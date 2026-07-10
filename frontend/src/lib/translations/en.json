@@ -1,0 +1,61 @@
+{
+  "app.title": "Env Manager",
+  "app.description": "Manage Windows environment variables",
+  
+  "nav.variables": "Variables",
+  "nav.backup": "Backup",
+  "nav.settings": "Settings",
+  
+  "buttons.add": "Add Variable",
+  "buttons.edit": "Edit",
+  "buttons.delete": "Delete",
+  "buttons.refresh": "Refresh",
+  "buttons.save": "Save",
+  "buttons.cancel": "Cancel",
+  "buttons.backup": "Create Backup",
+  "buttons.restore": "Restore",
+  "buttons.search": "Search",
+  "buttons.export": "Export",
+  
+  "table.name": "Name",
+  "table.scope": "Scope",
+  "table.value": "Value",
+  "table.actions": "Actions",
+  
+  "scope.user": "User",
+  "scope.system": "System",
+  
+  "dialogs.addVariable": "Add New Variable",
+  "dialogs.editVariable": "Edit Variable",
+  "dialogs.deleteConfirm": "Confirm Delete",
+  "dialogs.backupCreate": "Create Backup",
+  "dialogs.backupRestore": "Restore Backup",
+  
+  "labels.name": "Variable Name",
+  "labels.value": "Variable Value",
+  "labels.scope": "Scope",
+  "labels.backupFile": "Backup File",
+  
+  "messages.deleteConfirmText": "Are you sure you want to delete '{name}'?",
+  "messages.variableAdded": "Variable added successfully",
+  "messages.variableUpdated": "Variable updated successfully",
+  "messages.variableDeleted": "Variable deleted successfully",
+  "messages.backupCreated": "Backup created successfully",
+  "messages.backupRestored": "Backup restored successfully",
+  "messages.loading": "Loading...",
+  "messages.noData": "No variables found",
+  "messages.searchPlaceholder": "Search by name or value...",
+  
+  "errors.cliExecutionFailed": "CLI execution failed",
+  "errors.failedToListVariables": "Failed to list variables",
+  "errors.failedToAddVariable": "Failed to add variable",
+  "errors.failedToDeleteVariable": "Failed to delete variable",
+  "errors.failedToCreateBackup": "Failed to create backup",
+  "errors.failedToRestoreBackup": "Failed to restore backup",
+  "errors.invalidInput": "Invalid input",
+  "errors.variableNotFound": "Variable not found",
+  
+  "settings.language": "Language",
+  "settings.theme": "Theme",
+  "settings.darkMode": "Dark Mode"
+}

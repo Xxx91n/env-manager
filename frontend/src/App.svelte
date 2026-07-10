@@ -1,18 +1,53 @@
 <script lang="ts">
   import { onMount } from 'svelte'
+  import { locale, t } from 'svelte-i18n'
   import Variables from './lib/components/Variables.svelte'
   import { variables, loading, error } from './lib/stores'
   import { listVariables } from './lib/api'
+  import { locales, defaultLanguage } from './lib/i18n'
+
+  let currentLocale: string = defaultLanguage
 
   onMount(async () => {
+    // Subscribe to locale changes
+    const unsub = locale.subscribe(value => {
+      if (value) {
+        currentLocale = value
+        localStorage.setItem('locale', value)
+      }
+    })
+
     await listVariables()
+    return unsub
   })
+
+  function switchLocale(newLocale: string) {
+    locale.set(newLocale)
+  }
 </script>
 
 <main class="min-h-screen bg-gray-50">
   <header class="bg-white border-b border-gray-200 px-6 py-4">
-    <h1 class="text-2xl font-bold text-gray-900">Env Manager</h1>
-    <p class="text-gray-600 text-sm mt-1">Manage Windows environment variables</p>
+    <div class="flex justify-between items-start">
+      <div>
+        <h1 class="text-2xl font-bold text-gray-900">{$t('app.title')}</h1>
+        <p class="text-gray-600 text-sm mt-1">{$t('app.description')}</p>
+      </div>
+      <div class="flex gap-2">
+        {#each locales as loc}
+          <button
+            on:click={() => switchLocale(loc)}
+            class="px-3 py-1 rounded text-sm transition"
+            class:bg-blue-500={currentLocale === loc}
+            class:text-white={currentLocale === loc}
+            class:bg-gray-200={currentLocale !== loc}
+            class:text-gray-700={currentLocale !== loc}
+          >
+            {loc.toUpperCase()}
+          </button>
+        {/each}
+      </div>
+    </div>
   </header>
 
   <div class="container mx-auto px-6 py-8">

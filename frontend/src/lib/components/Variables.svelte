@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { t } from 'svelte-i18n'
   import { variables, selectedScope, error } from '../stores'
   import { deleteVariable, createBackup } from '../api'
   import EditDialog from './EditDialog.svelte'
@@ -29,7 +30,7 @@
   }
 
   async function handleDelete(name: string, scope: string) {
-    if (confirm(`Delete ${name} from ${scope} environment?`)) {
+    if (confirm(`${$t('messages.deleteConfirmText', { values: { name } })}`)) {
       try {
         await deleteVariable(name, scope as 'user' | 'system')
       } catch {
@@ -61,7 +62,7 @@
   <div class="flex gap-4 items-center">
     <input
       type="text"
-      placeholder="Search variables..."
+      placeholder={$t('messages.searchPlaceholder')}
       bind:value={search}
       class="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
     />
@@ -70,23 +71,23 @@
       bind:value={$selectedScope}
       class="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
     >
-      <option value="all">All Scopes</option>
-      <option value="user">User Only</option>
-      <option value="system">System Only</option>
+      <option value="all">{$t('table.scope')}</option>
+      <option value="user">{$t('scope.user')}</option>
+      <option value="system">{$t('scope.system')}</option>
     </select>
 
     <button
       on:click={() => (showEditDialog = true)}
       class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
     >
-      Add Variable
+      {$t('buttons.add')}
     </button>
 
     <button
       on:click={handleShowBackup}
       class="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition"
     >
-      Backup/Restore
+      {$t('buttons.backup')}
     </button>
   </div>
 
@@ -99,23 +100,23 @@
   <div class="overflow-x-auto bg-white rounded-lg border border-gray-200">
     {#if filteredVars.length === 0}
       <div class="px-6 py-8 text-center text-gray-500">
-        No variables found
+        {$t('messages.noData')}
       </div>
     {:else}
       <table class="w-full">
         <thead class="bg-gray-50 border-b border-gray-200">
           <tr>
             <th class="px-6 py-3 text-left text-sm font-semibold text-gray-900">
-              Name
+              {$t('table.name')}
             </th>
             <th class="px-6 py-3 text-left text-sm font-semibold text-gray-900">
-              Scope
+              {$t('table.scope')}
             </th>
             <th class="px-6 py-3 text-left text-sm font-semibold text-gray-900">
-              Value
+              {$t('table.value')}
             </th>
             <th class="px-6 py-3 text-right text-sm font-semibold text-gray-900">
-              Actions
+              {$t('table.actions')}
             </th>
           </tr>
         </thead>
@@ -132,7 +133,7 @@
                     ? 'bg-blue-100 text-blue-800'
                     : 'bg-red-100 text-red-800'}"
                 >
-                  {variable.scope}
+                  {variable.scope === 'user' ? $t('scope.user') : $t('scope.system')}
                 </span>
               </td>
               <td class="px-6 py-3 text-sm text-gray-600 font-mono max-w-xs truncate">
@@ -143,14 +144,14 @@
                   on:click={() => handleEdit(variable)}
                   class="px-3 py-1 text-blue-600 hover:bg-blue-50 rounded transition"
                 >
-                  Edit
+                  {$t('buttons.edit')}
                 </button>
                 <button
                   on:click={() =>
                     handleDelete(variable.name, variable.scope)}
                   class="px-3 py-1 text-red-600 hover:bg-red-50 rounded transition"
                 >
-                  Delete
+                  {$t('buttons.delete')}
                 </button>
               </td>
             </tr>
