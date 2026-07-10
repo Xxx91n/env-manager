@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("env-manager")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Release")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+597b0394a61f3f860b13fd63c7f3a1a0c37450a9")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+6907085d19e6866dae832bb556d80ac5a084136c")]
 [assembly: System.Reflection.AssemblyProductAttribute("env-manager")]
 [assembly: System.Reflection.AssemblyTitleAttribute("env-manager")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]
