@@ -1,4 +1,5 @@
 # Env Manager
+[English](README.md) | 中文
 
 一款现代、轻量级的Windows环境变量管理器，提供快速CLI和优雅的桌面GUI。
 

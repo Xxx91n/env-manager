@@ -1,4 +1,5 @@
 # Env Manager
+[中文](README_CN.md) | English
 
 A modern, lightweight Windows environment variable manager with a fast CLI and elegant desktop GUI.
 
