@@ -1,12 +1,12 @@
 {
   "productName": "Env Manager",
   "version": "0.3.0",
-  "identifier": "com.env-manager.app",
+  "identifier": "com.envmanager.desktop",
   "build": {
     "beforeDevCommand": "npm run dev",
     "beforeBuildCommand": "npm run build",
     "devUrl": "http://localhost:5173",
-    "frontendDist": "../dist"
+    "frontendDist": "../../dist"
   },
   "app": {
     "windows": [
@@ -28,6 +28,12 @@
     "active": true,
     "targets": [
       "msi"
+    ],
+    "icon": [
+      "icons/icon.ico"
+    ],
+    "resources": [
+      "../../bin/Release/net10.0/env-manager.exe"
     ]
   }
 }

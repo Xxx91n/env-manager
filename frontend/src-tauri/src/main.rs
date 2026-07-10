@@ -2,6 +2,7 @@ use log::info;
 use serde::Serialize;
 use std::path::PathBuf;
 use std::process::Command;
+use tauri::Manager;
 
 #[derive(Serialize)]
 #[serde(crate = "serde")]
@@ -11,75 +12,76 @@ struct CliResponse {
     error: Option<String>,
 }
 
-#[tauri::command]
-fn run_cli(command: String, args: Vec<String>) -> CliResponse {
-    info!("run_cli invoked with command: {} args: {:?}", command, args);
+fn resolve_cli_path(app: &tauri::AppHandle) -> Option<PathBuf> {
+    // 1. Tauri resource directory (production: bundled inside MSI)
+    if let Ok(resource_path) = app
+        .path()
+        .resolve("env-manager.exe", tauri::path::BaseDirectory::Resource)
+    {
+        if resource_path.exists() {
+            info!("Found CLI via resource: {}", resource_path.display());
+            return Some(resource_path);
+        }
+    }
 
-    // 获取当前执行文件的目录
+    // 2. Relative to exe dir (dev mode)
     let exe_dir = std::env::current_exe()
         .ok()
         .and_then(|p| p.parent().map(|p| p.to_path_buf()));
 
-    info!("Executable directory: {:?}", exe_dir);
-
-    // 尝试多个可能的 CLI 位置
-    let mut possible_paths = vec![
-        // 绝对路径（开发和生产都适用）
-        PathBuf::from("D:\\Aworker\\env-manager\\bin\\Release\\net10.0\\env-manager.exe"),
-        // 相对路径：从 Tauri 可执行文件所在目录向上找
-        if let Some(ref dir) = exe_dir {
-            dir.join("../../../../bin/Release/net10.0/env-manager.exe")
-        } else {
-            PathBuf::from("")
-        },
-        // 当前工作目录
-        std::env::current_dir()
-            .ok()
-            .map(|d| d.join("../../bin/Release/net10.0/env-manager.exe"))
-            .unwrap_or_default(),
-        // 直接搜索
-        PathBuf::from("env-manager.exe"),
-    ];
-
-    // 移除空路径
-    possible_paths.retain(|p| !p.as_os_str().is_empty());
-
-    info!("Searching for CLI in paths: {:?}", possible_paths);
-
-    let mut exe_path = None;
-    for path in possible_paths.iter() {
-        info!("Checking path: {}", path.display());
-        if path.exists() {
-            info!("Found CLI at: {}", path.display());
-            exe_path = Some(path.clone());
-            break;
+    if let Some(ref dir) = exe_dir {
+        let dev_path = dir.join("../../../../bin/Release/net10.0/env-manager.exe");
+        if dev_path.exists() {
+            info!("Found CLI via dev path: {}", dev_path.display());
+            return Some(dev_path);
         }
     }
 
-    let exe_path = match exe_path {
+    // 3. Current working directory
+    if let Ok(cwd) = std::env::current_dir() {
+        let cwd_path = cwd.join("../../bin/Release/net10.0/env-manager.exe");
+        if cwd_path.exists() {
+            info!("Found CLI via cwd: {}", cwd_path.display());
+            return Some(cwd_path);
+        }
+    }
+
+    // 4. PATH fallback
+    if let Ok(output) = Command::new("where").arg("env-manager.exe").output() {
+        if output.status.success() {
+            let stdout = String::from_utf8_lossy(&output.stdout);
+            if let Some(line) = stdout.lines().next() {
+                let path = PathBuf::from(line);
+                if path.exists() {
+                    return Some(path);
+                }
+            }
+        }
+    }
+
+    None
+}
+
+#[tauri::command]
+fn run_cli(app: tauri::AppHandle, command: String, args: Vec<String>) -> CliResponse {
+    info!("run_cli: command={}, args={:?}", command, args);
+
+    let exe_path = match resolve_cli_path(&app) {
         Some(p) => p,
         None => {
-            let error_msg = format!(
-                "env-manager.exe not found. Tried: {:?}. CWD: {:?}",
-                possible_paths,
-                std::env::current_dir()
-            );
-            info!("ERROR: {}", error_msg);
             return CliResponse {
                 success: false,
                 data: None,
-                error: Some(error_msg),
+                error: Some("env-manager.exe not found.".to_string()),
             };
         }
     };
 
     let mut cmd = Command::new(&exe_path);
     cmd.arg(&command);
-    for arg in args {
+    for arg in &args {
         cmd.arg(arg);
     }
-
-    info!("Executing: {} {}", exe_path.display(), command);
 
     match cmd.output() {
         Ok(output) => {
@@ -87,39 +89,35 @@ fn run_cli(command: String, args: Vec<String>) -> CliResponse {
             let stderr = String::from_utf8_lossy(&output.stderr).to_string();
 
             if output.status.success() {
-                info!("Command succeeded");
                 CliResponse {
                     success: true,
                     data: Some(stdout),
                     error: None,
                 }
             } else {
-                let error_msg = if !stderr.is_empty() { stderr } else { stdout };
-                info!("Command failed: {}", error_msg);
+                let err = if !stderr.trim().is_empty() { stderr } else { stdout };
                 CliResponse {
                     success: false,
                     data: None,
-                    error: Some(error_msg),
+                    error: Some(err),
                 }
             }
         }
-        Err(e) => {
-            let error_msg = format!("Failed to execute CLI: {}", e);
-            info!("ERROR: {}", error_msg);
-            CliResponse {
-                success: false,
-                data: None,
-                error: Some(error_msg),
-            }
-        }
+        Err(e) => CliResponse {
+            success: false,
+            data: None,
+            error: Some(format!("Failed to spawn CLI: {}", e)),
+        },
     }
 }
 
 fn main() {
     tauri::Builder::default()
-        .plugin(tauri_plugin_log::Builder::default()
-            .level(log::LevelFilter::Info)
-            .build())
+        .plugin(
+            tauri_plugin_log::Builder::default()
+                .level(log::LevelFilter::Info)
+                .build(),
+        )
         .invoke_handler(tauri::generate_handler![run_cli])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

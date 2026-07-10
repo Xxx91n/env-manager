@@ -1,5 +1,6 @@
 <script lang="ts">
   import { createEventDispatcher } from 'svelte'
+  import { t } from 'svelte-i18n'
   import { setVariable } from '../api'
 
   export let variable = null
@@ -13,7 +14,7 @@
 
   async function handleSave() {
     if (!name.trim()) {
-      alert('Name is required')
+      alert($t('labels.name'))
       return
     }
 
@@ -35,16 +36,17 @@
   <div class="bg-white rounded-lg shadow-lg max-w-md w-full mx-4">
     <div class="p-6 border-b border-gray-200">
       <h2 class="text-lg font-semibold text-gray-900">
-        {variable ? 'Edit Variable' : 'Add Variable'}
+        {variable ? $t('dialogs.editVariable') : $t('dialogs.addVariable')}
       </h2>
     </div>
 
     <div class="p-6 space-y-4">
       <div>
-        <label class="block text-sm font-medium text-gray-700 mb-1">
-          Name
+        <label for="edit-name" class="block text-sm font-medium text-gray-700 mb-1">
+          {$t('labels.name')}
         </label>
         <input
+          id="edit-name"
           type="text"
           bind:value={name}
           disabled={!!variable}
@@ -53,10 +55,11 @@
       </div>
 
       <div>
-        <label class="block text-sm font-medium text-gray-700 mb-1">
-          Value
+        <label for="edit-value" class="block text-sm font-medium text-gray-700 mb-1">
+          {$t('labels.value')}
         </label>
         <textarea
+          id="edit-value"
           bind:value={value}
           rows="3"
           class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono text-sm"
@@ -64,15 +67,16 @@
       </div>
 
       <div>
-        <label class="block text-sm font-medium text-gray-700 mb-1">
-          Scope
+        <label for="edit-scope" class="block text-sm font-medium text-gray-700 mb-1">
+          {$t('labels.scope')}
         </label>
         <select
+          id="edit-scope"
           bind:value={scope}
           class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
         >
-          <option value="user">User</option>
-          <option value="system">System</option>
+          <option value="user">{$t('scope.user')}</option>
+          <option value="system">{$t('scope.system')}</option>
         </select>
       </div>
     </div>
@@ -83,14 +87,14 @@
         disabled={saving}
         class="px-4 py-2 text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition disabled:opacity-50"
       >
-        Cancel
+        {$t('buttons.cancel')}
       </button>
       <button
         on:click={handleSave}
         disabled={saving}
         class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition disabled:opacity-50"
       >
-        {saving ? 'Saving...' : 'Save'}
+        {saving ? $t('messages.loading') : $t('buttons.save')}
       </button>
     </div>
   </div>

@@ -43,6 +43,8 @@ Thumbs.db
 *.omx
 omx_wiki/
 .codex/
+.docs/
+.opencode/
 
 # Temporary files and caches
 .cache/
