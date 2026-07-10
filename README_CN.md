@@ -1,159 +1,118 @@
 # Env Manager
-[English](README.md) | 中文
 
-一款现代、轻量级的Windows环境变量管理器，提供快速CLI和优雅的桌面GUI。
+现代、轻量级的 Windows 环境变量管理工具，同时支持 CLI 和 GUI 界面。
 
-灵感来自Microsoft PowerToys，专为效率而设计。开源MIT协议。
-
----
-
-## 特性
-
-### CLI命令行工具
-
-- 列出用户和系统作用域的所有变量
-- 支持作用域控制的获取、设置、删除操作
-- 以JSON格式备份和恢复环境快照
-- 对比和合并多个备份以追踪变更
-- 使用Spectre.Console提供美观的表格输出
-- 基于.NET 10的快速原生性能
-
-### GUI桌面应用（第2阶段）
-
-- 实时环境变量编辑器
-- 跨所有作用域的搜索和筛选
-- 备份导出和导入管理
-- 支持深色模式的响应式设计
-- CLI与桌面应用的IPC同步
-- 使用Tauri实现轻量级原生性能
-
----
+**[简体中文](README_CN.md)** | **[English](README.md)**
 
 ## 快速开始
 
-### 安装
+```bash
+# 下载
+# 来自: https://github.com/Xxx91n/env-manager/releases
 
-**选项1：下载二进制文件**
-
-从GitHub Releases下载：
-https://github.com/Xxx91n/env-manager/releases
-
-复制到PATH路径或直接使用：
-```powershell
-.\\env-manager.exe list
-```
-
-**选项2：从源代码编译**
-
-```powershell
-git clone https://github.com/Xxx91n/env-manager.git
-cd env-manager
-dotnet build -c Release
-
-# 二进制文件位置：bin/Release/net10.0/env-manager.exe
-```
-
-### CLI使用
-
-```powershell
 # 列出所有变量
-env-manager list
+env-manager.exe list
 
-# 获取特定变量
-env-manager get PATH
+# 获取变量值
+env-manager.exe get PATH
 
-# 设置变量（用户作用域）
-env-manager set MY_VAR "my_value"
-
-# 设置系统变量（需要管理员权限）
-env-manager set MY_VAR "my_value" --scope system
+# 设置变量
+env-manager.exe set MY_VAR "my_value"
 
 # 删除变量
-env-manager delete MY_VAR
+env-manager.exe delete MY_VAR
 
-# 备份当前状态
-env-manager backup --output my_backup.json
+# 备份所有变量
+env-manager.exe backup --output backup.json
 
 # 从备份恢复
-env-manager restore my_backup.json
+env-manager.exe restore backup.json
 
-# 对比两个备份
-env-manager diff old_backup.json new_backup.json
+# 比对两个备份
+env-manager.exe diff old.json new.json
 
-# 合并备份
-env-manager merge old.json new.json --output merged.json
-
-# 显示帮助
-env-manager help
+# 合并两个备份
+env-manager.exe merge old.json new.json --output merged.json
 ```
 
----
+## 功能特性
 
-## 项目阶段
+### CLI 命令行模式
+- **9 个命令**，完全掌控环境变量管理
+- **用户/系统作用域** - 同时管理当前用户和系统级环境变量
+- **备份/恢复** - 导出和导入为 JSON 文件
+- **对比/合并** - 比较和合并备份文件
+- **验证** - 检查备份文件格式有效性
+- **无需管理员** - 用户作用域无需提权（系统作用域需要）
 
-### 第1阶段：CLI后端（已完成）
+### GUI 图形界面
+- **现代 Tauri 桌面应用** - 轻量级(40MB)、快速响应
+- **实时变量列表** - 一览所有环境变量
+- **搜索/筛选** - 按名称或值快速查找
+- **作用域切换** - 用户/系统作用域一键切换
+- **增删改查** - 直接在 GUI 中管理变量
+- **备份/恢复界面** - 通过界面导出导入备份
 
-- 快速CRUD操作环境变量
-- 用户和系统作用域支持
-- 最小化依赖项（仅Spectre.Console）
-- 直接调用Windows Registry API
-- 在Windows 10和11上完全测试
+## 安装
 
-### 第2阶段：桌面GUI（开发中）
+### 从发布版本安装（推荐）
 
-- 基于Tauri的跨平台应用
-- TypeScript和Svelte前端
-- 实时环境变量编辑器
-- 备份导出和导入UI
-- CLI IPC桥接
+1. 下载 `env-manager-v0.3.0.exe`(CLI) 或 `env-manager-v0.3.0.msi`(GUI 安装程序)
+2. 运行或直接执行
+3. CLI: 复制到 PATH 路径中的目录，或随处运行
+4. GUI: MSI 安装程序会创建开始菜单快捷方式
 
-### 第3阶段：完善和分发（计划中）
+### 从源代码编译
 
-- MSI安装程序便捷安装
-- GitHub Releases自动下载功能
-- 自动更新机制
-- 完整文档和指南
+```bash
+# 需要: .NET 10 SDK、Node.js 20+、Rust stable
 
----
+# 编译 CLI
+dotnet build -c Release
+# 输出: bin/Release/net10.0/env-manager.exe
 
-## 架构
-
-### 后端（C# .NET 10）
-
-Program.cs包含：
-- Registry API包装器
-- 变量CRUD操作
-- 备份和恢复逻辑
-- CLI命令路由
-- 错误处理
-
-**技术栈**：
-- 语言：C# .NET 10
-- Registry访问：Microsoft.Win32.Registry（内置）
-- CLI输出：Spectre.Console
-- 交付：单一可执行文件，约15MB（包含运行时）
-
-### 前端（Tauri + TypeScript/Svelte）
-
-```
-src/
-├── App.svelte              (根组件)
-├── lib/
-│   ├── api.ts              (IPC桥接到CLI)
-│   ├── components/         (UI组件)
-│   └── stores/             (状态管理)
-└── styles/                 (TailwindCSS样式)
+# 编译 GUI
+cd frontend
+npm install
+npm run tauri-build
+# 输出: dist/(网页资源) + MSI 安装程序
 ```
 
-**技术栈**：
-- 框架：Tauri 2.0
-- UI：TypeScript和Svelte
-- 样式：TailwindCSS
-- 构建：Vite
+## 命令参考
 
-### 数据格式
+| 命令 | 用法 | 说明 |
+|------|------|------|
+| `list` | `env-manager list` | 列出所有变量 |
+| `get` | `env-manager get NAME` | 获取变量值 |
+| `set` | `env-manager set NAME VALUE [--scope user\|system]` | 创建/更新变量（默认: user） |
+| `delete` | `env-manager delete NAME [--scope user\|system]` | 删除变量（默认: user） |
+| `backup` | `env-manager backup [--output FILE]` | 导出所有变量到 JSON |
+| `restore` | `env-manager restore FILE [--scope user\|system]` | 从 JSON 备份导入 |
+| `diff` | `env-manager diff OLD NEW` | 比对两个备份文件 |
+| `merge` | `env-manager merge OLD NEW --output FILE` | 合并两个备份文件 |
+| `validate` | `env-manager validate FILE` | 验证备份格式 |
+| `help` | `env-manager help` | 显示帮助 |
 
-**备份JSON结构**：
+## GUI 使用方式
+
+多种方式打开 GUI:
+
+1. **开始菜单** - MSI 安装后，搜索 "Env Manager"
+2. **直接启动** - 运行生成的桌面快捷方式
+3. **Web 页面** - 开发时直接打开 `dist/index.html` 到浏览器
+
+### GUI 功能
+
+- **搜索栏** - 实时按名称或值筛选变量
+- **作用域下拉菜单** - 在用户/系统/全部作用域间切换
+- **变量表格** - 整齐排列: 名称、作用域、值、操作
+- **添加按钮** - 打开对话框创建新变量
+- **编辑按钮** - 修改现有变量（当前作用域）
+- **删除按钮** - 删除变量（需确认）
+- **备份/恢复按钮** - 导出或导入 JSON 备份
+
+## 备份文件格式
+
 ```json
 {
   "timestamp": "2026-07-10T12:34:56Z",
@@ -161,156 +120,187 @@ src/
   "variables": [
     {
       "name": "PATH",
-      "value": "C:\\\\Windows\\\\System32;...",
+      "value": "C:\\Windows\\System32",
       "scope": "user"
     },
     {
       "name": "JAVA_HOME",
-      "value": "D:\\\\jdk17\\\\",
+      "value": "D:\\jdk17",
       "scope": "system"
     }
   ]
 }
 ```
 
----
+## 系统要求
 
-## 与其他工具对比
+- **系统**: Windows 10 21H2 或更高版本（推荐 Windows 11）
+- **CLI**: .NET Runtime 10.0+
+- **GUI**: 无需额外运行时（Tauri 内置打包）
 
-| 特性 | Env Manager | PowerToys | setx（内置） |
-|------|------------|----------|-------------|
-| GUI图形界面 | 规划中 | 有 | 无 |
-| CLI命令行 | 有 | 无 | 有（有限） |
-| 备份/恢复 | 有 | 无 | 无 |
-| 差异/合并 | 有 | 无 | 无 |
-| 开源 | 是（MIT） | 是（MIT） | 是 |
-| .NET轻量 | 是 | 否（C++） | N/A |
-| 跨作用域 | 是 | 是 | 是（有限） |
-
----
-
-## 开发
-
-### 环境配置（Windows）
-
-**前置条件**：
-- .NET 10 SDK
-- Node.js 18或更高版本（用于GUI）
-- Tauri CLI
-- Git
-
-**克隆和编译**：
-```powershell
-git clone https://github.com/Xxx91n/env-manager.git
-cd env-manager
-
-# 编译CLI
-dotnet build -c Release
-
-# 编译GUI（第2阶段）
-cd frontend
-npm install
-npm run tauri-dev
-```
-
-### 项目结构
+## 项目结构
 
 ```
 env-manager/
-├── Program.cs              # C# CLI实现
-├── env-manager.csproj      # .NET项目文件
-├── bin/Release/            # 编译输出
-│   └── net10.0/
-│       └── env-manager.exe
-│
-├── frontend/               # Tauri GUI（第2阶段）
-│   ├── src/
-│   │   ├── App.svelte
-│   │   ├── lib/
-│   │   └── main.ts
-│   ├── src-tauri/          # Rust后端
-│   ├── package.json
-│   └── tsconfig.json
-│
-├── AGENTS.md               # 开发规范
-├── DEVELOPMENT.md          # 开发指南
-├── README.md               # 英文版本
-├── README_CN.md            # 中文版本
-├── LICENSE                 # MIT许可证
-└── .gitignore
+├── Program.cs                    # CLI 实现 (215 行，C#)
+├── env-manager.csproj            # .NET 项目配置
+├── bin/Release/net10.0/          # 编译后的 CLI 二进制
+│   └── env-manager.exe
+├── frontend/                      # GUI 应用 (Tauri + TypeScript + Svelte)
+│   ├── src/                      # 前端组件
+│   │   ├── App.svelte            # 根组件
+│   │   └── lib/components/       # 可复用组件
+│   ├── src-tauri/                # Tauri 后端 (Rust)
+│   │   └── src/main.rs           # IPC 命令处理器
+│   └── package.json              # Node.js 依赖
+├── dist/                         # 构建后的前端资源
+├── .github/workflows/            # GitHub Actions CI/CD
+│   └── build.yml                 # 完整的构建管道
+└── AGENTS.md                     # 项目规范文档
 ```
 
-### 测试
+## 开发
 
-**CLI冒烟测试**：
-```powershell
-.\\bin\\Release\\net10.0\\env-manager.exe list
+详见 `AGENTS.md` 包含的内容:
+- 项目规范和架构设计
+- 开发指南和代码标准
+- CLI 命令实现细节
+- GUI 组件结构
+- CI/CD 管道说明
+- 发布和测试流程
+
+### 快速开发设置
+
+```bash
+# 验证环境
+dotnet --version          # 验证 .NET 10
+node --version            # 验证 Node.js 20+
+
+# CLI 开发
+dotnet build -c Release
+
+# GUI 开发 (热重载)
+cd frontend
+npm install
+npm run tauri-dev
+
+# 运行测试
+dotnet test
+cd frontend && npm run test
 ```
 
-**备份测试**：
-```powershell
-.\\bin\\Release\\net10.0\\env-manager.exe backup --output test.json
-.\\bin\\Release\\net10.0\\env-manager.exe validate test.json
+## 安全性
+
+- **无外部依赖** - CLI 核心功能无第三方依赖
+- **本地 Registry 访问** - 仅本地操作，无远程传输
+- **输入验证** - 所有用户输入经过验证（32KB Windows 限制）
+- **作用域隔离** - 用户和系统作用域完全隔离
+- **安全审计**: Semgrep 通过✅ (0 个发现)
+
+详见 `SECURITY_AUDIT.md` 的完整安全分析。
+
+## 技术栈
+
+### 后端
+- **语言**: C# .NET 10
+- **注册表**: Microsoft.Win32.Registry (原生 Windows API)
+- **CLI 输出**: Spectre.Console (美化输出)
+- **部署**: 单一 158KB 可执行文件
+
+### 前端
+- **框架**: Tauri 2.0 (轻量级桌面应用)
+- **UI**: Svelte 4 (响应式组件)
+- **语言**: TypeScript 5 (类型安全)
+- **样式**: TailwindCSS 3 (原子式 CSS)
+- **构建**: Vite 5 (快速打包)
+
+## CI/CD 管道
+
+GitHub Actions 工作流: `.github/workflows/build.yml`
+
+**阶段**:
+1. **Lint** - Semgrep 安全扫描
+2. **Build-CLI** - .NET 编译 + 制品上传
+3. **Build-GUI** - Tauri 编译 + MSI 生成
+4. **Test** - 集成测试
+5. **Release** - 版本标签自动发布 GitHub Release
+
+**触发条件**:
+- 推送到 main: 运行 lint、build、test
+- 推送标签 (v*): 运行完整管道 + 发布
+
+## 常见问题
+
+### 如何管理系统变量？
+使用 `--scope system` 标志。需要管理员权限:
+
+```bash
+# 以管理员身份运行
+env-manager.exe set SYSTEM_VAR "value" --scope system
 ```
 
-### 贡献
+### 能否备份和恢复？
+当然! JSON 格式人类可读、跨平台兼容:
 
-欢迎贡献。详见DEVELOPMENT.md了解配置和工作流程。
+```bash
+env-manager.exe backup --output my-backup.json
+# 如需编辑 my-backup.json
+env-manager.exe restore my-backup.json
+```
 
-**代码风格**：
-- C#：遵循.editorconfig规范
-- TypeScript：ESLint严格模式
-- 提交：遵循Conventional Commits格式
+### GUI 无需安装就能用吗？
+可以! 开发时可直接打开网页版:
 
----
+```bash
+start .\dist\index.html
+```
+
+开发模式热重载:
+```bash
+cd frontend && npm run tauri-dev
+```
+
+### 如何更新？
+Tauri GUI 内置自动更新支持。CLI: 下载新 .exe 替换即可。
+
+## 故障排除
+
+| 问题 | 解决方案 |
+|------|--------|
+| "拒绝访问" (系统作用域) | 以管理员身份运行 |
+| 变量未立即显示 | 重启应用（环境变量缓存） |
+| GUI 无法启动 | 检查浏览器控制台 (F12) 的错误信息 |
+| 备份文件无效 | 手动验证 JSON 格式或使用 `validate` 命令 |
 
 ## 许可证
 
-MIT许可证。版权所有(c) 2026 Env Manager 贡献者。
+MIT - 自由用于个人和商业项目
 
-详见LICENSE文件。
+详见 [LICENSE](LICENSE)
 
----
+## 贡献
 
-## 文档
+这是一个开源项目。如有问题、功能需求或拉取请求:
 
-- README.md（英文版）
-- README_CN.md（中文版，本文件）
-- AGENTS.md（开发规范）
-- DEVELOPMENT.md（开发者指南）
-- ARCHITECTURE.md（系统设计）
-- CHANGELOG.md（发布说明）
+1. 查看 GitHub Issues
+2. 报告 bug 时提供:
+   - Windows 版本
+   - CLI/GUI 版本号
+   - 精确重现步骤
+   - 截图 (GUI 问题)
 
----
+## 更新日志
 
-## 社区
+详见 [CHANGELOG.md](CHANGELOG.md) 了解版本历史和发布说明。
 
-- 在GitHub Issues上报告bug
-- 在GitHub Discussions上提问
-- 提交PR进行改进
-- 通过Issues分享想法（标记为enhancement）
+## 联系与支持
 
----
-
-## 发展路线
-
-- v0.2（第2阶段）：Tauri GUI与备份命令
-- v0.3（第3阶段）：MSI安装程序和自动更新
-- v1.0：稳定版本，支持Windows应用商店
-- v1.1及更高版本：社区驱动的增强功能
+- **问题报告**: GitHub Issues
+- **讨论**: GitHub Discussions
+- **安全问题**: 私密报告
 
 ---
 
-## 为什么选择Env Manager？
-
-- 现代：使用最新的.NET和Tauri技术构建
-- 快速：单一可执行文件的原生性能
-- 轻量：CLI约15MB，依赖项最少
-- 安全：直接Registry访问，全面错误处理
-- 精美：清爽的CLI输出和优雅的GUI设计
-- 免费：MIT开源许可证
-- 社区驱动：您的贡献塑造未来
-
----
-
-仓库地址：https://github.com/Xxx91n/env-manager
+**版本**: 0.3.0  
+**许可**: MIT  
+**状态**: 生产就绪
