@@ -1,1 +1,69 @@
-# Build outputs\nbin/\nobj/\n*.exe\n*.dll\n*.pdb\n\n# IDE\n.vscode/\n.idea/\n*.sln.iml\n*.swp\n*.swo\n*~\n\n# OS\n.DS_Store\nThumbs.db\n\n# Dependencies\nnode_modules/\npackage-lock.json\nyarn.lock\n\n# Build artifacts\ndist/\nbuild/\n\n# Tauri specific\nsrc-tauri/target/\n\n# IDE generated\n.editorconfig\n.idea/\n.vscode/settings.json\n\n# Temporary files\n*.tmp\n*.log\n.env.local\n\n# OMX\n.omx/state/\n"
+# Build outputs
+bin/
+obj/
+dist/
+target/
+*.exe
+*.dll
+*.so
+*.dylib
+
+# Node modules and package manager
+node_modules/
+npm-debug.log*
+yarn-error.log*
+package-lock.json
+yarn.lock
+
+# Rust/Cargo
+Cargo.lock
+target/
+
+# IDE and editor
+.vscode/
+.idea/
+*.swp
+*.swo
+*.sublime-project
+*.sublime-workspace
+.DS_Store
+*.pem
+
+# Environment and build
+.env
+.env.local
+.env.*.local
+
+# OS specific
+Thumbs.db
+.DS_Store
+
+# OMX and agent workflow files (must not commit)
+.omx/
+*.omx
+omx_wiki/
+.codex/
+
+# Temporary files and caches
+.cache/
+.temp/
+temp/
+tmp/
+*.tmp
+*.log
+
+# Build artifacts and outputs
+dist-*
+build-*
+release-*
+
+# Git workflow artifacts
+.github/workflows/build-*.yml
+.git/MERGE_HEAD
+
+# Test coverage and reports (optional)
+coverage/
+*.lcov
+
+# Lock files for Rust (optional when publishing)
+Cargo.lock

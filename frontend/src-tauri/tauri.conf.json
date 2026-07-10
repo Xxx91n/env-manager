@@ -1,9 +1,12 @@
 {
+  "productName": "Env Manager",
+  "version": "0.3.0",
+  "identifier": "com.env-manager.app",
   "build": {
     "beforeDevCommand": "npm run dev",
     "beforeBuildCommand": "npm run build",
     "devUrl": "http://localhost:5173",
-    "frontendDist": "../dist"
+    "frontendDist": "../../dist"
   },
   "app": {
     "windows": [
@@ -21,18 +24,10 @@
       "csp": null
     }
   },
-  "package": {
-    "productName": "Env Manager",
-    "version": "0.3.0"
-  },
-  "tauri": {
-    "allowlist": {
-      "shell": {
-        "open": true
-      }
-    },
-    "security": {
-      "csp": null
-    }
+  "bundle": {
+    "active": true,
+    "targets": [
+      "msi"
+    ]
   }
 }
