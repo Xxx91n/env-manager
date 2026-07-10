@@ -1,1 +1,442 @@
-# Env Manager - OMX Agent Coordination & Project Operations\n\n## Project Overview\n\n**Name**: Env Manager  \n**Scope**: Modern, lightweight Windows environment variable manager  \n**Tech Stack**: C# .NET 10 (CLI) + Tauri + TypeScript/Svelte (GUI)  \n**Status**: Phase 1 Complete ✅ | Phase 2-3 In Progress 🚀  \n**License**: MIT  \n**Repository**: [Xxx91n/env-manager](https://github.com/Xxx91n/env-manager)  \n\n---\n\n## OMX Workflow & Agent Routing\n\nThis project uses **oh-my-codex (OMX)** for multi-agent coordination:\n\n### Primary Agents\n\n| Agent | Role | Trigger |\n|-------|------|----------|\n| `$executor` | Implementation of CLI/GUI features | Code writing, feature development |\n| `$architect` | System design, Tauri integration | GUI architecture, IPC bridges |\n| `$researcher` | Documentation, API references | Tauri docs, .NET Registry research |\n| `$test-engineer` | Test harness, Windows compatibility | Phase 2 validation, E2E testing |\n| `$code-reviewer` | Code quality review | Before Phase 2 release |\n| `$git-master` | Commit strategy, history hygiene | Pre-push cleanup, release tags |\n\n### Workflow Stages\n\n1. **Planning** → `$architect` + `$deep-interview` (clarify requirements)\n2. **Implementation** → `$executor` (code Phase 2/3 features)\n3. **Research** → `$researcher` (gather Tauri/Windows SDK docs)\n4. **Testing** → `$test-engineer` (write E2E tests, compatibility checks)\n5. **Review** → `$code-reviewer` (comprehensive code audit)\n6. **Git** → `$git-master` (commit, tag, prepare for push)\n7. **Release** → `$team` (coordinate multi-agent final push to GitHub)\n\n---\n\n## Phase Breakdown\n\n### Phase 1: CLI Backend ✅ COMPLETE\n\n**Deliverable**: `env-manager.exe` (working binary)  \n**Commands**:\n- `list` — Show all variables\n- `get <name>` — Retrieve value\n- `set <name> <value>` — Create/update\n- `delete <name>` — Remove\n- `help` — Usage info\n\n**Tech**: C# .NET 10, Microsoft.Win32.Registry, Spectre.Console  \n**Status**: Fully tested and working\n\n---\n\n### Phase 2: Extended CLI + Tauri GUI (IN PROGRESS 🚀)\n\n#### 2a. CLI Enhancements\n**Objective**: Add backup/restore/diff/merge commands  \n**Agent**: `$executor`  \n**Deliverables**:\n- `backup [--output <file>]` — Export JSON backup\n- `restore <file> [--scope user|system]` — Import backup\n- `diff <old> <new>` — Compare two backups\n- `merge <old> <new> --output <file>` — Merge backups\n- `validate <file>` — Verify backup format\n\n**Format**: JSON with timestamp, version, variable array  \n**Backup Structure**:\n```json\n{\n  \"timestamp\": \"2026-07-10T12:34:56Z\",\n  \"version\": \"1.0.0\",\n  \"variables\": [\n    {\"name\": \"PATH\", \"value\": \"...\", \"scope\": \"user\"},\n    {\"name\": \"JAVA_HOME\", \"value\": \"...\", \"scope\": \"system\"}\n  ]\n}\n```\n\n#### 2b. Tauri GUI Application\n**Objective**: Desktop UI for env-manager  \n**Agent**: `$architect` (design) + `$executor` (implementation)  \n**Stack**: Tauri 2.0 + TypeScript + Svelte  \n**Features**:\n- Environment variable list with pagination\n- Search/filter by name or value\n- Create/edit/delete dialogs\n- Backup export and import UI\n- Real-time sync with CLI\n- Scope selector (user/system)\n- Status notifications\n\n**IPC Strategy**:\n- GUI calls CLI via `tauri::Command` → `process.spawn(\"env-manager.exe\")`\n- Parse JSON/table output\n- Update UI state on completion\n- Error handling and retry logic\n\n**UI Layout**:\n```\n┌────────────────────────────────────┐\n│ Env Manager                     [≡] │\n├────────────────────────────────────┤\n│ [Search...] [Scope: User ▼] [Add] │\n├────────────────────────────────────┤\n│ Name       │ Value           │ [⋯] │\n├────────────┼─────────────────┼──────┤\n│ PATH       │ C:\\Windows\\...  │ [⋯] │\n│ JAVA_HOME  │ D:\\jdk17\\       │ [⋯] │\n└────────────────────────────────────┘\n```\n\n---\n\n### Phase 3: Polish & Release (PLANNED)\n\n**3a. Installer & Distribution**\n- MSI installer for Windows\n- GitHub Releases with binary downloads\n- Auto-update mechanism\n\n**3b. Settings & Theming**\n- User preferences (default scope, backup location)\n- Dark/light mode toggle\n- Keyboard shortcuts\n\n**3c. Documentation**\n- User guide (backup/restore workflow)\n- Developer guide (how to extend)\n- Architecture diagrams\n\n---\n\n## Project Structure\n\n```\nenv-manager/\n├── .git/                          # Git repository\n├── .gitignore                     # Exclude binaries, artifacts\n├── LICENSE                        # MIT license\n│\n├── backend/\n│   ├── Program.cs                 # CLI entry point\n│   ├── env-manager.csproj         # .NET project file\n│   ├── bin/Release/net10.0/       # Compiled binaries\n│   │   └── env-manager.exe        ← CLI executable\n│   └── obj/                       # Build artifacts\n│\n├── frontend/\n│   ├── src/\n│   │   ├── main.ts                # Tauri app entry\n│   │   ├── App.svelte             # Root component\n│   │   ├── lib/\n│   │   │   ├── api.ts             # CLI IPC bridge\n│   │   │   ├── components/        # Reusable UI parts\n│   │   │   └── stores/            # Svelte stores (state)\n│   │   └── styles/\n│   ├── public/\n│   ├── package.json\n│   ├── tsconfig.json\n│   ├── vite.config.ts\n│   └── tailwind.config.js         # CSS framework\n│\n├── docs/\n│   ├── README.md                  # English guide (main)\n│   ├── README_CN.md               # Chinese guide\n│   ├── DEVELOPMENT.md             # Developer setup\n│   ├── ARCHITECTURE.md            # System design\n│   └── CHANGELOG.md               # Release notes\n│\n├── .omx/\n│   └── ultragoal/                 # OMX workflow state\n│       ├── goals.json\n│       ├── ledger.jsonl\n│       └── brief.md\n│\n├── AGENTS.md                      # This file: OMX routing\n├── .github/\n│   ├── workflows/                 # CI/CD pipelines\n│   └── ISSUE_TEMPLATE/            # Bug report templates\n│\n└── LICENSE                        # MIT license file\n```\n\n---\n\n## Development Guidelines\n\n### Code Standards\n\n**C# (Backend)**:\n- .NET 10 minimum\n- async/await for I/O\n- Explicit types (no `var` for public APIs)\n- Proper resource disposal (using statements)\n- Unit tests for critical functions\n\n**TypeScript/Svelte (Frontend)**:\n- ESLint strict mode\n- Svelte reactive bindings\n- TailwindCSS for styling\n- Component-driven architecture\n- Error boundaries for stability\n\n### Testing Strategy\n\n**CLI Tests** (C#):\n- Unit tests for Registry operations\n- Integration tests for backup/restore\n- Mock Windows Registry for CI\n\n**GUI Tests** (Playwright):\n- Component tests (Svelte Kit)\n- E2E tests (user workflows)\n- Screenshot regression testing\n\n**Compatibility**:\n- Windows 10 21H2+\n- Windows 11\n- Admin vs. non-admin execution paths\n\n### Commit Message Format\n\n```\n<type>(<scope>): <subject>\n\n<body>\n\n<footer>\n```\n\n**Types**: `feat`, `fix`, `docs`, `style`, `refactor`, `test`, `chore`  \n**Scopes**: `cli`, `gui`, `backup`, `registry`, `docs`, `build`  \n**Example**:\n```\nfeat(backup): add JSON export and diff command\n\nImplement backup/restore/diff commands for CLI:\n- Export all variables to timestamped JSON\n- Support scope filtering during restore\n- Show side-by-side diff of two backups\n\nCloses #5\n```\n\n---\n\n## Key Design Decisions\n\n### Why Not Rust for CLI?\n- ✅ C# has native Windows Registry API\n- ✅ Simpler build chain (no linker toolchain complexity)\n- ✅ .NET 10 excellent performance\n- ✅ Faster CLI prototyping\n\n### Why Tauri for GUI?\n- ✅ Lightweight compared to Electron (~40MB vs 200MB)\n- ✅ Native Windows integration\n- ✅ Excellent TypeScript support\n- ✅ Active ecosystem and documentation\n\n### Why JSON for Backups?\n- ✅ Human-readable for debugging\n- ✅ Cross-platform portable\n- ✅ Easy diff/merge tooling\n- ✅ Git-friendly version control\n\n### Why Single-File CLI?\n- ✅ Easy deployment (copy .exe, done)\n- ✅ No DLL hell or versioning issues\n- ✅ Self-contained executable\n- ✅ When GUI is added, CLI stays stable\n\n---\n\n## Known Risks & Mitigations\n\n| Risk | Impact | Mitigation |\n|------|--------|------------|\n| Registry elevation for System scope | Users can't write System vars without admin | Show clear error, suggest Run as Admin |\n| Backup format evolving | Old backups break with new versions | Include version field, migration logic |\n| IPC blocking in GUI | UI freezes during CLI execution | Spawn as separate process, use channels |\n| Environment change propagation delay | New vars not visible immediately | Document refresh requirement |\n\n---\n\n## Open Questions for Team\n\n1. **Installer Type**: MSI (simple, classic) vs MSIX (modern, Store) vs Portable EXE?\n2. **Auto-Update**: GitHub Releases, Sparkel, or manual?\n3. **Telemetry**: Collect usage stats? (Recommend: no, privacy-first)\n4. **Community**: Accept contributions? Maintain CODE_OF_CONDUCT?\n\n---\n\n## OMX Integration Checklist\n\n- [x] Project structured for multi-agent workflows\n- [x] AGENTS.md defines routing and responsibilities\n- [x] Goals decomposed into 6 parallel/sequential stories\n- [x] Team mode ready for Phase 2 multi-lane work\n- [x] Ledger captures decisions and blockers\n- [ ] Phase 2 implementation (in progress)\n- [ ] Final code review and integration tests\n- [ ] GitHub push and release\n\n---\n\n**Last Updated**: 2026-07-10  \n**Next Agent Action**: Start G003 (CLI backup commands) or G002 (Tauri setup) in parallel\n"
+# Development Guidelines & Agent Operations
+
+This document defines the development standards, architecture decisions, and operational procedures for the Env Manager project.
+
+## Project Specification
+
+**Project**: Env Manager  
+**Scope**: Windows environment variable manager with CLI and desktop GUI  
+**Language**: C# (.NET 10), TypeScript + Svelte  
+**License**: MIT  
+**Status**: Phase 1 Complete | Phase 2-3 In Development  
+
+## Architecture & Design Decisions
+
+### Backend Architecture
+
+**Technology Stack**:
+- Runtime: .NET 10
+- Registry Access: Microsoft.Win32.Registry (built-in)
+- CLI Output: Spectre.Console
+- Delivery: Single executable (~15MB)
+
+**Design Pattern**: Command-based architecture with direct Registry operations.
+
+**Why C# over Rust**:
+1. Native Windows Registry API support
+2. Eliminates linker chain complexity
+3. .NET 10 provides excellent performance
+4. Faster CLI prototyping cycle
+
+**Registry Access Pattern**:
+```
+User Environment:   HKCU\Environment
+System Environment: HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\Environment
+```
+
+### Frontend Architecture (Phase 2)
+
+**Technology Stack**:
+- Framework: Tauri 2.0
+- UI: TypeScript + Svelte
+- Styling: TailwindCSS
+- Build: Vite
+- State: Svelte stores
+
+**IPC Bridge Strategy**:
+- GUI invokes CLI via `tauri::Command` spawning `env-manager.exe`
+- Communication through stdout parsing and JSON intermediates
+- Error handling with process exit codes
+- Async/await for non-blocking UI
+
+**UI Components**:
+- Environment variable table with pagination
+- Search and filter by name/value
+- Create/Edit/Delete dialogs
+- Backup export/import interface
+- Scope selector (user/system)
+- Status notifications and error messages
+
+### Data Format
+
+**Backup JSON Structure**:
+```json
+{
+  "timestamp": "ISO8601",
+  "version": "1.0.0",
+  "variables": [
+    {
+      "name": "VARIABLE_NAME",
+      "value": "value",
+      "scope": "user|system"
+    }
+  ]
+}
+```
+
+**Invariants**:
+- Timestamp is required for audit trails
+- Version enables migration logic
+- Scope field distinguishes user/system variables
+
+## Implementation Guidelines
+
+### Code Standards
+
+**C# Backend**:
+- Minimum .NET 10
+- Async/await for all I/O operations
+- Explicit types (no `var` in public APIs)
+- Using statements for resource disposal
+- XML documentation for public members
+- Unit tests for Registry operations
+
+**TypeScript/Svelte Frontend**:
+- ESLint strict mode
+- TypeScript strict null checks
+- Reactive bindings for state management
+- Error boundaries for stability
+- Component-based organization
+- TailwindCSS utility classes
+
+**Code Quality Metrics**:
+- Target: 80%+ test coverage for critical paths
+- No console.log in production code
+- All error paths explicitly handled
+- No TODO comments without GitHub issues
+
+### Testing Strategy
+
+**Unit Tests** (C#):
+- Registry wrapper functions
+- Backup/restore logic
+- Variable validation
+- Mock Windows Registry for CI
+
+**Integration Tests**:
+- CLI command execution with sample data
+- Backup export and restore workflows
+- Cross-scope operations
+- File I/O operations
+
+**End-to-End Tests** (Playwright):
+- Component rendering
+- User workflows (create, edit, delete)
+- IPC communication between GUI and CLI
+- Screenshot regression testing
+- Windows 10/11 compatibility
+
+**Compatibility Requirements**:
+- Windows 10 21H2+
+- Windows 11 all versions
+- Both admin and non-admin execution paths
+- System scope operations require elevation
+
+### Commit Conventions
+
+Format:
+```
+<type>(<scope>): <subject>
+
+<body>
+
+Closes #<issue>
+```
+
+**Types**: feat, fix, docs, style, refactor, test, chore, perf  
+**Scopes**: cli, gui, backup, registry, build, docs, infra  
+
+**Example**:
+```
+feat(backup): implement JSON export and restore
+
+- Add backup command with automatic timestamping
+- Implement restore with scope filtering
+- Add validate command for backup integrity
+- Support both user and system scopes
+
+Closes #3
+```
+
+### File Organization
+
+```
+env-manager/
+├── backend/
+│   ├── Program.cs                 # CLI entry point and handlers
+│   ├── env-manager.csproj         # Project configuration
+│   ├── bin/Release/net10.0/       # Compiled binaries
+│   └── obj/                       # Build artifacts (gitignored)
+├── frontend/
+│   ├── src/
+│   │   ├── main.ts                # Tauri app entry
+│   │   ├── App.svelte             # Root component
+│   │   ├── lib/
+│   │   │   ├── api.ts             # CLI IPC bridge
+│   │   │   ├── components/        # Reusable UI components
+│   │   │   └── stores/            # Svelte state stores
+│   │   └── styles/                # Global stylesheets
+│   ├── public/                    # Static assets
+│   ├── package.json
+│   ├── vite.config.ts
+│   ├── tsconfig.json
+│   └── tauri.conf.json            # Tauri configuration
+├── docs/
+│   ├── README.md                  # Main documentation (English)
+│   ├── README_CN.md               # Chinese translation
+│   ├── ARCHITECTURE.md            # System design details
+│   ├── DEVELOPMENT.md             # Developer setup guide
+│   └── CHANGELOG.md               # Release notes
+├── .github/
+│   ├── workflows/                 # CI/CD pipelines
+│   └── ISSUE_TEMPLATE/            # Bug report templates
+├── .gitignore                     # Standard .NET exclusions
+├── AGENTS.md                      # This file
+├── LICENSE                        # MIT license text
+└── .omx/                          # OMX workflow state
+
+```
+
+## Development Workflow
+
+### Setup Requirements
+
+**Prerequisites**:
+- .NET 10 SDK
+- Node.js 18+ (for GUI)
+- Tauri CLI
+- Git
+- For system scope operations: Administrator access
+
+**Initial Setup**:
+```powershell
+git clone https://github.com/Xxx91n/env-manager.git
+cd env-manager
+
+# Backend
+cd backend
+dotnet restore
+dotnet build -c Release
+
+# Frontend (Phase 2+)
+cd ../frontend
+npm install
+npm run build
+```
+
+### Build & Release Process
+
+**Development Build**:
+```powershell
+dotnet build -c Debug
+```
+
+**Release Build**:
+```powershell
+dotnet build -c Release
+# Output: bin/Release/net10.0/env-manager.exe
+```
+
+**GUI Development**:
+```powershell
+cd frontend
+tauri dev  # Hot reload enabled
+```
+
+### Testing Process
+
+**Run Tests**:
+```powershell
+dotnet test
+```
+
+**Manual Testing Checklist**:
+- [ ] List all variables (user and system)
+- [ ] Get specific variable
+- [ ] Set user variable
+- [ ] Set system variable (requires admin)
+- [ ] Delete variable
+- [ ] Backup creation
+- [ ] Backup restore
+- [ ] Diff two backups
+- [ ] Merge backups
+- [ ] Help output formatting
+
+### Code Review Checklist
+
+Before merge, verify:
+- [ ] No hardcoded paths or credentials
+- [ ] Error handling for all Registry operations
+- [ ] Unit tests added for new logic
+- [ ] Code follows style guidelines
+- [ ] Commit messages follow conventions
+- [ ] No Breaking changes documented
+- [ ] Documentation updated
+- [ ] Performance impact assessed
+
+## Known Constraints & Tradeoffs
+
+### System Scope Limitations
+
+- Requires administrator privileges for write operations
+- Changes apply to system-wide environment
+- User must restart applications to see changes
+
+### Backup & Restore
+
+- JSON format for portability but larger than binary
+- No compression implemented (can be added if needed)
+- Merge strategy is last-write-wins
+
+### IPC Design
+
+- CLI spawned as separate process to avoid blocking GUI
+- stdout/stderr parsing for output
+- JSON intermediates for complex data
+- No shared memory due to privilege isolation
+
+## Error Handling Strategy
+
+**Registry Access Failures**:
+- Catch UnauthorizedAccessException for elevation requirements
+- Log operation details for debugging
+- Present user-friendly error messages
+- Suggest running as administrator for system scope
+
+**File I/O**:
+- Validate paths before access
+- Handle missing files gracefully
+- Preserve backup files on error
+- Log stack traces for unexpected errors
+
+**Data Validation**:
+- Enforce name length limits (max 32767)
+- Validate scope values
+- Check value encoding compatibility
+- Prevent null or empty critical fields
+
+## Performance Considerations
+
+- Registry operations are I/O bound
+- GUI should spawn CLI processes asynchronously
+- Large variable lists require pagination
+- Backup diff should short-circuit on first change
+
+## Security Guidelines
+
+### Registry Access
+
+- Use minimal required Registry scope
+- Validate all user input before Registry operations
+- Log sensitive operations for audit trail
+- Never log variable values containing credentials
+
+### IPC Communication
+
+- Validate CLI output before parsing
+- Use JSON schema validation
+- Implement timeout for process execution
+- Handle process crashes gracefully
+
+### Dependency Management
+
+- Verify all NuGet packages before adding
+- Keep dependencies up-to-date
+- Review breaking changes in updates
+- Document dependency rationale
+
+## Release Checklist
+
+Before major release:
+- [ ] All tests passing
+- [ ] Code review completed
+- [ ] Documentation updated
+- [ ] Changelog entries written
+- [ ] Version bumped
+- [ ] Release notes prepared
+- [ ] Binaries built and tested
+- [ ] Tag created in Git
+- [ ] Artifacts uploaded
+- [ ] GitHub release published
+
+## Common Tasks
+
+### Adding a New CLI Command
+
+1. Add handler function in Program.cs
+2. Add case statement to main switch
+3. Document usage in help text
+4. Add unit tests
+5. Update README with example
+6. Commit with conventional format
+
+### Adding GUI Feature
+
+1. Create Svelte component in lib/components/
+2. Implement IPC call in lib/api.ts
+3. Add state to lib/stores/
+4. Wire component into App.svelte
+5. Style with TailwindCSS
+6. Test IPC communication
+7. Add E2E test
+
+### Updating Dependencies
+
+1. Review changelog for breaking changes
+2. Update package.json/csproj
+3. Run build and tests
+4. Commit: chore(deps): update <package>
+5. Document any migration steps required
+
+## Decision Log
+
+### Why Single-File CLI
+
+- Simplifies deployment (copy .exe, done)
+- Avoids DLL version conflicts
+- Self-contained for packaging
+- Future: split into service/library for GUI integration
+
+### Why JSON for Backups
+
+- Human-readable for debugging
+- Portable across platforms
+- Version-aware for migrations
+- Git-friendly for version control
+- Tooling support (jq, PowerShell)
+
+### Why Tauri for GUI
+
+- Lightweight (40MB vs 200MB Electron)
+- Native Windows integration
+- Strong TypeScript support
+- Active ecosystem
+- Security-first design
+
+## Maintenance & Support
+
+### Issue Triage
+
+- Bug: Reproducible issue with clear steps
+- Enhancement: Feature request or improvement
+- Documentation: Docs clarity or completeness
+- Question: Support or clarification needed
+
+### Version Support
+
+- Latest: Full support and updates
+- N-1: Critical bug fixes only
+- N-2 and older: No support
+
+### Deprecation Policy
+
+- 3 month notice period
+- Clear migration path provided
+- Documentation updated
+- Alternative solutions documented
+
+---
+
+**Last Updated**: 2026-07-10  
+**Maintained By**: Env Manager Development Team  
+**Status**: Active Development

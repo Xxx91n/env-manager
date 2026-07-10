@@ -1,1 +1,317 @@
-# Env Manager\n\n[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)\n[![.NET 10](https://img.shields.io/badge/.NET-10.0-blue)](https://dotnet.microsoft.com/)\n[![Windows](https://img.shields.io/badge/Platform-Windows%2010%2F11-0078d4)](https://www.microsoft.com/windows/)\n\n**A modern, lightweight Windows environment variable manager** with a fast CLI and elegant desktop GUI.\n\n> Inspired by [Microsoft PowerToys](https://github.com/microsoft/PowerToys) • Engineered for efficiency • Open source & MIT licensed\n\n---\n\n## ✨ Features\n\n### CLI\n✅ **List all variables** from user & system scopes  \n✅ **Get/Set/Delete** individual variables with scope control  \n✅ **Backup/Restore** environment snapshots in JSON format  \n✅ **Diff/Merge** multiple backups to track changes  \n✅ **Beautiful output** with Spectre.Console tables  \n✅ **Fast** — .NET 10 native binary  \n\n### GUI (Phase 2)\n🚀 **Real-time editor** for environment variables  \n🚀 **Search & filter** across all scopes  \n🚀 **Backup management** with one-click export/import  \n🚀 **Responsive design** with dark mode support  \n🚀 **IPC sync** between CLI and desktop app  \n🚀 **Built with Tauri** — lightweight & native  \n\n---\n\n## 🚀 Quick Start\n\n### Installation\n\n**Option 1: Download Binary**\n```powershell\n# Download from GitHub Releases\n# https://github.com/Xxx91n/env-manager/releases\n\n# Copy to PATH or use directly\n.\\env-manager.exe list\n```\n\n**Option 2: Build from Source**\n```powershell\ngit clone https://github.com/Xxx91n/env-manager.git\ncd env-manager/backend\ndotnet build -c Release\n\n# Binary at: bin/Release/net10.0/env-manager.exe\n```\n\n### CLI Usage\n\n```powershell\n# List all variables\nenv-manager list\n\n# Get a specific variable\nenv-manager get PATH\n\n# Set a variable (user scope)\nenv-manager set MY_VAR \"my_value\"\n\n# Set system variable (requires elevation)\nenv-manager set MY_VAR \"my_value\" --scope system\n\n# Delete a variable\nenv-manager delete MY_VAR\n\n# Backup current state\nenv-manager backup --output my_backup.json\n\n# Restore from backup\nenv-manager restore my_backup.json\n\n# Compare two backups\nenv-manager diff old_backup.json new_backup.json\n\n# Merge backups\nenv-manager merge old.json new.json --output merged.json\n\n# Show help\nenv-manager help\n```\n\n---\n\n## 📦 What's Included\n\n### Phase 1: CLI Backend ✅\n- Fast CRUD operations on environment variables\n- User & System scope support\n- Minimal dependencies (only Spectre.Console for UI)\n- Direct Windows Registry API access\n- Fully tested on Windows 10/11\n\n### Phase 2: Desktop GUI (In Progress)\n- Tauri-based cross-platform app\n- TypeScript + Svelte frontend\n- Real-time environment variable editor\n- Backup export/import UI\n- IPC bridge to CLI\n\n### Phase 3: Polish & Distribution\n- MSI installer\n- GitHub Releases with auto-download\n- Auto-update mechanism\n- Full documentation\n\n---\n\n## 🔧 Architecture\n\n### Backend (C# .NET 10)\n```\nProgram.cs\n├── Registry API wrapper\n├── CRUD operations\n├── Backup/restore logic\n├── CLI command router\n└── Error handling\n```\n\n**Stack**:\n- **Language**: C# .NET 10\n- **Registry Access**: Microsoft.Win32.Registry (built-in)\n- **CLI Output**: Spectre.Console\n- **Delivery**: Single executable, ~15MB with runtime\n\n### Frontend (Tauri + TypeScript/Svelte)\n```\nsrc/\n├── App.svelte          (Root component)\n├── lib/\n│   ├── api.ts          (IPC bridge to CLI)\n│   ├── components/     (UI components)\n│   └── stores/         (State management)\n└── styles/             (TailwindCSS)\n```\n\n**Stack**:\n- **Framework**: Tauri 2.0\n- **UI**: TypeScript + Svelte\n- **Styling**: TailwindCSS\n- **Build**: Vite\n\n### Data Format\n\n**Backup JSON**:\n```json\n{\n  \"timestamp\": \"2026-07-10T12:34:56Z\",\n  \"version\": \"1.0.0\",\n  \"variables\": [\n    {\n      \"name\": \"PATH\",\n      \"value\": \"C:\\\\Windows\\\\System32;...\",\n      \"scope\": \"user\"\n    },\n    {\n      \"name\": \"JAVA_HOME\",\n      \"value\": \"D:\\\\jdk17\\\\\",\n      \"scope\": \"system\"\n    }\n  ]\n}\n```\n\n---\n\n## 📊 Comparison with Alternatives\n\n| Feature | Env Manager | PowerToys | setx (native) |\n|---------|-------------|----------|---------------|\n| GUI | ✅ Planned | ✅ | ❌ |\n| CLI | ✅ | ❌ | ✅ Limited |\n| Backup/Restore | ✅ | ❌ | ❌ |\n| Diff/Merge | ✅ | ❌ | ❌ |\n| Open Source | ✅ MIT | ✅ MIT | ✅ |\n| .NET Lightweight | ✅ | ❌ (C++) | N/A |\n| Cross-Scope | ✅ | ✅ | ✅ Limited |\n\n---\n\n## 🛠️ Development\n\n### Setup (Windows)\n\n**Prerequisites**:\n- .NET 10 SDK\n- Node.js 18+ (for GUI)\n- Tauri CLI\n- Git\n\n**Clone & Build**:\n```powershell\ngit clone https://github.com/Xxx91n/env-manager.git\ncd env-manager\n\n# Build CLI\ncd backend\ndotnet build -c Release\ncd ..\n\n# Build GUI (Phase 2)\ncd frontend\nnpm install\ntauri dev\n```\n\n### Project Structure\n```\nenv-manager/\n├── backend/              # C# CLI\n│   ├── Program.cs\n│   ├── env-manager.csproj\n│   ├── bin/Release/\n│   └── obj/\n│\n├── frontend/             # Tauri GUI (Phase 2)\n│   ├── src/\n│   ├── package.json\n│   └── tauri.conf.json\n│\n├── docs/\n│   ├── README.md         (this file)\n│   ├── README_CN.md      (中文版)\n│   ├── ARCHITECTURE.md\n│   └── DEVELOPMENT.md\n│\n├── .github/workflows/    # CI/CD\n├── AGENTS.md             # OMX agent routing\n├── LICENSE               # MIT\n└── .gitignore\n```\n\n### Testing\n\n```powershell\n# CLI smoke test\n.\\backend\\bin\\Release\\net10.0\\env-manager.exe list\n\n# Backup test\n.\\backend\\bin\\Release\\net10.0\\env-manager.exe backup --output test.json\n.\\backend\\bin\\Release\\net10.0\\env-manager.exe validate test.json\n```\n\n### Contribution\n\nWe welcome contributions! See [DEVELOPMENT.md](./docs/DEVELOPMENT.md) for setup and workflow.\n\n**Code Style**:\n- C#: `.editorconfig` enforced\n- TypeScript: ESLint strict\n- Commits: Conventional Commits format\n\n---\n\n## 📝 License\n\nMIT License © 2026 Env Manager Contributors\n\nSee [LICENSE](./LICENSE) for full text.\n\n---\n\n## 🌍 Documentation\n\n- 📖 **[English Guide](./README.md)** (you are here)\n- 📖 **[中文指南](./README_CN.md)** — Chinese guide\n- 🏗️ **[Architecture](./docs/ARCHITECTURE.md)** — System design & design decisions\n- 👨‍💻 **[Development Guide](./docs/DEVELOPMENT.md)** — Setup, testing, contribution\n- 📋 **[AGENTS.md](./AGENTS.md)** — OMX workflow & agent routing\n- 📈 **[Changelog](./docs/CHANGELOG.md)** — Release notes\n\n---\n\n## 🤝 Community\n\n- **Issues**: Report bugs on [GitHub Issues](https://github.com/Xxx91n/env-manager/issues)\n- **Discussions**: Ask questions on [GitHub Discussions](https://github.com/Xxx91n/env-manager/discussions)\n- **Contribute**: Submit PRs with improvements\n- **Feedback**: Share ideas via Issues (tag as `enhancement`)\n\n---\n\n## 🎯 Roadmap\n\n- **v0.2** (Phase 2) — Tauri GUI + backup commands\n- **v0.3** (Phase 3) — MSI installer, auto-update\n- **v1.0** — Stable release, Windows Store\n- **v1.1+** — Community-driven enhancements\n\n---\n\n## ⚡ Why Env Manager?\n\n✨ **Modern** — Built with latest .NET & Tauri  \n🚀 **Fast** — Native performance, single executable  \n📦 **Lightweight** — ~15MB CLI, minimal dependencies  \n🔒 **Safe** — Direct Registry access with error handling  \n🎨 **Beautiful** — Polished CLI output, elegant GUI  \n🆓 **Free** — Open source MIT license  \n👥 **Community** — Your contributions shape the future  \n\n---\n\n**[⬆ back to top](#env-manager)**\n"
+# Env Manager
+
+A modern, lightweight Windows environment variable manager with a fast CLI and elegant desktop GUI.
+
+Inspired by Microsoft PowerToys. Engineered for efficiency. Open source and MIT licensed.
+
+---
+
+## Features
+
+### CLI
+
+- List all variables from user and system scopes
+- Get, set, and delete individual variables with scope control
+- Backup and restore environment snapshots in JSON format
+- Diff and merge multiple backups to track changes
+- Beautiful output with Spectre.Console tables
+- Fast and native performance with .NET 10
+
+### GUI (Phase 2)
+
+- Real-time environment variable editor
+- Search and filter across all scopes
+- Backup management with export and import
+- Responsive design with dark mode support
+- IPC synchronization between CLI and desktop app
+- Built with Tauri for lightweight native performance
+
+---
+
+## Quick Start
+
+### Installation
+
+**Option 1: Download Binary**
+
+Download from GitHub Releases:
+https://github.com/Xxx91n/env-manager/releases
+
+Copy to your PATH or use directly:
+```powershell
+.\\env-manager.exe list
+```
+
+**Option 2: Build from Source**
+
+```powershell
+git clone https://github.com/Xxx91n/env-manager.git
+cd env-manager/backend
+dotnet build -c Release
+
+# Binary at: bin/Release/net10.0/env-manager.exe
+```
+
+### CLI Usage
+
+```powershell
+# List all variables
+env-manager list
+
+# Get a specific variable
+env-manager get PATH
+
+# Set a variable (user scope)
+env-manager set MY_VAR "my_value"
+
+# Set system variable (requires elevation)
+env-manager set MY_VAR "my_value" --scope system
+
+# Delete a variable
+env-manager delete MY_VAR
+
+# Backup current state
+env-manager backup --output my_backup.json
+
+# Restore from backup
+env-manager restore my_backup.json
+
+# Compare two backups
+env-manager diff old_backup.json new_backup.json
+
+# Merge backups
+env-manager merge old.json new.json --output merged.json
+
+# Show help
+env-manager help
+```
+
+---
+
+## Project Phases
+
+### Phase 1: CLI Backend (Complete)
+
+- Fast CRUD operations on environment variables
+- User and system scope support
+- Minimal dependencies (Spectre.Console only)
+- Direct Windows Registry API access
+- Fully tested on Windows 10 and 11
+
+### Phase 2: Desktop GUI (In Development)
+
+- Tauri-based cross-platform application
+- TypeScript and Svelte frontend
+- Real-time environment variable editor
+- Backup export and import UI
+- IPC bridge to CLI
+
+### Phase 3: Polish and Distribution (Planned)
+
+- MSI installer for easy installation
+- GitHub Releases with auto-download functionality
+- Auto-update mechanism
+- Complete documentation and guides
+
+---
+
+## Architecture
+
+### Backend (C# .NET 10)
+
+Program.cs contains:
+- Registry API wrapper
+- CRUD operations for variables
+- Backup and restore logic
+- CLI command routing
+- Error handling
+
+**Technology Stack**:
+- Language: C# .NET 10
+- Registry Access: Microsoft.Win32.Registry (built-in)
+- CLI Output: Spectre.Console
+- Delivery: Single executable, approximately 15MB with runtime
+
+### Frontend (Tauri + TypeScript/Svelte)
+
+```
+src/
+├── App.svelte              (Root component)
+├── lib/
+│   ├── api.ts              (IPC bridge to CLI)
+│   ├── components/         (UI components)
+│   └── stores/             (State management)
+└── styles/                 (TailwindCSS)
+```
+
+**Technology Stack**:
+- Framework: Tauri 2.0
+- UI: TypeScript and Svelte
+- Styling: TailwindCSS
+- Build: Vite
+
+### Data Format
+
+**Backup JSON**:
+```json
+{
+  "timestamp": "2026-07-10T12:34:56Z",
+  "version": "1.0.0",
+  "variables": [
+    {
+      "name": "PATH",
+      "value": "C:\\\\Windows\\\\System32;...",
+      "scope": "user"
+    },
+    {
+      "name": "JAVA_HOME",
+      "value": "D:\\\\jdk17\\\\",
+      "scope": "system"
+    }
+  ]
+}
+```
+
+---
+
+## Comparison with Alternatives
+
+| Feature | Env Manager | PowerToys | setx (native) |
+|---------|-------------|----------|---------------|
+| GUI | Planned | Yes | No |
+| CLI | Yes | No | Yes (limited) |
+| Backup/Restore | Yes | No | No |
+| Diff/Merge | Yes | No | No |
+| Open Source | Yes (MIT) | Yes (MIT) | Yes |
+| .NET Lightweight | Yes | No (C++) | N/A |
+| Cross-Scope | Yes | Yes | Yes (limited) |
+
+---
+
+## Development
+
+### Setup (Windows)
+
+**Prerequisites**:
+- .NET 10 SDK
+- Node.js 18 or higher (for GUI)
+- Tauri CLI
+- Git
+
+**Clone and Build**:
+```powershell
+git clone https://github.com/Xxx91n/env-manager.git
+cd env-manager
+
+# Build CLI
+cd backend
+dotnet build -c Release
+cd ..
+
+# Build GUI (Phase 2)
+cd frontend
+npm install
+tauri dev
+```
+
+### Project Structure
+
+```
+env-manager/
+├── backend/                # C# CLI
+│   ├── Program.cs
+│   ├── env-manager.csproj
+│   ├── bin/Release/
+│   └── obj/
+│
+├── frontend/               # Tauri GUI (Phase 2)
+│   ├── src/
+│   ├── package.json
+│   └── tauri.conf.json
+│
+├── docs/
+│   ├── README.md           (this file)
+│   ├── README_CN.md        (Chinese version)
+│   ├── ARCHITECTURE.md
+│   └── DEVELOPMENT.md
+│
+├── .github/workflows/      # CI/CD
+├── AGENTS.md               # Development guidelines
+├── LICENSE                 # MIT license
+└── .gitignore
+```
+
+### Testing
+
+**CLI Smoke Test**:
+```powershell
+.\\backend\\bin\\Release\\net10.0\\env-manager.exe list
+```
+
+**Backup Test**:
+```powershell
+.\\backend\\bin\\Release\\net10.0\\env-manager.exe backup --output test.json
+.\\backend\\bin\\Release\\net10.0\\env-manager.exe validate test.json
+```
+
+### Contribution
+
+We welcome contributions. See DEVELOPMENT.md for setup and workflow.
+
+**Code Style**:
+- C#: .editorconfig enforced
+- TypeScript: ESLint strict mode
+- Commits: Conventional Commits format
+
+---
+
+## License
+
+MIT License. Copyright (c) 2026 Env Manager Contributors.
+
+See LICENSE for full text.
+
+---
+
+## Documentation
+
+- README.md (English, this file)
+- README_CN.md (Chinese translation)
+- AGENTS.md (Development guidelines)
+- DEVELOPMENT.md (Developer setup)
+- ARCHITECTURE.md (System design)
+- CHANGELOG.md (Release notes)
+
+---
+
+## Community
+
+- Report bugs on GitHub Issues
+- Ask questions on GitHub Discussions
+- Submit PRs with improvements
+- Share ideas via Issues (tag as enhancement)
+
+---
+
+## Roadmap
+
+- v0.2 (Phase 2): Tauri GUI with backup commands
+- v0.3 (Phase 3): MSI installer and auto-update
+- v1.0: Stable release with Windows Store availability
+- v1.1 and beyond: Community-driven enhancements
+
+---
+
+## Why Env Manager?
+
+- Modern: Built with latest .NET and Tauri technologies
+- Fast: Native performance with single executable
+- Lightweight: Approximately 15MB CLI with minimal dependencies
+- Safe: Direct Registry access with comprehensive error handling
+- Polished: Clean CLI output and elegant GUI design
+- Free: Open source with MIT license
+- Community-Driven: Your contributions shape the future
+
+---
+
+Repository: https://github.com/Xxx91n/env-manager
