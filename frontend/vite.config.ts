@@ -15,4 +15,12 @@ export default defineConfig({
     port: 5173,
     strictPort: false,
   },
+  test: {
+    // Unit tests only. E2e tests use Playwright separately.
+    include: ['src/**/*.test.ts'],
+    exclude: ['tests/**', 'node_modules/**', 'dist/**'],
+    environment: 'jsdom',
+    globals: true,
+    setupFiles: ['./tests/setup.ts'],
+  },
 })

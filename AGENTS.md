@@ -50,6 +50,7 @@ env-manager/
 │   ├── playwright.config.ts
 │   ├── scripts/
 │   │   ├── prebuild.mjs              # Builds CLI, copies to src-tauri/bin/
+│   │   ├── tauri-build.mjs           # Wraps tauri build, auto-detects host triple
 │   │   └── build-all.ps1             # Consolidated build: release/portable + release/msi
 │   ├── src/
 │   │   ├── main.ts                   # App entry, initializes i18n
@@ -62,7 +63,7 @@ env-manager/
 │   │       ├── components/
 │   │       │   ├── Variables.svelte  # Variable list, search, filter
 │   │       │   ├── EditDialog.svelte # Create/edit variable dialog
-│   │       │   └── BackupDialog.svelte # Backup/export dialog
+│   │       │   ├── BackupDialog.svelte # Backup/export dialog
 │   │       │   ├── ProfileDialog.svelte # Profile management dialog
 │   │       │   ├── PathEditor.svelte   # PATH variable list editor
 │   │       │   └── SettingsDialog.svelte # Settings (language, theme)
@@ -87,6 +88,7 @@ env-manager/
 │   │   ├── icons/                    # Application icons
 │   │   └── bin/                      # CLI files copied by prebuild (gitignored)
 │   └── tests/
+│       ├── setup.ts                  # Vitest global mocks
 │       └── e2e/app.spec.ts
 │
 ├── release/                           # Build output (gitignored)
@@ -112,7 +114,7 @@ env-manager/
 
 ```powershell
 dotnet build -c Release
-# Output: bin/Release/net10.0/env-manager-cli.exe
+# Output: bin/Release/net10.0-windows/env-manager-cli.exe
 ```
 
 ### Build GUI (development with hot reload)
@@ -126,11 +128,13 @@ npm run tauri-dev
 
 ### Build GUI (production)
 
+The `tauri-build` npm script runs `scripts/tauri-build.mjs`, which auto-detects the Rust host triple via `rustc -vV` and passes `--target <triple>` to `tauri build`. This ensures the Tauri bundler looks in the same output directory where cargo actually places the binary (`target/<triple>/release/`), which is critical on hosts whose default triple is not the plain host (e.g. `x86_64-pc-windows-gnu` with MinGW).
+
 ```powershell
 cd frontend
 npm run tauri-build
 # Compiles Rust, bundles frontend, produces:
-#   frontend/src-tauri/target/release/env-manager.exe (host default)
+#   frontend/src-tauri/target/<triple>/release/env-manager.exe
 #   frontend/src-tauri/target/<triple>/release/bundle/msi/*.msi
 ```
 
@@ -190,6 +194,9 @@ All commands follow: `env-manager-cli <command> [arguments] [--flags]`
 
 ### Error handling
 
+- Errors go to stderr, success output to stdout
+- Exit code: 0 = success, 1 = failure
+
 ### Profiles
 
 Profiles are sets of preconfigured variables that can be applied/unapplied as a group. When applied, original values of affected user variables are backed up. Unapplying restores originals. Profiles only affect user scope.
@@ -202,9 +209,6 @@ Profiles are sets of preconfigured variables that can be applied/unapplied as a 
 ### Path Editor
 
 PATH variable edited as a list of directory entries. Entries can be added, removed, and reordered. Supports both user and system scopes.
-
-- Errors go to stderr, success output to stdout
-- Exit code: 0 = success, 1 = failure
 
 ---
 
@@ -243,6 +247,25 @@ The default locale (en) is loaded synchronously via `addMessages()` to ensure th
 
 ## Backup JSON Format
 
+```json
+{
+  "timestamp": "2026-07-10T12:34:56Z",
+  "version": "1.0.0",
+  "variables": [
+    {
+      "name": "PATH",
+      "value": "C:\\Windows\\System32;...",
+      "scope": "user"
+    }
+  ]
+}
+```
+
+- `timestamp`: RFC3339 / ISO 8601, UTC
+- `version`: Semantic version (currently "1.0.0")
+- `variables`: Array of `{ name, value, scope }`, may be empty
+- `scope`: Must be "user" or "system"
+
 ## Profile JSON Format
 
 Profiles are stored at `%LOCALAPPDATA%\EnvManager\profiles.json`:
@@ -266,24 +289,39 @@ Profiles are stored at `%LOCALAPPDATA%\EnvManager\profiles.json`:
 - `variables`: Array of `{ name, value }` pairs
 - When applied, original user variable values are backed up as `name_EnvManager_backup_<profileName>`
 
-```json
-{
-  "timestamp": "2026-07-10T12:34:56Z",
-  "version": "1.0.0",
-  "variables": [
-    {
-      "name": "PATH",
-      "value": "C:\\Windows\\System32;...",
-      "scope": "user"
-    }
-  ]
-}
+---
+
+## Testing
+
+### Test framework
+
+Frontend unit tests use Vitest with jsdom environment. Tests live alongside source files as `*.test.ts`. The test setup file at `frontend/tests/setup.ts` provides global mocks for `@tauri-apps/api/core` `invoke` and `svelte-i18n`.
+
+```powershell
+cd frontend
+npx vitest run          # Run all tests once
+npm run test:ui         # Interactive test UI
+npm run test:coverage   # With coverage report
+npm run test:e2e        # Playwright E2E tests
 ```
 
-- `timestamp`: RFC3339 / ISO 8601, UTC
-- `version`: Semantic version (currently "1.0.0")
-- `variables`: Array of `{ name, value, scope }`, may be empty
-- `scope`: Must be "user" or "system"
+### Mandatory testing rules
+
+1. **Before every commit**: run `npx vitest run` from `frontend/` and ensure all tests pass. A commit with failing tests is considered incomplete.
+2. **New feature = new tests**: any new CLI command, GUI component, store, API function, or i18n key must have corresponding unit test coverage added in the same commit.
+3. **i18n key completeness**: `src/lib/translations.test.ts` validates that every key in `en.json` exists in all 9 non-English translation files with non-empty values. Adding a key to `en.json` without adding it to all other files will fail the test.
+4. **Build verification after code changes**: after modifying code on the local machine, you must compile the release build to verify the full pipeline works. Run `powershell -ExecutionPolicy Bypass -File frontend/scripts/build-all.ps1` and verify `release/portable/env-manager.exe` launches successfully. Do not commit code that breaks the build.
+5. **No emoji in tests**: test names and assertions follow the same no-emoji rule as the rest of the project.
+
+### Test file inventory
+
+| File | Coverage |
+|------|----------|
+| `src/App.test.ts` | Root component rendering, navigation |
+| `src/lib/stores.test.ts` | All Svelte stores (variables, loading, error, scope filter, search, settings) |
+| `src/lib/api.test.ts` | Tauri IPC bridge, all CLI command invocations, response parsing |
+| `src/lib/i18n.test.ts` | Locale registration, default locale, setup function, localStorage persistence |
+| `src/lib/translations.test.ts` | Translation key completeness across all 10 locales |
 
 ---
 
@@ -353,6 +391,10 @@ Scopes: `cli`, `gui`, `backup`, `registry`, `i18n`, `docs`, `build`
 | tailwindcss 3.x | CSS framework |
 | vite 5.x | Build tool |
 | typescript 5.x | Type checking |
+| vitest 4.x | Unit test runner |
+| jsdom 25.x | DOM environment for tests |
+| @testing-library/svelte 5.x | Svelte component testing utilities |
+| @playwright/test 1.x | E2E browser testing |
 
 ### Cargo (Rust)
 
@@ -421,6 +463,7 @@ Scopes: `cli`, `gui`, `backup`, `registry`, `i18n`, `docs`, `build`
 | Dependency update | AGENTS.md |
 | Build change | AGENTS.md, README.md, README_CN.md |
 | Directory structure change | AGENTS.md |
+| New test file | AGENTS.md (test inventory section) |
 
 A commit that does not update AGENTS.md when the project has changed is considered incomplete.
 
@@ -439,4 +482,4 @@ A commit that does not update AGENTS.md when the project has changed is consider
 
 ---
 
-**Last updated**: 2026-07-12
+**Last updated**: 2026-07-11
