@@ -486,6 +486,26 @@ Scopes: `cli`, `gui`, `backup`, `registry`, `i18n`, `docs`, `build`
 
 ---
 
+## Mandatory Build After Code Changes
+
+**Every commit that modifies CLI, GUI, or build code MUST produce compiled artifacts in `release/` before pushing.**
+
+Run the consolidated build after any code change:
+
+```powershell
+cd frontend
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build-all.ps1
+```
+
+Verify the output:
+- `release/portable/env-manager.exe` - GUI executable
+- `release/portable/env-manager-cli.exe` - CLI backend
+- `release/msi/Env Manager_X.Y.Z_x64.msi` - MSI installer
+
+A commit that does not produce working `release/` artifacts is considered incomplete. The `release/` directory is gitignored - artifacts are for local testing only, not committed to git.
+
+---
+
 ## How to Release
 
 1. Update version in `env-manager.csproj`, `frontend/package.json`, `frontend/src-tauri/tauri.conf.json`, `frontend/src-tauri/Cargo.toml`
@@ -589,6 +609,7 @@ This is accessible via `getDiagnostics()` in `api.ts` and helps debug "CLI not f
 | Build change | AGENTS.md, README.md, README_CN.md |
 | Directory structure change | AGENTS.md |
 | CodeGraph index change | AGENTS.md (CodeGraph section) |
+| Code change (any) | Run build-all.ps1, verify release/ artifacts |
 | New test file | AGENTS.md (test inventory section) |
 
 A commit that does not update AGENTS.md when the project has changed is considered incomplete.
