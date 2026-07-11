@@ -20,17 +20,29 @@
   }
 
   let currentLocale: string = defaultLanguage
+  let initError: string | null = null
 
   // Reactively sync currentLocale from the locale store
   $: if ($locale) currentLocale = $locale
 
   onMount(async () => {
-    await listVariables()
+    console.log('[env-manager] App mounted, loading variables...')
+    try {
+      await listVariables()
+      console.log('[env-manager] Variables loaded:', $variables.length)
+    } catch (err) {
+      console.error('[env-manager] Failed to load variables on mount:', err)
+      initError = err instanceof Error ? err.message : String(err)
+    }
   })
 
   function switchLocale(newLocale: string) {
     locale.set(newLocale)
-    localStorage.setItem('locale', newLocale)
+    try {
+      localStorage.setItem('locale', newLocale)
+    } catch {
+      // Ignore storage errors
+    }
   }
 </script>
 
@@ -55,6 +67,13 @@
   </header>
 
   <div class="container mx-auto px-6 py-8">
+    {#if initError}
+      <div class="bg-red-50 border border-red-200 text-red-800 px-4 py-3 rounded mb-4">
+        <p class="font-semibold mb-1">{$t('errors.cliExecutionFailed')}</p>
+        <p class="text-sm font-mono break-all">{initError}</p>
+      </div>
+    {/if}
+
     {#if $error}
       <div class="bg-red-50 border border-red-200 text-red-800 px-4 py-3 rounded mb-4">
         {$error}

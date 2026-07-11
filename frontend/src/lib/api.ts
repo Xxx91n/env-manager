@@ -14,6 +14,7 @@ export interface Diagnostics {
 }
 
 async function runCommand(cmd: string, args: string[] = []): Promise<string> {
+  console.log(`[api] run_cli: ${cmd}`, args)
   try {
     const result = await invoke<CLIResponse>('run_cli', {
       command: cmd,
@@ -21,12 +22,15 @@ async function runCommand(cmd: string, args: string[] = []): Promise<string> {
     })
 
     if (!result.success) {
-      throw new Error(result.error || 'Unknown error')
+      const errMsg = result.error || 'Unknown CLI error'
+      console.error(`[api] CLI error for '${cmd}':`, errMsg)
+      throw new Error(errMsg)
     }
 
     return result.data || ''
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err)
+    console.error(`[api] invoke failed for '${cmd}':`, msg)
     throw new Error(msg)
   }
 }
@@ -34,7 +38,8 @@ async function runCommand(cmd: string, args: string[] = []): Promise<string> {
 export async function getDiagnostics(): Promise<Diagnostics> {
   try {
     return await invoke<Diagnostics>('cli_diagnostics')
-  } catch {
+  } catch (err) {
+    console.error('[api] cli_diagnostics failed:', err)
     return {
       resolved_cli_path: 'UNAVAILABLE',
       gui_exe_dir: 'UNAVAILABLE',
@@ -52,7 +57,8 @@ export async function listVariables(): Promise<void> {
     const parsed = parseTableOutput(output)
     variables.set(parsed)
   } catch (err) {
-    error.set(err instanceof Error ? err.message : 'Failed to list variables')
+    const msg = err instanceof Error ? err.message : 'Failed to list variables'
+    error.set(msg)
   } finally {
     loading.set(false)
   }
@@ -129,12 +135,17 @@ export async function restoreBackup(
   }
 }
 
-function parseTableOutput(output: string) {
+/**
+ * Parse Spectre.Console table output into structured variable objects.
+ * The table uses Unicode box-drawing characters as cell separators.
+ */
+function parseTableOutput(output: string): Array<{ name: string; scope: string; value: string }> {
   const lines = output.split('\n').slice(1)
-  const vars = []
+  const vars: Array<{ name: string; scope: string; value: string }> = []
 
   for (const line of lines) {
     if (!line.trim()) continue
+    // Spectre.Console uses U+2502 as column separator
     const parts = line.split('\u2502').map((s) => s.trim()).filter(Boolean)
     if (parts.length >= 3) {
       vars.push({

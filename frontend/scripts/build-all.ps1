@@ -39,20 +39,35 @@ if (-not $SkipGui) {
   Pop-Location
 }
 
-# Locate the GUI exe across possible target triples
+# Locate the GUI exe. Tauri outputs to:
+#   - target/release/env-manager.exe               (host default, no --target)
+#   - target/<triple>/release/env-manager.exe      (when --target is specified)
+# We auto-detect instead of hardcoding a triple so the script works on any
+# machine (GNU, MSVC, or other) and in CI/CD.
 $TargetBase = Join-Path $ProjectRoot "frontend\src-tauri\target"
 $GuiExe = $null
-$TargetTriple = $null
-foreach ($triple in @("x86_64-pc-windows-gnu", "x86_64-pc-windows-msvc")) {
-  $candidate = Join-Path $TargetBase "$triple\release\env-manager.exe"
-  if (Test-Path $candidate) {
-    $GuiExe = $candidate
-    $TargetTriple = $triple
-    break
+
+# 1. Check host-default location first (no --target flag used)
+$HostDefault = Join-Path $TargetBase "release\env-manager.exe"
+if (Test-Path $HostDefault) {
+  $GuiExe = $HostDefault
+  Write-Host "[build] Found GUI exe (host default): $GuiExe" -ForegroundColor Green
+}
+
+# 2. Scan all triple-named subdirectories
+if (-not $GuiExe) {
+  $releaseDirs = Get-ChildItem -Path $TargetBase -Directory -ErrorAction SilentlyContinue
+  foreach ($dir in $releaseDirs) {
+    $candidate = Join-Path $dir.FullName "release\env-manager.exe"
+    if (Test-Path $candidate) {
+      $GuiExe = $candidate
+      Write-Host "[build] Found GUI exe ($($dir.Name)): $GuiExe" -ForegroundColor Green
+      break
+    }
   }
 }
+
 if (-not $GuiExe) { throw "GUI exe not found under $TargetBase" }
-Write-Host "[build] Found GUI exe: $GuiExe" -ForegroundColor Green
 
 Write-Host "[build] Step 3: Assemble portable package" -ForegroundColor Cyan
 # Copy GUI exe
@@ -61,7 +76,7 @@ Copy-Item $GuiExe -Destination $PortableDir -Force
 Get-ChildItem $CliDir | Where-Object { $_.Extension -in '.exe', '.dll', '.json' } | ForEach-Object {
   Copy-Item $_.FullName -Destination $PortableDir -Force
 }
-# Copy WebView2 runtime loader if Tauri bundled it alongside
+# Copy WebView2 runtime loader if Tauri placed it alongside the GUI exe
 $WebViewLoader = Join-Path (Split-Path -Parent $GuiExe) "WebView2Loader.dll"
 if (Test-Path $WebViewLoader) {
   Copy-Item $WebViewLoader -Destination $PortableDir -Force

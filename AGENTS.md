@@ -103,8 +103,7 @@ env-manager/
 
 - .NET 10 SDK
 - Node.js 18+ with npm
-- Rust toolchain (rustc + cargo) with target `x86_64-pc-windows-gnu`
-- MinGW-w64 (at `D:\MinGW64` or on PATH) for the GNU target
+- Rust toolchain (rustc + cargo). Either GNU (stable-x86_64-pc-windows-gnu) or MSVC (stable-x86_64-pc-windows-msvc) target works. The build system auto-detects the host triple and does not hardcode any specific target or linker path.
 
 ### Build CLI only
 
@@ -128,7 +127,7 @@ npm run tauri-dev
 cd frontend
 npm run tauri-build
 # Compiles Rust, bundles frontend, produces:
-#   frontend/src-tauri/target/<triple>/release/env-manager.exe
+#   frontend/src-tauri/target/release/env-manager.exe (host default)
 #   frontend/src-tauri/target/<triple>/release/bundle/msi/*.msi
 ```
 

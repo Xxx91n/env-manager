@@ -82,7 +82,7 @@ Launch `env-manager.exe` from the portable package or Start Menu. The GUI commun
 
 ### From Source
 
-**Prerequisites**: .NET 10 SDK, Node.js 18+, Rust toolchain with `x86_64-pc-windows-gnu` target, MinGW-w64
+**Prerequisites**: .NET 10 SDK, Node.js 18+, Rust toolchain (GNU or MSVC)
 
 ```bash
 # Build CLI

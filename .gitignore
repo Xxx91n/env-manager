@@ -48,6 +48,9 @@ omx_wiki/
 .docs/
 .opencode/
 
+# === Local Rust config (machine-specific, never commit) ===
+frontend/src-tauri/.cargo/config.toml
+
 # === Temporary / cache ===
 .cache/
 .temp/

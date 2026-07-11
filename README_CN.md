@@ -82,7 +82,7 @@ env-manager-cli.exe validate backup.json
 
 ### 从源代码编译
 
-**前提条件**：.NET 10 SDK、Node.js 18+、Rust 工具链（含 `x86_64-pc-windows-gnu` 目标）、MinGW-w64
+**前提条件**：.NET 10 SDK、Node.js 18+、Rust 工具链（GNU 或 MSVC 均可）
 
 ```bash
 # 编译 CLI
