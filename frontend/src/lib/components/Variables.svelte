@@ -58,100 +58,124 @@
   }
 </script>
 
-<div class="space-y-4">
-  <div class="flex gap-4 items-center">
-    <input
-      type="text"
-      placeholder={$t('messages.searchPlaceholder')}
-      bind:value={search}
-      class="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-    />
+<div class="space-y-3">
+  <!-- Toolbar -->
+  <div class="flex gap-2 items-center">
+    <!-- Search -->
+    <div class="relative flex-1">
+      <svg class="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+      </svg>
+      <input
+        type="text"
+        placeholder={$t('messages.searchPlaceholder')}
+        bind:value={search}
+        class="w-full pl-8 pr-3 py-1.5 text-xs border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-800 dark:border-gray-600 dark:text-gray-100"
+      />
+    </div>
 
+    <!-- Scope filter -->
     <select
       bind:value={$selectedScope}
-      class="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+      class="px-2.5 py-1.5 text-xs border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white dark:bg-gray-800 dark:border-gray-600 dark:text-gray-100"
     >
       <option value="all">{$t('table.scope')}</option>
       <option value="user">{$t('scope.user')}</option>
       <option value="system">{$t('scope.system')}</option>
     </select>
 
+    <!-- Add button -->
     <button
       on:click={() => (showEditDialog = true)}
-      class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
+      class="flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 transition dark:bg-blue-500 dark:hover:bg-blue-600"
     >
+      <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2.5">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4" />
+      </svg>
       {$t('buttons.add')}
     </button>
 
+    <!-- Backup button -->
     <button
       on:click={handleShowBackup}
-      class="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition"
+      class="flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 transition dark:text-gray-200 dark:bg-gray-800 dark:border-gray-600 dark:hover:bg-gray-700"
     >
+      <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
+      </svg>
       {$t('buttons.backup')}
     </button>
   </div>
 
   {#if $error}
-    <div class="bg-red-50 border border-red-200 text-red-800 px-4 py-3 rounded">
+    <div class="bg-red-50 border border-red-200 text-red-800 px-3 py-2 rounded-md text-xs dark:bg-red-900/30 dark:border-red-700 dark:text-red-300">
       {$error}
     </div>
   {/if}
 
-  <div class="overflow-x-auto bg-white rounded-lg border border-gray-200">
+  <!-- Table -->
+  <div class="overflow-x-auto bg-white rounded-md border border-gray-200 dark:bg-gray-800 dark:border-gray-700">
     {#if filteredVars.length === 0}
-      <div class="px-6 py-8 text-center text-gray-500">
+      <div class="px-4 py-8 text-center text-gray-400 text-xs dark:text-gray-500">
         {$t('messages.noData')}
       </div>
     {:else}
       <table class="w-full">
-        <thead class="bg-gray-50 border-b border-gray-200">
+        <thead class="bg-gray-50 border-b border-gray-200 dark:bg-gray-750 dark:border-gray-600">
           <tr>
-            <th class="px-6 py-3 text-left text-sm font-semibold text-gray-900">
+            <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">
               {$t('table.name')}
             </th>
-            <th class="px-6 py-3 text-left text-sm font-semibold text-gray-900">
+            <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide w-20">
               {$t('table.scope')}
             </th>
-            <th class="px-6 py-3 text-left text-sm font-semibold text-gray-900">
+            <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">
               {$t('table.value')}
             </th>
-            <th class="px-6 py-3 text-right text-sm font-semibold text-gray-900">
+            <th class="px-3 py-2 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide w-24">
               {$t('table.actions')}
             </th>
           </tr>
         </thead>
-        <tbody>
+        <tbody class="divide-y divide-gray-100 dark:divide-gray-700">
           {#each filteredVars as variable (variable.name + variable.scope)}
-            <tr class="border-b border-gray-200 hover:bg-gray-50">
-              <td class="px-6 py-3 text-sm font-mono text-gray-900">
+            <tr class="hover:bg-gray-50 transition dark:hover:bg-gray-750">
+              <td class="px-3 py-2 text-xs font-mono text-gray-900 dark:text-gray-100">
                 {variable.name}
               </td>
-              <td class="px-6 py-3 text-sm">
+              <td class="px-3 py-2 text-xs">
                 <span
-                  class="px-2 py-1 rounded text-xs font-semibold {variable.scope ===
+                  class="inline-flex px-1.5 py-0.5 rounded text-xs font-medium {variable.scope ===
                   'user'
-                    ? 'bg-blue-100 text-blue-800'
-                    : 'bg-red-100 text-red-800'}"
+                    ? 'bg-blue-50 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300'
+                    : 'bg-amber-50 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300'}"
                 >
                   {variable.scope === 'user' ? $t('scope.user') : $t('scope.system')}
                 </span>
               </td>
-              <td class="px-6 py-3 text-sm text-gray-600 font-mono max-w-xs truncate">
+              <td class="px-3 py-2 text-xs text-gray-600 font-mono dark:text-gray-300 max-w-xs truncate" title={variable.value}>
                 {variable.value}
               </td>
-              <td class="px-6 py-3 text-right text-sm space-x-2">
+              <td class="px-3 py-2 text-right text-xs">
                 <button
                   on:click={() => handleEdit(variable)}
-                  class="px-3 py-1 text-blue-600 hover:bg-blue-50 rounded transition"
+                  class="inline-flex p-1 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded transition dark:hover:text-blue-400 dark:hover:bg-blue-900/30"
+                  title={$t('buttons.edit')}
+                  aria-label={$t('buttons.edit')}
                 >
-                  {$t('buttons.edit')}
+                  <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                  </svg>
                 </button>
                 <button
-                  on:click={() =>
-                    handleDelete(variable.name, variable.scope)}
-                  class="px-3 py-1 text-red-600 hover:bg-red-50 rounded transition"
+                  on:click={() => handleDelete(variable.name, variable.scope)}
+                  class="inline-flex p-1 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition dark:hover:text-red-400 dark:hover:bg-red-900/30"
+                  title={$t('buttons.delete')}
+                  aria-label={$t('buttons.delete')}
                 >
-                  {$t('buttons.delete')}
+                  <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                  </svg>
                 </button>
               </td>
             </tr>

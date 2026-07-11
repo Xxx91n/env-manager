@@ -14,6 +14,7 @@
   "buttons.restore": "복원",
   "buttons.search": "검색",
   "buttons.export": "내보내기",
+  "buttons.close": "닫기",
   "table.name": "이름",
   "table.scope": "범위",
   "table.value": "값",

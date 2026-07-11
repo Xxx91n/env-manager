@@ -4,6 +4,7 @@ import enMessages from './translations/en.json'
 
 const defaultLocale = 'en'
 const supportedLocales = ['en', 'zh', 'ja', 'ko', 'de', 'fr', 'es', 'pt', 'ru', 'ar']
+const rtlLocales = ['ar']
 
 // Eagerly load English synchronously. This is the only locale that must be
 // available before the first render under Tauri's custom protocol.
@@ -24,6 +25,13 @@ function normalizeLocale(raw: string | null | undefined): string {
   if (!raw) return defaultLocale
   const base = raw.toLowerCase().split('-')[0]
   return supportedLocales.includes(base) ? base : defaultLocale
+}
+
+function applyTextDirection(loc: string): void {
+  if (typeof document === 'undefined') return
+  const isRtl = rtlLocales.includes(loc)
+  document.documentElement.setAttribute('dir', isRtl ? 'rtl' : 'ltr')
+  document.documentElement.setAttribute('lang', loc)
 }
 
 /**
@@ -73,6 +81,12 @@ export function setupI18n(): string {
       localeStore.set(resolved)
     })
   }
+
+  // Apply text direction (RTL for Arabic) immediately and on locale changes.
+  applyTextDirection(resolved)
+  localeStore.subscribe((loc) => {
+    if (loc) applyTextDirection(loc)
+  })
 
   return resolved
 }

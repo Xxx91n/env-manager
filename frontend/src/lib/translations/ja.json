@@ -14,6 +14,7 @@
   "buttons.restore": "復元",
   "buttons.search": "検索",
   "buttons.export": "エクスポート",
+  "buttons.close": "閉じる",
   "table.name": "名前",
   "table.scope": "スコープ",
   "table.value": "値",

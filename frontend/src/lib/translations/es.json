@@ -14,6 +14,7 @@
   "buttons.restore": "Restaurar",
   "buttons.search": "Buscar",
   "buttons.export": "Exportar",
+  "buttons.close": "Cerrar",
   "table.name": "Nombre",
   "table.scope": "Ambito",
   "table.value": "Valor",

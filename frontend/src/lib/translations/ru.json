@@ -14,6 +14,7 @@
   "buttons.restore": "Восстановить",
   "buttons.search": "Поиск",
   "buttons.export": "Экспорт",
+  "buttons.close": "Закрыть",
   "table.name": "Имя",
   "table.scope": "Область",
   "table.value": "Значение",

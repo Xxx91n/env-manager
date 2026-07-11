@@ -14,6 +14,7 @@
   "buttons.restore": "Restore",
   "buttons.search": "Search",
   "buttons.export": "Export",
+  "buttons.close": "Close",
   "table.name": "Name",
   "table.scope": "Scope",
   "table.value": "Value",

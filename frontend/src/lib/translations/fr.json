@@ -14,6 +14,7 @@
   "buttons.restore": "Restaurer",
   "buttons.search": "Rechercher",
   "buttons.export": "Exporter",
+  "buttons.close": "Fermer",
   "table.name": "Nom",
   "table.scope": "Portee",
   "table.value": "Valeur",
