@@ -83,5 +83,14 @@
   "path.moveDown": "下移",
   "path.removeEntry": "移除",
   "path.empty": "路径为空",
-  "path.confirmRemove": "从路径中移除此条目?"
+  "path.confirmRemove": "从路径中移除此条目?",
+  "table.enabled": "启用",
+  "messages.clickToEnable": "点击启用此变量",
+  "messages.clickToDisable": "点击禁用此变量",
+  "profiles.noVariables": "此配置文件中没有变量",
+  "profiles.cloneFromExisting": "从已有变量克隆",
+  "profiles.selectVariable": "选择变量",
+  "tray.show": "显示",
+  "tray.quit": "退出",
+  "tray.tooltip": "环境变量管理器"
 }

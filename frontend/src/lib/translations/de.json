@@ -83,5 +83,14 @@
   "path.moveDown": "Nach unten",
   "path.removeEntry": "Entfernen",
   "path.empty": "Pfad ist leer",
-  "path.confirmRemove": "Diesen Eintrag aus dem Pfad entfernen?"
+  "path.confirmRemove": "Diesen Eintrag aus dem Pfad entfernen?",
+  "table.enabled": "Aktiviert",
+  "messages.clickToEnable": "Klicken um diese Variable zu aktivieren",
+  "messages.clickToDisable": "Klicken um diese Variable zu deaktivieren",
+  "profiles.noVariables": "Keine Variablen in diesem Profil",
+  "profiles.cloneFromExisting": "Aus vorhandener Variable klonen",
+  "profiles.selectVariable": "Variable auswahlen",
+  "tray.show": "Anzeigen",
+  "tray.quit": "Beenden",
+  "tray.tooltip": "Env Manager"
 }

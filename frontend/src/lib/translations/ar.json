@@ -83,5 +83,14 @@
   "path.moveDown": "تحريك لأسفل",
   "path.removeEntry": "إزالة",
   "path.empty": "المسار فارغ",
-  "path.confirmRemove": "إزالة هذا الإدخال من المسار؟"
+  "path.confirmRemove": "إزالة هذا الإدخال من المسار؟",
+  "table.enabled": "مفعل",
+  "messages.clickToEnable": "انقر لتمكين هذا المتغير",
+  "messages.clickToDisable": "انقر لتعطيل هذا المتغير",
+  "profiles.noVariables": "لا توجد متغيرات في هذا الملف الشخصي",
+  "profiles.cloneFromExisting": "استنساخ من متغير موجود",
+  "profiles.selectVariable": "اختر متغير",
+  "tray.show": "إظهار",
+  "tray.quit": "خروج",
+  "tray.tooltip": "Env Manager"
 }

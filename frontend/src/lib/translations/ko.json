@@ -83,5 +83,14 @@
   "path.moveDown": "아래로 이동",
   "path.removeEntry": "제거",
   "path.empty": "경로가 비어 있습니다",
-  "path.confirmRemove": "경로에서 이 항목을 제거하시겠습니까?"
+  "path.confirmRemove": "경로에서 이 항목을 제거하시겠습니까?",
+  "table.enabled": "활성화",
+  "messages.clickToEnable": "클릭하여 이 변수를 활성화",
+  "messages.clickToDisable": "클릭하여 이 변수를 비활성화",
+  "profiles.noVariables": "이 프로필에 변수가 없습니다",
+  "profiles.cloneFromExisting": "기존 변수에서 복제",
+  "profiles.selectVariable": "변수 선택",
+  "tray.show": "표시",
+  "tray.quit": "종료",
+  "tray.tooltip": "Env Manager"
 }

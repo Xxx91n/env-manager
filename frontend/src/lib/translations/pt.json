@@ -83,5 +83,14 @@
   "path.moveDown": "Mover para baixo",
   "path.removeEntry": "Remover",
   "path.empty": "O caminho esta vazio",
-  "path.confirmRemove": "Remover esta entrada do caminho?"
+  "path.confirmRemove": "Remover esta entrada do caminho?",
+  "table.enabled": "Ativo",
+  "messages.clickToEnable": "Clique para ativar esta variavel",
+  "messages.clickToDisable": "Clique para desativar esta variavel",
+  "profiles.noVariables": "Sem variaveis neste perfil",
+  "profiles.cloneFromExisting": "Clonar de variavel existente",
+  "profiles.selectVariable": "Selecionar variavel",
+  "tray.show": "Mostrar",
+  "tray.quit": "Sair",
+  "tray.tooltip": "Env Manager"
 }

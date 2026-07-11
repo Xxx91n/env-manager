@@ -83,5 +83,14 @@
   "path.moveDown": "Вниз",
   "path.removeEntry": "Удалить",
   "path.empty": "Путь пуст",
-  "path.confirmRemove": "Удалить эту запись из пути?"
+  "path.confirmRemove": "Удалить эту запись из пути?",
+  "table.enabled": "Вкл",
+  "messages.clickToEnable": "Нажмите чтобы включить эту переменную",
+  "messages.clickToDisable": "Нажмите чтобы отключить эту переменную",
+  "profiles.noVariables": "В этом профиле нет переменных",
+  "profiles.cloneFromExisting": "Клонировать из существующей переменной",
+  "profiles.selectVariable": "Выбрать переменную",
+  "tray.show": "Показать",
+  "tray.quit": "Выход",
+  "tray.tooltip": "Env Manager"
 }

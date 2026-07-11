@@ -177,6 +177,7 @@ All commands follow: `env-manager-cli <command> [arguments] [--flags]`
 | `get` | `get <name>` | Get variable value |
 | `set` | `set <name> <value> [--scope user\|system]` | Set variable (default: user) |
 | `delete` | `delete <name> [--scope user\|system]` | Delete variable (default: user) |
+| `toggle` | `toggle <name> [--scope user\|system]` | Enable/disable variable (backs up value, default: user) |
 | `backup` | `backup [--output <file>]` | Backup all variables to JSON |
 | `restore` | `restore <file> [--scope user\|system]` | Restore variables from JSON |
 | `diff` | `diff <old> <new>` | Compare two backup files |
@@ -234,6 +235,18 @@ Profiles are sets of preconfigured variables that can be applied/unapplied as a 
 - Values containing `%` are stored as `REG_EXPAND_SZ` (matches Windows default editor behavior)
 - List-type variables (`PATH`, `PATHEXT`, `PSMODULEPATH`, `_NT_SYMBOL_PATH`, etc.) are detected for list-style editing
 
+### Variable Toggle (Enable/Disable)
+
+Variables can be toggled on/off without deleting them. When disabled:
+- The original value is backed up to a registry key named `<name>_EnvManager_disabled`
+- The original variable is deleted from the active environment
+- The `list` command shows disabled variables with `isDisabled: true` and their backed-up value
+- Re-enabling restores the original value and deletes the backup key
+
+This mirrors PowerToys' approach of preserving variable data while deactivating it.
+
+**Safety**: The toggle operation verifies backup write success before deleting the original. If the backup fails, the original variable is preserved unchanged.
+
 ### Path Editor
 
 PATH variable edited as a list of directory entries. Entries can be added, removed, and reordered. Supports both user and system scopes.
@@ -250,6 +263,20 @@ The Rust layer (`main.rs`) exposes two Tauri commands:
 ### Race Condition Prevention
 
 The Rust IPC layer uses a `static CLI_MUTEX: Mutex<()>` to serialize all CLI subprocess invocations. Without this, concurrent frontend calls (e.g. `setVariable()` immediately followed by `listVariables()`) could race: the list call might execute before the set completes, returning stale data. The mutex ensures mutations and reads are ordered.
+
+### System Tray
+
+The GUI creates a system tray icon on startup. Features:
+- Closing the main window hides it to tray instead of exiting
+- Double-clicking the tray icon restores the window
+- Right-click context menu: Show, Quit
+- The tray tooltip is "Env Manager"
+
+This is implemented in `main.rs` using Tauri 2's `tray::TrayIconBuilder`.
+
+### Internal Modal Dialog System
+
+The GUI uses an internal Svelte store-based modal system instead of browser `confirm()`/`alert()`. The `modal` writable store in `stores.ts` holds the current `ModalConfig`. The `ConfirmDialog.svelte` component renders globally in `App.svelte`. All confirmation dialogs (delete variable, delete profile, etc.) use `showModal()` from `stores.ts`.
 
 ### CLI path resolution order:
 1. Tauri resource directory (`BaseDirectory::Resource`) - production MSI install
@@ -460,7 +487,7 @@ Scopes: `cli`, `gui`, `backup`, `registry`, `i18n`, `docs`, `build`
 - Variable name validation: rejects empty names, names >255 chars (user scope), names containing `=`
 - Path traversal protection: backup files must have `.json` extension, writes to system directories blocked
 - Backup file size cap: 50 MB maximum to prevent DoS via large files
-- CLI command whitelist in Rust IPC layer: only known commands can spawn subprocesses
+- CLI command whitelist in Rust IPC layer: only known commands can spawn subprocesses (list, get, set, delete, toggle, backup, restore, diff, merge, validate, profile, path, help)
 - Process isolation: CREATE_NO_WINDOW flag prevents console flicker and information leakage
 
 ---
@@ -534,6 +561,7 @@ The GUI communicates with the CLI exclusively through `invoke('run_cli', { comma
 | Get variable | `get` | `getVariable()` | Yes |
 | Set variable | `set` | `setVariable()` | Yes |
 | Delete variable | `delete` | `deleteVariable()` | Yes |
+| Toggle variable | `toggle` | `toggleVariable()` | Yes |
 | Backup | `backup` | `createBackup()` | Yes |
 | Restore | `restore` | `restoreBackup()` | Yes |
 | Profile list | `profile list` | `listProfiles()` | Yes |
@@ -557,7 +585,7 @@ The GUI communicates with the CLI exclusively through `invoke('run_cli', { comma
 When adding a new GUI feature:
 1. Add the CLI command in `Program.cs`
 2. Add the API function in `frontend/src/lib/api.ts`
-3. Add the command to `ALLOWED_COMMANDS` in `main.rs` if it is a new top-level command
+3. Add the command to `ALLOWED_COMMANDS` in `main.rs` if it is a new top-level command (current: list, get, set, delete, toggle, backup, restore, diff, merge, validate, profile, path, help)
 4. Add UI in the appropriate `.svelte` component
 5. Add i18n strings to ALL translation files
 6. Update the alignment table above

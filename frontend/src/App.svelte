@@ -2,18 +2,17 @@
   import { onMount } from 'svelte'
   import { t, locale } from 'svelte-i18n'
   import Variables from './lib/components/Variables.svelte'
+  import ProfilePage from './lib/components/ProfilePage.svelte'
   import SettingsDialog from './lib/components/SettingsDialog.svelte'
-  import ProfileDialog from './lib/components/ProfileDialog.svelte'
   import PathEditor from './lib/components/PathEditor.svelte'
-  import { variables, loading, error, activeView } from './lib/stores'
+  import ConfirmDialog from './lib/components/ConfirmDialog.svelte'
+  import { variables, loading, error, activeView, modal } from './lib/stores'
   import { listVariables } from './lib/api'
   import { defaultLanguage } from './lib/i18n'
 
   let currentLocale: string = defaultLanguage
   let initError: string | null = null
   let showSettings = false
-  let showProfiles = false
-  let showPathEditor = false
   let darkMode = false
 
   $: if ($locale) currentLocale = $locale
@@ -96,14 +95,18 @@
         {$t('nav.variables')}
       </button>
       <button
-        on:click={() => { showProfiles = true; }}
-        class="px-3 py-1.5 text-xs font-medium rounded-md transition text-gray-500 hover:text-gray-700 hover:bg-gray-100 dark:text-gray-400 dark:hover:text-gray-200 dark:hover:bg-gray-700"
+        on:click={() => activeView.set('profiles')}
+        class="px-3 py-1.5 text-xs font-medium rounded-md transition {$activeView === 'profiles'
+          ? 'bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300'
+          : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100 dark:text-gray-400 dark:hover:text-gray-200 dark:hover:bg-gray-700'}"
       >
         {$t('nav.profiles')}
       </button>
       <button
-        on:click={() => { showPathEditor = true; }}
-        class="px-3 py-1.5 text-xs font-medium rounded-md transition text-gray-500 hover:text-gray-700 hover:bg-gray-100 dark:text-gray-400 dark:hover:text-gray-200 dark:hover:bg-gray-700"
+        on:click={() => activeView.set('path')}
+        class="px-3 py-1.5 text-xs font-medium rounded-md transition {$activeView === 'path'
+          ? 'bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300'
+          : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100 dark:text-gray-400 dark:hover:text-gray-200 dark:hover:bg-gray-700'}"
       >
         {$t('nav.path')}
       </button>
@@ -124,12 +127,18 @@
       </div>
     {/if}
 
-    {#if $loading}
-      <div class="flex justify-center py-8">
-        <div class="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
-      </div>
-    {:else}
-      <Variables />
+    {#if $activeView === 'variables'}
+      {#if $loading}
+        <div class="flex justify-center py-8">
+          <div class="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
+        </div>
+      {:else}
+        <Variables />
+      {/if}
+    {:else if $activeView === 'profiles'}
+      <ProfilePage />
+    {:else if $activeView === 'path'}
+      <PathEditor />
     {/if}
   </div>
 </div>
@@ -142,13 +151,7 @@
   />
 {/if}
 
-{#if showProfiles}
-  <ProfileDialog on:close={() => { showProfiles = false; }} />
-{/if}
-
-{#if showPathEditor}
-  <PathEditor on:close={() => { showPathEditor = false; }} />
-{/if}
+<ConfirmDialog />
 
 <style lang="postcss">
   @tailwind base;

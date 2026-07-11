@@ -83,5 +83,14 @@
   "path.moveDown": "Descendre",
   "path.removeEntry": "Supprimer",
   "path.empty": "Le chemin est vide",
-  "path.confirmRemove": "Supprimer cette entree du chemin?"
+  "path.confirmRemove": "Supprimer cette entree du chemin?",
+  "table.enabled": "Active",
+  "messages.clickToEnable": "Cliquez pour activer cette variable",
+  "messages.clickToDisable": "Cliquez pour desactiver cette variable",
+  "profiles.noVariables": "Aucune variable dans ce profil",
+  "profiles.cloneFromExisting": "Cloner a partir d'une variable existante",
+  "profiles.selectVariable": "Selectionner une variable",
+  "tray.show": "Afficher",
+  "tray.quit": "Quitter",
+  "tray.tooltip": "Env Manager"
 }

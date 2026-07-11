@@ -2,6 +2,7 @@
   import { createEventDispatcher } from 'svelte'
   import { t } from 'svelte-i18n'
   import { setVariable } from '../api'
+  import { showModal } from '../stores'
 
   export let variable = null
 
@@ -14,7 +15,12 @@
 
   async function handleSave() {
     if (!name.trim()) {
-      alert($t('errors.invalidInput'))
+      showModal({
+        title: $t('errors.invalidInput'),
+        message: $t('labels.name') + ' is required',
+        confirmLabel: $t('buttons.close'),
+        variant: 'warning',
+      })
       return
     }
 
@@ -32,7 +38,12 @@
   }
 </script>
 
-<div class="fixed inset-0 bg-black/40 flex items-center justify-center z-50" on:click={handleClose}>
+<div
+  class="fixed inset-0 bg-black/40 flex items-center justify-center z-50"
+  on:click={handleClose}
+  on:keydown={(e) => { if (e.key === 'Escape') handleClose() }}
+  role="presentation"
+  tabindex="-1">
   <div class="bg-white rounded-lg shadow-xl max-w-md w-full mx-4 dark:bg-gray-800" on:click|stopPropagation>
     <div class="px-5 py-3 border-b border-gray-200 dark:border-gray-700">
       <h2 class="text-sm font-semibold text-gray-900 dark:text-gray-100">

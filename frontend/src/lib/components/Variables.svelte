@@ -1,7 +1,7 @@
 <script lang="ts">
   import { t } from 'svelte-i18n'
-  import { variables, selectedScope, error } from '../stores'
-  import { deleteVariable, createBackup } from '../api'
+  import { variables, selectedScope, error, showModal } from '../stores'
+  import { deleteVariable, createBackup, toggleVariable } from '../api'
   import EditDialog from './EditDialog.svelte'
   import BackupDialog from './BackupDialog.svelte'
 
@@ -10,6 +10,7 @@
   let editingVar = null
   let showEditDialog = false
   let showBackupDialog = false
+  let toggling = new Set<string>()
 
   $: {
     let filtered = $variables
@@ -29,13 +30,32 @@
     filteredVars = filtered
   }
 
-  async function handleDelete(name: string, scope: string) {
-    if (confirm(`${$t('messages.deleteConfirmText', { values: { name } })}`)) {
-      try {
-        await deleteVariable(name, scope as 'user' | 'system')
-      } catch {
-        // Error already set in store
+  function handleDelete(name: string, scope: string) {
+    showModal({
+      title: $t('dialogs.deleteConfirm'),
+      message: $t('messages.deleteConfirmText', { values: { name } }),
+      confirmLabel: $t('buttons.delete'),
+      cancelLabel: $t('buttons.cancel'),
+      variant: 'danger',
+      onConfirm: async () => {
+        try {
+          await deleteVariable(name, scope as 'user' | 'system')
+        } catch {
+          // Error already set in store
+        }
       }
+    })
+  }
+
+  async function handleToggle(name: string, scope: string) {
+    const key = name + scope
+    toggling.add(key)
+    try {
+      await toggleVariable(name, scope as 'user' | 'system')
+    } catch {
+      // Error already set in store
+    } finally {
+      toggling.delete(key)
     }
   }
 
@@ -61,7 +81,6 @@
 <div class="space-y-3">
   <!-- Toolbar -->
   <div class="flex gap-2 items-center">
-    <!-- Search -->
     <div class="relative flex-1">
       <svg class="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
         <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
@@ -74,7 +93,6 @@
       />
     </div>
 
-    <!-- Scope filter -->
     <select
       bind:value={$selectedScope}
       class="px-2.5 py-1.5 text-xs border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white dark:bg-gray-800 dark:border-gray-600 dark:text-gray-100"
@@ -84,7 +102,6 @@
       <option value="system">{$t('scope.system')}</option>
     </select>
 
-    <!-- Add button -->
     <button
       on:click={() => (showEditDialog = true)}
       class="flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 transition dark:bg-blue-500 dark:hover:bg-blue-600"
@@ -95,7 +112,6 @@
       {$t('buttons.add')}
     </button>
 
-    <!-- Backup button -->
     <button
       on:click={handleShowBackup}
       class="flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 transition dark:text-gray-200 dark:bg-gray-800 dark:border-gray-600 dark:hover:bg-gray-700"
@@ -113,7 +129,6 @@
     </div>
   {/if}
 
-  <!-- Table -->
   <div class="overflow-x-auto bg-white rounded-md border border-gray-200 dark:bg-gray-800 dark:border-gray-700">
     {#if filteredVars.length === 0}
       <div class="px-4 py-8 text-center text-gray-400 text-xs dark:text-gray-500">
@@ -123,6 +138,9 @@
       <table class="w-full">
         <thead class="bg-gray-50 border-b border-gray-200 dark:bg-gray-750 dark:border-gray-600">
           <tr>
+            <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide w-12">
+              {$t('table.enabled')}
+            </th>
             <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">
               {$t('table.name')}
             </th>
@@ -139,7 +157,21 @@
         </thead>
         <tbody class="divide-y divide-gray-100 dark:divide-gray-700">
           {#each filteredVars as variable (variable.name + variable.scope)}
-            <tr class="hover:bg-gray-50 transition dark:hover:bg-gray-750">
+            <tr class="hover:bg-gray-50 transition dark:hover:bg-gray-750 {variable.isDisabled ? 'opacity-50' : ''}">
+              <td class="px-3 py-2">
+                <button
+                  on:click={() => handleToggle(variable.name, variable.scope)}
+                  disabled={toggling.has(variable.name + variable.scope)}
+                  class="relative inline-flex h-4 w-7 items-center rounded-full transition disabled:opacity-50 {variable.isDisabled ? 'bg-gray-300 dark:bg-gray-600' : 'bg-blue-600 dark:bg-blue-500'}"
+                  role="switch"
+                  aria-checked={!variable.isDisabled}
+                  title={variable.isDisabled ? $t('messages.clickToEnable') : $t('messages.clickToDisable')}
+                >
+                  <span
+                    class="inline-block h-3 w-3 transform rounded-full bg-white shadow transition {variable.isDisabled ? 'translate-x-0.5' : 'translate-x-3.5'}"
+                  ></span>
+                </button>
+              </td>
               <td class="px-3 py-2 text-xs font-mono text-gray-900 dark:text-gray-100">
                 {variable.name}
               </td>

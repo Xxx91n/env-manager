@@ -47,7 +47,12 @@
   }
 </script>
 
-<div class="fixed inset-0 bg-black/40 flex items-center justify-center z-50" on:click={handleClose}>
+<div
+  class="fixed inset-0 bg-black/40 flex items-center justify-center z-50"
+  on:click={handleClose}
+  on:keydown={(e) => { if (e.key === 'Escape') handleClose() }}
+  role="presentation"
+  tabindex="-1">
   <div class="bg-white rounded-lg shadow-xl max-w-sm w-full mx-4" on:click|stopPropagation>
     <div class="px-5 py-4 border-b border-gray-200">
       <h2 class="text-sm font-semibold text-gray-900">{$t('nav.settings')}</h2>

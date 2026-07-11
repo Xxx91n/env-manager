@@ -6,7 +6,11 @@ use serde::Serialize;
 use std::path::PathBuf;
 use std::process::Command;
 use std::sync::Mutex;
-use tauri::Manager;
+use tauri::{
+    menu::{Menu, MenuItem},
+    tray::TrayIconBuilder,
+    Manager, WindowEvent,
+};
 
 #[cfg(windows)]
 use std::os::windows::process::CommandExt;
@@ -25,12 +29,12 @@ struct CliResponse {
 }
 
 /// Commands the IPC layer is allowed to forward to the CLI.
-/// Any command not in this list is rejected before spawning a subprocess.
 const ALLOWED_COMMANDS: &[&str] = &[
     "list",
     "get",
     "set",
     "delete",
+    "toggle",
     "backup",
     "restore",
     "diff",
@@ -42,13 +46,10 @@ const ALLOWED_COMMANDS: &[&str] = &[
 ];
 
 /// Mutex to serialize CLI invocations.
-/// Without this, concurrent calls (e.g. set + listVariables triggered by the
-/// frontend) can race: the list call may execute before the set completes,
-/// returning stale data. This ensures mutations and reads are ordered.
 static CLI_MUTEX: Mutex<()> = Mutex::new(());
 
 fn resolve_cli_path(app: &tauri::AppHandle) -> Option<PathBuf> {
-    // 1. Tauri resource directory (production: bundled as flat env-manager-cli.exe)
+    // 1. Tauri resource directory
     if let Ok(resource_path) = app
         .path()
         .resolve("env-manager-cli.exe", tauri::path::BaseDirectory::Resource)
@@ -72,8 +73,7 @@ fn resolve_cli_path(app: &tauri::AppHandle) -> Option<PathBuf> {
         }
     }
 
-    // 3. Dev mode: relative to project root.
-    //    Covers both net10.0 and net10.0-windows output directories.
+    // 3. Dev mode: relative to project root
     if let Some(ref dir) = exe_dir {
         for rel in [
             "../../../../bin/Release/net10.0/env-manager-cli.exe",
@@ -131,7 +131,6 @@ fn resolve_cli_path(app: &tauri::AppHandle) -> Option<PathBuf> {
 }
 
 /// Builds a Command for the CLI with CREATE_NO_WINDOW to prevent console flicker.
-/// On non-Windows platforms this is a no-op.
 fn build_cli_command(exe_path: &PathBuf, command: &str, args: &[String]) -> Command {
     let mut cmd = Command::new(exe_path);
     cmd.arg(command);
@@ -151,7 +150,6 @@ fn build_cli_command(exe_path: &PathBuf, command: &str, args: &[String]) -> Comm
 fn run_cli(app: tauri::AppHandle, command: String, args: Vec<String>) -> CliResponse {
     info!("[run_cli] command={}, args={:?}", command, args);
 
-    // Reject commands not in the whitelist before spawning any subprocess.
     if !ALLOWED_COMMANDS.contains(&command.as_str()) {
         warn!("[run_cli] rejected unknown command: {}", command);
         return CliResponse {
@@ -172,12 +170,9 @@ fn run_cli(app: tauri::AppHandle, command: String, args: Vec<String>) -> CliResp
         }
     };
 
-    // Acquire the serialization lock so that concurrent frontend calls
-    // (e.g. set followed immediately by list) execute in order.
     let _guard = CLI_MUTEX.lock().unwrap_or_else(|e| e.into_inner());
 
     let mut cmd = build_cli_command(&exe_path, &command, &args);
-
     let start = std::time::Instant::now();
 
     match cmd.output() {
@@ -227,7 +222,6 @@ fn run_cli(app: tauri::AppHandle, command: String, args: Vec<String>) -> CliResp
     }
 }
 
-/// Returns diagnostic info about the CLI resolution for the frontend.
 #[tauri::command]
 fn cli_diagnostics(app: tauri::AppHandle) -> serde_json::Value {
     let exe_dir = std::env::current_exe()
@@ -253,6 +247,53 @@ fn main() {
                 .level(log::LevelFilter::Info)
                 .build(),
         )
+        .setup(|app| {
+            // Build tray menu items
+            let show_item = MenuItem::with_id(app, "show", "Show", true, None::<&str>)?;
+            let quit_item = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
+            let menu = Menu::with_items(app, &[&show_item, &quit_item])?;
+
+            // Create system tray icon
+            let _tray = TrayIconBuilder::new()
+                .icon(app.default_window_icon().unwrap().clone())
+                .tooltip("Env Manager")
+                .menu(&menu)
+                .show_menu_on_left_click(false)
+                .on_menu_event(|app, event| {
+                    match event.id.as_ref() {
+                        "show" => {
+                            if let Some(window) = app.get_webview_window("main") {
+                                let _ = window.show();
+                                let _ = window.set_focus();
+                            }
+                        }
+                        "quit" => {
+                            app.exit(0);
+                        }
+                        _ => {}
+                    }
+                })
+                .on_tray_icon_event(|tray, event| {
+                    // Double-click on tray icon shows the window
+                    if let tauri::tray::TrayIconEvent::DoubleClick { .. } = event {
+                        let app = tray.app_handle();
+                        if let Some(window) = app.get_webview_window("main") {
+                            let _ = window.show();
+                            let _ = window.set_focus();
+                        }
+                    }
+                })
+                .build(app)?;
+
+            Ok(())
+        })
+        .on_window_event(|window, event| {
+            // When the user closes the window, hide it to tray instead of exiting
+            if let WindowEvent::CloseRequested { api, .. } = event {
+                let _ = window.hide();
+                api.prevent_close();
+            }
+        })
         .invoke_handler(tauri::generate_handler![run_cli, cli_diagnostics])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

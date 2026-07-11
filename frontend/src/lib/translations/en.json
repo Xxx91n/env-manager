@@ -83,5 +83,14 @@
   "path.moveDown": "Move Down",
   "path.removeEntry": "Remove",
   "path.empty": "PATH is empty",
-  "path.confirmRemove": "Remove this entry from PATH?"
+  "path.confirmRemove": "Remove this entry from PATH?",
+  "table.enabled": "Enabled",
+  "messages.clickToEnable": "Click to enable this variable",
+  "messages.clickToDisable": "Click to disable this variable",
+  "profiles.noVariables": "No variables in this profile",
+  "profiles.cloneFromExisting": "Clone from existing variable",
+  "profiles.selectVariable": "Select a variable",
+  "tray.show": "Show",
+  "tray.quit": "Quit",
+  "tray.tooltip": "Env Manager"
 }

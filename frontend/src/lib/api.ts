@@ -5,6 +5,7 @@ export interface EnvVariable {
   name: string
   value: string
   scope: 'user' | 'system'
+  isDisabled?: boolean
 }
 
 export interface CLIResponse {
@@ -123,6 +124,23 @@ export async function deleteVariable(
     throw err
   }
 }
+
+export async function toggleVariable(
+  name: string,
+  scope: 'user' | 'system' = 'user'
+): Promise<{ isDisabled: boolean }> {
+  error.set(null)
+
+  try {
+    const output = await runCommand('toggle', [name, '--scope', scope])
+    await listVariables()
+    return JSON.parse(output)
+  } catch (err) {
+    error.set(err instanceof Error ? err.message : 'Failed to toggle variable')
+    throw err
+  }
+}
+
 
 export async function createBackup(outputFile?: string): Promise<string> {
   error.set(null)

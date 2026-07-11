@@ -10,6 +10,7 @@ class EnvVariable
     [JsonPropertyName("name")] public string Name { get; set; } = "";
     [JsonPropertyName("value")] public string Value { get; set; } = "";
     [JsonPropertyName("scope")] public string Scope { get; set; } = "";
+    [JsonPropertyName("isDisabled")] public bool IsDisabled { get; set; } = false;
 }
 
 class BackupData
@@ -50,7 +51,7 @@ class Program
 
     static readonly HashSet<string> ValidCommands = new(StringComparer.OrdinalIgnoreCase)
     {
-        "list", "get", "set", "delete", "backup", "restore", "diff", "merge",
+        "list", "get", "set", "delete", "toggle", "backup", "restore", "diff", "merge",
         "validate", "help", "profile", "path"
     };
 
@@ -116,6 +117,7 @@ class Program
                 "get" => args.Length < 2 ? ArgError("Usage: env-manager get <name>") : GetVariable(args[1]),
                 "set" => args.Length < 3 ? ArgError("Usage: env-manager set <name> <value> [--scope user|system]") : RunSet(args),
                 "delete" => args.Length < 2 ? ArgError("Usage: env-manager delete <name> [--scope user|system]") : RunDelete(args),
+                "toggle" => args.Length < 2 ? ArgError("Usage: env-manager toggle <name> [--scope user|system]") : RunToggle(args),
                 "backup" => RunBackup(args),
                 "restore" => args.Length < 2 ? ArgError("Usage: env-manager restore <file> [--scope user|system]") : RunRestore(args),
                 "diff" => args.Length < 3 ? ArgError("Usage: env-manager diff <old> <new>") : DiffBackups(args[1], args[2]),
@@ -273,11 +275,17 @@ class Program
             {
                 foreach (var name in key.GetValueNames())
                 {
+                    // Skip internal backup variables from toggle/profile features
+                    if (name.Contains("_EnvManager_disabled") || name.Contains("_PowerToys_"))
+                        continue;
+                    string backupName = name + "_EnvManager_disabled";
+                    bool isDisabled = key.GetValueNames().Contains(backupName);
                     items.Add(new EnvVariable
                     {
                         Name = name,
-                        Value = key.GetValue(name)?.ToString() ?? "",
-                        Scope = "user"
+                        Value = isDisabled ? (key.GetValue(backupName)?.ToString() ?? "") : (key.GetValue(name)?.ToString() ?? ""),
+                        Scope = "user",
+                        IsDisabled = isDisabled
                     });
                 }
             }
@@ -313,12 +321,18 @@ class Program
         DebugLog("GetVariable: " + name);
         using (var key = Registry.CurrentUser.OpenSubKey(UserEnvPath))
         {
-            var v = key?.GetValue(name);
-            if (v != null)
+            if (key != null)
             {
-                var result = new { name, value = v.ToString(), scope = "user" };
-                Console.WriteLine(JsonSerializer.Serialize(result, JsonOpts));
-                return 0;
+                var v = key.GetValue(name);
+                if (v != null)
+                {
+                    string backupName = GetToggleBackupName(name);
+                    bool isDisabled = key.GetValueNames().Contains(backupName);
+                    string value = isDisabled ? (key.GetValue(backupName)?.ToString() ?? "") : v.ToString();
+                    var result = new { name, value, scope = "user", isDisabled };
+                    Console.WriteLine(JsonSerializer.Serialize(result, JsonOpts));
+                    return 0;
+                }
             }
         }
 
@@ -329,7 +343,7 @@ class Program
                 var v = key?.GetValue(name);
                 if (v != null)
                 {
-                    var result = new { name, value = v.ToString(), scope = "system" };
+                    var result = new { name, value = v.ToString(), scope = "system", isDisabled = false };
                     Console.WriteLine(JsonSerializer.Serialize(result, JsonOpts));
                     return 0;
                 }
@@ -472,6 +486,77 @@ class Program
             "help" => ShowProfileHelp(),
             _ => ArgError($"Unknown profile subcommand: {sub}")
         };
+    }
+
+    /// <summary>
+    /// Returns the backup variable name for a toggled (disabled) variable.
+    /// Mirrors PowerToys: name + "_EnvManager_disabled"
+    /// </summary>
+    static string GetToggleBackupName(string varName)
+    {
+        return varName + "_EnvManager_disabled";
+    }
+
+    static int RunToggle(string[] args)
+    {
+        string name = args[1];
+        string scope = ParseScope(args, 2, "user");
+        DebugLog($"Toggle: {name} scope={scope}");
+
+        if (string.IsNullOrEmpty(name))
+        {
+            Console.Error.WriteLine("Error: Variable name cannot be empty");
+            return 1;
+        }
+
+        string backupName = GetToggleBackupName(name);
+        var currentValue = GetVariableValue(name, scope);
+        var backupValue = GetVariableValue(backupName, scope);
+
+        if (backupValue != null)
+        {
+            // Re-enable: restore original value from backup, then delete backup.
+            // Write-first order ensures data is not lost if delete fails.
+            SetVariableWithoutNotify(name, backupValue, scope);
+            // Verify the restore succeeded before removing backup
+            var restoredCheck = GetVariableValue(name, scope);
+            if (restoredCheck != null)
+            {
+                DeleteVariableWithoutNotify(backupName, scope);
+                BroadcastSettingChange();
+                Console.WriteLine(JsonSerializer.Serialize(new { name, scope, isDisabled = false }, JsonOpts));
+            }
+            else
+            {
+                Console.Error.WriteLine($"Error: Failed to restore variable {name}, backup preserved");
+                return 1;
+            }
+        }
+        else if (currentValue != null)
+        {
+            // Disable: write backup first, then delete original.
+            // Write-first order ensures data is not lost if delete fails.
+            SetVariableWithoutNotify(backupName, currentValue, scope);
+            // Verify backup was written before removing original
+            var backupCheck = GetVariableValue(backupName, scope);
+            if (backupCheck != null)
+            {
+                DeleteVariableWithoutNotify(name, scope);
+                BroadcastSettingChange();
+                Console.WriteLine(JsonSerializer.Serialize(new { name, scope, isDisabled = true }, JsonOpts));
+            }
+            else
+            {
+                Console.Error.WriteLine($"Error: Failed to create backup for {name}, variable not modified");
+                return 1;
+            }
+        }
+        else
+        {
+            Console.Error.WriteLine($"Error: Variable {name} not found in {scope} scope");
+            return 1;
+        }
+        return 0;
     }
 
     static int ProfileEditVar(string profileName, string oldVarName, string newVarName, string newVarValue)
@@ -1270,6 +1355,7 @@ Commands:
   get <name>                 Get variable (JSON)
   set <name> <val> [--scope user|system] Set variable
   delete <name> [--scope user|system]    Delete variable
+  toggle <name> [--scope user|system]    Enable/disable a variable (backs up value)
   backup [--output <file>]   Create backup
   restore <file> [--scope user|system]   Restore backup
   diff <old> <new>           Compare backups (JSON)
