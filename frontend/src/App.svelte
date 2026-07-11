@@ -3,13 +3,17 @@
   import { t, locale } from 'svelte-i18n'
   import Variables from './lib/components/Variables.svelte'
   import SettingsDialog from './lib/components/SettingsDialog.svelte'
-  import { variables, loading, error } from './lib/stores'
+  import ProfileDialog from './lib/components/ProfileDialog.svelte'
+  import PathEditor from './lib/components/PathEditor.svelte'
+  import { variables, loading, error, activeView } from './lib/stores'
   import { listVariables } from './lib/api'
   import { defaultLanguage } from './lib/i18n'
 
   let currentLocale: string = defaultLanguage
   let initError: string | null = null
   let showSettings = false
+  let showProfiles = false
+  let showPathEditor = false
   let darkMode = false
 
   $: if ($locale) currentLocale = $locale
@@ -81,6 +85,29 @@
         </button>
       </div>
     </div>
+
+    <nav class="flex gap-1 mt-3">
+      <button
+        on:click={() => activeView.set('variables')}
+        class="px-3 py-1.5 text-xs font-medium rounded-md transition {$activeView === 'variables'
+          ? 'bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300'
+          : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100 dark:text-gray-400 dark:hover:text-gray-200 dark:hover:bg-gray-700'}"
+      >
+        {$t('nav.variables')}
+      </button>
+      <button
+        on:click={() => { showProfiles = true; }}
+        class="px-3 py-1.5 text-xs font-medium rounded-md transition text-gray-500 hover:text-gray-700 hover:bg-gray-100 dark:text-gray-400 dark:hover:text-gray-200 dark:hover:bg-gray-700"
+      >
+        {$t('nav.profiles')}
+      </button>
+      <button
+        on:click={() => { showPathEditor = true; }}
+        class="px-3 py-1.5 text-xs font-medium rounded-md transition text-gray-500 hover:text-gray-700 hover:bg-gray-100 dark:text-gray-400 dark:hover:text-gray-200 dark:hover:bg-gray-700"
+      >
+        {$t('nav.path')}
+      </button>
+    </nav>
   </header>
 
   <div class="px-5 py-4">
@@ -113,6 +140,14 @@
     on:close={() => (showSettings = false)}
     on:themeChange={handleThemeChange}
   />
+{/if}
+
+{#if showProfiles}
+  <ProfileDialog on:close={() => { showProfiles = false; }} />
+{/if}
+
+{#if showPathEditor}
+  <PathEditor on:close={() => { showPathEditor = false; }} />
 {/if}
 
 <style lang="postcss">

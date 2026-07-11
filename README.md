@@ -10,6 +10,8 @@ Modern, lightweight Windows environment variable manager with CLI and GUI dual-m
 
 ### CLI Mode
 - 10 commands for complete environment variable management
+- Profile system: create, apply, and unapply sets of preconfigured variables
+- PATH editor: add, remove, and reorder PATH entries as a list
 - User and System scope support
 - JSON backup and restore with diff/merge
 - No admin required for user scope
@@ -65,6 +67,20 @@ env-manager-cli.exe merge old.json new.json --output merged.json
 env-manager-cli.exe validate backup.json
 ```
 
+# Profile management
+env-manager-cli.exe profile list
+env-manager-cli.exe profile create dev-profile
+env-manager-cli.exe profile add-var dev-profile JAVA_HOME "D:\jdk17"
+env-manager-cli.exe profile apply dev-profile
+env-manager-cli.exe profile unapply dev-profile
+env-manager-cli.exe profile delete dev-profile
+
+# PATH editor
+env-manager-cli.exe path list --scope user
+env-manager-cli.exe path add "C:\MyTools\bin" --scope user
+env-manager-cli.exe path move-up 2 --scope user
+env-manager-cli.exe path remove "C:\OldTools\bin" --scope user
+
 ### GUI Usage
 
 Launch `env-manager.exe` from the portable package or Start Menu. The GUI communicates with the CLI backend through Tauri IPC, so both modes always operate on the same state.
@@ -117,6 +133,17 @@ powershell -ExecutionPolicy Bypass -File scripts/build-all.ps1
 | `merge` | `merge <old> <new> --output <file>` | Merge two backup files |
 | `validate` | `validate <file>` | Verify backup file format |
 | `help` | `help` | Show help text |
+| `profile list` | `profile list` | List all profiles |
+| `profile create` | `profile create <name>` | Create a new profile |
+| `profile apply` | `profile apply <name>` | Apply a profile (backs up existing vars) |
+| `profile unapply` | `profile unapply <name>` | Unapply a profile (restores originals) |
+| `profile add-var` | `profile add-var <profile> <name> <val>` | Add variable to profile |
+| `profile remove-var` | `profile remove-var <profile> <name>` | Remove variable from profile |
+| `path list` | `path list [--scope]` | List PATH entries |
+| `path add` | `path add <dir> [--scope]` | Add directory to PATH |
+| `path remove` | `path remove <dir> [--scope]` | Remove directory from PATH |
+| `path move-up` | `path move-up <index> [--scope]` | Move PATH entry up |
+| `path move-down` | `path move-down <index> [--scope]` | Move PATH entry down |
 
 ### Scope
 
@@ -271,4 +298,4 @@ Open source project. For issues, feature requests, or pull requests, visit the [
 
 ---
 
-**Version**: 0.3.0 | **License**: MIT | **Status**: Active Development
+**Version**: 0.4.0 | **License**: MIT | **Status**: Active Development

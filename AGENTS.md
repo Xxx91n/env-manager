@@ -7,7 +7,7 @@ This document is the single source of truth for the Env Manager project. All dev
 ## Project Overview
 
 - **Name**: Env Manager
-- **Version**: 0.3.0
+- **Version**: 0.4.0
 - **License**: MIT
 - **Repository**: https://github.com/Xxx91n/env-manager
 - **Languages**: C# (.NET 10), TypeScript, Svelte, Rust
@@ -63,6 +63,9 @@ env-manager/
 │   │       │   ├── Variables.svelte  # Variable list, search, filter
 │   │       │   ├── EditDialog.svelte # Create/edit variable dialog
 │   │       │   └── BackupDialog.svelte # Backup/export dialog
+│   │       │   ├── ProfileDialog.svelte # Profile management dialog
+│   │       │   ├── PathEditor.svelte   # PATH variable list editor
+│   │       │   └── SettingsDialog.svelte # Settings (language, theme)
 │   │       └── translations/
 │   │           ├── en.json
 │   │           ├── zh.json
@@ -166,6 +169,19 @@ All commands follow: `env-manager-cli <command> [arguments] [--flags]`
 | `merge` | `merge <old> <new> --output <file>` | Merge two backup files |
 | `validate` | `validate <file>` | Validate backup file format |
 | `help` | `help` | Show help text |
+| `profile list` | `profile list` | List all profiles (JSON) |
+| `profile create` | `profile create <name>` | Create a new empty profile |
+| `profile delete` | `profile delete <name>` | Delete a profile |
+| `profile show` | `profile show <name>` | Show profile details (JSON) |
+| `profile apply` | `profile apply <name>` | Apply a profile (backs up existing user vars) |
+| `profile unapply` | `profile unapply <name>` | Unapply a profile (restores backed-up user vars) |
+| `profile add-var` | `profile add-var <profile> <name> <val>` | Add a variable to a profile |
+| `profile remove-var` | `profile remove-var <profile> <name>` | Remove a variable from a profile |
+| `path list` | `path list [--scope]` | List PATH entries (JSON) |
+| `path add` | `path add <dir> [--scope] [--index N]` | Add directory to PATH |
+| `path remove` | `path remove <dir> [--scope]` | Remove directory from PATH |
+| `path move-up` | `path move-up <index> [--scope]` | Move PATH entry up |
+| `path move-down` | `path move-down <index> [--scope]` | Move PATH entry down |
 
 ### Scope
 
@@ -173,6 +189,19 @@ All commands follow: `env-manager-cli <command> [arguments] [--flags]`
 - `system`: `HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\Session Manager\Environment` (requires administrator)
 
 ### Error handling
+
+### Profiles
+
+Profiles are sets of preconfigured variables that can be applied/unapplied as a group. When applied, original values of affected user variables are backed up. Unapplying restores originals. Profiles only affect user scope.
+
+- Profile storage: `%LOCALAPPDATA%\EnvManager\profiles.json`
+- Profile variables override user variables when applied
+- Original values backed up before apply, restored on unapply
+- Profiles only affect user scope
+
+### Path Editor
+
+PATH variable edited as a list of directory entries. Entries can be added, removed, and reordered. Supports both user and system scopes.
 
 - Errors go to stderr, success output to stdout
 - Exit code: 0 = success, 1 = failure
@@ -213,6 +242,29 @@ The default locale (en) is loaded synchronously via `addMessages()` to ensure th
 ---
 
 ## Backup JSON Format
+
+## Profile JSON Format
+
+Profiles are stored at `%LOCALAPPDATA%\EnvManager\profiles.json`:
+
+```json
+[
+  {
+    "id": "uuid-string",
+    "name": "dev-profile",
+    "isEnabled": false,
+    "variables": [
+      { "name": "JAVA_HOME", "value": "C:\\Program Files\\Java\\jdk-21" }
+    ]
+  }
+]
+```
+
+- `id`: Unique identifier (GUID)
+- `name`: Profile name (unique)
+- `isEnabled`: Whether the profile is currently applied
+- `variables`: Array of `{ name, value }` pairs
+- When applied, original user variable values are backed up as `name_EnvManager_backup_<profileName>`
 
 ```json
 {
@@ -387,4 +439,4 @@ A commit that does not update AGENTS.md when the project has changed is consider
 
 ---
 
-**Last updated**: 2026-07-11
+**Last updated**: 2026-07-12

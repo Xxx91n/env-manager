@@ -10,6 +10,8 @@
 
 ### CLI 命令行模式
 - 10 个命令，完全掌控环境变量管理
+- 配置文件系统：创建、应用、取消应用一组预配置变量
+- PATH 编辑器：以列表形式添加、删除、排序 PATH 条目
 - 用户和系统作用域支持
 - JSON 备份与恢复，支持差异对比和合并
 - 用户作用域无需管理员权限
@@ -65,6 +67,20 @@ env-manager-cli.exe merge old.json new.json --output merged.json
 env-manager-cli.exe validate backup.json
 ```
 
+# 配置文件管理
+env-manager-cli.exe profile list
+env-manager-cli.exe profile create dev-profile
+env-manager-cli.exe profile add-var dev-profile JAVA_HOME "D:\jdk17"
+env-manager-cli.exe profile apply dev-profile
+env-manager-cli.exe profile unapply dev-profile
+env-manager-cli.exe profile delete dev-profile
+
+# PATH 编辑器
+env-manager-cli.exe path list --scope user
+env-manager-cli.exe path add "C:\MyTools\bin" --scope user
+env-manager-cli.exe path move-up 2 --scope user
+env-manager-cli.exe path remove "C:\OldTools\bin" --scope user
+
 ### GUI 使用
 
 从便携版目录或开始菜单启动 `env-manager.exe`。GUI 通过 Tauri IPC 调用 CLI 后端，两种模式始终操作同一状态。
@@ -117,6 +133,16 @@ powershell -ExecutionPolicy Bypass -File scripts/build-all.ps1
 | `merge` | `merge <old> <new> --output <file>` | 合并两个备份文件 |
 | `validate` | `validate <file>` | 验证备份文件格式 |
 | `help` | `help` | 显示帮助 |
+| `profile list` | `profile list` | 列出所有配置文件 |
+| `profile create` | `profile create <name>` | 创建新配置文件 |
+| `profile apply` | `profile apply <name>` | 应用配置文件（备份现有变量） |
+| `profile unapply` | `profile unapply <name>` | 取消应用（恢复原始变量） |
+| `profile add-var` | `profile add-var <profile> <name> <val>` | 向配置文件添加变量 |
+| `path list` | `path list [--scope]` | 列出 PATH 条目 |
+| `path add` | `path add <dir> [--scope]` | 添加目录到 PATH |
+| `path remove` | `path remove <dir> [--scope]` | 从 PATH 移除目录 |
+| `path move-up` | `path move-up <index> [--scope]` | 上移 PATH 条目 |
+| `path move-down` | `path move-down <index> [--scope]` | 下移 PATH 条目 |
 
 ### 作用域
 
@@ -271,4 +297,4 @@ MIT - 可自由用于个人和商业项目。详见 [LICENSE](LICENSE)。
 
 ---
 
-**版本**：0.3.0 | **许可**：MIT | **状态**：积极开发中
+**版本**：0.4.0 | **许可**：MIT | **状态**：积极开发中

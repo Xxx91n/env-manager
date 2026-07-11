@@ -18,6 +18,20 @@ class BackupData
     [JsonPropertyName("variables")] public List<EnvVariable> Variables { get; set; } = new();
 }
 
+class ProfileVariable
+{
+    [JsonPropertyName("name")] public string Name { get; set; } = "";
+    [JsonPropertyName("value")] public string Value { get; set; } = "";
+}
+
+class ProfileData
+{
+    [JsonPropertyName("id")] public string Id { get; set; } = Guid.NewGuid().ToString();
+    [JsonPropertyName("name")] public string Name { get; set; } = "";
+    [JsonPropertyName("isEnabled")] public bool IsEnabled { get; set; } = false;
+    [JsonPropertyName("variables")] public List<ProfileVariable> Variables { get; set; } = new();
+}
+
 class Program
 {
     const string SystemEnvPath = @"SYSTEM\CurrentControlSet\Control\Session Manager\Environment";
@@ -27,7 +41,8 @@ class Program
 
     static readonly HashSet<string> ValidCommands = new(StringComparer.OrdinalIgnoreCase)
     {
-        "list", "get", "set", "delete", "backup", "restore", "diff", "merge", "validate", "help"
+        "list", "get", "set", "delete", "backup", "restore", "diff", "merge",
+        "validate", "help", "profile", "path"
     };
 
     static readonly JsonSerializerOptions JsonOpts = new()
@@ -41,6 +56,22 @@ class Program
         PropertyNameCaseInsensitive = true,
         WriteIndented = true
     };
+
+    /// <summary>
+    /// Returns the path to the profiles JSON file in LocalAppData.
+    /// Mirrors PowerToys' approach of storing profiles in a per-user app data folder.
+    /// </summary>
+    static string ProfilesFilePath
+    {
+        get
+        {
+            string dir = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                "EnvManager");
+            Directory.CreateDirectory(dir);
+            return Path.Combine(dir, "profiles.json");
+        }
+    }
 
     static int Main(string[] args)
     {
@@ -71,6 +102,8 @@ class Program
                 "diff" => args.Length < 3 ? ArgError("Usage: env-manager diff <old> <new>") : DiffBackups(args[1], args[2]),
                 "merge" => args.Length < 5 || args[3] != "--output" ? ArgError("Usage: env-manager merge <old> <new> --output <file>") : MergeBackups(args[1], args[2], args[4]),
                 "validate" => args.Length < 2 ? ArgError("Usage: env-manager validate <file>") : ValidateBackup(args[1]),
+                "profile" => RunProfileCommand(args),
+                "path" => RunPathCommand(args),
                 "help" => ShowHelp(),
                 _ => 1
             };
@@ -257,7 +290,6 @@ class Program
 
     static int GetVariable(string name)
     {
-        // Output as JSON for reliable parsing by the GUI.
         using (var key = Registry.CurrentUser.OpenSubKey(UserEnvPath))
         {
             var v = key?.GetValue(name);
@@ -327,7 +359,6 @@ class Program
             key.SetValue(name, value, kind);
         }
 
-        // Broadcast WM_SETTINGCHANGE so new processes pick up the change.
         BroadcastSettingChange();
     }
 
@@ -366,6 +397,537 @@ class Program
         const uint SMTO_ABORTIFHUNG = 0x0002;
         SendMessageTimeout((IntPtr)HWND_BROADCAST, WM_SETTINGCHANGE, IntPtr.Zero,
             "Environment", SMTO_ABORTIFHUNG, 1000, out _);
+    }
+
+    // --- Profile commands ---
+    // Mirrors PowerToys profile logic: profiles override user variables,
+    // original values are backed up as name_PowerToys_<profileName> before apply,
+    // and restored on unapply. Profiles only affect user-scope variables.
+
+    static int RunProfileCommand(string[] args)
+    {
+        if (args.Length < 2)
+        {
+            ShowProfileHelp();
+            return 0;
+        }
+
+        string sub = args[1].ToLowerInvariant();
+        return sub switch
+        {
+            "list" => ProfileList(),
+            "create" => args.Length < 3 ? ArgError("Usage: env-manager profile create <name>") : ProfileCreate(args[2]),
+            "delete" => args.Length < 3 ? ArgError("Usage: env-manager profile delete <name>") : ProfileDelete(args[2]),
+            "apply" => args.Length < 3 ? ArgError("Usage: env-manager profile apply <name>") : ProfileApply(args[2]),
+            "unapply" => args.Length < 3 ? ArgError("Usage: env-manager profile unapply <name>") : ProfileUnapply(args[2]),
+            "show" => args.Length < 3 ? ArgError("Usage: env-manager profile show <name>") : ProfileShow(args[2]),
+            "add-var" => args.Length < 5 ? ArgError("Usage: env-manager profile add-var <profile> <name> <value>") : ProfileAddVar(args[2], args[3], args[4]),
+            "remove-var" => args.Length < 4 ? ArgError("Usage: env-manager profile remove-var <profile> <name>") : ProfileRemoveVar(args[2], args[3]),
+            "help" => ShowProfileHelp(),
+            _ => ArgError($"Unknown profile subcommand: {sub}")
+        };
+    }
+
+    static int ShowProfileHelp()
+    {
+        Console.WriteLine(@"Profile commands:
+  profile list                        List all profiles (JSON)
+  profile create <name>               Create a new empty profile
+  profile delete <name>               Delete a profile
+  profile show <name>                 Show profile details (JSON)
+  profile apply <name>                Apply a profile (backs up existing user vars)
+  profile unapply <name>              Unapply a profile (restores backed-up user vars)
+  profile add-var <profile> <name> <val>   Add a variable to a profile
+  profile remove-var <profile> <name>      Remove a variable from a profile");
+        return 0;
+    }
+
+    static List<ProfileData> LoadProfiles()
+    {
+        if (!File.Exists(ProfilesFilePath))
+            return new List<ProfileData>();
+
+        string json = File.ReadAllText(ProfilesFilePath);
+        var profiles = JsonSerializer.Deserialize<List<ProfileData>>(json, JsonOpts);
+        return profiles ?? new List<ProfileData>();
+    }
+
+    static void SaveProfiles(List<ProfileData> profiles)
+    {
+        string json = JsonSerializer.Serialize(profiles, JsonOptsIndented);
+        File.WriteAllText(ProfilesFilePath, json);
+    }
+
+    static ProfileData? FindProfile(List<ProfileData> profiles, string name)
+    {
+        return profiles.FirstOrDefault(p =>
+            p.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
+    }
+
+    static int ProfileList()
+    {
+        var profiles = LoadProfiles();
+        Console.WriteLine(JsonSerializer.Serialize(profiles, JsonOptsIndented));
+        return 0;
+    }
+
+    static int ProfileCreate(string name)
+    {
+        var profiles = LoadProfiles();
+        if (FindProfile(profiles, name) != null)
+        {
+            Console.Error.WriteLine($"Error: Profile '{name}' already exists");
+            return 1;
+        }
+
+        var profile = new ProfileData
+        {
+            Id = Guid.NewGuid().ToString(),
+            Name = name,
+            IsEnabled = false,
+            Variables = new List<ProfileVariable>()
+        };
+        profiles.Add(profile);
+        SaveProfiles(profiles);
+        Console.WriteLine($"Created profile: {name}");
+        return 0;
+    }
+
+    static int ProfileDelete(string name)
+    {
+        var profiles = LoadProfiles();
+        var profile = FindProfile(profiles, name);
+        if (profile == null)
+        {
+            Console.Error.WriteLine($"Error: Profile '{name}' not found");
+            return 1;
+        }
+
+        if (profile.IsEnabled)
+        {
+            UnapplyProfile(profile);
+        }
+
+        profiles.Remove(profile);
+        SaveProfiles(profiles);
+        Console.WriteLine($"Deleted profile: {name}");
+        return 0;
+    }
+
+    static int ProfileShow(string name)
+    {
+        var profiles = LoadProfiles();
+        var profile = FindProfile(profiles, name);
+        if (profile == null)
+        {
+            Console.Error.WriteLine($"Error: Profile '{name}' not found");
+            return 1;
+        }
+        Console.WriteLine(JsonSerializer.Serialize(profile, JsonOptsIndented));
+        return 0;
+    }
+
+    static int ProfileApply(string name)
+    {
+        var profiles = LoadProfiles();
+        var profile = FindProfile(profiles, name);
+        if (profile == null)
+        {
+            Console.Error.WriteLine($"Error: Profile '{name}' not found");
+            return 1;
+        }
+
+        // Unapply any currently enabled profile first
+        foreach (var p in profiles)
+        {
+            if (p.IsEnabled && !p.Id.Equals(profile.Id))
+            {
+                UnapplyProfile(p);
+                p.IsEnabled = false;
+            }
+        }
+
+        ApplyProfile(profile);
+        profile.IsEnabled = true;
+        SaveProfiles(profiles);
+        Console.WriteLine($"Applied profile: {name} ({profile.Variables.Count} variables)");
+        return 0;
+    }
+
+    static int ProfileUnapply(string name)
+    {
+        var profiles = LoadProfiles();
+        var profile = FindProfile(profiles, name);
+        if (profile == null)
+        {
+            Console.Error.WriteLine($"Error: Profile '{name}' not found");
+            return 1;
+        }
+
+        if (!profile.IsEnabled)
+        {
+            Console.Error.WriteLine($"Warning: Profile '{name}' is not currently applied");
+            return 0;
+        }
+
+        UnapplyProfile(profile);
+        profile.IsEnabled = false;
+        SaveProfiles(profiles);
+        Console.WriteLine($"Unapplied profile: {name}");
+        return 0;
+    }
+
+    static int ProfileAddVar(string profileName, string varName, string varValue)
+    {
+        var profiles = LoadProfiles();
+        var profile = FindProfile(profiles, profileName);
+        if (profile == null)
+        {
+            Console.Error.WriteLine($"Error: Profile '{profileName}' not found");
+            return 1;
+        }
+
+        profile.Variables.RemoveAll(v => v.Name.Equals(varName, StringComparison.OrdinalIgnoreCase));
+        profile.Variables.Add(new ProfileVariable { Name = varName, Value = varValue });
+        SaveProfiles(profiles);
+
+        // If profile is currently applied, propagate the change to the registry
+        if (profile.IsEnabled)
+        {
+            SetVariableWithoutNotify(varName, varValue, "user");
+            BroadcastSettingChange();
+        }
+
+        Console.WriteLine($"Added variable '{varName}' to profile '{profileName}'");
+        return 0;
+    }
+
+    static int ProfileRemoveVar(string profileName, string varName)
+    {
+        var profiles = LoadProfiles();
+        var profile = FindProfile(profiles, profileName);
+        if (profile == null)
+        {
+            Console.Error.WriteLine($"Error: Profile '{profileName}' not found");
+            return 1;
+        }
+
+        int removed = profile.Variables.RemoveAll(v => v.Name.Equals(varName, StringComparison.OrdinalIgnoreCase));
+        if (removed == 0)
+        {
+            Console.Error.WriteLine($"Warning: Variable '{varName}' not found in profile '{profileName}'");
+            return 0;
+        }
+
+        SaveProfiles(profiles);
+
+        // If profile is currently applied, restore backup if it exists
+        if (profile.IsEnabled)
+        {
+            string backupName = GetBackupVariableName(varName, profileName);
+            var backupValue = GetVariableValue(backupName, "user");
+            if (backupValue != null)
+            {
+                SetVariableWithoutNotify(varName, backupValue, "user");
+                DeleteVariableWithoutNotify(backupName, "user");
+            }
+            else
+            {
+                DeleteVariableWithoutNotify(varName, "user");
+            }
+            BroadcastSettingChange();
+        }
+
+        Console.WriteLine($"Removed variable '{varName}' from profile '{profileName}'");
+        return 0;
+    }
+
+    /// <summary>
+    /// Returns the backup variable name for a given variable and profile.
+    /// Mirrors PowerToys: name + "_PowerToys_" + profileName
+    /// </summary>
+    static string GetBackupVariableName(string varName, string profileName)
+    {
+        return varName + "_PowerToys_" + profileName;
+    }
+
+    /// <summary>
+    /// Gets a variable value from registry without expanding environment variables.
+    /// </summary>
+    static string? GetVariableValue(string name, string scope)
+    {
+        var (hive, path) = GetScopeTarget(scope);
+        using (var key = hive.OpenSubKey(path, false))
+        {
+            if (key == null) return null;
+            var v = key.GetValue(name, null, RegistryValueOptions.DoNotExpandEnvironmentNames);
+            return v?.ToString();
+        }
+    }
+
+    /// <summary>
+    /// Sets a variable in the registry without broadcasting WM_SETTINGCHANGE.
+    /// Used by profile apply/unapply to batch changes efficiently.
+    /// </summary>
+    static void SetVariableWithoutNotify(string name, string value, string scope)
+    {
+        var (hive, path) = GetScopeTarget(scope);
+        using (var key = hive.OpenSubKey(path, true))
+        {
+            if (key == null) return;
+
+            RegistryValueKind kind = RegistryValueKind.String;
+            try
+            {
+                kind = key.GetValueKind(name);
+            }
+            catch (IOException) { }
+
+            // If value contains %, use ExpandString like Windows does
+            if (value.Contains('%'))
+            {
+                kind = RegistryValueKind.ExpandString;
+            }
+
+            key.SetValue(name, value, kind);
+        }
+    }
+
+    /// <summary>
+    /// Deletes a variable from the registry without broadcasting WM_SETTINGCHANGE.
+    /// </summary>
+    static void DeleteVariableWithoutNotify(string name, string scope)
+    {
+        var (hive, path) = GetScopeTarget(scope);
+        using (var key = hive.OpenSubKey(path, true))
+        {
+            if (key == null) return;
+            key.DeleteValue(name, false);
+        }
+    }
+
+    /// <summary>
+    /// Applies a profile: for each variable, backs up the existing user variable
+    /// (if it exists) by renaming it to name_PowerToys_profileName, then sets
+    /// the profile variable value. Finally broadcasts the setting change.
+    /// </summary>
+    static void ApplyProfile(ProfileData profile)
+    {
+        foreach (var var in profile.Variables)
+        {
+            string backupName = GetBackupVariableName(var.Name, profile.Name);
+
+            // Back up existing user variable if it exists and no backup exists yet
+            var existingValue = GetVariableValue(var.Name, "user");
+            if (existingValue != null)
+            {
+                var existingBackup = GetVariableValue(backupName, "user");
+                if (existingBackup == null)
+                {
+                    SetVariableWithoutNotify(backupName, existingValue, "user");
+                }
+            }
+
+            SetVariableWithoutNotify(var.Name, var.Value, "user");
+        }
+
+        BroadcastSettingChange();
+    }
+
+    /// <summary>
+    /// Unapplies a profile: for each variable, deletes the profile variable
+    /// and restores the backup if it exists.
+    /// </summary>
+    static void UnapplyProfile(ProfileData profile)
+    {
+        foreach (var var in profile.Variables)
+        {
+            string backupName = GetBackupVariableName(var.Name, profile.Name);
+
+            DeleteVariableWithoutNotify(var.Name, "user");
+
+            var backupValue = GetVariableValue(backupName, "user");
+            if (backupValue != null)
+            {
+                SetVariableWithoutNotify(var.Name, backupValue, "user");
+                DeleteVariableWithoutNotify(backupName, "user");
+            }
+        }
+
+        BroadcastSettingChange();
+    }
+
+    // --- Path commands ---
+    // Mirrors PowerToys list-style editing of PATH and similar semicolon-separated variables.
+
+    static int RunPathCommand(string[] args)
+    {
+        if (args.Length < 2)
+        {
+            ShowPathHelp();
+            return 0;
+        }
+
+        string sub = args[1].ToLowerInvariant();
+        return sub switch
+        {
+            "list" => PathList(args),
+            "add" => args.Length < 3 ? ArgError("Usage: env-manager path add <dir> [--scope user|system] [--index N]") : PathAdd(args),
+            "remove" => args.Length < 3 ? ArgError("Usage: env-manager path remove <dir> [--scope user|system]") : PathRemove(args),
+            "move-up" => args.Length < 3 ? ArgError("Usage: env-manager path move-up <index> [--scope user|system]") : PathMoveUp(args),
+            "move-down" => args.Length < 3 ? ArgError("Usage: env-manager path move-down <index> [--scope user|system]") : PathMoveDown(args),
+            "help" => ShowPathHelp(),
+            _ => ArgError($"Unknown path subcommand: {sub}")
+        };
+    }
+
+    static int ShowPathHelp()
+    {
+        Console.WriteLine(@"Path commands (edits PATH as a semicolon-separated list):
+  path list [--scope user|system]              List PATH entries (JSON)
+  path add <dir> [--scope user|system] [--index N]  Add directory to PATH
+  path remove <dir> [--scope user|system]      Remove directory from PATH
+  path move-up <index> [--scope user|system]   Move PATH entry up
+  path move-down <index> [--scope user|system] Move PATH entry down");
+        return 0;
+    }
+
+    /// <summary>
+    /// Parses the PATH variable for a given scope, returns entries as a list.
+    /// </summary>
+    static List<string> GetPathEntries(string scope)
+    {
+        string? pathValue = GetVariableValue("PATH", scope);
+        if (string.IsNullOrEmpty(pathValue))
+            return new List<string>();
+
+        return pathValue.Split(';', StringSplitOptions.RemoveEmptyEntries).ToList();
+    }
+
+    /// <summary>
+    /// Writes PATH entries back to the registry for a given scope.
+    /// </summary>
+    static void SetPathEntries(List<string> entries, string scope)
+    {
+        string joined = string.Join(";", entries);
+        SetVariable("PATH", joined, scope);
+    }
+
+    static int PathList(string[] args)
+    {
+        string? scope = ParseScope(args, 2, "user");
+        if (scope == null) return 1;
+
+        var entries = GetPathEntries(scope);
+        var result = entries.Select((e, i) => new { index = i, path = e }).ToList();
+        Console.WriteLine(JsonSerializer.Serialize(result, JsonOptsIndented));
+        return 0;
+    }
+
+    static int PathAdd(string[] args)
+    {
+        string dir = args[2];
+        string? scope = ParseScope(args, 3, "user");
+        if (scope == null) return 1;
+
+        // Parse optional --index
+        int? insertIndex = null;
+        for (int i = 3; i < args.Length - 1; i++)
+        {
+            if (args[i] == "--index" && int.TryParse(args[i + 1], out int idx))
+            {
+                insertIndex = idx;
+                break;
+            }
+        }
+
+        var entries = GetPathEntries(scope);
+
+        // Don't add duplicates
+        if (entries.Any(e => e.Equals(dir, StringComparison.OrdinalIgnoreCase)))
+        {
+            Console.Error.WriteLine($"Warning: '{dir}' already exists in PATH ({scope})");
+            return 0;
+        }
+
+        if (insertIndex.HasValue && insertIndex.Value >= 0 && insertIndex.Value <= entries.Count)
+        {
+            entries.Insert(insertIndex.Value, dir);
+        }
+        else
+        {
+            entries.Add(dir);
+        }
+
+        SetPathEntries(entries, scope);
+        Console.WriteLine($"Added '{dir}' to PATH ({scope}) at index {insertIndex ?? entries.Count - 1}");
+        return 0;
+    }
+
+    static int PathRemove(string[] args)
+    {
+        string dir = args[2];
+        string? scope = ParseScope(args, 3, "user");
+        if (scope == null) return 1;
+
+        var entries = GetPathEntries(scope);
+        int removed = entries.RemoveAll(e => e.Equals(dir, StringComparison.OrdinalIgnoreCase));
+
+        if (removed == 0)
+        {
+            Console.Error.WriteLine($"Warning: '{dir}' not found in PATH ({scope})");
+            return 0;
+        }
+
+        SetPathEntries(entries, scope);
+        Console.WriteLine($"Removed '{dir}' from PATH ({scope})");
+        return 0;
+    }
+
+    static int PathMoveUp(string[] args)
+    {
+        if (!int.TryParse(args[2], out int index))
+        {
+            return ArgError("Error: index must be a number");
+        }
+
+        string? scope = ParseScope(args, 3, "user");
+        if (scope == null) return 1;
+
+        var entries = GetPathEntries(scope);
+        if (index < 0 || index >= entries.Count || index == 0)
+        {
+            Console.Error.WriteLine("Error: Cannot move entry up (already at top or invalid index)");
+            return 1;
+        }
+
+        (entries[index - 1], entries[index]) = (entries[index], entries[index - 1]);
+        SetPathEntries(entries, scope);
+        Console.WriteLine($"Moved PATH entry at index {index} up");
+        return 0;
+    }
+
+    static int PathMoveDown(string[] args)
+    {
+        if (!int.TryParse(args[2], out int index))
+        {
+            return ArgError("Error: index must be a number");
+        }
+
+        string? scope = ParseScope(args, 3, "user");
+        if (scope == null) return 1;
+
+        var entries = GetPathEntries(scope);
+        if (index < 0 || index >= entries.Count - 1)
+        {
+            Console.Error.WriteLine("Error: Cannot move entry down (already at bottom or invalid index)");
+            return 1;
+        }
+
+        (entries[index], entries[index + 1]) = (entries[index + 1], entries[index]);
+        SetPathEntries(entries, scope);
+        Console.WriteLine($"Moved PATH entry at index {index} down");
+        return 0;
     }
 
     static void CreateBackup(string outputPath)
@@ -528,7 +1090,7 @@ class Program
 
     static int ShowHelp()
     {
-        Console.WriteLine(@"Env Manager v0.3.0
+        Console.WriteLine(@"Env Manager v0.4.0
 
 Commands:
   list                       List all variables (JSON)
@@ -540,6 +1102,8 @@ Commands:
   diff <old> <new>           Compare backups (JSON)
   merge <old> <new> --output <file>      Merge backups
   validate <file>            Validate backup
+  profile <subcommand>       Manage variable profiles (see: profile help)
+  path <subcommand>          Edit PATH variable as list (see: path help)
   help                       Show help");
         return 0;
     }

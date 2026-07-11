@@ -27,6 +27,8 @@ const ALLOWED_COMMANDS: &[&str] = &[
     "diff",
     "merge",
     "validate",
+    "profile",
+    "path",
     "help",
 ];
 

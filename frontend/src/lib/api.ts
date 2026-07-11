@@ -19,6 +19,23 @@ export interface Diagnostics {
   cwd: string
 }
 
+export interface ProfileVariable {
+  name: string
+  value: string
+}
+
+export interface ProfileData {
+  id: string
+  name: string
+  isEnabled: boolean
+  variables: ProfileVariable[]
+}
+
+export interface PathEntry {
+  index: number
+  path: string
+}
+
 async function runCommand(cmd: string, args: string[] = []): Promise<string> {
   try {
     const result = await invoke<CLIResponse>('run_cli', {
@@ -132,6 +149,157 @@ export async function restoreBackup(
     await listVariables()
   } catch (err) {
     error.set(err instanceof Error ? err.message : 'Restore failed')
+    throw err
+  }
+}
+
+// --- Profile API ---
+
+export async function listProfiles(): Promise<ProfileData[]> {
+  try {
+    const output = await runCommand('profile', ['list'])
+    return JSON.parse(output) as ProfileData[]
+  } catch (err) {
+    error.set(err instanceof Error ? err.message : 'Failed to list profiles')
+    return []
+  }
+}
+
+export async function createProfile(name: string): Promise<string> {
+  try {
+    return await runCommand('profile', ['create', name])
+  } catch (err) {
+    error.set(err instanceof Error ? err.message : 'Failed to create profile')
+    throw err
+  }
+}
+
+export async function deleteProfile(name: string): Promise<string> {
+  try {
+    return await runCommand('profile', ['delete', name])
+  } catch (err) {
+    error.set(err instanceof Error ? err.message : 'Failed to delete profile')
+    throw err
+  }
+}
+
+export async function applyProfile(name: string): Promise<string> {
+  try {
+    const result = await runCommand('profile', ['apply', name])
+    await listVariables()
+    return result
+  } catch (err) {
+    error.set(err instanceof Error ? err.message : 'Failed to apply profile')
+    throw err
+  }
+}
+
+export async function unapplyProfile(name: string): Promise<string> {
+  try {
+    const result = await runCommand('profile', ['unapply', name])
+    await listVariables()
+    return result
+  } catch (err) {
+    error.set(err instanceof Error ? err.message : 'Failed to unapply profile')
+    throw err
+  }
+}
+
+export async function showProfile(name: string): Promise<ProfileData | null> {
+  try {
+    const output = await runCommand('profile', ['show', name])
+    return JSON.parse(output) as ProfileData
+  } catch {
+    return null
+  }
+}
+
+export async function addProfileVar(
+  profileName: string,
+  varName: string,
+  varValue: string
+): Promise<string> {
+  try {
+    return await runCommand('profile', ['add-var', profileName, varName, varValue])
+  } catch (err) {
+    error.set(err instanceof Error ? err.message : 'Failed to add variable to profile')
+    throw err
+  }
+}
+
+export async function removeProfileVar(
+  profileName: string,
+  varName: string
+): Promise<string> {
+  try {
+    return await runCommand('profile', ['remove-var', profileName, varName])
+  } catch (err) {
+    error.set(err instanceof Error ? err.message : 'Failed to remove variable from profile')
+    throw err
+  }
+}
+
+// --- Path API ---
+
+export async function listPathEntries(scope: 'user' | 'system' = 'user'): Promise<PathEntry[]> {
+  try {
+    const output = await runCommand('path', ['list', '--scope', scope])
+    return JSON.parse(output) as PathEntry[]
+  } catch (err) {
+    error.set(err instanceof Error ? err.message : 'Failed to list PATH entries')
+    return []
+  }
+}
+
+export async function addPathEntry(
+  dir: string,
+  scope: 'user' | 'system' = 'user',
+  index?: number
+): Promise<string> {
+  try {
+    const args = ['add', dir, '--scope', scope]
+    if (index !== undefined) {
+      args.push('--index', String(index))
+    }
+    return await runCommand('path', args)
+  } catch (err) {
+    error.set(err instanceof Error ? err.message : 'Failed to add PATH entry')
+    throw err
+  }
+}
+
+export async function removePathEntry(
+  dir: string,
+  scope: 'user' | 'system' = 'user'
+): Promise<string> {
+  try {
+    return await runCommand('path', ['remove', dir, '--scope', scope])
+  } catch (err) {
+    error.set(err instanceof Error ? err.message : 'Failed to remove PATH entry')
+    throw err
+  }
+}
+
+export async function movePathEntryUp(
+  index: number,
+  scope: 'user' | 'system' = 'user'
+): Promise<string> {
+  try {
+    return await runCommand('path', ['move-up', String(index), '--scope', scope])
+  } catch (err) {
+    error.set(err instanceof Error ? err.message : 'Failed to move PATH entry')
+    throw err
+  }
+}
+
+export async function movePathEntryDown(
+  index: number,
+  scope: 'user' | 'system' = 'user'
+): Promise<string> {
+  try {
+    return await runCommand('path', ['move-down', String(index), '--scope', scope])
+  } catch (err) {
+    error.set(err instanceof Error ? err.message : 'Failed to move PATH entry')
     throw err
   }
 }
