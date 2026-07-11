@@ -1,5 +1,4 @@
 import { register, init, getLocaleFromNavigator, addMessages, locale as localeStore } from 'svelte-i18n'
-import { get } from 'svelte/store'
 import enMessages from './translations/en.json'
 
 const defaultLocale = 'en'

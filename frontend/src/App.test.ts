@@ -9,14 +9,13 @@ describe('App.svelte', () => {
 
   it('renders application title', async () => {
     render(App)
-    const title = await screen.findByText(/Env Manager|环境变量管理器/)
+    const title = await screen.findByText(/Env Manager/i)
     expect(title).toBeTruthy()
   })
 
-  it('has language switcher buttons', () => {
+  it('has settings button', () => {
     render(App)
-    const enButton = screen.queryByText('EN')
-    const zhButton = screen.queryByText('ZH')
-    expect(enButton || zhButton).toBeTruthy()
+    const settingsBtn = screen.queryByLabelText(/settings/i)
+    expect(settingsBtn).toBeTruthy()
   })
 })

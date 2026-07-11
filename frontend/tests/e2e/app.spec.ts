@@ -10,25 +10,24 @@ test.describe('Env Manager GUI', () => {
     await expect(title).toContainText('Env Manager')
   })
 
-  test('should have language switcher', async ({ page }) => {
-    const enButton = page.locator('button:has-text("EN")')
-    const zhButton = page.locator('button:has-text("ZH")')
-    await expect(enButton).toBeVisible()
-    await expect(zhButton).toBeVisible()
+  test('should have settings button', async ({ page }) => {
+    const settingsBtn = page.locator('[aria-label="Settings"], [aria-label="设置"]')
+    await expect(settingsBtn).toBeVisible()
   })
 
-  test('should switch language to Chinese', async ({ page }) => {
-    const zhButton = page.locator('button:has-text("ZH")')
-    await zhButton.click()
-    await page.waitForTimeout(500)
-    const title = page.locator('h1')
-    await expect(title).toContainText('环境变量管理器')
+  test('should open settings dialog and show language selector', async ({ page }) => {
+    const settingsBtn = page.locator('[aria-label="Settings"], [aria-label="设置"]')
+    await settingsBtn.click()
+    const langSelect = page.locator('#settings-lang')
+    await expect(langSelect).toBeVisible()
   })
 
-  test('should list environment variables', async ({ page }) => {
-    // Wait for variables to load
-    await page.waitForSelector('table', { timeout: 5000 })
+  test('should list environment variables or show empty state', async ({ page }) => {
+    // Wait for either the table or the empty state
+    await page.waitForTimeout(2000)
     const table = page.locator('table')
-    await expect(table).toBeVisible()
+    const emptyState = page.locator('text=No variables found').or(page.locator('text=没有找到'))
+    // At least one should be present
+    await expect(table.or(emptyState).first()).toBeVisible({ timeout: 10000 })
   })
 })

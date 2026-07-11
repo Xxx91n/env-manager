@@ -8,10 +8,8 @@ import { fileURLToPath } from 'url'
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const projectRoot = resolve(__dirname, '..', '..')
 const cliProject = projectRoot
-const cliOutputDir = resolve(cliProject, 'bin', 'Release', 'net10.0')
-const cliExe = resolve(cliOutputDir, 'env-manager-cli.exe')
+const releaseBase = resolve(cliProject, 'bin', 'Release')
 const binDir = resolve(__dirname, '..', 'src-tauri', 'bin')
-const binTarget = resolve(binDir, 'env-manager-cli.exe')
 
 console.log('[prebuild] Building C# CLI...')
 
@@ -22,6 +20,21 @@ try {
   process.exit(1)
 }
 
+// Auto-detect the TFM output directory (net10.0, net10.0-windows, etc.)
+let cliOutputDir = ''
+for (const dir of readdirSync(releaseBase)) {
+  const candidate = resolve(releaseBase, dir)
+  if (existsSync(resolve(candidate, 'env-manager-cli.dll'))) {
+    cliOutputDir = candidate
+    break
+  }
+}
+if (!cliOutputDir) {
+  console.error('[prebuild] Could not find CLI output directory under ' + releaseBase)
+  process.exit(1)
+}
+
+const cliExe = resolve(cliOutputDir, 'env-manager-cli.exe')
 if (!existsSync(cliExe)) {
   console.error(`[prebuild] CLI exe not found at ${cliExe}`)
   process.exit(1)
@@ -33,7 +46,7 @@ if (existsSync(binDir)) {
 }
 mkdirSync(binDir, { recursive: true })
 
-// Copy CLI exe and its dependency DLLs (Spectre.Console.dll, etc.)
+// Copy CLI exe and its dependency DLLs
 const filesToCopy = readdirSync(cliOutputDir).filter(f =>
   f.endsWith('.dll') || f.endsWith('.exe') || f.endsWith('.json')
 )
@@ -42,4 +55,4 @@ for (const file of filesToCopy) {
   copyFileSync(resolve(cliOutputDir, file), resolve(binDir, file))
 }
 
-console.log(`[prebuild] CLI copied to ${binTarget} (${filesToCopy.length} files)`)
+console.log(`[prebuild] CLI copied to ${binDir} (${filesToCopy.length} files from ${cliOutputDir})`)

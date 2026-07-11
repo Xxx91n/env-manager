@@ -15,6 +15,21 @@ struct CliResponse {
     error: Option<String>,
 }
 
+/// Commands the IPC layer is allowed to forward to the CLI.
+/// Any command not in this list is rejected before spawning a subprocess.
+const ALLOWED_COMMANDS: &[&str] = &[
+    "list",
+    "get",
+    "set",
+    "delete",
+    "backup",
+    "restore",
+    "diff",
+    "merge",
+    "validate",
+    "help",
+];
+
 fn resolve_cli_path(app: &tauri::AppHandle) -> Option<PathBuf> {
     // 1. Tauri resource directory (production: bundled as flat env-manager-cli.exe)
     if let Ok(resource_path) = app
@@ -41,7 +56,6 @@ fn resolve_cli_path(app: &tauri::AppHandle) -> Option<PathBuf> {
     }
 
     // 3. Dev mode: relative to project root
-    //    src-tauri/target/<triple>/debug|release/ -> project root
     if let Some(ref dir) = exe_dir {
         for rel in [
             "../../../../bin/Release/net10.0/env-manager-cli.exe",
@@ -91,6 +105,15 @@ fn resolve_cli_path(app: &tauri::AppHandle) -> Option<PathBuf> {
 #[tauri::command]
 fn run_cli(app: tauri::AppHandle, command: String, args: Vec<String>) -> CliResponse {
     info!("[run_cli] command={}, args={:?}", command, args);
+
+    // Reject commands not in the whitelist before spawning any subprocess.
+    if !ALLOWED_COMMANDS.contains(&command.as_str()) {
+        return CliResponse {
+            success: false,
+            data: None,
+            error: Some(format!("Unknown command: {}", command)),
+        };
+    }
 
     let exe_path = match resolve_cli_path(&app) {
         Some(p) => p,

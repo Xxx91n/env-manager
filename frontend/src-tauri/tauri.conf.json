@@ -21,7 +21,7 @@
       }
     ],
     "security": {
-      "csp": null
+      "csp": "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self'"
     }
   },
   "bundle": {
@@ -34,8 +34,7 @@
       "bin/env-manager-cli.exe",
       "bin/env-manager-cli.dll",
       "bin/env-manager-cli.runtimeconfig.json",
-      "bin/env-manager-cli.deps.json",
-      "bin/Spectre.Console.dll"
+      "bin/env-manager-cli.deps.json"
     ]
   }
 }

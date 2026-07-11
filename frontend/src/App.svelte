@@ -21,6 +21,7 @@
     } catch {
       // Ignore
     }
+    applyDarkMode(darkMode)
     try {
       await listVariables()
     } catch (err) {

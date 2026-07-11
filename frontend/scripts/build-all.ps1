@@ -27,7 +27,16 @@ if (-not $SkipCli) {
   Pop-Location
 }
 
-$CliDir = Join-Path $ProjectRoot "bin\Release\net10.0"
+# Auto-detect TFM output directory (net10.0, net10.0-windows, etc.)
+$ReleaseBase = Join-Path $ProjectRoot "bin\Release"
+$CliDir = $null
+Get-ChildItem -Path $ReleaseBase -Directory -ErrorAction SilentlyContinue | ForEach-Object {
+  if (Test-Path (Join-Path $_.FullName "env-manager-cli.dll")) {
+    $CliDir = $_.FullName
+  }
+}
+if (-not $CliDir) { throw "CLI output directory not found under $ReleaseBase" }
+
 $CliExe = Join-Path $CliDir "env-manager-cli.exe"
 if (-not (Test-Path $CliExe)) { throw "CLI exe not found: $CliExe" }
 

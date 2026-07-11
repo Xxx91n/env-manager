@@ -1,6 +1,12 @@
 import { invoke } from '@tauri-apps/api/core'
 import { variables, loading, error } from './stores'
 
+export interface EnvVariable {
+  name: string
+  value: string
+  scope: 'user' | 'system'
+}
+
 export interface CLIResponse {
   success: boolean
   data?: string
@@ -14,7 +20,6 @@ export interface Diagnostics {
 }
 
 async function runCommand(cmd: string, args: string[] = []): Promise<string> {
-  console.log(`[api] run_cli: ${cmd}`, args)
   try {
     const result = await invoke<CLIResponse>('run_cli', {
       command: cmd,
@@ -22,15 +27,12 @@ async function runCommand(cmd: string, args: string[] = []): Promise<string> {
     })
 
     if (!result.success) {
-      const errMsg = result.error || 'Unknown CLI error'
-      console.error(`[api] CLI error for '${cmd}':`, errMsg)
-      throw new Error(errMsg)
+      throw new Error(result.error || 'Unknown CLI error')
     }
 
     return result.data || ''
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err)
-    console.error(`[api] invoke failed for '${cmd}':`, msg)
     throw new Error(msg)
   }
 }
@@ -38,8 +40,7 @@ async function runCommand(cmd: string, args: string[] = []): Promise<string> {
 export async function getDiagnostics(): Promise<Diagnostics> {
   try {
     return await invoke<Diagnostics>('cli_diagnostics')
-  } catch (err) {
-    console.error('[api] cli_diagnostics failed:', err)
+  } catch {
     return {
       resolved_cli_path: 'UNAVAILABLE',
       gui_exe_dir: 'UNAVAILABLE',
@@ -54,7 +55,7 @@ export async function listVariables(): Promise<void> {
 
   try {
     const output = await runCommand('list')
-    const parsed = parseTableOutput(output)
+    const parsed: EnvVariable[] = JSON.parse(output)
     variables.set(parsed)
   } catch (err) {
     const msg = err instanceof Error ? err.message : 'Failed to list variables'
@@ -64,11 +65,11 @@ export async function listVariables(): Promise<void> {
   }
 }
 
-export async function getVariable(name: string): Promise<string | null> {
+export async function getVariable(name: string): Promise<EnvVariable | null> {
   try {
     const output = await runCommand('get', [name])
-    const match = output.match(/= (.*)/)
-    return match ? match[1] : null
+    const parsed = JSON.parse(output) as { name: string; value: string; scope: 'user' | 'system' }
+    return parsed
   } catch (err) {
     error.set(err instanceof Error ? err.message : 'Failed to get variable')
     return null
@@ -133,28 +134,4 @@ export async function restoreBackup(
     error.set(err instanceof Error ? err.message : 'Restore failed')
     throw err
   }
-}
-
-/**
- * Parse Spectre.Console table output into structured variable objects.
- * The table uses Unicode box-drawing characters as cell separators.
- */
-function parseTableOutput(output: string): Array<{ name: string; scope: string; value: string }> {
-  const lines = output.split('\n').slice(1)
-  const vars: Array<{ name: string; scope: string; value: string }> = []
-
-  for (const line of lines) {
-    if (!line.trim()) continue
-    // Spectre.Console uses U+2502 as column separator
-    const parts = line.split('\u2502').map((s) => s.trim()).filter(Boolean)
-    if (parts.length >= 3) {
-      vars.push({
-        name: parts[0],
-        scope: parts[1] as 'user' | 'system',
-        value: parts[2],
-      })
-    }
-  }
-
-  return vars
 }
