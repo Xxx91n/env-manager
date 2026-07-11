@@ -1,11 +1,20 @@
 // Hide the console window in release builds on Windows.
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-use log::info;
+use log::{info, warn};
 use serde::Serialize;
 use std::path::PathBuf;
 use std::process::Command;
+use std::sync::Mutex;
 use tauri::Manager;
+
+#[cfg(windows)]
+use std::os::windows::process::CommandExt;
+
+/// Windows process creation flag that prevents a console window from flashing.
+/// 0x08000000 = CREATE_NO_WINDOW
+#[cfg(windows)]
+const CREATE_NO_WINDOW: u32 = 0x08000000;
 
 #[derive(Serialize)]
 #[serde(crate = "serde")]
@@ -32,6 +41,12 @@ const ALLOWED_COMMANDS: &[&str] = &[
     "help",
 ];
 
+/// Mutex to serialize CLI invocations.
+/// Without this, concurrent calls (e.g. set + listVariables triggered by the
+/// frontend) can race: the list call may execute before the set completes,
+/// returning stale data. This ensures mutations and reads are ordered.
+static CLI_MUTEX: Mutex<()> = Mutex::new(());
+
 fn resolve_cli_path(app: &tauri::AppHandle) -> Option<PathBuf> {
     // 1. Tauri resource directory (production: bundled as flat env-manager-cli.exe)
     if let Ok(resource_path) = app
@@ -57,12 +72,16 @@ fn resolve_cli_path(app: &tauri::AppHandle) -> Option<PathBuf> {
         }
     }
 
-    // 3. Dev mode: relative to project root
+    // 3. Dev mode: relative to project root.
+    //    Covers both net10.0 and net10.0-windows output directories.
     if let Some(ref dir) = exe_dir {
         for rel in [
             "../../../../bin/Release/net10.0/env-manager-cli.exe",
+            "../../../../bin/Release/net10.0-windows/env-manager-cli.exe",
             "../../../bin/Release/net10.0/env-manager-cli.exe",
+            "../../../bin/Release/net10.0-windows/env-manager-cli.exe",
             "../../bin/Release/net10.0/env-manager-cli.exe",
+            "../../bin/Release/net10.0-windows/env-manager-cli.exe",
         ] {
             let dev_path = dir.join(rel);
             if dev_path.exists() {
@@ -76,6 +95,7 @@ fn resolve_cli_path(app: &tauri::AppHandle) -> Option<PathBuf> {
     if let Ok(cwd) = std::env::current_dir() {
         for rel in [
             "bin/Release/net10.0/env-manager-cli.exe",
+            "bin/Release/net10.0-windows/env-manager-cli.exe",
             "../../bin/Release/net10.0/env-manager-cli.exe",
         ] {
             let cwd_path = cwd.join(rel);
@@ -87,7 +107,13 @@ fn resolve_cli_path(app: &tauri::AppHandle) -> Option<PathBuf> {
     }
 
     // 5. PATH fallback
-    if let Ok(output) = Command::new("where").arg("env-manager-cli.exe").output() {
+    let mut where_cmd = Command::new("where");
+    where_cmd.arg("env-manager-cli.exe");
+    #[cfg(windows)]
+    {
+        where_cmd.creation_flags(CREATE_NO_WINDOW);
+    }
+    if let Ok(output) = where_cmd.output() {
         if output.status.success() {
             let stdout = String::from_utf8_lossy(&output.stdout);
             if let Some(line) = stdout.lines().next() {
@@ -100,8 +126,25 @@ fn resolve_cli_path(app: &tauri::AppHandle) -> Option<PathBuf> {
         }
     }
 
-    info!("[resolve] CLI not found by any method");
+    warn!("[resolve] CLI not found by any method");
     None
+}
+
+/// Builds a Command for the CLI with CREATE_NO_WINDOW to prevent console flicker.
+/// On non-Windows platforms this is a no-op.
+fn build_cli_command(exe_path: &PathBuf, command: &str, args: &[String]) -> Command {
+    let mut cmd = Command::new(exe_path);
+    cmd.arg(command);
+    for arg in args {
+        cmd.arg(arg);
+    }
+
+    #[cfg(windows)]
+    {
+        cmd.creation_flags(CREATE_NO_WINDOW);
+    }
+
+    cmd
 }
 
 #[tauri::command]
@@ -110,6 +153,7 @@ fn run_cli(app: tauri::AppHandle, command: String, args: Vec<String>) -> CliResp
 
     // Reject commands not in the whitelist before spawning any subprocess.
     if !ALLOWED_COMMANDS.contains(&command.as_str()) {
+        warn!("[run_cli] rejected unknown command: {}", command);
         return CliResponse {
             success: false,
             data: None,
@@ -128,22 +172,30 @@ fn run_cli(app: tauri::AppHandle, command: String, args: Vec<String>) -> CliResp
         }
     };
 
-    let mut cmd = Command::new(&exe_path);
-    cmd.arg(&command);
-    for arg in &args {
-        cmd.arg(arg);
-    }
+    // Acquire the serialization lock so that concurrent frontend calls
+    // (e.g. set followed immediately by list) execute in order.
+    let _guard = CLI_MUTEX.lock().unwrap_or_else(|e| e.into_inner());
+
+    let mut cmd = build_cli_command(&exe_path, &command, &args);
+
+    let start = std::time::Instant::now();
 
     match cmd.output() {
         Ok(output) => {
+            let elapsed = start.elapsed();
             let stdout = String::from_utf8_lossy(&output.stdout).to_string();
             let stderr = String::from_utf8_lossy(&output.stderr).to_string();
             info!(
-                "[run_cli] exit={}, stdout_len={}, stderr_len={}",
+                "[run_cli] exit={}, stdout_len={}, stderr_len={}, elapsed={}ms",
                 output.status,
                 stdout.len(),
-                stderr.len()
+                stderr.len(),
+                elapsed.as_millis()
             );
+
+            if !stderr.is_empty() {
+                info!("[run_cli] stderr: {}", stderr.trim());
+            }
 
             if output.status.success() {
                 CliResponse {
@@ -165,7 +217,7 @@ fn run_cli(app: tauri::AppHandle, command: String, args: Vec<String>) -> CliResp
             }
         }
         Err(e) => {
-            info!("[run_cli] spawn failed: {}", e);
+            warn!("[run_cli] spawn failed: {}", e);
             CliResponse {
                 success: false,
                 data: None,

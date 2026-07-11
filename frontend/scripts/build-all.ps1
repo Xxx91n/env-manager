@@ -96,7 +96,10 @@ $MsiSearchDir = Join-Path (Split-Path -Parent $GuiExe) "bundle\msi"
 if (Test-Path $MsiSearchDir) {
   $msiFiles = Get-ChildItem -Path $MsiSearchDir -Filter "*.msi"
   foreach ($msi in $msiFiles) {
-    Copy-Item $msi.FullName -Destination $MsiDir -Force
+    # Strip the _en-US language suffix (e.g. "Env Manager_0.4.0_x64_en-US.msi" -> "Env Manager_0.4.0_x64.msi")
+    $cleanName = $msi.Name -replace '_\w{2}-\w{2}\.', '.'
+    $destPath = Join-Path $MsiDir $cleanName
+    Copy-Item $msi.FullName -Destination $destPath -Force
   }
   Write-Host "[build] MSI copied: $($msiFiles.Count) file(s)" -ForegroundColor Green
 } else {

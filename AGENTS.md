@@ -7,7 +7,7 @@ This document is the single source of truth for the Env Manager project. All dev
 ## Project Overview
 
 - **Name**: Env Manager
-- **Version**: 0.4.0
+- **Version**: 0.5.0
 - **License**: MIT
 - **Repository**: https://github.com/Xxx91n/env-manager
 - **Languages**: C# (.NET 10), TypeScript, Svelte, Rust
@@ -148,6 +148,16 @@ powershell -ExecutionPolicy Bypass -File scripts/build-all.ps1
 #   release/msi/       - Env Manager_X.Y.Z_x64_en-US.msi
 ```
 
+### Intermediate Build Artifacts
+
+The `bin/Release/` directory (specifically `bin/Release/net10.0-windows/`) is an intermediate build output from `dotnet build`. It is NOT the final distribution. Its role:
+
+1. `dotnet build -c Release` produces CLI DLLs and exe here
+2. `frontend/scripts/prebuild.mjs` copies from here to `frontend/src-tauri/bin/` for Tauri resource bundling
+3. `frontend/scripts/build-all.ps1` copies from here to `release/portable/` for the portable distribution
+
+This directory is gitignored and should not be manually distributed. It is regenerated on every build. The TFM output path may be `net10.0` or `net10.0-windows` depending on the .NET SDK version; the build scripts auto-detect which exists.
+
 ### Build output layout
 
 The `release/` directory is the canonical output for distribution:
@@ -181,11 +191,24 @@ All commands follow: `env-manager-cli <command> [arguments] [--flags]`
 | `profile unapply` | `profile unapply <name>` | Unapply a profile (restores backed-up user vars) |
 | `profile add-var` | `profile add-var <profile> <name> <val>` | Add a variable to a profile |
 | `profile remove-var` | `profile remove-var <profile> <name>` | Remove a variable from a profile |
+| `profile edit-var` | `profile edit-var <profile> <old> <new> <val>` | Edit a variable in a profile |
+| `profile status` | `profile status <name>` | Check profile application status (JSON) |
 | `path list` | `path list [--scope]` | List PATH entries (JSON) |
 | `path add` | `path add <dir> [--scope] [--index N]` | Add directory to PATH |
 | `path remove` | `path remove <dir> [--scope]` | Remove directory from PATH |
 | `path move-up` | `path move-up <index> [--scope]` | Move PATH entry up |
 | `path move-down` | `path move-down <index> [--scope]` | Move PATH entry down |
+
+### Debug Mode
+
+Pass `--debug` (or `-d`) anywhere in the args to enable verbose stderr logging:
+
+```powershell
+env-manager-cli list --debug
+env-manager-cli set MY_VAR value --scope user --debug
+```
+
+Debug output goes to stderr with timestamps: `[debug] HH:mm:ss.fff message`. This does not affect stdout JSON output. The GUI's Rust layer captures and logs all stderr to the Tauri log.
 
 ### Scope
 
@@ -205,6 +228,11 @@ Profiles are sets of preconfigured variables that can be applied/unapplied as a 
 - Profile variables override user variables when applied
 - Original values backed up before apply, restored on unapply
 - Profiles only affect user scope
+- `profile status` checks if a profile is correctly applied (mirrors PowerToys `IsCorrectlyApplied()`)
+- `IsProfileApplicable()` validation runs before apply - rejects profiles with invalid variable names (>255 chars, contains `=`)
+- Variable name validation: user-scope names limited to 255 chars (registry limit), rejects `=` in names
+- Values containing `%` are stored as `REG_EXPAND_SZ` (matches Windows default editor behavior)
+- List-type variables (`PATH`, `PATHEXT`, `PSMODULEPATH`, `_NT_SYMBOL_PATH`, etc.) are detected for list-style editing
 
 ### Path Editor
 
@@ -219,7 +247,11 @@ The Rust layer (`main.rs`) exposes two Tauri commands:
 - `run_cli(command: String, args: Vec<String>) -> CliResponse` - Spawns the CLI subprocess, returns `{ success, data, error }`.
 - `cli_diagnostics() -> serde_json::Value` - Returns resolved CLI path, GUI exe directory, and CWD for debugging.
 
-CLI path resolution order:
+### Race Condition Prevention
+
+The Rust IPC layer uses a `static CLI_MUTEX: Mutex<()>` to serialize all CLI subprocess invocations. Without this, concurrent frontend calls (e.g. `setVariable()` immediately followed by `listVariables()`) could race: the list call might execute before the set completes, returning stale data. The mutex ensures mutations and reads are ordered.
+
+### CLI path resolution order:
 1. Tauri resource directory (`BaseDirectory::Resource`) - production MSI install
 2. Adjacent to GUI exe - portable distribution
 3. Dev mode relative paths - `../../../../bin/Release/net10.0/`
@@ -325,6 +357,16 @@ npm run test:e2e        # Playwright E2E tests
 
 ---
 
+## CodeGraph
+
+The project uses [CodeGraph](https://github.com/nicholasgriffintn/codegraph) for code navigation and indexing.
+
+- Index is stored in `.codegraph/` (gitignored, regenerated per machine)
+- Initialize: `codegraph init` (scans and indexes all source files)
+- The index enables fast symbol lookup, reference finding, and dependency analysis
+- Agents should use `codegraph` for code navigation when available, but it is not required for development
+- The index is machine-local and never committed to git
+
 ## Coding Standards
 
 ### C#
@@ -415,6 +457,11 @@ Scopes: `cli`, `gui`, `backup`, `registry`, `i18n`, `docs`, `build`
 - Input length validation (32767 byte limit on variable names/values)
 - Permission separation: user scope needs no elevation, system scope requires administrator
 - `UnauthorizedAccessException` handled explicitly for system scope without elevation
+- Variable name validation: rejects empty names, names >255 chars (user scope), names containing `=`
+- Path traversal protection: backup files must have `.json` extension, writes to system directories blocked
+- Backup file size cap: 50 MB maximum to prevent DoS via large files
+- CLI command whitelist in Rust IPC layer: only known commands can spawn subprocesses
+- Process isolation: CREATE_NO_WINDOW flag prevents console flicker and information leakage
 
 ---
 
@@ -453,16 +500,95 @@ Scopes: `cli`, `gui`, `backup`, `registry`, `i18n`, `docs`, `build`
 
 ---
 
+## GUI/CLI Alignment
+
+**WARNING: When adding or changing GUI features, you MUST verify the CLI has matching support.**
+
+The GUI communicates with the CLI exclusively through `invoke('run_cli', { command, args })`. Every GUI action maps to a CLI command. If a GUI feature is added without CLI support, it will fail at runtime with "Unknown command".
+
+### Current Alignment Status (v0.5.0)
+
+| GUI Feature | CLI Command | API Function | Aligned |
+|---|---|---|---|
+| List variables | `list` | `listVariables()` | Yes |
+| Get variable | `get` | `getVariable()` | Yes |
+| Set variable | `set` | `setVariable()` | Yes |
+| Delete variable | `delete` | `deleteVariable()` | Yes |
+| Backup | `backup` | `createBackup()` | Yes |
+| Restore | `restore` | `restoreBackup()` | Yes |
+| Profile list | `profile list` | `listProfiles()` | Yes |
+| Profile create | `profile create` | `createProfile()` | Yes |
+| Profile delete | `profile delete` | `deleteProfile()` | Yes |
+| Profile apply | `profile apply` | `applyProfile()` | Yes |
+| Profile unapply | `profile unapply` | `unapplyProfile()` | Yes |
+| Profile show | `profile show` | `showProfile()` | Yes |
+| Profile add-var | `profile add-var` | `addProfileVar()` | Yes |
+| Profile remove-var | `profile remove-var` | `removeProfileVar()` | Yes |
+| Profile edit-var | `profile edit-var` | `editProfileVar()` | Yes |
+| Profile status | `profile status` | `getProfileStatus()` | Yes |
+| Path list | `path list` | `listPathEntries()` | Yes |
+| Path add | `path add` | `addPathEntry()` | Yes |
+| Path remove | `path remove` | `removePathEntry()` | Yes |
+| Path move-up | `path move-up` | `movePathEntryUp()` | Yes |
+| Path move-down | `path move-down` | `movePathEntryDown()` | Yes |
+
+### Alignment Checklist
+
+When adding a new GUI feature:
+1. Add the CLI command in `Program.cs`
+2. Add the API function in `frontend/src/lib/api.ts`
+3. Add the command to `ALLOWED_COMMANDS` in `main.rs` if it is a new top-level command
+4. Add UI in the appropriate `.svelte` component
+5. Add i18n strings to ALL translation files
+6. Update the alignment table above
+7. Add test coverage
+
+## Logging and Debugging
+
+### CLI Logging
+
+The CLI supports a `--debug` flag (passable anywhere in args) that enables verbose stderr output with timestamps. Debug log lines use the format `[debug] HH:mm:ss.fff message`. Key instrumented methods:
+
+- `Main()` - logs all args
+- `ListEnvironment()` - logs read operation
+- `GetVariable()` - logs variable name
+- `SetVariable()` - logs name and scope
+- `DeleteVariable()` - logs name and scope
+- `CreateBackup()` / `RestoreBackup()` - logs file paths
+- `ApplyProfile()` / `UnapplyProfile()` - logs profile name
+- `RunPathCommand()` - logs subcommand and args
+
+### Rust Logging
+
+The Tauri shell uses `tauri-plugin-log` at `Info` level. All `run_cli` calls log:
+- Command and args on entry
+- Exit code, stdout/stderr length, and elapsed time on completion
+- stderr content if non-empty
+- Spawn failures with error details
+
+CLI path resolution also logs which method succeeded (resource, adjacent, dev, cwd, PATH).
+
+### Frontend Diagnostics
+
+The `cli_diagnostics` Tauri command returns:
+- `resolved_cli_path` - the CLI exe path that will be used
+- `gui_exe_dir` - directory of the GUI exe
+- `cwd` - current working directory
+
+This is accessible via `getDiagnostics()` in `api.ts` and helps debug "CLI not found" errors.
+
 ## Documentation Maintenance
 
 | Event | Files to update |
 |-------|----------------|
-| New CLI command | AGENTS.md, README.md, README_CN.md |
+| New CLI command | AGENTS.md, README.md, README_CN.md, GUI/CLI alignment table |
 | Changed command args | AGENTS.md, README.md, README_CN.md |
-| New GUI feature | AGENTS.md, README.md, README_CN.md, all translation files |
+| New GUI feature | AGENTS.md, README.md, README_CN.md, all translation files, GUI/CLI alignment table |
+| New debug log point | AGENTS.md (Logging section) |
 | Dependency update | AGENTS.md |
 | Build change | AGENTS.md, README.md, README_CN.md |
 | Directory structure change | AGENTS.md |
+| CodeGraph index change | AGENTS.md (CodeGraph section) |
 | New test file | AGENTS.md (test inventory section) |
 
 A commit that does not update AGENTS.md when the project has changed is considered incomplete.
@@ -482,4 +608,4 @@ A commit that does not update AGENTS.md when the project has changed is consider
 
 ---
 
-**Last updated**: 2026-07-11
+**Last updated**: 2026-07-12

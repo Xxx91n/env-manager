@@ -239,6 +239,39 @@ export async function removeProfileVar(
   }
 }
 
+export async function editProfileVar(
+  profileName: string,
+  oldVarName: string,
+  newVarName: string,
+  newVarValue: string
+): Promise<string> {
+  try {
+    const result = await runCommand('profile', ['edit-var', profileName, oldVarName, newVarName, newVarValue])
+    await listVariables()
+    return result
+  } catch (err) {
+    error.set(err instanceof Error ? err.message : 'Failed to edit profile variable')
+    throw err
+  }
+}
+
+export interface ProfileStatus {
+  name: string
+  isEnabled: boolean
+  isCorrectlyApplied: boolean
+  isApplicable: boolean
+  variableCount: number
+}
+
+export async function getProfileStatus(name: string): Promise<ProfileStatus | null> {
+  try {
+    const output = await runCommand('profile', ['status', name])
+    return JSON.parse(output) as ProfileStatus
+  } catch {
+    return null
+  }
+}
+
 // --- Path API ---
 
 export async function listPathEntries(scope: 'user' | 'system' = 'user'): Promise<PathEntry[]> {

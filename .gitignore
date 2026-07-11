@@ -41,6 +41,9 @@ package-lock.json.bak
 Thumbs.db
 
 # === Agent workflow (never commit) ===
+
+# === CodeGraph index (local, regenerated per machine) ===
+.codegraph/
 .omx/
 *.omx
 omx_wiki/

@@ -1,4 +1,5 @@
 using Microsoft.Win32;
+using System.Linq;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
@@ -38,6 +39,14 @@ class Program
     const string UserEnvPath = "Environment";
     const int MaxLength = 32767;
     const long MaxBackupFileSize = 50 * 1024 * 1024; // 50 MB safety cap
+
+    static bool DebugMode = false;
+
+    static void DebugLog(string msg)
+    {
+        if (DebugMode)
+            Console.Error.WriteLine($"[debug] {DateTime.Now:HH:mm:ss.fff} {msg}");
+    }
 
     static readonly HashSet<string> ValidCommands = new(StringComparer.OrdinalIgnoreCase)
     {
@@ -80,6 +89,16 @@ class Program
             ShowHelp();
             return 0;
         }
+
+        // Check for --debug flag anywhere in args
+        var argList = args.ToList();
+        if (argList.Remove("--debug") || argList.Remove("-d"))
+        {
+            DebugMode = true;
+        }
+        args = argList.ToArray();
+
+        DebugLog($"Args: {string.Join(" ", args)}");
 
         string command = args[0];
         if (!ValidCommands.Contains(command))
@@ -245,6 +264,7 @@ class Program
 
     static int ListEnvironment()
     {
+        DebugLog("ListEnvironment: reading user + system variables");
         var items = new List<EnvVariable>();
 
         using (var key = Registry.CurrentUser.OpenSubKey(UserEnvPath))
@@ -290,6 +310,7 @@ class Program
 
     static int GetVariable(string name)
     {
+        DebugLog("GetVariable: " + name);
         using (var key = Registry.CurrentUser.OpenSubKey(UserEnvPath))
         {
             var v = key?.GetValue(name);
@@ -322,9 +343,25 @@ class Program
 
     static void SetVariable(string name, string? value, string scope)
     {
-        if (string.IsNullOrEmpty(name) || name.Length > MaxLength)
+        DebugLog("SetVariable: " + name + " scope=" + scope);
+        if (string.IsNullOrEmpty(name))
         {
-            Console.Error.WriteLine("Error: Invalid variable name");
+            Console.Error.WriteLine("Error: Variable name cannot be empty");
+            return;
+        }
+
+        // PowerToys: user env var names limited to 255 chars in registry
+        int maxNameLength = scope == "user" ? 255 : MaxLength;
+        if (name.Length > maxNameLength)
+        {
+            Console.Error.WriteLine($"Error: Variable name exceeds {maxNameLength} characters");
+            return;
+        }
+
+        // Reject names containing '=' (invalid in Windows environment)
+        if (name.Contains('='))
+        {
+            Console.Error.WriteLine("Error: Variable name cannot contain '='");
             return;
         }
 
@@ -346,6 +383,7 @@ class Program
             }
 
             // Preserve ExpandString kind for variables like PATH.
+            // PowerToys: if value contains %, use ExpandString (same as Windows default editor)
             RegistryValueKind kind = RegistryValueKind.String;
             try
             {
@@ -356,6 +394,11 @@ class Program
                 // Variable doesn't exist yet; default to String is correct.
             }
 
+            if (value.Contains('%'))
+            {
+                kind = RegistryValueKind.ExpandString;
+            }
+
             key.SetValue(name, value, kind);
         }
 
@@ -364,6 +407,7 @@ class Program
 
     static void DeleteVariable(string name, string scope)
     {
+        DebugLog("DeleteVariable: " + name + " scope=" + scope);
         if (string.IsNullOrEmpty(name))
         {
             Console.Error.WriteLine("Error: Invalid variable name");
@@ -423,9 +467,83 @@ class Program
             "show" => args.Length < 3 ? ArgError("Usage: env-manager profile show <name>") : ProfileShow(args[2]),
             "add-var" => args.Length < 5 ? ArgError("Usage: env-manager profile add-var <profile> <name> <value>") : ProfileAddVar(args[2], args[3], args[4]),
             "remove-var" => args.Length < 4 ? ArgError("Usage: env-manager profile remove-var <profile> <name>") : ProfileRemoveVar(args[2], args[3]),
+            "edit-var" => args.Length < 6 ? ArgError("Usage: env-manager profile edit-var <profile> <old-name> <new-name> <new-value>") : ProfileEditVar(args[2], args[3], args[4], args[5]),
+            "status" => args.Length < 3 ? ArgError("Usage: env-manager profile status <name>") : ProfileStatus(args[2]),
             "help" => ShowProfileHelp(),
             _ => ArgError($"Unknown profile subcommand: {sub}")
         };
+    }
+
+    static int ProfileEditVar(string profileName, string oldVarName, string newVarName, string newVarValue)
+    {
+        var profiles = LoadProfiles();
+        var profile = FindProfile(profiles, profileName);
+        if (profile == null)
+        {
+            Console.Error.WriteLine($"Error: Profile '{profileName}' not found");
+            return 1;
+        }
+
+        var var = profile.Variables.FirstOrDefault(v => v.Name.Equals(oldVarName, StringComparison.OrdinalIgnoreCase));
+        if (var == null)
+        {
+            Console.Error.WriteLine($"Error: Variable '{oldVarName}' not found in profile '{profileName}'");
+            return 1;
+        }
+
+        // If name changed and profile is applied, handle backup rename
+        if (!oldVarName.Equals(newVarName, StringComparison.OrdinalIgnoreCase) && profile.IsEnabled)
+        {
+            string oldBackupName = GetBackupVariableName(oldVarName, profileName);
+            string newBackupName = GetBackupVariableName(newVarName, profileName);
+
+            var oldBackup = GetVariableValue(oldBackupName, "user");
+            if (oldBackup != null)
+            {
+                SetVariableWithoutNotify(newBackupName, oldBackup, "user");
+                DeleteVariableWithoutNotify(oldBackupName, "user");
+            }
+
+            DeleteVariableWithoutNotify(oldVarName, "user");
+        }
+
+        var.Name = newVarName;
+        var.Value = newVarValue;
+        SaveProfiles(profiles);
+
+        if (profile.IsEnabled)
+        {
+            SetVariableWithoutNotify(newVarName, newVarValue, "user");
+            BroadcastSettingChange();
+        }
+
+        Console.WriteLine($"Edited variable '{oldVarName}' -> '{newVarName}' in profile '{profileName}'");
+        return 0;
+    }
+
+    static int ProfileStatus(string name)
+    {
+        var profiles = LoadProfiles();
+        var profile = FindProfile(profiles, name);
+        if (profile == null)
+        {
+            Console.Error.WriteLine($"Error: Profile '{name}' not found");
+            return 1;
+        }
+
+        bool correctlyApplied = profile.IsEnabled && IsProfileCorrectlyApplied(profile);
+        bool applicable = IsProfileApplicable(profile);
+
+        var result = new
+        {
+            name = profile.Name,
+            isEnabled = profile.IsEnabled,
+            isCorrectlyApplied = correctlyApplied,
+            isApplicable = applicable,
+            variableCount = profile.Variables.Count
+        };
+        Console.WriteLine(JsonSerializer.Serialize(result, JsonOptsIndented));
+        return 0;
     }
 
     static int ShowProfileHelp()
@@ -437,8 +555,10 @@ class Program
   profile show <name>                 Show profile details (JSON)
   profile apply <name>                Apply a profile (backs up existing user vars)
   profile unapply <name>              Unapply a profile (restores backed-up user vars)
-  profile add-var <profile> <name> <val>   Add a variable to a profile
-  profile remove-var <profile> <name>      Remove a variable from a profile");
+  profile add-var <profile> <name> <val>        Add a variable to a profile
+  profile remove-var <profile> <name>           Remove a variable from a profile
+  profile edit-var <profile> <old> <new> <val>  Edit a variable in a profile
+  profile status <name>                         Check profile application status");
         return 0;
     }
 
@@ -534,6 +654,12 @@ class Program
         if (profile == null)
         {
             Console.Error.WriteLine($"Error: Profile '{name}' not found");
+            return 1;
+        }
+
+        if (!IsProfileApplicable(profile))
+        {
+            Console.Error.WriteLine($"Error: Profile '{name}' contains invalid variables and cannot be applied");
             return 1;
         }
 
@@ -711,8 +837,41 @@ class Program
     /// (if it exists) by renaming it to name_PowerToys_profileName, then sets
     /// the profile variable value. Finally broadcasts the setting change.
     /// </summary>
+    /// <summary>
+    /// Checks if a profile's variables are all correctly applied in the registry.
+    /// Mirrors PowerToys' IsCorrectlyApplied().
+    /// </summary>
+    static bool IsProfileCorrectlyApplied(ProfileData profile)
+    {
+        foreach (var var in profile.Variables)
+        {
+            var applied = GetVariableValue(var.Name, "user");
+            if (applied == null || applied != var.Value)
+                return false;
+        }
+        return true;
+    }
+
+    /// <summary>
+    /// Validates that all variables in a profile can be applied.
+    /// Mirrors PowerToys' IsApplicable().
+    /// </summary>
+    static bool IsProfileApplicable(ProfileData profile)
+    {
+        foreach (var var in profile.Variables)
+        {
+            if (string.IsNullOrWhiteSpace(var.Name) || var.Name.Length >= 255)
+                return false;
+
+            if (var.Name.Contains('='))
+                return false;
+        }
+        return true;
+    }
+
     static void ApplyProfile(ProfileData profile)
     {
+        DebugLog("ApplyProfile: " + profile.Name);
         foreach (var var in profile.Variables)
         {
             string backupName = GetBackupVariableName(var.Name, profile.Name);
@@ -740,6 +899,7 @@ class Program
     /// </summary>
     static void UnapplyProfile(ProfileData profile)
     {
+        DebugLog("UnapplyProfile: " + profile.Name);
         foreach (var var in profile.Variables)
         {
             string backupName = GetBackupVariableName(var.Name, profile.Name);
@@ -757,11 +917,22 @@ class Program
         BroadcastSettingChange();
     }
 
+    // Variables that should be edited as semicolon-separated lists.
+    // Mirrors PowerToys' IsList() check.
+    static readonly HashSet<string> ListVariables = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "PATH", "PATHEXT", "PSMODULEPATH",
+        "_NT_SYMBOL_PATH", "_NT_ALT_SYMBOL_PATH", "_NT_SYMCACHE_PATH"
+    };
+
+    static bool IsListVariable(string name) => ListVariables.Contains(name);
+
     // --- Path commands ---
     // Mirrors PowerToys list-style editing of PATH and similar semicolon-separated variables.
 
     static int RunPathCommand(string[] args)
     {
+        DebugLog("PathCommand: " + string.Join(" ", args.Skip(1)));
         if (args.Length < 2)
         {
             ShowPathHelp();
@@ -932,6 +1103,7 @@ class Program
 
     static void CreateBackup(string outputPath)
     {
+        DebugLog("CreateBackup: " + outputPath);
         var backup = new BackupData
         {
             Timestamp = DateTime.UtcNow.ToString("O"),
@@ -981,6 +1153,7 @@ class Program
 
     static void RestoreBackup(string inputPath, string? scope)
     {
+        DebugLog("RestoreBackup: " + inputPath);
         string fullPath = ValidateFilePath(inputPath, mustExist: true);
 
         var backup = JsonSerializer.Deserialize<BackupData>(File.ReadAllText(fullPath), JsonOpts);
@@ -1090,7 +1263,7 @@ class Program
 
     static int ShowHelp()
     {
-        Console.WriteLine(@"Env Manager v0.4.0
+        Console.WriteLine(@"Env Manager v0.5.0
 
 Commands:
   list                       List all variables (JSON)
@@ -1104,7 +1277,8 @@ Commands:
   validate <file>            Validate backup
   profile <subcommand>       Manage variable profiles (see: profile help)
   path <subcommand>          Edit PATH variable as list (see: path help)
-  help                       Show help");
+  help                       Show help
+  --debug                    Enable verbose stderr logging");
         return 0;
     }
 }
