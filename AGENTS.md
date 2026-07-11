@@ -1,178 +1,220 @@
-# Env Manager - 项目开发规范
+# Env Manager - Project Specification
 
-本文档是项目的**唯一可信源**。所有开发者、AI Agent和LLM模型必须遵循此规范。  
-**重要**：项目功能或结构如有任何变化，必须立即同步更新本文档。
-
----
-
-## 项目概览
-
-**名称**: Env Manager  
-**版本**: 0.2.0  
-**许可**: MIT  
-**语言**: C# (.NET 10) + TypeScript + Svelte + Rust  
-**状态**: Phase 1完成 | Phase 2开发中 | Phase 3规划中  
-**仓库**: https://github.com/Xxx91n/env-manager
-
-**目标**: 现代、轻量级的Windows环境变量管理器，支持CLI和GUI双模态。
+This document is the single source of truth for the Env Manager project. All developers, AI agents, and LLMs must follow this specification. When any project feature or structure changes, this document must be updated immediately in the same commit.
 
 ---
 
-## 项目结构
+## Project Overview
+
+- **Name**: Env Manager
+- **Version**: 0.3.0
+- **License**: MIT
+- **Repository**: https://github.com/Xxx91n/env-manager
+- **Languages**: C# (.NET 10), TypeScript, Svelte, Rust
+- **Goal**: A modern, lightweight Windows environment variable manager with CLI and GUI dual-mode support, inspired by Microsoft PowerToys environment variable editor but standalone and agent-friendly.
+
+---
+
+## Architecture
+
+The application has three layers:
+
+1. **CLI backend** (`Program.cs`) - C# .NET 10 console application that reads/writes the Windows Registry directly. Compiles to `env-manager-cli.exe`. Handles all variable CRUD, backup/restore, diff/merge operations.
+2. **Tauri shell** (`frontend/src-tauri/`) - Rust application that embeds the CLI as a bundled resource. Spawns CLI subprocesses for each operation and returns structured JSON responses to the frontend via Tauri IPC commands.
+3. **Svelte frontend** (`frontend/src/`) - TypeScript + Svelte 4 + TailwindCSS UI rendered in a WebView2 window. Communicates with the Rust layer exclusively through `invoke('run_cli', ...)`.
+
+The GUI does NOT depend on a local web server. In development, Vite serves the frontend at `localhost:5173`. In production, Tauri embeds the built static assets via its `tauri://` custom protocol - no server, no network.
+
+---
+
+## Project Structure
 
 ```
 env-manager/
-├── Program.cs                    # C# CLI完整实现（215行）
-├── env-manager.csproj            # .NET 10项目配置
-├── bin/Release/net10.0/
-│   └── env-manager.exe          # 编译产物（15MB）
+├── Program.cs                         # C# CLI implementation
+├── env-manager.csproj                 # .NET 10 project (AssemblyName: env-manager-cli)
+├── LICENSE                            # MIT
+├── README.md                          # English documentation
+├── README_CN.md                       # Chinese documentation
+├── AGENTS.md                          # This file
+├── .gitignore
 │
-├── frontend/                      # Tauri GUI应用
+├── frontend/                          # Tauri GUI application
+│   ├── index.html
+│   ├── package.json
+│   ├── vite.config.ts
+│   ├── svelte.config.js
+│   ├── tailwind.config.js
+│   ├── postcss.config.js
+│   ├── tsconfig.json
+│   ├── playwright.config.ts
+│   ├── scripts/
+│   │   ├── prebuild.mjs              # Builds CLI, copies to src-tauri/bin/
+│   │   └── build-all.ps1             # Consolidated build: release/portable + release/msi
 │   ├── src/
-│   │   ├── main.ts              # 应用入口
-│   │   ├── App.svelte           # 根组件
+│   │   ├── main.ts                   # App entry, initializes i18n
+│   │   ├── App.svelte                # Root component
+│   │   ├── App.test.ts
 │   │   └── lib/
-│   │       ├── api.ts           # IPC CLI桥接
-│   │       ├── stores.ts        # Svelte响应式状态
-│   │       └── components/
-│   │           ├── Variables.svelte      # 变量列表主组件
-│   │           ├── EditDialog.svelte     # 创建/编辑对话框
-│   │           └── BackupDialog.svelte   # 备份/恢复对话框
+│   │       ├── api.ts                # Tauri IPC bridge, CLI invocation
+│   │       ├── stores.ts             # Svelte reactive stores
+│   │       ├── i18n.ts               # Internationalization setup
+│   │       ├── components/
+│   │       │   ├── Variables.svelte  # Variable list, search, filter
+│   │       │   ├── EditDialog.svelte # Create/edit variable dialog
+│   │       │   └── BackupDialog.svelte # Backup/export dialog
+│   │       └── translations/
+│   │           ├── en.json
+│   │           ├── zh.json
+│   │           ├── ja.json
+│   │           ├── ko.json
+│   │           ├── de.json
+│   │           ├── fr.json
+│   │           ├── es.json
+│   │           ├── pt.json
+│   │           ├── ru.json
+│   │           └── ar.json
 │   ├── src-tauri/
-│   │   ├── src/main.rs          # Tauri命令处理
-│   │   ├── Cargo.toml           # Rust依赖
-│   │   └── tauri.conf.json      # Tauri配置
-│   ├── package.json             # npm依赖
-│   ├── tsconfig.json            # TypeScript配置
-│   ├── vite.config.ts           # Vite构建配置
-│   ├── tailwind.config.js       # TailwindCSS配置
-│   └── postcss.config.js        # PostCSS配置
+│   │   ├── src/main.rs               # Tauri commands: run_cli, cli_diagnostics
+│   │   ├── Cargo.toml
+│   │   ├── Cargo.lock
+│   │   ├── tauri.conf.json           # Bundle config, resources mapping
+│   │   ├── build.rs
+│   │   ├── capabilities/default.json
+│   │   ├── icons/                    # Application icons
+│   │   └── bin/                      # CLI files copied by prebuild (gitignored)
+│   └── tests/
+│       └── e2e/app.spec.ts
 │
-├── README.md                     # 英文使用指南
-├── README_CN.md                  # 中文使用指南
-├── AGENTS.md                     # 本文件：项目规范
-├── DEVELOPMENT.md               # 开发者指南
-├── SECURITY_AUDIT.md            # 安全审计报告
-├── LICENSE                      # MIT许可证
-└── .gitignore                   # Git忽略配置
+├── release/                           # Build output (gitignored)
+│   ├── portable/                     # GUI exe + CLI files, flat layout
+│   └── msi/                          # MSI installer
+│
+├── bin/                               # CLI build output (gitignored)
+├── obj/                               # CLI build intermediates (gitignored)
+└── dist/                              # Frontend build output (gitignored)
 ```
 
 ---
 
-## 快速启动（新Agent/LLM指南）
+## Build System
 
-### 1. 克隆与初始化
-```bash
-git clone https://github.com/Xxx91n/env-manager.git
-cd env-manager
-```
+### Prerequisites
 
-### 2. 构建CLI
-```bash
+- .NET 10 SDK
+- Node.js 18+ with npm
+- Rust toolchain (rustc + cargo) with target `x86_64-pc-windows-gnu`
+- MinGW-w64 (at `D:\MinGW64` or on PATH) for the GNU target
+
+### Build CLI only
+
+```powershell
 dotnet build -c Release
-# 输出: bin/Release/net10.0/env-manager.exe (15MB)
+# Output: bin/Release/net10.0/env-manager-cli.exe
 ```
 
-### 3. 构建GUI（可选）
-```bash
+### Build GUI (development with hot reload)
+
+```powershell
 cd frontend
 npm install
-npm run build              # 生产构建
-# 或
-npm run tauri-dev         # 开发模式（热重载）
-```
-
-### 4. 测试
-```bash
-# CLI测试
-.\bin\Release\net10.0\env-manager.exe list
-.\bin\Release\net10.0\env-manager.exe help
-
-# GUI测试（开发模式）
-cd frontend
 npm run tauri-dev
+# Opens a Tauri window with Vite dev server at localhost:5173
 ```
+
+### Build GUI (production)
+
+```powershell
+cd frontend
+npm run tauri-build
+# Compiles Rust, bundles frontend, produces:
+#   frontend/src-tauri/target/<triple>/release/env-manager.exe
+#   frontend/src-tauri/target/<triple>/release/bundle/msi/*.msi
+```
+
+### Build everything (consolidated output)
+
+```powershell
+cd frontend
+powershell -ExecutionPolicy Bypass -File scripts/build-all.ps1
+# Output:
+#   release/portable/  - env-manager.exe + env-manager-cli.exe + DLLs (flat)
+#   release/msi/       - Env Manager_X.Y.Z_x64_en-US.msi
+```
+
+### Build output layout
+
+The `release/` directory is the canonical output for distribution:
+
+- `release/portable/` contains the GUI executable (`env-manager.exe`) and all CLI runtime files side-by-side. This is the portable distribution - no installation needed, just run the exe.
+- `release/msi/` contains the Windows MSI installer. When installed, the CLI exe and its DLLs are bundled as Tauri resources and resolved at runtime via `BaseDirectory::Resource`.
 
 ---
 
-## 技术栈
+## CLI Command Specification
 
-### 后端 (Backend)
-- **语言**: C# .NET 10
-- **Registry访问**: Microsoft.Win32.Registry (内置)
-- **CLI输出**: Spectre.Console
-- **部署**: 单一15MB可执行文件
-- **特性**: 无需管理员即可访问用户变量，系统变量需提权
+All commands follow: `env-manager-cli <command> [arguments] [--flags]`
 
-### 前端 (Frontend)  
-- **框架**: Tauri 2.0 (轻量级桌面框架)
-- **UI**: Svelte 4 (响应式组件)
-- **语言**: TypeScript 5 (完全类型安全)
-- **样式**: TailwindCSS 3 (原子CSS)
-- **构建**: Vite 5 (极速构建)
-- **IPC**: Tauri命令调用CLI进程
+| Command | Usage | Description |
+|---------|-------|-------------|
+| `list` | `list` | List all variables (user + system) |
+| `get` | `get <name>` | Get variable value |
+| `set` | `set <name> <value> [--scope user\|system]` | Set variable (default: user) |
+| `delete` | `delete <name> [--scope user\|system]` | Delete variable (default: user) |
+| `backup` | `backup [--output <file>]` | Backup all variables to JSON |
+| `restore` | `restore <file> [--scope user\|system]` | Restore variables from JSON |
+| `diff` | `diff <old> <new>` | Compare two backup files |
+| `merge` | `merge <old> <new> --output <file>` | Merge two backup files |
+| `validate` | `validate <file>` | Validate backup file format |
+| `help` | `help` | Show help text |
 
-### 构建工具
-- **CLI**: dotnet CLI (.NET 10 SDK)
-- **前端**: Node.js 18+, npm
-- **Rust**: rustc (Tauri编译)
-- **Git**: 版本控制
+### Scope
 
----
+- `user`: `HKEY_CURRENT_USER\Environment` (no elevation required)
+- `system`: `HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\Session Manager\Environment` (requires administrator)
 
-## CLI命令规范
+### Error handling
 
-所有命令遵循以下格式：
-```
-env-manager <command> [arguments] [--flags]
-```
-
-### 已实现命令 (Phase 1)
-
-| 命令 | 用法 | 说明 |
-|------|------|------|
-| `list` | `env-manager list` | 列出所有变量 |
-| `get` | `env-manager get <name>` | 获取变量值 |
-| `set` | `env-manager set <name> <value> [--scope user\|system]` | 设置变量（默认user） |
-| `delete` | `env-manager delete <name> [--scope user\|system]` | 删除变量（默认user） |
-| `backup` | `env-manager backup [--output <file>]` | 备份到JSON |
-| `restore` | `env-manager restore <file> [--scope user\|system]` | 从JSON恢复 |
-| `diff` | `env-manager diff <old> <new>` | 对比两个备份 |
-| `merge` | `env-manager merge <old> <new> --output <file>` | 合并两个备份 |
-| `validate` | `env-manager validate <file>` | 验证备份格式 |
-| `help` | `env-manager help` | 显示帮助 |
-
-### 作用域说明
-- `user`: HKEY_CURRENT_USER\Environment (无需提权)
-- `system`: HKEY_LOCAL_MACHINE\System\CurrentControlSet\Control\Session Manager\Environment (需要管理员)
-
-### 错误处理
-- 所有错误输出到 stderr
-- 成功输出到 stdout
-- 退出码：0=成功，1=失败
+- Errors go to stderr, success output to stdout
+- Exit code: 0 = success, 1 = failure
 
 ---
 
-## 数据格式
+## IPC Bridge
 
-### 备份JSON结构
+The Rust layer (`main.rs`) exposes two Tauri commands:
 
-**必须字段**:
-```json
-{
-  "timestamp": "ISO8601字符串（用于审计追踪）",
-  "version": "1.0.0（支持未来迁移）",
-  "variables": [
-    {
-      "name": "变量名",
-      "value": "变量值",
-      "scope": "user|system"
-    }
-  ]
-}
-```
+- `run_cli(command: String, args: Vec<String>) -> CliResponse` - Spawns the CLI subprocess, returns `{ success, data, error }`.
+- `cli_diagnostics() -> serde_json::Value` - Returns resolved CLI path, GUI exe directory, and CWD for debugging.
 
-**示例**:
+CLI path resolution order:
+1. Tauri resource directory (`BaseDirectory::Resource`) - production MSI install
+2. Adjacent to GUI exe - portable distribution
+3. Dev mode relative paths - `../../../../bin/Release/net10.0/`
+4. Current working directory
+5. PATH fallback (`where env-manager-cli.exe`)
+
+---
+
+## i18n (Internationalization)
+
+The GUI supports 10 languages: English (en), Chinese (zh), Japanese (ja), Korean (ko), German (de), French (fr), Spanish (es), Portuguese (pt), Russian (ru), Arabic (ar).
+
+### Rule: i18n sync is mandatory
+
+When adding any new user-facing string (button label, message, dialog text, error), you must:
+
+1. Add the key to `frontend/src/lib/translations/en.json` (the reference)
+2. Add the same key with translated value to ALL other translation files in `frontend/src/lib/translations/`
+3. Use `$t('key')` in Svelte components - never hardcode display text
+4. Register any new locale in `frontend/src/lib/i18n.ts` (both `register()` call and `supportedLocales` array)
+
+The default locale (en) is loaded synchronously via `addMessages()` to ensure the UI renders immediately under Tauri's custom protocol. Other locales load lazily via dynamic import.
+
+---
+
+## Backup JSON Format
+
 ```json
 {
   "timestamp": "2026-07-10T12:34:56Z",
@@ -182,379 +224,168 @@ env-manager <command> [arguments] [--flags]
       "name": "PATH",
       "value": "C:\\Windows\\System32;...",
       "scope": "user"
-    },
-    {
-      "name": "JAVA_HOME",
-      "value": "D:\\jdk17\\",
-      "scope": "system"
     }
   ]
 }
 ```
 
-**验证**:
-- timestamp: RFC3339格式，用UTC时区
-- version: 遵循语义化版本
-- variables: 数组，允许空数组
-- scope: 必须是"user"或"system"
+- `timestamp`: RFC3339 / ISO 8601, UTC
+- `version`: Semantic version (currently "1.0.0")
+- `variables`: Array of `{ name, value, scope }`, may be empty
+- `scope`: Must be "user" or "system"
 
 ---
 
-## 开发规范
+## Coding Standards
 
-### 代码风格
+### C#
 
-#### C#
-- 遵循 .editorconfig 规范
-- 使用显式类型声明（public API）
-- 使用 `using` 语句管理资源
-- 异常处理：捕获特定异常，不使用空catch
-- 最大行长：120字符
+- 4-space indentation
+- Max line length: 120 characters
+- Use `using` statements for Registry keys
+- Catch specific exceptions, never empty catch blocks
+- Explicit types on public API, `var` for locals
 
-#### TypeScript/Svelte
-- ESLint 严格模式
-- 无隐式any
-- 所有导出都有JSDoc注释
-- 响应式语句使用 `$:` 语法
-- 组件使用 Props验证
+### TypeScript / Svelte
 
-#### 文件编码
-- **所有文件**: UTF-8 无BOM
-- **行尾**: LF (Unix风格)
-- **缩进**: 
-  - C#: 4空格
-  - TypeScript/Svelte: 2空格
+- 2-space indentation
+- Strict mode, no implicit any
+- All exports documented with JSDoc
+- Reactive statements use `$:` syntax
+- Components use props validation
 
-### 提交规范
+### Rust
 
-使用 Conventional Commits 格式：
+- 4-space indentation
+- Use `log` crate macros (`info!`, `warn!`, `error!`) for diagnostics
+- `#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]` to hide console in release
+
+### File encoding
+
+- All files: UTF-8 without BOM
+- Line endings: LF
+
+---
+
+## Commit Convention
+
+Use Conventional Commits:
+
 ```
 <type>(<scope>): <subject>
 
 <body>
-
-<footer>
 ```
 
-**类型**:
-- `feat`: 新功能
-- `fix`: 缺陷修复
-- `docs`: 文档更新
-- `refactor`: 代码重构（不改变功能）
-- `test`: 测试
-- `perf`: 性能优化
-- `chore`: 其他更改
+Types: `feat`, `fix`, `docs`, `refactor`, `test`, `perf`, `chore`
 
-**作用域**:
-- `cli`: CLI相关
-- `gui`: GUI相关
-- `backup`: 备份功能
-- `registry`: 注册表操作
-- `docs`: 文档
-
-**示例**:
-```
-feat(cli): add merge command for backup files
-
-Implement backup merging with conflict resolution:
-- User variables override system variables
-- Timestamp comparison for ordering
-- JSON output with validation
-
-Closes #5
-```
-
-### 测试需求
-
-- **CLI**: 每个命令必须有集成测试
-- **GUI**: 每个组件必须有单元测试
-- **备份**: 必须验证JSON格式
-- **错误**: 覆盖关键异常路径
+Scopes: `cli`, `gui`, `backup`, `registry`, `i18n`, `docs`, `build`
 
 ---
 
-## Phase规划
-
-### Phase 1: CLI后端 ✅ 完成
-- [x] Registry读写 (user/system作用域)
-- [x] 9个核心命令
-- [x] JSON备份/恢复
-- [x] 差异/合并功能
-- [x] 输入验证
-- [x] 错误处理
-- [x] 命令帮助
-
-### Phase 2: GUI应用 🚀 开发中
-- [x] Tauri框架初始化
-- [x] 变量列表组件
-- [x] 编辑对话框
-- [x] 备份管理UI
-- [x] IPC桥接到CLI
-- [ ] 主题切换 (深/浅色)
-- [ ] 键盘快捷键
-- [ ] 搜索优化
-
-### Phase 3: 分发与发布 📋 规划中
-- [ ] MSI安装程序
-- [ ] GitHub Actions CI/CD
-- [ ] 自动更新机制
-- [ ] Windows应用商店发布
-- [ ] 代码签名
-
----
-
-## 安全性
-
-### 已验证
-- ✅ 0个OWASP Top 10漏洞
-- ✅ 0个CWE关键漏洞
-- ✅ 547条安全规则通过
-- ✅ 输入长度验证 (32767字节限制)
-- ✅ 异常安全处理
-- ✅ 资源正确清理
-
-### 设计决策
-- **无凭证存储**: 不存储密码，仅管理变量
-- **直接Registry API**: 不通过COM，直接系统调用
-- **IPC隔离**: CLI在独立进程中运行
-- **权限分离**: user/system作用域隔离
-
-详见 [SECURITY_AUDIT.md](SECURITY_AUDIT.md)
-
----
-
-## 依赖项
+## Dependencies
 
 ### C# (.NET)
-| 包 | 版本 | 说明 |
-|----|------|------|
-| Spectre.Console | 最新稳定 | CLI美化输出 |
 
-### TypeScript (npm)
-| 包 | 说明 |
-|----|------|
-| @tauri-apps/api | Tauri IPC API |
-| svelte | UI框架 |
-| typescript | 类型检查 |
-| tailwindcss | CSS框架 |
-| vite | 构建工具 |
+| Package | Purpose |
+|---------|---------|
+| Spectre.Console 0.49.1 | CLI table formatting |
 
-### Rust (Cargo)
-| 包 | 说明 |
-|----|------|
-| tauri | 桌面框架 |
-| serde | JSON序列化 |
-| tokio | 异步运行时 |
+### npm
 
-**更新策略**: 
-- 依赖版本锁定在 package-lock.json 和 Cargo.lock
-- 每月检查安全更新
-- 不用Beta/Alpha版本除非必要
+| Package | Purpose |
+|---------|---------|
+| @tauri-apps/api 2.x | Tauri IPC |
+| @tauri-apps/cli 2.x | Tauri build tooling |
+| svelte 4.x | UI framework |
+| svelte-i18n 4.x | Internationalization |
+| tailwindcss 3.x | CSS framework |
+| vite 5.x | Build tool |
+| typescript 5.x | Type checking |
 
----
+### Cargo (Rust)
 
-## 性能目标
-
-| 指标 | 目标 | 现状 |
-|------|------|------|
-| CLI启动时间 | <200ms | ~100ms ✅ |
-| GUI启动时间 | <1s | ~800ms ✅ |
-| 列表加载 | <100ms | ~50ms ✅ |
-| 备份大小 | <1MB | ~10KB (典型) ✅ |
-| 内存占用 | CLI <50MB, GUI <150MB | 符合 ✅ |
+| Crate | Purpose |
+|-------|---------|
+| tauri 2.0 | Desktop framework |
+| serde / serde_json | Serialization |
+| log | Logging |
+| tauri-plugin-log | Tauri log integration |
 
 ---
 
-## 文档要求
+## Security
 
-### 必须维护的文件
-
-1. **README.md** (英文)
-   - 功能介绍
-   - 安装说明
-   - CLI使用示例
-   - 开发指南
-   - 许可证信息
-
-2. **README_CN.md** (中文)
-   - 与README.md内容对等
-   - 中文本地化翻译
-   - 保持格式一致
-
-3. **AGENTS.md** (本文件)
-   - 项目规范源
-   - 必须与实现同步
-   - 任何功能变化立即更新
-
-4. **DEVELOPMENT.md**
-   - 开发者快速开始
-   - 本地构建步骤
-   - 测试流程
-   - 常见问题
-
-5. **SECURITY_AUDIT.md**
-   - 安全审计结果
-   - 漏洞列表（当前为0）
-   - 风险评估
-   - 推荐措施
-
-### 文档更新触发条件
-
-| 事件 | 需要更新 |
-|------|---------|
-| 新增CLI命令 | AGENTS.md, README.md, README_CN.md |
-| 修改命令参数 | AGENTS.md, README.md, README_CN.md, DEVELOPMENT.md |
-| 安全漏洞发现 | SECURITY_AUDIT.md |
-| 依赖更新 | AGENTS.md |
-| Phase进度 | AGENTS.md, README.md, README_CN.md |
-| 目录结构变化 | AGENTS.md |
-
-**规则**: 没有同步更新AGENTS.md的commit会被视为不完整。
+- No credential storage - only manages environment variables
+- Direct Registry API via `Microsoft.Win32.Registry`, no COM
+- IPC isolation - CLI runs as a separate subprocess
+- Input length validation (32767 byte limit on variable names/values)
+- Permission separation: user scope needs no elevation, system scope requires administrator
+- `UnauthorizedAccessException` handled explicitly for system scope without elevation
 
 ---
 
-## 贡献工作流
+## How to Add a New CLI Command
 
-### 新功能开发
-
-1. **规划阶段**
-   - 在AGENTS.md中记录需求
-   - 确定影响的模块
-   - 评估安全影响
-
-2. **实现阶段**
-   - 遵循代码风格
-   - 添加测试
-   - 更新相关文档
-
-3. **评审阶段**
-   - 代码审查
-   - 安全审查
-   - 文档审查
-
-4. **发布阶段**
-   - 所有文档同步
-   - 语义版本更新
-   - Git标签创建
-
-### 缺陷报告
-
-当发现问题时：
-1. 使用GitHub Issues报告
-2. 提供复现步骤
-3. 在修复时更新AGENTS.md
-4. 添加回归测试
+1. Add a `case` in `Program.cs` `Main()` switch statement
+2. Implement the command method
+3. Update `ShowHelp()` with usage text
+4. Document the command in this file (CLI Command Specification table)
+5. Update `README.md` and `README_CN.md`
+6. Add integration test coverage
 
 ---
 
-## 与外部代码的关系
+## How to Modify the GUI
 
-### 参考来源（灵感）
-- **Microsoft PowerToys**: 界面设计理念
-- **Windows Registry API**: Registry操作
-- **Tauri**: 桌面框架选择
-
-### 许可兼容性
-- ✅ MIT许可证（无限制）
-- ✅ 可商用、私用、修改、分发
-- ✅ 需保留许可证声明
+1. Edit `.svelte` files in `frontend/src/lib/components/`
+2. Run `npm run tauri-dev` for live preview
+3. Add any new display strings to ALL translation files (see i18n section)
+4. Update this file if the component structure changes
+5. Add component tests
 
 ---
 
-## 常见问题
+## How to Release
 
-### "如何添加新的CLI命令？"
-1. 在 Program.cs Main()的switch语句中添加case
-2. 实现命令方法
-3. 更新ShowHelp()
-4. 在AGENTS.md中记录命令
-5. 添加集成测试
-
-### "如何修改GUI界面？"
-1. 编辑 frontend/src/lib/components/ 中的.svelte文件
-2. 运行 `npm run tauri-dev` 查看实时预览
-3. 更新AGENTS.md中的前端结构说明
-4. 添加单元测试
-
-### "如何发布新版本？"
-1. 更新所有文件版本号
-2. 更新SECURITY_AUDIT.md
-3. 更新README.md的Phase说明
-4. 创建commit: `chore: release v0.x.0`
-5. 创建Git tag: `git tag v0.x.0`
-6. 构建发布物: MSI, ZIP, 可执行文件
-
-### "发现安全问题怎么办？"
-1. 立即在SECURITY_AUDIT.md中记录
-2. 修复问题
-3. 运行Semgrep扫描验证
-4. 更新AGENTS.md的安全部分
-5. 创建commit说明修复
+1. Update version in `env-manager.csproj`, `frontend/package.json`, `frontend/src-tauri/tauri.conf.json`, `frontend/src-tauri/Cargo.toml`
+2. Update `README.md` and `README_CN.md` if features changed
+3. Update this file if structure or commands changed
+4. Run `powershell -ExecutionPolicy Bypass -File frontend/scripts/build-all.ps1`
+5. Verify `release/portable/env-manager.exe` launches and shows variables
+6. Verify MSI installs and the app works
+7. Commit: `chore: release vX.Y.Z`
+8. Tag: `git tag vX.Y.Z`
+9. Push: `git push origin main --tags`
 
 ---
 
-## 项目命令速查表
+## Documentation Maintenance
 
-```bash
-# 构建
-dotnet build -c Release                    # 构建CLI
-cd frontend && npm run build               # 构建GUI生产版
+| Event | Files to update |
+|-------|----------------|
+| New CLI command | AGENTS.md, README.md, README_CN.md |
+| Changed command args | AGENTS.md, README.md, README_CN.md |
+| New GUI feature | AGENTS.md, README.md, README_CN.md, all translation files |
+| Dependency update | AGENTS.md |
+| Build change | AGENTS.md, README.md, README_CN.md |
+| Directory structure change | AGENTS.md |
 
-# 开发
-cd frontend && npm run tauri-dev          # GUI热重载开发
-npm run tauri-build                        # GUI生产构建
-
-# 测试
-.\bin\Release\net10.0\env-manager.exe list
-.\bin\Release\net10.0\env-manager.exe help
-
-# 清理
-dotnet clean
-rm -r frontend/node_modules frontend/dist frontend/src-tauri/target
-
-# 验证
-semgrep --config=p/owasp-top-ten Program.cs
-semgrep --config=p/typescript frontend/src
-```
+A commit that does not update AGENTS.md when the project has changed is considered incomplete.
 
 ---
 
-## 关键人物/责任
+## Performance Targets
 
-| 角色 | 职责 |
-|------|------|
-| CLI开发者 | Program.cs 功能开发、Registry操作 |
-| GUI开发者 | Svelte组件开发、UI/UX实现 |
-| 安全审查 | 代码审查、安全扫描、SECURITY_AUDIT.md维护 |
-| 文档维护 | README同步、AGENTS.md更新 |
-| 发布工程师 | 构建、测试、版本发布 |
-
----
-
-## 审计日志
-
-| 日期 | 变更 | 提交者 |
-|------|------|--------|
-| 2026-07-10 | 创建初始AGENTS.md规范 | System |
-| 2026-07-10 | 整合Phase 1-2完成状态 | System |
-| 2026-07-10 | 添加项目规范强制要求 | System |
-
-**下次审计**: 任何功能变化时立即审计
+| Metric | Target |
+|--------|--------|
+| CLI startup | < 200ms |
+| GUI startup | < 1s |
+| List load | < 100ms |
+| Backup size | < 1MB (typically ~10KB) |
+| CLI memory | < 50MB |
+| GUI memory | < 150MB |
 
 ---
 
-## 声明
-
-本文档是 Env Manager 项目的**唯一真实来源**（Single Source of Truth）。
-
-- ✅ 新的LLM/Agent必须首先读取本文档
-- ✅ 项目变化必须同步更新本文档
-- ✅ 无AGENTS.md的同步更新不接受提交
-- ✅ 本文档定义了项目的所有规范和契约
-
----
-
-**最后更新**: 2026-07-10  
-**维护者**: Env Manager开发团队  
-**版本**: 1.0  
-**状态**: 生效中
+**Last updated**: 2026-07-11

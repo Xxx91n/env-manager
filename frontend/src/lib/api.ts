@@ -1,10 +1,16 @@
 import { invoke } from '@tauri-apps/api/core'
-import { variables, loading, error, selectedScope } from './stores'
+import { variables, loading, error } from './stores'
 
 export interface CLIResponse {
   success: boolean
   data?: string
   error?: string
+}
+
+export interface Diagnostics {
+  resolved_cli_path: string
+  gui_exe_dir: string
+  cwd: string
 }
 
 async function runCommand(cmd: string, args: string[] = []): Promise<string> {
@@ -20,7 +26,20 @@ async function runCommand(cmd: string, args: string[] = []): Promise<string> {
 
     return result.data || ''
   } catch (err) {
-    throw new Error(err instanceof Error ? err.message : 'CLI execution failed')
+    const msg = err instanceof Error ? err.message : String(err)
+    throw new Error(msg)
+  }
+}
+
+export async function getDiagnostics(): Promise<Diagnostics> {
+  try {
+    return await invoke<Diagnostics>('cli_diagnostics')
+  } catch {
+    return {
+      resolved_cli_path: 'UNAVAILABLE',
+      gui_exe_dir: 'UNAVAILABLE',
+      cwd: 'UNAVAILABLE',
+    }
   }
 }
 
@@ -116,7 +135,7 @@ function parseTableOutput(output: string) {
 
   for (const line of lines) {
     if (!line.trim()) continue
-    const parts = line.split('│').map((s) => s.trim()).filter(Boolean)
+    const parts = line.split('\u2502').map((s) => s.trim()).filter(Boolean)
     if (parts.length >= 3) {
       vars.push({
         name: parts[0],

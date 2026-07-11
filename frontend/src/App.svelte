@@ -1,28 +1,36 @@
 <script lang="ts">
   import { onMount } from 'svelte'
-  import { locale, t } from 'svelte-i18n'
+  import { t, locale } from 'svelte-i18n'
   import Variables from './lib/components/Variables.svelte'
   import { variables, loading, error } from './lib/stores'
   import { listVariables } from './lib/api'
   import { locales, defaultLanguage } from './lib/i18n'
 
+  const languageNames: Record<string, string> = {
+    en: 'English',
+    zh: '中文',
+    ja: '日本語',
+    ko: '한국어',
+    de: 'Deutsch',
+    fr: 'Francais',
+    es: 'Espanol',
+    pt: 'Portugues',
+    ru: 'Русский',
+    ar: 'العربية',
+  }
+
   let currentLocale: string = defaultLanguage
 
-  onMount(async () => {
-    // Subscribe to locale changes
-    const unsub = locale.subscribe(value => {
-      if (value) {
-        currentLocale = value
-        localStorage.setItem('locale', value)
-      }
-    })
+  // Reactively sync currentLocale from the locale store
+  $: if ($locale) currentLocale = $locale
 
+  onMount(async () => {
     await listVariables()
-    return unsub
   })
 
   function switchLocale(newLocale: string) {
     locale.set(newLocale)
+    localStorage.setItem('locale', newLocale)
   }
 </script>
 
@@ -33,20 +41,16 @@
         <h1 class="text-2xl font-bold text-gray-900">{$t('app.title')}</h1>
         <p class="text-gray-600 text-sm mt-1">{$t('app.description')}</p>
       </div>
-      <div class="flex gap-2">
+      <select
+        on:change={(e) => switchLocale(e.currentTarget.value)}
+        value={currentLocale}
+        class="px-3 py-1.5 border border-gray-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+        aria-label={$t('settings.language')}
+      >
         {#each locales as loc}
-          <button
-            on:click={() => switchLocale(loc)}
-            class="px-3 py-1 rounded text-sm transition"
-            class:bg-blue-500={currentLocale === loc}
-            class:text-white={currentLocale === loc}
-            class:bg-gray-200={currentLocale !== loc}
-            class:text-gray-700={currentLocale !== loc}
-          >
-            {loc.toUpperCase()}
-          </button>
+          <option value={loc}>{languageNames[loc]}</option>
         {/each}
-      </div>
+      </select>
     </div>
   </header>
 
@@ -67,10 +71,10 @@
   </div>
 </main>
 
-<style global>
-  @import 'tailwindcss/base';
-  @import 'tailwindcss/components';
-  @import 'tailwindcss/utilities';
+<style lang="postcss">
+  @tailwind base;
+  @tailwind components;
+  @tailwind utilities;
 
   :global(body) {
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen,

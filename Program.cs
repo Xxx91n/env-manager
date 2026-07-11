@@ -203,7 +203,7 @@ class Program
     
     static void ShowHelp()
     {
-        Console.WriteLine(@"Env Manager v0.2.0
+        Console.WriteLine(@"Env Manager v0.3.0
 
 Commands:
   list                       List all variables

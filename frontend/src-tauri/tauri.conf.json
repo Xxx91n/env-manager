@@ -26,14 +26,16 @@
   },
   "bundle": {
     "active": true,
-    "targets": [
-      "msi"
-    ],
+    "targets": ["msi"],
     "icon": [
       "icons/icon.ico"
     ],
     "resources": [
-      "../../bin/Release/net10.0/env-manager.exe"
+      "bin/env-manager-cli.exe",
+      "bin/env-manager-cli.dll",
+      "bin/env-manager-cli.runtimeconfig.json",
+      "bin/env-manager-cli.deps.json",
+      "bin/Spectre.Console.dll"
     ]
   }
 }

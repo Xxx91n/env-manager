@@ -1,25 +1,29 @@
-# Build outputs
+# === Build outputs ===
 bin/
 obj/
 dist/
 target/
+release/
 *.exe
 *.dll
 *.so
 *.dylib
+*.msi
+*.pdb
 
-# Node modules and package manager
+# Frontend build artifacts
+frontend/src-tauri/bin/
+frontend/src-tauri/gen/
+frontend/src-tauri/target/
+frontend/dist/
+
+# === Dependencies ===
 node_modules/
 npm-debug.log*
 yarn-error.log*
-package-lock.json
-yarn.lock
+package-lock.json.bak
 
-# Rust/Cargo
-Cargo.lock
-target/
-
-# IDE and editor
+# === IDE / Editor ===
 .vscode/
 .idea/
 *.swp
@@ -27,18 +31,16 @@ target/
 *.sublime-project
 *.sublime-workspace
 .DS_Store
-*.pem
 
-# Environment and build
+# === Environment ===
 .env
 .env.local
 .env.*.local
 
-# OS specific
+# === OS ===
 Thumbs.db
-.DS_Store
 
-# OMX and agent workflow files (must not commit)
+# === Agent workflow (never commit) ===
 .omx/
 *.omx
 omx_wiki/
@@ -46,26 +48,18 @@ omx_wiki/
 .docs/
 .opencode/
 
-# Temporary files and caches
+# === Temporary / cache ===
 .cache/
 .temp/
 temp/
 tmp/
 *.tmp
 *.log
+tauri-dev.log
 
-# Build artifacts and outputs
-dist-*
-build-*
-release-*
-
-# Git workflow artifacts
-.github/workflows/build-*.yml
-.git/MERGE_HEAD
-
-# Test coverage and reports (optional)
+# === Test coverage ===
 coverage/
 *.lcov
 
-# Lock files for Rust (optional when publishing)
-Cargo.lock
+# === Screenshots ===
+screenshot.png

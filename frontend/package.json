@@ -4,7 +4,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
+    "build": "node scripts/prebuild.mjs && vite build",
     "preview": "vite preview",
     "tauri": "tauri",
     "tauri-dev": "tauri dev --target x86_64-pc-windows-gnu",
@@ -33,4 +33,3 @@
     "vitest": "^4.1.10"
   }
 }
-

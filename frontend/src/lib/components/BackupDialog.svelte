@@ -1,6 +1,7 @@
 <script lang="ts">
   import { createEventDispatcher } from 'svelte'
-  import { createBackup, restoreBackup } from '../api'
+  import { t } from 'svelte-i18n'
+  import { createBackup } from '../api'
 
   const dispatch = createEventDispatcher()
 
@@ -29,7 +30,9 @@
 <div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
   <div class="bg-white rounded-lg shadow-lg max-w-md w-full mx-4">
     <div class="p-6 border-b border-gray-200">
-      <h2 class="text-lg font-semibold text-gray-900">Backup & Restore</h2>
+      <h2 class="text-lg font-semibold text-gray-900">
+        {$t('dialogs.backupCreate')}
+      </h2>
     </div>
 
     <div class="p-6">
@@ -40,7 +43,7 @@
             ? 'bg-blue-600 text-white'
             : 'bg-gray-100 text-gray-700'} rounded-lg transition"
         >
-          Export
+          {$t('buttons.export')}
         </button>
         <button
           on:click={() => (mode = 'import')}
@@ -48,24 +51,24 @@
             ? 'bg-blue-600 text-white'
             : 'bg-gray-100 text-gray-700'} rounded-lg transition"
         >
-          Import
+          {$t('buttons.restore')}
         </button>
       </div>
 
       {#if mode === 'export'}
         <p class="text-sm text-gray-600 mb-4">
-          Export all environment variables to a JSON file.
+          {$t('messages.exportDescription')}
         </p>
         <button
           on:click={handleExport}
           disabled={saving}
           class="w-full px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition disabled:opacity-50"
         >
-          {saving ? 'Exporting...' : 'Export Now'}
+          {saving ? $t('messages.loading') : $t('buttons.export')}
         </button>
       {:else}
         <p class="text-sm text-gray-600 mb-4">
-          Import variables from a backup file.
+          {$t('messages.importDescription')}
         </p>
         <input
           type="file"
@@ -76,7 +79,7 @@
           disabled={saving}
           class="w-full mt-3 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition disabled:opacity-50"
         >
-          Import
+          {$t('buttons.restore')}
         </button>
       {/if}
 
@@ -92,7 +95,7 @@
         on:click={handleClose}
         class="px-4 py-2 text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition"
       >
-        Close
+        {$t('buttons.cancel')}
       </button>
     </div>
   </div>

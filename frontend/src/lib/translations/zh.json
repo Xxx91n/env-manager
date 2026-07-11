@@ -1,11 +1,9 @@
 {
   "app.title": "环境变量管理器",
   "app.description": "管理Windows环境变量",
-  
   "nav.variables": "变量",
   "nav.backup": "备份",
   "nav.settings": "设置",
-  
   "buttons.add": "添加变量",
   "buttons.edit": "编辑",
   "buttons.delete": "删除",
@@ -16,26 +14,21 @@
   "buttons.restore": "恢复",
   "buttons.search": "搜索",
   "buttons.export": "导出",
-  
   "table.name": "名称",
   "table.scope": "作用域",
   "table.value": "值",
   "table.actions": "操作",
-  
   "scope.user": "用户",
   "scope.system": "系统",
-  
   "dialogs.addVariable": "添加新变量",
   "dialogs.editVariable": "编辑变量",
   "dialogs.deleteConfirm": "确认删除",
   "dialogs.backupCreate": "创建备份",
   "dialogs.backupRestore": "恢复备份",
-  
   "labels.name": "变量名",
   "labels.value": "变量值",
   "labels.scope": "作用域",
   "labels.backupFile": "备份文件",
-  
   "messages.deleteConfirmText": "确定要删除'{name}'吗?",
   "messages.variableAdded": "变量添加成功",
   "messages.variableUpdated": "变量更新成功",
@@ -45,7 +38,6 @@
   "messages.loading": "加载中...",
   "messages.noData": "未找到变量",
   "messages.searchPlaceholder": "按名称或值搜索...",
-  
   "errors.cliExecutionFailed": "CLI执行失败",
   "errors.failedToListVariables": "获取变量列表失败",
   "errors.failedToAddVariable": "添加变量失败",
@@ -54,8 +46,9 @@
   "errors.failedToRestoreBackup": "恢复备份失败",
   "errors.invalidInput": "输入无效",
   "errors.variableNotFound": "变量未找到",
-  
   "settings.language": "语言",
   "settings.theme": "主题",
-  "settings.darkMode": "深色模式"
+  "settings.darkMode": "深色模式",
+  "messages.exportDescription": "将所有环境变量导出为 JSON 文件。",
+  "messages.importDescription": "从备份 JSON 文件导入变量。"
 }
