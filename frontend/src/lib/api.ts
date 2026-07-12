@@ -69,7 +69,6 @@ export async function getDiagnostics(): Promise<Diagnostics> {
 
 /**
  * Updates the system tray menu text and tooltip to match the current GUI locale.
- * Called whenever the user changes the language setting.
  */
 export async function updateTrayLocale(
   showText: string,
@@ -375,11 +374,38 @@ export async function movePathEntryDown(
   }
 }
 
+// --- CLI PATH management ---
 
 /**
- * Adds the CLI executable directory to the user's PATH environment variable.
- * Automatically detects the CLI location via diagnostics, avoiding hardcoding.
- * Prevents infinite loops by checking if the path is already in PATH.
+ * Detects whether the CLI executable directory is in the user PATH.
+ * Always checks real system PATH data, never trusts cached GUI state.
+ */
+export async function isCliInPath(): Promise<boolean> {
+  try {
+    const diag = await getDiagnostics()
+    const cliPath = diag.resolved_cli_path
+
+    if (!cliPath || cliPath === 'NOT FOUND' || cliPath === 'UNAVAILABLE') {
+      return false
+    }
+
+    const lastSep = Math.max(cliPath.lastIndexOf('\\'), cliPath.lastIndexOf('/'))
+    const cliDir = cliPath.substring(0, lastSep)
+
+    if (!cliDir) return false
+
+    const entries = await listPathEntries('user')
+    return entries.some(
+      (e) => e.path.toLowerCase() === cliDir.toLowerCase()
+    )
+  } catch {
+    return false
+  }
+}
+
+/**
+ * Adds the CLI executable directory to the user PATH.
+ * Detects CLI location via diagnostics, checks real PATH before adding.
  */
 export async function addCliToPath(): Promise<{ added: boolean; message: string }> {
   try {
@@ -390,7 +416,6 @@ export async function addCliToPath(): Promise<{ added: boolean; message: string 
       return { added: false, message: 'CLI path not found' }
     }
 
-    // Extract directory from the CLI executable path
     const lastSep = Math.max(cliPath.lastIndexOf('\\'), cliPath.lastIndexOf('/'))
     const cliDir = cliPath.substring(0, lastSep)
 
@@ -398,7 +423,7 @@ export async function addCliToPath(): Promise<{ added: boolean; message: string 
       return { added: false, message: 'Invalid CLI directory' }
     }
 
-    // Check if already in PATH
+    // Check real system PATH
     const entries = await listPathEntries('user')
     const alreadyExists = entries.some(
       (e) => e.path.toLowerCase() === cliDir.toLowerCase()
@@ -408,7 +433,6 @@ export async function addCliToPath(): Promise<{ added: boolean; message: string 
       return { added: false, message: 'CLI directory already in PATH' }
     }
 
-    // Add to PATH
     await addPathEntry(cliDir, 'user')
     return { added: true, message: cliDir }
   } catch (err) {
@@ -419,10 +443,48 @@ export async function addCliToPath(): Promise<{ added: boolean; message: string 
   }
 }
 
+/**
+ * Removes the CLI executable directory from the user PATH.
+ * Detects CLI location via diagnostics, checks real PATH before removing.
+ */
+export async function removeCliFromPath(): Promise<{ removed: boolean; message: string }> {
+  try {
+    const diag = await getDiagnostics()
+    const cliPath = diag.resolved_cli_path
+
+    if (!cliPath || cliPath === 'NOT FOUND' || cliPath === 'UNAVAILABLE') {
+      return { removed: false, message: 'CLI path not found' }
+    }
+
+    const lastSep = Math.max(cliPath.lastIndexOf('\\'), cliPath.lastIndexOf('/'))
+    const cliDir = cliPath.substring(0, lastSep)
+
+    if (!cliDir) {
+      return { removed: false, message: 'Invalid CLI directory' }
+    }
+
+    // Check real system PATH
+    const entries = await listPathEntries('user')
+    const exists = entries.some(
+      (e) => e.path.toLowerCase() === cliDir.toLowerCase()
+    )
+
+    if (!exists) {
+      return { removed: false, message: 'CLI directory not in PATH' }
+    }
+
+    await removePathEntry(cliDir, 'user')
+    return { removed: true, message: cliDir }
+  } catch (err) {
+    return {
+      removed: false,
+      message: err instanceof Error ? err.message : 'Failed to remove CLI from PATH',
+    }
+  }
+}
 
 /**
  * Retrieves the CLI AGENTS.md file content.
- * Used for displaying CLI specification within the GUI or for AI integration.
  */
 export async function getCliAgentsSpec(): Promise<string> {
   try {

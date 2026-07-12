@@ -7,8 +7,10 @@
   import PathEditor from './lib/components/PathEditor.svelte'
   import ConfirmDialog from './lib/components/ConfirmDialog.svelte'
   import { variables, loading, error, activeView, modal } from './lib/stores'
-  import { listVariables } from './lib/api'
+  import { listVariables, updateTrayLocale } from './lib/api'
   import { defaultLanguage } from './lib/i18n'
+  import { get } from 'svelte/store'
+  import { t as tStore } from 'svelte-i18n'
 
   let currentLocale: string = defaultLanguage
   let initError: string | null = null
@@ -25,6 +27,15 @@
       // Ignore
     }
     applyDarkMode(darkMode)
+
+    // Sync tray locale on startup with saved language
+    setTimeout(() => {
+      const showText = get(tStore)('tray.show')
+      const quitText = get(tStore)('tray.quit')
+      const tooltip = get(tStore)('tray.tooltip')
+      updateTrayLocale(showText, quitText, tooltip)
+    }, 500)
+
     try {
       await listVariables()
     } catch (err) {

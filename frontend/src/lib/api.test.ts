@@ -15,6 +15,7 @@ import {
   movePathEntryUp,
   movePathEntryDown,
 } from './api'
+import { isCliInPath, removeCliFromPath } from './api'
 import { variables, error } from './stores'
 
 const mockInvoke = invoke as unknown as ReturnType<typeof vi.fn>
@@ -247,6 +248,65 @@ describe('api module', () => {
         command: 'path',
         args: ['move-down', '0', '--scope', 'user'],
       })
+    })
+  })
+
+  describe('CLI PATH management', () => {
+    it('isCliInPath returns false when CLI not found', async () => {
+      mockInvoke.mockResolvedValue({
+        resolved_cli_path: 'NOT FOUND',
+        gui_exe_dir: '',
+        cwd: '',
+      })
+
+      const result = await isCliInPath()
+      expect(result).toBe(false)
+    })
+
+    it('isCliInPath checks real PATH entries', async () => {
+      mockInvoke.mockImplementation((cmd: string) => {
+        if (cmd === 'cli_diagnostics') {
+          return Promise.resolve({
+            resolved_cli_path: 'C:\\Tools\\env-manager-cli.exe',
+            gui_exe_dir: 'C:\\Tools',
+            cwd: 'C:\\Tools',
+          })
+        }
+        if (cmd === 'run_cli') {
+          return Promise.resolve({
+            success: true,
+            data: JSON.stringify([{ index: 0, path: 'C:\\Tools' }]),
+            error: null,
+          })
+        }
+        return Promise.resolve({ success: true, data: '', error: null })
+      })
+
+      const result = await isCliInPath()
+      expect(result).toBe(true)
+    })
+
+    it('removeCliFromPath sends remove command when CLI is in PATH', async () => {
+      mockInvoke.mockImplementation((cmd: string, opts?: { command?: string; args?: string[] }) => {
+        if (cmd === 'cli_diagnostics') {
+          return Promise.resolve({
+            resolved_cli_path: 'C:\\Tools\\env-manager-cli.exe',
+            gui_exe_dir: 'C:\\Tools',
+            cwd: 'C:\\Tools',
+          })
+        }
+        if (cmd === 'run_cli' && opts?.command === 'path' && opts?.args?.[0] === 'list') {
+          return Promise.resolve({
+            success: true,
+            data: JSON.stringify([{ index: 0, path: 'C:\\Tools' }]),
+            error: null,
+          })
+        }
+        return Promise.resolve({ success: true, data: 'ok', error: null })
+      })
+
+      const result = await removeCliFromPath()
+      expect(result.removed).toBe(true)
     })
   })
 })
