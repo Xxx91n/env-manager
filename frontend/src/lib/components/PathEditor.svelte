@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte'
   import { t } from 'svelte-i18n'
-  import { showModal } from '../stores'
+  import { showModal, isWriteInProgress } from '../stores'
   import {
     listPathEntries,
     addPathEntry,
@@ -202,18 +202,38 @@
     }
   }
 
-  // Click outside to cancel edit (blur on the input)
+  // Click outside to cancel edit: when the edit input loses focus,
+  // cancel if no changes were made (value unchanged from original).
+  // If changes were made, keep the edit state so the user can click confirm.
   function handleEditBlur(oldPath: string) {
-    // Use setTimeout to allow confirm button click to fire first
+    // Short delay to let confirm/cancel button clicks register
     setTimeout(() => {
       if (editingIndex !== null && editValue.trim() === oldPath) {
         cancelEdit()
       }
-    }, 150)
+    }, 100)
+  }
+
+  // Global click handler: clicking outside the edit row cancels immediately
+  function handleGlobalClick(event: MouseEvent) {
+    if (editingIndex === null) return
+    // Check if click is inside the edit row
+    const target = event.target as HTMLElement
+    if (target && (target.closest('.edit-row') || target.tagName === 'INPUT' || target.tagName === 'BUTTON')) {
+      return // Click inside edit controls, don't cancel
+    }
+    // Click outside: cancel only if no changes
+    if (editValue.trim() === entries[editingIndex]?.path) {
+      cancelEdit()
+    }
   }
 </script>
 
+<svelte:window on:click={handleGlobalClick} />
+
 <div class="space-y-3">
+
+
   {#if message}
     <div class="p-2.5 rounded-md text-xs {messageType === 'success'
       ? 'bg-green-50 border border-green-200 text-green-800 dark:bg-green-900/30 dark:border-green-700 dark:text-green-300'

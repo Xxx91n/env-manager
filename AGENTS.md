@@ -402,6 +402,7 @@ npm run test:e2e        # Playwright E2E tests
 | `src/lib/translations.test.ts` | Translation key completeness across all 10 locales |
 | `src/lib/race.test.ts` | CLI/GUI race condition prevention, toggle safety, rapid toggle serialization |
 | `src/lib/sync.test.ts` | CLI/GUI state synchronization, mutation triggers refresh, error store lifecycle |
+| `src/lib/debug.test.ts` | Debug logging system, log entry management, 200-entry cap (memory leak prevention), isWriteInProgress tracking |
 
 ---
 
@@ -715,6 +716,19 @@ The `cli_diagnostics` Tauri command returns:
 - `cwd` - current working directory
 
 This is accessible via `getDiagnostics()` in `api.ts` and helps debug "CLI not found" errors.
+
+### Frontend Debug System
+
+The GUI has a frontend-level debug logging system:
+
+- `debugLogs` store in `stores.ts` - holds up to 200 `DebugLogEntry` objects (capped to prevent memory leaks)
+- `addDebugLog()` - adds entries with timestamp, level (info/warn/error/debug), message, and optional command name
+- `clearDebugLogs()` - empties the log store
+- `isWriteInProgress` store - `true` while a write operation is executing (set in `runWriteOperation()` in `api.ts`)
+- `runCommand()` in `api.ts` logs all CLI invocations with timing (ms) and success/error status
+- GUI buttons (nav tabs, refresh) are disabled via `disabled={$isWriteInProgress}` during write operations to prevent UI race conditions
+
+The `isWriteInProgress` store drives button-disable behavior: when a write operation starts, the store is set to `true`, and all navigation buttons and refresh buttons get `disabled` styling (`opacity-50`, `cursor-not-allowed`). When the write completes, the store returns to `false`, re-enabling buttons.
 
 ## Documentation Maintenance
 

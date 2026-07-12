@@ -393,12 +393,25 @@ fn cli_diagnostics(app: tauri::AppHandle) -> serde_json::Value {
     })
 }
 
-/// Restores the main window: un-minimize, show, and set focus.
+/// Restores the main window from tray: un-minimize, show, bring to front, and focus.
+/// Handles all hiding states: minimized, hidden to tray, or behind other windows.
 fn restore_window(app: &tauri::AppHandle) {
     if let Some(window) = app.get_webview_window("main") {
+        // First ensure the window is not skipped from taskbar
+        // (it may have been hidden to tray which can set skip_taskbar)
+        let _ = window.set_skip_taskbar(false);
+        // Un-minimize if minimized
         let _ = window.unminimize();
+        // Show if hidden
         let _ = window.show();
+        // Bring to front
+        let _ = window.set_always_on_top(true);
+        let _ = window.set_always_on_top(false);
+        // Focus
         let _ = window.set_focus();
+        info!("[tray] restore_window called: window restored and focused");
+    } else {
+        warn!("[tray] restore_window: main window not found");
     }
 }
 
@@ -434,11 +447,17 @@ fn main() {
                 })
                 .on_tray_icon_event(|tray, event| {
                     // Handle both single click and double click to restore the window.
-                    // This ensures clicking the tray icon always brings the window back,
-                    // whether it was minimized or hidden.
-                    if let tauri::tray::TrayIconEvent::DoubleClick { .. } = event {
-                        let app = tray.app_handle();
-                        restore_window(app);
+                    // Single click is the standard Windows tray interaction for
+                    // restoring a window. Double-click is a backup for older behavior.
+                    let app = tray.app_handle();
+                    match event {
+                        tauri::tray::TrayIconEvent::Click { .. } => {
+                            restore_window(app);
+                        }
+                        tauri::tray::TrayIconEvent::DoubleClick { .. } => {
+                            restore_window(app);
+                        }
+                        _ => {}
                     }
                 })
                 .build(app)?;

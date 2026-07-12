@@ -1,5 +1,5 @@
 import { invoke } from '@tauri-apps/api/core'
-import { variables, loading, error } from './stores'
+import { variables, loading, error, isWriteInProgress, addDebugLog } from './stores'
 
 export interface EnvVariable {
   name: string
@@ -65,6 +65,7 @@ let writeChain: Promise<void> = Promise.resolve()
  * Read operations are NOT serialized (they use the Rust read lock).
  */
 async function runWriteOperation<T>(fn: () => Promise<T>): Promise<T> {
+  isWriteInProgress.set(true)
   const prevChain = writeChain
   let resolveWrite: () => void
   writeChain = new Promise<void>((resolve) => { resolveWrite = resolve! })
@@ -76,23 +77,31 @@ async function runWriteOperation<T>(fn: () => Promise<T>): Promise<T> {
     return await fn()
   } finally {
     resolveWrite!()
+    isWriteInProgress.set(false)
   }
 }
 
 async function runCommand(cmd: string, args: string[] = []): Promise<string> {
+  const startTime = Date.now()
+  addDebugLog({ level: 'debug', message: `CLI: ${cmd} ${args.join(' ')}`, command: cmd })
   try {
     const result = await invoke<CLIResponse>('run_cli', {
       command: cmd,
       args: args,
     })
 
+    const elapsed = Date.now() - startTime
     if (!result.success) {
+      addDebugLog({ level: 'error', message: `CLI error (${elapsed}ms): ${result.error}`, command: cmd })
       throw new Error(result.error || 'Unknown CLI error')
     }
 
+    addDebugLog({ level: 'debug', message: `CLI ok (${elapsed}ms): ${cmd}`, command: cmd })
     return result.data || ''
   } catch (err) {
+    const elapsed = Date.now() - startTime
     const msg = err instanceof Error ? err.message : String(err)
+    addDebugLog({ level: 'error', message: `CLI exception (${elapsed}ms): ${msg}`, command: cmd })
     throw new Error(msg)
   }
 }

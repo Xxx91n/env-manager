@@ -6,7 +6,7 @@
   import SettingsDialog from './lib/components/SettingsDialog.svelte'
   import PathEditor from './lib/components/PathEditor.svelte'
   import ConfirmDialog from './lib/components/ConfirmDialog.svelte'
-  import { variables, loading, error, activeView, modal } from './lib/stores'
+  import { variables, loading, error, activeView, modal, isWriteInProgress, debugLogs } from './lib/stores'
   import { listVariables, updateTrayLocale } from './lib/api'
   import { defaultLanguage } from './lib/i18n'
   import { get } from 'svelte/store'
@@ -74,7 +74,8 @@
       <div class="flex items-center gap-2">
         <button
           on:click={() => listVariables()}
-          class="p-1.5 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-md transition dark:text-gray-400 dark:hover:text-gray-200 dark:hover:bg-gray-700"
+          disabled={$isWriteInProgress}
+          class="p-1.5 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-md transition disabled:opacity-50 dark:text-gray-400 dark:hover:text-gray-200 dark:hover:bg-gray-700"
           title={$t('buttons.refresh')}
           aria-label={$t('buttons.refresh')}
         >
@@ -99,7 +100,8 @@
     <nav class="flex gap-1 mt-3">
       <button
         on:click={() => activeView.set('variables')}
-        class="px-3 py-1.5 text-xs font-medium rounded-md transition {$activeView === 'variables'
+        disabled={$isWriteInProgress}
+        class="px-3 py-1.5 text-xs font-medium rounded-md transition disabled:opacity-50 disabled:cursor-not-allowed {$activeView === 'variables'
           ? 'bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300'
           : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100 dark:text-gray-400 dark:hover:text-gray-200 dark:hover:bg-gray-700'}"
       >
@@ -107,6 +109,7 @@
       </button>
       <button
         on:click={() => activeView.set('profiles')}
+        disabled={$isWriteInProgress}
         class="px-3 py-1.5 text-xs font-medium rounded-md transition {$activeView === 'profiles'
           ? 'bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300'
           : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100 dark:text-gray-400 dark:hover:text-gray-200 dark:hover:bg-gray-700'}"
@@ -115,6 +118,7 @@
       </button>
       <button
         on:click={() => activeView.set('path')}
+        disabled={$isWriteInProgress}
         class="px-3 py-1.5 text-xs font-medium rounded-md transition {$activeView === 'path'
           ? 'bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300'
           : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100 dark:text-gray-400 dark:hover:text-gray-200 dark:hover:bg-gray-700'}"

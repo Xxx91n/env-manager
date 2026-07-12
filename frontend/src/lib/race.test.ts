@@ -19,7 +19,7 @@ import {
   addPathEntry,
   listPathEntries,
 } from './api'
-import { variables, error } from './stores'
+import { variables, error, isWriteInProgress } from './stores'
 
 const mockInvoke = invoke as unknown as ReturnType<typeof vi.fn>
 
@@ -327,3 +327,85 @@ describe('CLI/GUI race condition prevention', () => {
   })
 
 })
+
+describe('Button disable during write operations', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    variables.set([])
+    error.set(null)
+  })
+
+  it('isWriteInProgress exists and defaults to false', () => {
+    let currentVal = false
+    const unsub = isWriteInProgress.subscribe((v: boolean) => { currentVal = v })
+    expect(currentVal).toBe(false)
+    unsub()
+  })
+
+  it('setVariable sets isWriteInProgress to true during operation', async () => {
+    let writeInProgress = false
+    let captureCount = 0
+
+    const unsub = isWriteInProgress.subscribe((v: boolean) => {
+      if (v) { writeInProgress = true; captureCount++ }
+    })
+
+    mockInvoke.mockImplementation((_cmd: string, opts: { command: string }) => {
+      if (opts.command === 'set') {
+        return new Promise((resolve) => {
+          setTimeout(() => {
+            resolve({ success: true, data: '', error: null })
+          }, 30)
+        })
+      }
+      if (opts.command === 'list') {
+        return Promise.resolve({ success: true, data: '[]', error: null })
+      }
+      return Promise.resolve({ success: true, data: '', error: null })
+    })
+
+    await setVariable('TEST_VAR', 'value', 'user')
+
+    // During the write operation, isWriteInProgress should have been set to true
+    expect(writeInProgress).toBe(true)
+    expect(captureCount).toBeGreaterThan(0)
+    unsub()
+  })
+
+  it('isWriteInProgress returns to false after write completes', async () => {
+    let finalVal = true
+
+    mockInvoke.mockImplementation((_cmd: string, opts: { command: string }) => {
+      if (opts.command === 'set') {
+        return Promise.resolve({ success: true, data: '', error: null })
+      }
+      if (opts.command === 'list') {
+        return Promise.resolve({ success: true, data: '[]', error: null })
+      }
+      return Promise.resolve({ success: true, data: '', error: null })
+    })
+
+    await setVariable('TEST_VAR', 'value', 'user')
+
+    const unsub = isWriteInProgress.subscribe((v: boolean) => { finalVal = v })
+    expect(finalVal).toBe(false)
+    unsub()
+  })
+
+  it('concurrent reads do not set isWriteInProgress', async () => {
+    let writeStarted = false
+    const unsub = isWriteInProgress.subscribe((v: boolean) => { if (v) writeStarted = true })
+
+    mockInvoke.mockImplementation((_cmd: string, opts: { command: string }) => {
+      if (opts.command === 'list') {
+        return Promise.resolve({ success: true, data: '[]', error: null })
+      }
+      return Promise.resolve({ success: true, data: '', error: null })
+    })
+
+    await Promise.all([listVariables(), listVariables()])
+    expect(writeStarted).toBe(false)
+    unsub()
+  })
+})
+
