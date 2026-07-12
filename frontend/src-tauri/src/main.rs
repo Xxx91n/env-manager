@@ -5,7 +5,7 @@ use log::{info, warn};
 use serde::Serialize;
 use std::path::PathBuf;
 use std::process::Command;
-use std::sync::Mutex;
+use std::sync::{Mutex, RwLock};
 use tauri::{
     menu::{Menu, MenuItem},
     tray::TrayIconBuilder,
@@ -52,18 +52,89 @@ const ALLOWED_COMMANDS: &[&str] = &[
     "help",
 ];
 
-/// Mutex to serialize CLI invocations.
-static CLI_MUTEX: Mutex<()> = Mutex::new(());
+/// Read-only commands that can run concurrently with each other.
+/// They never mutate the registry, so concurrent execution is safe.
+const READ_COMMANDS: &[&str] = &[
+    "list",
+    "get",
+    "backup",
+    "diff",
+    "validate",
+    "agents",
+    "help",
+];
 
-/// Strips the `\\?\\` (verbatim/long-path) prefix from a Windows path string.
+/// Write commands that mutate the registry. These must hold the write lock
+/// to prevent concurrent mutations from interfering with each other.
+/// Sub-commands like `profile list` / `path list` are read-only despite
+/// using `profile` / `path` as the top-level command, so we also inspect args.
+const WRITE_COMMANDS: &[&str] = &[
+    "set",
+    "delete",
+    "toggle",
+    "restore",
+    "merge",
+];
+
+/// Determines if a CLI invocation is read-only (can run concurrently) or
+/// write (must hold exclusive lock).
+///
+/// Some commands like `profile` and `path` have both read and write subcommands.
+/// We inspect the first arg to determine the subcommand:
+///   - `profile list`, `profile show` -> read
+///   - `profile create`, `profile delete`, `profile apply`, `profile unapply`,
+///     `profile add-var`, `profile remove-var`, `profile edit-var` -> write
+///   - `path list` -> read
+///   - `path add`, `path remove`, `path move-up`, `path move-down` -> write
+fn is_read_only(command: &str, args: &[String]) -> bool {
+    // Top-level commands that are always read-only
+    if READ_COMMANDS.contains(&command) {
+        return true;
+    }
+
+    // Top-level commands that are always write
+    if WRITE_COMMANDS.contains(&command) {
+        return false;
+    }
+
+    // Composite commands: inspect subcommand
+    match command {
+        "profile" => {
+            match args.first().map(|s| s.as_str()) {
+                Some("list") | Some("show") | Some("status") => true,
+                _ => false, // create, delete, apply, unapply, add-var, remove-var, edit-var
+            }
+        }
+        "path" => {
+            match args.first().map(|s| s.as_str()) {
+                Some("list") => true,
+                _ => false, // add, remove, move-up, move-down
+            }
+        }
+        _ => false,
+    }
+}
+
+/// RwLock for read/write separation:
+/// - Read commands acquire a read lock (multiple can run concurrently)
+/// - Write commands acquire a write lock (exclusive)
+/// This prevents write-write and read-write races while allowing read-read concurrency.
+static CLI_RWLOCK: RwLock<()> = RwLock::new(());
+
+/// Fallback mutex for write commands that also need to serialize against
+/// each other within the write lock. The write lock alone is sufficient
+/// since only one writer can hold it at a time.
+static _WRITE_MUTEX: Mutex<()> = Mutex::new(());
+
+/// Strips the `\\?\` (verbatim/long-path) prefix from a Windows path string.
 /// Rust's PathBuf::display() can emit this prefix when the path was constructed
 /// from a long path or UNC source. We remove it so that registry values and
-/// PATH entries use clean drive-letter paths (e.g. `D:\Tools` not `\\?\\D:\Tools`).
+/// PATH entries use clean drive-letter paths (e.g. `D:\Tools` not `\\?\D:\Tools`).
 fn strip_verbatim_prefix(path: &str) -> String {
-    if path.starts_with(r"\\?\\") {
-        path[r"\\?\\".len()..].to_string()
-    } else if path.starts_with(r"\\\\?\\UNC\\") {
-        format!("\\\\{}", &path[r"\\\\?\\UNC\\".len()..])
+    if path.starts_with(r"\\?\") {
+        path[r"\\?\".len()..].to_string()
+    } else if path.starts_with(r"\\?\UNC\") {
+        format!("\\{}", &path[r"\\?\UNC\".len()..])
     } else {
         path.to_string()
     }
@@ -175,6 +246,13 @@ fn build_cli_command(exe_path: &PathBuf, command: &str, args: &[String]) -> Comm
 
 /// Validates command and args before spawning the CLI subprocess.
 /// Returns Ok(()) if safe, Err(message) if rejected.
+///
+/// Security checks:
+/// 1. Command must be in the whitelist (prevents arbitrary command execution)
+/// 2. Argument count limit (prevents resource exhaustion)
+/// 3. Per-argument length limit (prevents buffer exhaustion)
+/// 4. Null byte rejection (prevents argument injection)
+/// 5. Control character rejection (prevents terminal injection)
 fn validate_cli_input(command: &str, args: &[String]) -> Result<(), String> {
     if !ALLOWED_COMMANDS.contains(&command) {
         return Err(format!("Unknown command: {}", command));
@@ -191,6 +269,10 @@ fn validate_cli_input(command: &str, args: &[String]) -> Result<(), String> {
         // Reject null bytes (injection prevention)
         if arg.contains('\0') {
             return Err("Null bytes in arguments are not allowed".to_string());
+        }
+        // Reject control characters except tab/newline (terminal injection prevention)
+        if arg.chars().any(|c| c.is_control() && c != '\t' && c != '\n') {
+            return Err("Control characters in arguments are not allowed".to_string());
         }
     }
 
@@ -222,22 +304,40 @@ fn run_cli(app: tauri::AppHandle, command: String, args: Vec<String>) -> CliResp
         }
     };
 
-    let _guard = CLI_MUTEX.lock().unwrap_or_else(|e| e.into_inner());
+    let read_only = is_read_only(&command, &args);
 
     let mut cmd = build_cli_command(&exe_path, &command, &args);
     let start = std::time::Instant::now();
 
-    match cmd.output() {
+    // Execute the CLI with the appropriate lock held.
+    // We use a closure to capture cmd and start, and return the output.
+    // The lock guard is held for the duration of the closure execution.
+    let mut exec_with_lock = || -> std::io::Result<std::process::Output> {
+        cmd.output()
+    };
+
+    let output_result = if read_only {
+        info!("[run_cli] acquiring READ lock for {} {:?}", command, args.first());
+        let _guard = CLI_RWLOCK.read().unwrap_or_else(|e| e.into_inner());
+        exec_with_lock()
+    } else {
+        info!("[run_cli] acquiring WRITE lock for {} {:?}", command, args.first());
+        let _guard = CLI_RWLOCK.write().unwrap_or_else(|e| e.into_inner());
+        exec_with_lock()
+    };
+
+    match output_result {
         Ok(output) => {
             let elapsed = start.elapsed();
             let stdout = String::from_utf8_lossy(&output.stdout).to_string();
             let stderr = String::from_utf8_lossy(&output.stderr).to_string();
             info!(
-                "[run_cli] exit={}, stdout_len={}, stderr_len={}, elapsed={}ms",
+                "[run_cli] exit={}, stdout_len={}, stderr_len={}, elapsed={}ms, read_only={}",
                 output.status,
                 stdout.len(),
                 stderr.len(),
-                elapsed.as_millis()
+                elapsed.as_millis(),
+                read_only,
             );
 
             if !stderr.is_empty() {
@@ -369,22 +469,29 @@ fn update_tray_locale(
     quit_text: String,
     tooltip: String,
 ) {
+    update_tray_locale_impl(&app, &show_text, &quit_text, &tooltip)
+}
 
+fn update_tray_locale_impl(
+    app: &tauri::AppHandle,
+    show_text: &str,
+    quit_text: &str,
+    tooltip: &str,
+) {
     info!(
         "[tray] update_tray_locale: show='{}', quit='{}', tooltip='{}'",
         show_text, quit_text, tooltip
     );
 
     if let Some(tray) = app.tray_by_id("main") {
-        // Rebuild the menu with translated text
-        match MenuItem::with_id(&app, "show", &show_text, true, None::<&str>) {
+        match MenuItem::with_id(app, "show", show_text, true, None::<&str>) {
             Ok(show_item) => {
-                match MenuItem::with_id(&app, "quit", &quit_text, true, None::<&str>) {
+                match MenuItem::with_id(app, "quit", quit_text, true, None::<&str>) {
                     Ok(quit_item) => {
-                        match Menu::with_items(&app, &[&show_item, &quit_item]) {
+                        match Menu::with_items(app, &[&show_item, &quit_item]) {
                             Ok(menu) => {
                                 let _ = tray.set_menu(Some(menu));
-                                let _ = tray.set_tooltip(Some(&tooltip));
+                                let _ = tray.set_tooltip(Some(tooltip));
                             }
                             Err(e) => warn!("[tray] failed to build menu: {}", e),
                         }

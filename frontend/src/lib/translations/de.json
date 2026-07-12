@@ -100,5 +100,10 @@
   "settings.cliAdded": "CLI zum PATH hinzugefugt",
   "settings.cliRemoved": "CLI aus dem PATH entfernt",
   "settings.cliAddFailed": "Fehler beim Hinzufugen des CLI zum PATH",
-  "settings.cliRemoveFailed": "Fehler beim Entfernen des CLI aus dem PATH"
+  "settings.cliRemoveFailed": "Fehler beim Entfernen des CLI aus dem PATH",
+  "path.rename": "Umbenennen",
+  "messages.pathRenamed": "PATH-Eintrag umbenannt",
+  "messages.pathRenameEmpty": "Neuer Pfad darf nicht leer sein",
+  "messages.pathRenameInvalid": "Pfad enthalt ungultige Steuerzeichen",
+  "messages.pathRenameTooLong": "Neuer Pfad uberschreitet maximale Lange"
 }

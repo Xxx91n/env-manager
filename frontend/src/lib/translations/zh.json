@@ -100,5 +100,10 @@
   "settings.cliAdded": "CLI已添加到PATH",
   "settings.cliRemoved": "CLI已从PATH移除",
   "settings.cliAddFailed": "添加CLI到PATH失败",
-  "settings.cliRemoveFailed": "从PATH移除CLI失败"
+  "settings.cliRemoveFailed": "从PATH移除CLI失败",
+  "path.rename": "重命名",
+  "messages.pathRenamed": "PATH 路径已重命名",
+  "messages.pathRenameEmpty": "新路径不能为空",
+  "messages.pathRenameInvalid": "路径包含无效控制字符",
+  "messages.pathRenameTooLong": "新路径超出最大长度"
 }

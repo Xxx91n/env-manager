@@ -100,5 +100,10 @@
   "settings.cliAdded": "CLIをPATHに追加しました",
   "settings.cliRemoved": "CLIをPATHから削除しました",
   "settings.cliAddFailed": "PATHへのCLI追加に失敗しました",
-  "settings.cliRemoveFailed": "PATHからのCLI削除に失敗しました"
+  "settings.cliRemoveFailed": "PATHからのCLI削除に失敗しました",
+  "path.rename": "名前変更",
+  "messages.pathRenamed": "PATH エントリの名前を変更しました",
+  "messages.pathRenameEmpty": "新しいパスは空にできません",
+  "messages.pathRenameInvalid": "パスに無効な制御文字が含まれています",
+  "messages.pathRenameTooLong": "新しいパスが最大長を超えています"
 }

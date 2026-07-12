@@ -53,6 +53,32 @@ function stripVerbatimPrefix(path: string): string {
   return path
 }
 
+// Write serialization: ensures only one write operation is in-flight at a time
+// on the frontend side. This works with the Rust RwLock to prevent UI-level
+// races (e.g., double-click triggering two set operations before the first
+// completes). Read operations are not serialized.
+let writeChain: Promise<void> = Promise.resolve()
+
+/**
+ * Executes a write operation in a serialized chain.
+ * Each write operation waits for the previous one to complete before starting.
+ * Read operations are NOT serialized (they use the Rust read lock).
+ */
+async function runWriteOperation<T>(fn: () => Promise<T>): Promise<T> {
+  const prevChain = writeChain
+  let resolveWrite: () => void
+  writeChain = new Promise<void>((resolve) => { resolveWrite = resolve! })
+
+  try {
+    // Wait for the previous write to complete
+    await prevChain
+    // Execute the write operation
+    return await fn()
+  } finally {
+    resolveWrite!()
+  }
+}
+
 async function runCommand(cmd: string, args: string[] = []): Promise<string> {
   try {
     const result = await invoke<CLIResponse>('run_cli', {
@@ -69,6 +95,21 @@ async function runCommand(cmd: string, args: string[] = []): Promise<string> {
     const msg = err instanceof Error ? err.message : String(err)
     throw new Error(msg)
   }
+}
+
+/**
+ * Read commands can run concurrently. They acquire the Rust read lock.
+ */
+async function runRead(cmd: string, args: string[] = []): Promise<string> {
+  return runCommand(cmd, args)
+}
+
+/**
+ * Write commands are serialized on the frontend side AND acquire the Rust
+ * write lock. This prevents UI-level races and backend-level races.
+ */
+async function runWrite(cmd: string, args: string[] = []): Promise<string> {
+  return runWriteOperation(() => runCommand(cmd, args))
 }
 
 export async function getDiagnostics(): Promise<Diagnostics> {
@@ -113,7 +154,7 @@ export async function listVariables(): Promise<void> {
   error.set(null)
 
   try {
-    const output = await runCommand('list')
+    const output = await runRead('list')
     const parsed: EnvVariable[] = JSON.parse(output)
     variables.set(parsed)
   } catch (err) {
@@ -126,7 +167,7 @@ export async function listVariables(): Promise<void> {
 
 export async function getVariable(name: string): Promise<EnvVariable | null> {
   try {
-    const output = await runCommand('get', [name])
+    const output = await runRead('get', [name])
     const parsed = JSON.parse(output) as { name: string; value: string; scope: 'user' | 'system' }
     return parsed
   } catch (err) {
@@ -143,7 +184,7 @@ export async function setVariable(
   error.set(null)
 
   try {
-    await runCommand('set', [name, value, '--scope', scope])
+    await runWrite('set', [name, value, '--scope', scope])
     await listVariables()
   } catch (err) {
     error.set(err instanceof Error ? err.message : 'Failed to set variable')
@@ -158,7 +199,7 @@ export async function deleteVariable(
   error.set(null)
 
   try {
-    await runCommand('delete', [name, '--scope', scope])
+    await runWrite('delete', [name, '--scope', scope])
     await listVariables()
   } catch (err) {
     error.set(err instanceof Error ? err.message : 'Failed to delete variable')
@@ -173,7 +214,7 @@ export async function toggleVariable(
   error.set(null)
 
   try {
-    const output = await runCommand('toggle', [name, '--scope', scope])
+    const output = await runWrite('toggle', [name, '--scope', scope])
     await listVariables()
     return JSON.parse(output)
   } catch (err) {
@@ -188,7 +229,7 @@ export async function createBackup(outputFile?: string): Promise<string> {
 
   try {
     const args = outputFile ? ['--output', outputFile] : []
-    const output = await runCommand('backup', args)
+    const output = await runRead('backup', args)
     return output
   } catch (err) {
     error.set(err instanceof Error ? err.message : 'Backup failed')
@@ -204,7 +245,7 @@ export async function restoreBackup(
 
   try {
     const args = scope ? [inputFile, '--scope', scope] : [inputFile]
-    await runCommand('restore', args)
+    await runWrite('restore', args)
     await listVariables()
   } catch (err) {
     error.set(err instanceof Error ? err.message : 'Restore failed')
@@ -216,7 +257,7 @@ export async function restoreBackup(
 
 export async function listProfiles(): Promise<ProfileData[]> {
   try {
-    const output = await runCommand('profile', ['list'])
+    const output = await runRead('profile', ['list'])
     return JSON.parse(output) as ProfileData[]
   } catch (err) {
     error.set(err instanceof Error ? err.message : 'Failed to list profiles')
@@ -226,7 +267,7 @@ export async function listProfiles(): Promise<ProfileData[]> {
 
 export async function createProfile(name: string): Promise<string> {
   try {
-    return await runCommand('profile', ['create', name])
+    return await runWrite('profile', ['create', name])
   } catch (err) {
     error.set(err instanceof Error ? err.message : 'Failed to create profile')
     throw err
@@ -235,7 +276,7 @@ export async function createProfile(name: string): Promise<string> {
 
 export async function deleteProfile(name: string): Promise<string> {
   try {
-    return await runCommand('profile', ['delete', name])
+    return await runWrite('profile', ['delete', name])
   } catch (err) {
     error.set(err instanceof Error ? err.message : 'Failed to delete profile')
     throw err
@@ -244,7 +285,7 @@ export async function deleteProfile(name: string): Promise<string> {
 
 export async function applyProfile(name: string): Promise<string> {
   try {
-    const result = await runCommand('profile', ['apply', name])
+    const result = await runWrite('profile', ['apply', name])
     await listVariables()
     return result
   } catch (err) {
@@ -255,7 +296,7 @@ export async function applyProfile(name: string): Promise<string> {
 
 export async function unapplyProfile(name: string): Promise<string> {
   try {
-    const result = await runCommand('profile', ['unapply', name])
+    const result = await runWrite('profile', ['unapply', name])
     await listVariables()
     return result
   } catch (err) {
@@ -266,7 +307,7 @@ export async function unapplyProfile(name: string): Promise<string> {
 
 export async function showProfile(name: string): Promise<ProfileData | null> {
   try {
-    const output = await runCommand('profile', ['show', name])
+    const output = await runRead('profile', ['show', name])
     return JSON.parse(output) as ProfileData
   } catch {
     return null
@@ -279,7 +320,7 @@ export async function addProfileVar(
   varValue: string
 ): Promise<string> {
   try {
-    return await runCommand('profile', ['add-var', profileName, varName, varValue])
+    return await runWrite('profile', ['add-var', profileName, varName, varValue])
   } catch (err) {
     error.set(err instanceof Error ? err.message : 'Failed to add variable to profile')
     throw err
@@ -291,7 +332,7 @@ export async function removeProfileVar(
   varName: string
 ): Promise<string> {
   try {
-    return await runCommand('profile', ['remove-var', profileName, varName])
+    return await runWrite('profile', ['remove-var', profileName, varName])
   } catch (err) {
     error.set(err instanceof Error ? err.message : 'Failed to remove variable from profile')
     throw err
@@ -305,7 +346,7 @@ export async function editProfileVar(
   newVarValue: string
 ): Promise<string> {
   try {
-    const result = await runCommand('profile', ['edit-var', profileName, oldVarName, newVarName, newVarValue])
+    const result = await runWrite('profile', ['edit-var', profileName, oldVarName, newVarName, newVarValue])
     await listVariables()
     return result
   } catch (err) {
@@ -324,7 +365,7 @@ export interface ProfileStatus {
 
 export async function getProfileStatus(name: string): Promise<ProfileStatus | null> {
   try {
-    const output = await runCommand('profile', ['status', name])
+    const output = await runRead('profile', ['status', name])
     return JSON.parse(output) as ProfileStatus
   } catch {
     return null
@@ -335,7 +376,7 @@ export async function getProfileStatus(name: string): Promise<ProfileStatus | nu
 
 export async function listPathEntries(scope: 'user' | 'system' = 'user'): Promise<PathEntry[]> {
   try {
-    const output = await runCommand('path', ['list', '--scope', scope])
+    const output = await runRead('path', ['list', '--scope', scope])
     return JSON.parse(output) as PathEntry[]
   } catch (err) {
     error.set(err instanceof Error ? err.message : 'Failed to list PATH entries')
@@ -353,7 +394,7 @@ export async function addPathEntry(
     if (index !== undefined) {
       args.push('--index', String(index))
     }
-    return await runCommand('path', args)
+    return await runWrite('path', args)
   } catch (err) {
     error.set(err instanceof Error ? err.message : 'Failed to add PATH entry')
     throw err
@@ -365,7 +406,7 @@ export async function removePathEntry(
   scope: 'user' | 'system' = 'user'
 ): Promise<string> {
   try {
-    return await runCommand('path', ['remove', dir, '--scope', scope])
+    return await runWrite('path', ['remove', dir, '--scope', scope])
   } catch (err) {
     error.set(err instanceof Error ? err.message : 'Failed to remove PATH entry')
     throw err
@@ -377,7 +418,7 @@ export async function movePathEntryUp(
   scope: 'user' | 'system' = 'user'
 ): Promise<string> {
   try {
-    return await runCommand('path', ['move-up', String(index), '--scope', scope])
+    return await runWrite('path', ['move-up', String(index), '--scope', scope])
   } catch (err) {
     error.set(err instanceof Error ? err.message : 'Failed to move PATH entry')
     throw err
@@ -389,9 +430,26 @@ export async function movePathEntryDown(
   scope: 'user' | 'system' = 'user'
 ): Promise<string> {
   try {
-    return await runCommand('path', ['move-down', String(index), '--scope', scope])
+    return await runWrite('path', ['move-down', String(index), '--scope', scope])
   } catch (err) {
     error.set(err instanceof Error ? err.message : 'Failed to move PATH entry')
+    throw err
+  }
+}
+
+/**
+ * Renames a PATH entry: replaces the old directory string with a new one
+ * at the same position in the PATH list.
+ */
+export async function renamePathEntry(
+  oldDir: string,
+  newDir: string,
+  scope: 'user' | 'system' = 'user'
+): Promise<string> {
+  try {
+    return await runWrite('path', ['rename', oldDir, newDir, '--scope', scope])
+  } catch (err) {
+    error.set(err instanceof Error ? err.message : 'Failed to rename PATH entry')
     throw err
   }
 }
@@ -510,7 +568,7 @@ export async function removeCliFromPath(): Promise<{ removed: boolean; message: 
  */
 export async function getCliAgentsSpec(): Promise<string> {
   try {
-    return await runCommand('agents', [])
+    return await runRead('agents', [])
   } catch {
     return 'CLI agents spec not available'
   }
@@ -521,7 +579,7 @@ export async function getCliAgentsSpec(): Promise<string> {
  */
 export async function getCliAgentsPath(): Promise<string> {
   try {
-    return await runCommand('agents', ['--path'])
+    return await runRead('agents', ['--path'])
   } catch {
     return ''
   }

@@ -100,5 +100,10 @@
   "settings.cliAdded": "CLI가 PATH에 추가되었습니다",
   "settings.cliRemoved": "CLI가 PATH에서 제거되었습니다",
   "settings.cliAddFailed": "PATH에 CLI 추가 실패",
-  "settings.cliRemoveFailed": "PATH에서 CLI 제거 실패"
+  "settings.cliRemoveFailed": "PATH에서 CLI 제거 실패",
+  "path.rename": "이름 변경",
+  "messages.pathRenamed": "PATH 항목 이름이 변경되었습니다",
+  "messages.pathRenameEmpty": "새 경로는 비워둘 수 없습니다",
+  "messages.pathRenameInvalid": "경로에 잘못된 제어 문자가 포함되어 있습니다",
+  "messages.pathRenameTooLong": "새 경로가 최대 길이를 초과했습니다"
 }

@@ -100,5 +100,10 @@
   "settings.cliAdded": "CLI добавлен в PATH",
   "settings.cliRemoved": "CLI удален из PATH",
   "settings.cliAddFailed": "Не удалось добавить CLI в PATH",
-  "settings.cliRemoveFailed": "Не удалось удалить CLI из PATH"
+  "settings.cliRemoveFailed": "Не удалось удалить CLI из PATH",
+  "path.rename": "Переименовать",
+  "messages.pathRenamed": "Запись PATH переименована",
+  "messages.pathRenameEmpty": "Новый путь не может быть пустым",
+  "messages.pathRenameInvalid": "Путь содержит недопустимые управляющие символы",
+  "messages.pathRenameTooLong": "Новый путь превышает максимальную длину"
 }

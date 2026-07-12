@@ -1033,9 +1033,69 @@ class Program
             "remove" => args.Length < 3 ? ArgError("Usage: env-manager path remove <dir> [--scope user|system]") : PathRemove(args),
             "move-up" => args.Length < 3 ? ArgError("Usage: env-manager path move-up <index> [--scope user|system]") : PathMoveUp(args),
             "move-down" => args.Length < 3 ? ArgError("Usage: env-manager path move-down <index> [--scope user|system]") : PathMoveDown(args),
+            "rename" => args.Length < 5 ? ArgError("Usage: env-manager path rename <old-name> <new-name> [--scope user|system]") : PathRename(args),
             "help" => ShowPathHelp(),
             _ => ArgError($"Unknown path subcommand: {sub}")
         };
+    }
+
+
+    /// <summary>
+    /// Renames a PATH entry: replaces the old directory string with a new one
+    /// at the same position. Validates the new name for injection safety.
+    /// </summary>
+    static int PathRename(string[] args)
+    {
+        string oldDir = args[2];
+        string newDir = args[3];
+        string? scope = ParseScope(args, 4, "user");
+        if (scope == null) return 1;
+
+        // Validate new directory name (injection prevention)
+        if (string.IsNullOrEmpty(newDir))
+        {
+            Console.Error.WriteLine("Error: New directory path cannot be empty");
+            return 1;
+        }
+        if (newDir.Contains('\0'))
+        {
+            Console.Error.WriteLine("Error: Invalid characters in new directory path");
+            return 1;
+        }
+        if (newDir.Length > MaxLength)
+        {
+            Console.Error.WriteLine("Error: New directory path exceeds maximum length");
+            return 1;
+        }
+
+        var entries = GetPathEntries(scope);
+        int index = entries.FindIndex(e => e.Equals(oldDir, StringComparison.OrdinalIgnoreCase));
+        if (index < 0)
+        {
+            Console.Error.WriteLine($"Error: '{oldDir}' not found in PATH ({scope})");
+            return 1;
+        }
+
+        // Check for duplicates (if new name matches an existing entry that isn't the one being renamed)
+        bool dupFound = false;
+        for (int i = 0; i < entries.Count; i++)
+        {
+            if (i != index && entries[i].Equals(newDir, StringComparison.OrdinalIgnoreCase))
+            {
+                dupFound = true;
+                break;
+            }
+        }
+        if (dupFound)
+        {
+            Console.Error.WriteLine($"Error: '{newDir}' already exists in PATH ({scope})");
+            return 1;
+        }
+
+        entries[index] = newDir;
+        SetPathEntries(entries, scope);
+        Console.WriteLine($"Renamed PATH entry from '{oldDir}' to '{newDir}' ({scope})");
+        return 0;
     }
 
     static int ShowPathHelp()
@@ -1045,7 +1105,8 @@ class Program
   path add <dir> [--scope user|system] [--index N]  Add directory to PATH
   path remove <dir> [--scope user|system]      Remove directory from PATH
   path move-up <index> [--scope user|system]   Move PATH entry up
-  path move-down <index> [--scope user|system] Move PATH entry down");
+  path move-down <index> [--scope user|system] Move PATH entry down
+  path rename <old> <new> [--scope user|system] Rename a PATH entry");
         return 0;
     }
 
@@ -1361,8 +1422,10 @@ class Program
     static int RunAgents(string[] args)
     {
         bool pathOnly = args.Length > 1 && args[1] == "--path";
+        bool jsonOutput = args.Length > 1 && args[1] == "--json";
+        bool summaryOnly = args.Length > 1 && args[1] == "--summary";
 
-        // Resolve AGENTS.md path: adjacent to the CLI executable, then fallback to AppContext.BaseDirectory
+        // Resolve AGENTS.md path: adjacent to the CLI executable
         string agentsPath = "";
         try
         {
@@ -1370,7 +1433,6 @@ class Program
             agentsPath = Path.Combine(exeDir, "AGENTS.cli.md");
             if (!File.Exists(agentsPath))
             {
-                // Try "AGENTS.md" as alternate name
                 agentsPath = Path.Combine(exeDir, "AGENTS.md");
             }
         }
@@ -1382,14 +1444,69 @@ class Program
             return 0;
         }
 
+        // --summary: brief machine-friendly overview (single line, easy to parse)
+        if (summaryOnly)
+        {
+            string version = "0.5.0";
+            Console.WriteLine($"env-manager-cli v{version} | Commands: list,get,set,delete,toggle,backup,restore,diff,merge,validate,profile,path,agents,help | Scopes: user,system | Safe: no-credentials,injection-protected,write-serialized | Agents: env-manager-cli agents --json for full spec");
+            return 0;
+        }
+
+        // --json: structured machine-readable spec for AI agent integration
+        if (jsonOutput)
+        {
+            var spec = new
+            {
+                name = "env-manager-cli",
+                version = "0.5.0",
+                description = "Windows environment variable manager CLI",
+                commands = new[]
+                {
+                    new { cmd = "list", desc = "List all variables (JSON)", args = "", scope = false, @async = true },
+                    new { cmd = "get", desc = "Get variable (JSON)", args = "<name>", scope = false, @async = true },
+                    new { cmd = "set", desc = "Set variable", args = "<name> <value>", scope = true, @async = false },
+                    new { cmd = "delete", desc = "Delete variable", args = "<name>", scope = true, @async = false },
+                    new { cmd = "toggle", desc = "Enable/disable variable (backs up value)", args = "<name>", scope = true, @async = false },
+                    new { cmd = "backup", desc = "Backup to JSON", args = "[--output <file>]", scope = false, @async = true },
+                    new { cmd = "restore", desc = "Restore from JSON", args = "<file> [--scope]", scope = true, @async = false },
+                    new { cmd = "diff", desc = "Compare backups (JSON)", args = "<old> <new>", scope = false, @async = true },
+                    new { cmd = "merge", desc = "Merge backups", args = "<old> <new> --output <file>", scope = false, @async = false },
+                    new { cmd = "validate", desc = "Validate backup", args = "<file>", scope = false, @async = true },
+                    new { cmd = "profile", desc = "Manage profiles", args = "list|create|delete|apply|unapply|show|add-var|remove-var|edit-var|status", scope = true, @async = false },
+                    new { cmd = "path", desc = "Edit PATH as list", args = "list|add|remove|move-up|move-down|rename", scope = true, @async = false },
+                    new { cmd = "agents", desc = "Output AGENTS.md spec", args = "[--path|--json|--summary]", scope = false, @async = true },
+                    new { cmd = "help", desc = "Show help", args = "", scope = false, @async = true },
+                },
+                scopes = new[] { "user", "system" },
+                output = "stdout: JSON or text, stderr: errors/debug, exit 0=success 1=failure",
+                safety = new
+                {
+                    noCredentials = true,
+                    injectionProtected = true,
+                    writeSerialized = true,
+                    maxArgLen = 32767,
+                    maxArgs = 64,
+                    nullByteRejected = true,
+                    controlCharRejected = true
+                },
+                integration = new
+                {
+                    pattern = "Call agents first to discover the contract, then use commands. Read operations are safe to batch. Write operations are serialized.",
+                    tip = "Use --debug for verbose stderr logging. Pin to --scope user for non-interactive agent workflows (no elevation needed)."
+                }
+            };
+            Console.WriteLine(JsonSerializer.Serialize(spec, JsonOptsIndented));
+            return 0;
+        }
+
+        // Default: output AGENTS.cli.md content
         if (File.Exists(agentsPath))
         {
             Console.WriteLine(File.ReadAllText(agentsPath));
         }
         else
         {
-            // Fallback: output minimal inline guide
-            Console.WriteLine("# Env Manager CLI\n\nCommands: list, get, set, delete, toggle, backup, restore, diff, merge, validate, profile, path, agents, help\n\nUse --debug for verbose logging. Use --scope user|system for scope control.");
+            Console.WriteLine("# Env Manager CLI\n\nCommands: list, get, set, delete, toggle, backup, restore, diff, merge, validate, profile, path, agents, help\n\nUse --debug for verbose logging. Use --scope user|system for scope control.\nUse agents --json for machine-readable spec.");
         }
         return 0;
     }
@@ -1411,7 +1528,7 @@ Commands:
   validate <file>            Validate backup
   profile <subcommand>       Manage variable profiles (see: profile help)
   path <subcommand>          Edit PATH variable as list (see: path help)
-  agents [--path]            Output AGENTS.md (CLI spec for AI agents), --path for file path only
+  agents [--path|--json|--summary] Output CLI spec. --path: file only. --json: machine-readable. --summary: brief
   help                       Show help
   --debug                    Enable verbose stderr logging");
         return 0;

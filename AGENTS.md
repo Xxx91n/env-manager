@@ -185,7 +185,7 @@ All commands follow: `env-manager-cli <command> [arguments] [--flags]`
 | `merge` | `merge <old> <new> --output <file>` | Merge two backup files |
 | `validate` | `validate <file>` | Validate backup file format |
 | `help` | `help` | Show help text |
-| `agents` | `agents [--path]` | Output CLI AGENTS.md spec (for AI integration) |
+| `agents` | `agents [--path\|--json\|--summary]` | Output CLI AGENTS.md spec. --path: file only. --json: machine-readable JSON. --summary: brief |
 | `profile list` | `profile list` | List all profiles (JSON) |
 | `profile create` | `profile create <name>` | Create a new empty profile |
 | `profile delete` | `profile delete <name>` | Delete a profile |
@@ -201,6 +201,7 @@ All commands follow: `env-manager-cli <command> [arguments] [--flags]`
 | `path remove` | `path remove <dir> [--scope]` | Remove directory from PATH |
 | `path move-up` | `path move-up <index> [--scope]` | Move PATH entry up |
 | `path move-down` | `path move-down <index> [--scope]` | Move PATH entry down |
+| `path rename` | `path rename <old> <new> [--scope]` | Rename a PATH entry |
 
 ### Debug Mode
 
@@ -264,7 +265,18 @@ The Rust layer (`main.rs`) exposes two Tauri commands:
 
 ### Race Condition Prevention
 
-The Rust IPC layer uses a `static CLI_MUTEX: Mutex<()>` to serialize all CLI subprocess invocations. Without this, concurrent frontend calls (e.g. `setVariable()` immediately followed by `listVariables()`) could race: the list call might execute before the set completes, returning stale data. The mutex ensures mutations and reads are ordered.
+The Rust IPC layer uses a `static CLI_RWLOCK: RwLock<()>` to implement read/write lock separation:
+
+- **Read commands** (`list`, `get`, `backup`, `diff`, `validate`, `agents`, `profile list/show/status`, `path list`) acquire a **read lock** that allows concurrent execution. Multiple read operations can run in parallel without blocking each other.
+- **Write commands** (`set`, `delete`, `toggle`, `restore`, `merge`, `profile create/delete/apply/unapply/add-var/remove-var/edit-var`, `path add/remove/move-up/move-down/rename`) acquire a **write lock** that is exclusive. Only one write can run at a time, and no read can interleave with a write.
+
+This means:
+- Concurrent reads (e.g. loading variables list + loading profiles) run in parallel, improving responsiveness.
+- All mutations are serialized, preventing race conditions where a read could see a partial mutation.
+
+The frontend also serializes write operations via a `writeChain` promise in `api.ts`. This ensures that even if a user double-clicks a button, the write operations execute in order rather than racing. Read operations (`runRead()`) are not serialized on the frontend side, allowing them to fire concurrently.
+
+The `is_read_only()` function in `main.rs` determines the lock type by inspecting both the command and its first argument (subcommand for `profile` and `path`).
 
 ### System Tray
 
@@ -631,6 +643,7 @@ The GUI communicates with the CLI exclusively through `invoke('run_cli', { comma
 | Tray locale sync | `update_tray_locale` | `updateTrayLocale()` | Yes |
 | CLI agents spec | `agents` | `getCliAgentsSpec()` | Yes |
 | Add CLI to PATH | `path add` | `addCliToPath()` | Yes |
+| Rename PATH entry | `path rename` | `renamePathEntry()` | Yes |
 
 ### Alignment Checklist
 

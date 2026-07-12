@@ -100,5 +100,10 @@
   "settings.cliAdded": "CLI anadido al PATH",
   "settings.cliRemoved": "CLI eliminado del PATH",
   "settings.cliAddFailed": "Error al anadir CLI al PATH",
-  "settings.cliRemoveFailed": "Error al eliminar CLI del PATH"
+  "settings.cliRemoveFailed": "Error al eliminar CLI del PATH",
+  "path.rename": "Renombrar",
+  "messages.pathRenamed": "Entrada PATH renombrada",
+  "messages.pathRenameEmpty": "La nueva ruta no puede estar vacia",
+  "messages.pathRenameInvalid": "La ruta contiene caracteres de control no validos",
+  "messages.pathRenameTooLong": "La nueva ruta excede la longitud maxima"
 }

@@ -100,5 +100,10 @@
   "settings.cliAdded": "CLI ajoute au PATH",
   "settings.cliRemoved": "CLI supprime du PATH",
   "settings.cliAddFailed": "Echec de l ajout du CLI au PATH",
-  "settings.cliRemoveFailed": "Echec de la suppression du CLI du PATH"
+  "settings.cliRemoveFailed": "Echec de la suppression du CLI du PATH",
+  "path.rename": "Renommer",
+  "messages.pathRenamed": "Entree PATH renommee",
+  "messages.pathRenameEmpty": "Le nouveau chemin ne peut pas etre vide",
+  "messages.pathRenameInvalid": "Le chemin contient des caracteres de controle invalides",
+  "messages.pathRenameTooLong": "Le nouveau chemin depasse la longueur maximale"
 }

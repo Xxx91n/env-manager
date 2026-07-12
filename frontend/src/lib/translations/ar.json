@@ -100,5 +100,10 @@
   "settings.cliAdded": "تمت إضافة CLI إلى PATH",
   "settings.cliRemoved": "تمت إزالة CLI من PATH",
   "settings.cliAddFailed": "فشل في إضافة CLI إلى PATH",
-  "settings.cliRemoveFailed": "فشل في إزالة CLI من PATH"
+  "settings.cliRemoveFailed": "فشل في إزالة CLI من PATH",
+  "path.rename": "إعادة تسمية",
+  "messages.pathRenamed": "تمت إعادة تسمية إدخال PATH",
+  "messages.pathRenameEmpty": "لا يمكن أن يكون المسار الجديد فارغا",
+  "messages.pathRenameInvalid": "يحتوي المسار على أحرف تحكم غير صالحة",
+  "messages.pathRenameTooLong": "المسار الجديد يتجاوز الحد الأقصى للطول"
 }

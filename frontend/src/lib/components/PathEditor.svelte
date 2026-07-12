@@ -8,6 +8,7 @@
     removePathEntry,
     movePathEntryUp,
     movePathEntryDown,
+    renamePathEntry,
   } from '../api'
   import type { PathEntry } from '../api'
 
@@ -18,6 +19,12 @@
   let newEntry = ''
   let message = ''
   let messageType = ''
+  let copyFeedback = ''
+
+  // Inline rename state
+  let editingIndex: number | null = null
+  let editValue: string = ''
+  let editError: string = ''
 
   onMount(async () => {
     await refresh()
@@ -40,7 +47,28 @@
     setTimeout(() => { message = ''; messageType = '' }, 3000)
   }
 
+  function copyToClipboard(text: string) {
+    navigator.clipboard.writeText(text).then(() => {
+      copyFeedback = $t('messages.copied')
+      setTimeout(() => { copyFeedback = '' }, 1500)
+    }).catch(() => {
+      const textarea = document.createElement('textarea')
+      textarea.value = text
+      textarea.style.position = 'fixed'
+      textarea.style.opacity = '0'
+      document.body.appendChild(textarea)
+      textarea.select()
+      try {
+        document.execCommand('copy')
+        copyFeedback = $t('messages.copied')
+        setTimeout(() => { copyFeedback = '' }, 1500)
+      } catch { /* ignore */ }
+      document.body.removeChild(textarea)
+    })
+  }
+
   async function handleScopeChange() {
+    cancelEdit()
     await refresh()
   }
 
@@ -83,6 +111,7 @@
   }
 
   async function handleMoveUp(index: number) {
+    cancelEdit()
     actionLoading = true
     try {
       await movePathEntryUp(index, scope)
@@ -95,6 +124,7 @@
   }
 
   async function handleMoveDown(index: number) {
+    cancelEdit()
     actionLoading = true
     try {
       await movePathEntryDown(index, scope)
@@ -105,6 +135,82 @@
       actionLoading = false
     }
   }
+
+  // --- Inline rename ---
+
+  function startEdit(index: number, currentPath: string) {
+    editingIndex = index
+    editValue = currentPath
+    editError = ''
+  }
+
+  function cancelEdit() {
+    editingIndex = null
+    editValue = ''
+    editError = ''
+  }
+
+  async function confirmEdit(oldPath: string) {
+    const newPath = editValue.trim()
+    editError = ''
+
+    // No change -> cancel
+    if (newPath === oldPath) {
+      cancelEdit()
+      return
+    }
+
+    // Validate: not empty
+    if (!newPath) {
+      editError = $t('messages.pathRenameEmpty')
+      return
+    }
+
+    // Validate: no null bytes or control chars (injection prevention)
+    if (/[\0-\x08\x0B\x0C\x0E-\x1F]/.test(newPath)) {
+      editError = $t('messages.pathRenameInvalid')
+      return
+    }
+
+    // Validate: length limit
+    if (newPath.length > 32767) {
+      editError = $t('messages.pathRenameTooLong')
+      return
+    }
+
+    actionLoading = true
+    try {
+      await renamePathEntry(oldPath, newPath, scope)
+      editingIndex = null
+      editValue = ''
+      await refresh()
+      showMessage($t('messages.pathRenamed'), 'success')
+    } catch (err) {
+      editError = err instanceof Error ? err.message : String(err)
+    } finally {
+      actionLoading = false
+    }
+  }
+
+  function handleEditKeydown(e: KeyboardEvent, oldPath: string) {
+    if (e.key === 'Enter') {
+      e.preventDefault()
+      confirmEdit(oldPath)
+    } else if (e.key === 'Escape') {
+      e.preventDefault()
+      cancelEdit()
+    }
+  }
+
+  // Click outside to cancel edit (blur on the input)
+  function handleEditBlur(oldPath: string) {
+    // Use setTimeout to allow confirm button click to fire first
+    setTimeout(() => {
+      if (editingIndex !== null && editValue.trim() === oldPath) {
+        cancelEdit()
+      }
+    }, 150)
+  }
 </script>
 
 <div class="space-y-3">
@@ -113,6 +219,12 @@
       ? 'bg-green-50 border border-green-200 text-green-800 dark:bg-green-900/30 dark:border-green-700 dark:text-green-300'
       : 'bg-red-50 border border-red-200 text-red-800 dark:bg-red-900/30 dark:border-red-700 dark:text-red-300'}">
       {message}
+    </div>
+  {/if}
+
+  {#if copyFeedback}
+    <div class="fixed top-4 left-1/2 -translate-x-1/2 px-3 py-1.5 bg-gray-800 text-white text-xs rounded-md shadow-lg z-50 dark:bg-gray-700">
+      {copyFeedback}
     </div>
   {/if}
 
@@ -164,48 +276,110 @@
           <tr>
             <th class="px-2 py-1.5 text-left text-[10px] font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide w-8">#</th>
             <th class="px-2 py-1.5 text-left text-[10px] font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">{$t('table.value')}</th>
-            <th class="px-2 py-1.5 text-right text-[10px] font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide w-20">{$t('table.actions')}</th>
+            <th class="px-2 py-1.5 text-right text-[10px] font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide w-24">{$t('table.actions')}</th>
           </tr>
         </thead>
         <tbody class="divide-y divide-gray-100 dark:divide-gray-700">
           {#each entries as entry (entry.index)}
             <tr class="hover:bg-gray-50 transition dark:hover:bg-gray-750">
-              <td class="px-2 py-1.5 text-[10px] text-gray-400 dark:text-gray-500">{entry.index}</td>
-              <td class="px-2 py-1.5 text-[10px] font-mono text-gray-700 dark:text-gray-300 break-all">{entry.path}</td>
-              <td class="px-2 py-1.5 text-right">
-                <button
-                  on:click={() => handleMoveUp(entry.index)}
-                  disabled={actionLoading || entry.index === 0}
-                  class="inline-flex p-1 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded transition disabled:opacity-30 dark:hover:text-blue-400 dark:hover:bg-blue-900/30"
-                  title={$t('path.moveUp')}
-                  aria-label={$t('path.moveUp')}
-                >
-                  <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M5 15l7-7 7 7" />
-                  </svg>
-                </button>
-                <button
-                  on:click={() => handleMoveDown(entry.index)}
-                  disabled={actionLoading || entry.index === entries.length - 1}
-                  class="inline-flex p-1 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded transition disabled:opacity-30 dark:hover:text-blue-400 dark:hover:bg-blue-900/30"
-                  title={$t('path.moveDown')}
-                  aria-label={$t('path.moveDown')}
-                >
-                  <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7" />
-                  </svg>
-                </button>
-                <button
-                  on:click={() => handleRemove(entry.path)}
-                  disabled={actionLoading}
-                  class="inline-flex p-1 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition dark:hover:text-red-400 dark:hover:bg-red-900/30"
-                  title={$t('path.removeEntry')}
-                  aria-label={$t('path.removeEntry')}
-                >
-                  <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
+              <td class="px-2 py-1.5 text-[10px] text-gray-400 dark:text-gray-500 align-top">{entry.index}</td>
+              <td class="px-2 py-1.5 align-top">
+                {#if editingIndex === entry.index}
+                  <!-- Inline edit mode -->
+                  <div class="flex items-center gap-1">
+                    <input
+                      type="text"
+                      bind:value={editValue}
+                      on:keydown={(e) => handleEditKeydown(e, entry.path)}
+                      on:blur={() => handleEditBlur(entry.path)}
+                      class="flex-1 px-2 py-1 text-[10px] font-mono border border-blue-500 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 dark:bg-gray-900 dark:border-blue-400 dark:text-gray-100"
+                      spellcheck="false"
+                    />
+                    <button
+                      on:click={() => confirmEdit(entry.path)}
+                      disabled={actionLoading}
+                      class="inline-flex p-1 text-green-600 hover:bg-green-50 rounded transition disabled:opacity-50 dark:text-green-400 dark:hover:bg-green-900/30"
+                      title={$t('buttons.save')}
+                      aria-label={$t('buttons.save')}
+                    >
+                      <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2.5">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
+                      </svg>
+                    </button>
+                    <button
+                      on:click={cancelEdit}
+                      disabled={actionLoading}
+                      class="inline-flex p-1 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded transition disabled:opacity-50 dark:hover:bg-gray-700"
+                      title={$t('buttons.cancel')}
+                      aria-label={$t('buttons.cancel')}
+                    >
+                      <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                  </div>
+                  {#if editError}
+                    <div class="mt-1 text-[10px] text-red-600 dark:text-red-400">{editError}</div>
+                  {/if}
+                {:else}
+                  <!-- Display mode: click to copy -->
+                  <div
+                    class="text-[11px] font-mono text-gray-700 dark:text-gray-200 break-all cursor-pointer hover:text-blue-600 dark:hover:text-blue-400 transition select-none leading-relaxed"
+                    title={$t('messages.clickToCopy')}
+                    on:click={() => copyToClipboard(entry.path)}
+                  >
+                    {entry.path}
+                  </div>
+                {/if}
+              </td>
+              <td class="px-2 py-1.5 text-right align-top">
+                {#if editingIndex !== entry.index}
+                  <!-- Rename button -->
+                  <button
+                    on:click={() => startEdit(entry.index, entry.path)}
+                    disabled={actionLoading}
+                    class="inline-flex p-1 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded transition disabled:opacity-30 dark:hover:text-blue-400 dark:hover:bg-blue-900/30"
+                    title={$t('path.rename')}
+                    aria-label={$t('path.rename')}
+                  >
+                    <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+                      <path stroke-linecap="round" stroke-linejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                    </svg>
+                  </button>
+                  <button
+                    on:click={() => handleMoveUp(entry.index)}
+                    disabled={actionLoading || entry.index === 0}
+                    class="inline-flex p-1 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded transition disabled:opacity-30 dark:hover:text-blue-400 dark:hover:bg-blue-900/30"
+                    title={$t('path.moveUp')}
+                    aria-label={$t('path.moveUp')}
+                  >
+                    <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+                      <path stroke-linecap="round" stroke-linejoin="round" d="M5 15l7-7 7 7" />
+                    </svg>
+                  </button>
+                  <button
+                    on:click={() => handleMoveDown(entry.index)}
+                    disabled={actionLoading || entry.index === entries.length - 1}
+                    class="inline-flex p-1 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded transition disabled:opacity-30 dark:hover:text-blue-400 dark:hover:bg-blue-900/30"
+                    title={$t('path.moveDown')}
+                    aria-label={$t('path.moveDown')}
+                  >
+                    <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+                      <path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7" />
+                    </svg>
+                  </button>
+                  <button
+                    on:click={() => handleRemove(entry.path)}
+                    disabled={actionLoading}
+                    class="inline-flex p-1 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition dark:hover:text-red-400 dark:hover:bg-red-900/30"
+                    title={$t('path.removeEntry')}
+                    aria-label={$t('path.removeEntry')}
+                  >
+                    <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+                      <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                {/if}
               </td>
             </tr>
           {/each}
