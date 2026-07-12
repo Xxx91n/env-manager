@@ -101,14 +101,21 @@ if (Test-Path $WebViewLoader) {
 Write-Host "[build] Step 4: Collect MSI installer" -ForegroundColor Cyan
 $MsiSearchDir = Join-Path (Split-Path -Parent $GuiExe) "bundle\msi"
 if (Test-Path $MsiSearchDir) {
-  $msiFiles = Get-ChildItem -Path $MsiSearchDir -Filter "*.msi"
-  foreach ($msi in $msiFiles) {
-    # Strip the _en-US language suffix (e.g. "Env Manager_0.4.0_x64_en-US.msi" -> "Env Manager_0.4.0_x64.msi")
-    $cleanName = $msi.Name -replace '_\w{2}-\w{2}\.', '.'
+  # Get all MSI files, select only the one matching current version, and clean stale ones
+  $msiFiles = Get-ChildItem -Path $MsiSearchDir -Filter "*.msi" | Sort-Object Name -Descending
+  # Pick the freshest MSI (Tauri overwrites the same version file each build)
+  $latestMsi = $msiFiles | Select-Object -First 1
+  if ($latestMsi) {
+    # Strip any language suffix patterns:
+    #   "Env Manager_0.5.0_x64_en-US.msi"  -> "Env Manager_0.5.0_x64.msi"
+    #   "Env Manager_0.5.0_x64_zh-CN.msi"  -> "Env Manager_0.5.0_x64.msi"
+    #   "Env Manager_0.5.0_x64.msi"        -> "Env Manager_0.5.0_x64.msi" (no change)
+    $cleanName = $latestMsi.Name
+    $cleanName = $cleanName -replace '_[a-zA-Z]{2}-[a-zA-Z]{2,3}\.msi$', '.msi'
     $destPath = Join-Path $MsiDir $cleanName
-    Copy-Item $msi.FullName -Destination $destPath -Force
+    Copy-Item $latestMsi.FullName -Destination $destPath -Force
+    Write-Host "[build] MSI: $($latestMsi.Name) -> $cleanName" -ForegroundColor Green
   }
-  Write-Host "[build] MSI copied: $($msiFiles.Count) file(s)" -ForegroundColor Green
 } else {
   Write-Host "[build] WARNING: No MSI bundle directory found at $MsiSearchDir" -ForegroundColor Yellow
 }
