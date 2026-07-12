@@ -105,5 +105,6 @@
   "messages.pathRenamed": "PATH entry renamed",
   "messages.pathRenameEmpty": "New path cannot be empty",
   "messages.pathRenameInvalid": "Path contains invalid control characters",
-  "messages.pathRenameTooLong": "New path exceeds maximum length"
+  "messages.pathRenameTooLong": "New path exceeds maximum length",
+  "messages.renameWarning": "Renaming will delete the old variable and create a new one"
 }

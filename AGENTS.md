@@ -223,6 +223,12 @@ Debug output goes to stderr with timestamps: `[debug] HH:mm:ss.fff message`. Thi
 
 - Errors go to stderr, success output to stdout
 - Exit code: 0 = success, 1 = failure
+- The GUI catches CLI errors and displays them as transient toasts (auto-dismiss after 3s),
+  not as persistent banners. This prevents duplicate error display when both the CLI
+  stderr and the GUI error store would show the same message.
+
+- Errors go to stderr, success output to stdout
+- Exit code: 0 = success, 1 = failure
 
 ### Profiles
 
@@ -671,6 +677,20 @@ The GUI communicates with the CLI exclusively through `invoke('run_cli', { comma
 | CLI agents spec | `agents` | `getCliAgentsSpec()` | Yes |
 | Add CLI to PATH | `path add` | `addCliToPath()` | Yes |
 | Rename PATH entry | `path rename` | `renamePathEntry()` | Yes |
+| Rename variable | `delete` + `set` | EditDialog (rename via delete+set) | Yes |
+
+### Variable Rename (GUI)
+
+The GUI EditDialog allows renaming a variable by editing the name field. When the name changes:
+1. The old variable is deleted via `deleteVariable(originalName, scope)`
+2. The new variable is set via `setVariable(newName, value, scope)`
+
+This two-step approach is used because the Windows Registry does not support atomic key renaming. The operation is serialized through the frontend `writeChain` and Rust `RwLock` write lock, ensuring no race condition can interleave the delete and set.
+
+**Security**: The rename operation inherits all security checks:
+- Protected system variables cannot be renamed (same list as SetVariable/DeleteVariable)
+- Variable name validation: no empty names, no `=`, max 255 chars (user scope)
+- The CLI-side `set` and `delete` commands enforce the same guards
 
 ### Alignment Checklist
 

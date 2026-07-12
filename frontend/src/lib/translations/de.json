@@ -105,5 +105,6 @@
   "messages.pathRenamed": "PATH-Eintrag umbenannt",
   "messages.pathRenameEmpty": "Neuer Pfad darf nicht leer sein",
   "messages.pathRenameInvalid": "Pfad enthalt ungultige Steuerzeichen",
-  "messages.pathRenameTooLong": "Neuer Pfad uberschreitet maximale Lange"
+  "messages.pathRenameTooLong": "Neuer Pfad uberschreitet maximale Lange",
+  "messages.renameWarning": "Umbenennen loscht die alte Variable und erstellt eine neue"
 }

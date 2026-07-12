@@ -74,8 +74,7 @@
       <div class="flex items-center gap-2">
         <button
           on:click={() => listVariables()}
-          disabled={$isWriteInProgress}
-          class="p-1.5 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-md transition disabled:opacity-50 dark:text-gray-400 dark:hover:text-gray-200 dark:hover:bg-gray-700"
+          class="p-1.5 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-md transition dark:text-gray-400 dark:hover:text-gray-200 dark:hover:bg-gray-700"
           title={$t('buttons.refresh')}
           aria-label={$t('buttons.refresh')}
         >
@@ -133,12 +132,6 @@
       <div class="bg-red-50 border border-red-200 text-red-800 px-3 py-2 rounded-md mb-3 text-xs dark:bg-red-900/30 dark:border-red-700 dark:text-red-300">
         <p class="font-medium mb-0.5">{$t('errors.cliExecutionFailed')}</p>
         <p class="font-mono break-all opacity-80">{initError}</p>
-      </div>
-    {/if}
-
-    {#if $error}
-      <div class="bg-red-50 border border-red-200 text-red-800 px-3 py-2 rounded-md mb-3 text-xs dark:bg-red-900/30 dark:border-red-700 dark:text-red-300">
-        {$error}
       </div>
     {/if}
 

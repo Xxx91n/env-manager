@@ -1,7 +1,7 @@
 <script lang="ts">
   import { createEventDispatcher } from 'svelte'
   import { t } from 'svelte-i18n'
-  import { setVariable } from '../api'
+  import { setVariable, deleteVariable } from '../api'
   import { showModal } from '../stores'
 
   export let variable = null
@@ -11,7 +11,12 @@
   let name = variable?.name || ''
   let value = variable?.value || ''
   let scope = variable?.scope || 'user'
+  let originalName = variable?.name || ''
   let saving = false
+  let localError = ''
+
+  // Check if name has changed from original
+  $: nameChanged = !!variable && name !== originalName
 
   async function handleSave() {
     if (!name.trim()) {
@@ -24,10 +29,43 @@
       return
     }
 
+    // Validate: no '=' in name
+    if (name.includes('=')) {
+      localError = 'Variable name cannot contain "="'
+      return
+    }
+
+    // Validate: name length
+    if (name.length > 255 && scope === 'user') {
+      localError = 'Variable name exceeds 255 characters'
+      return
+    }
+
+    // Check for protected system variable (consistent with CLI security)
+    const protectedVars = ['PATH', 'PATHEXT', 'PSMODULEPATH', 'SystemRoot', 'windir',
+      'ComSpec', 'TEMP', 'TMP', 'USERPROFILE', 'SystemDrive', 'ProgramFiles',
+      'ProgramFiles(x86)', 'ProgramData', 'HOMEDRIVE', 'HOMEPATH',
+      'NUMBER_OF_PROCESSORS', 'OS', 'PROCESSOR_ARCHITECTURE']
+    if (scope === 'system' && protectedVars.some(v => v.toLowerCase() === name.toLowerCase())) {
+      localError = `Cannot modify protected system variable: ${name}`
+      return
+    }
+
+    localError = ''
     saving = true
     try {
-      await setVariable(name, value, scope as 'user' | 'system')
+      if (variable && nameChanged) {
+        // Rename: delete old variable, set new one
+        await deleteVariable(originalName, scope as 'user' | 'system')
+        await setVariable(name, value, scope as 'user' | 'system')
+      } else {
+        // Normal set (new variable or just value change)
+        await setVariable(name, value, scope as 'user' | 'system')
+      }
       dispatch('save')
+    } catch (err) {
+      localError = err instanceof Error ? err.message : String(err)
+      setTimeout(() => { localError = '' }, 4000)
     } finally {
       saving = false
     }
@@ -52,6 +90,12 @@
     </div>
 
     <div class="px-5 py-4 space-y-3">
+      {#if localError}
+        <div class="bg-red-50 border border-red-200 text-red-800 px-3 py-2 rounded-md text-xs dark:bg-red-900/30 dark:border-red-700 dark:text-red-300">
+          {localError}
+        </div>
+      {/if}
+
       <div>
         <label for="edit-name" class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">
           {$t('labels.name')}
@@ -60,9 +104,14 @@
           id="edit-name"
           type="text"
           bind:value={name}
-          disabled={!!variable}
-          class="w-full px-3 py-1.5 text-xs border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100"
+          spellcheck="false"
+          class="w-full px-3 py-1.5 text-xs border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 font-mono dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100"
         />
+        {#if nameChanged}
+          <p class="mt-1 text-[10px] text-amber-600 dark:text-amber-400">
+            {$t('messages.renameWarning')}
+          </p>
+        {/if}
       </div>
 
       <div>
@@ -84,7 +133,8 @@
         <select
           id="edit-scope"
           bind:value={scope}
-          class="w-full px-3 py-1.5 text-xs border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100"
+          disabled={!!variable}
+          class="w-full px-3 py-1.5 text-xs border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white disabled:bg-gray-100 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100"
         >
           <option value="user">{$t('scope.user')}</option>
           <option value="system">{$t('scope.system')}</option>

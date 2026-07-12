@@ -1,7 +1,7 @@
 <script lang="ts">
   import { t } from 'svelte-i18n'
   import { variables, selectedScope, error, showModal } from '../stores'
-  import { deleteVariable, createBackup, toggleVariable } from '../api'
+  import { deleteVariable, createBackup, toggleVariable, setVariable, deleteVariable as delVar } from '../api'
   import EditDialog from './EditDialog.svelte'
   import BackupDialog from './BackupDialog.svelte'
 
@@ -10,9 +10,11 @@
   let editingVar = null
   let showEditDialog = false
   let showBackupDialog = false
-  let toggling = new Set<string>()
+  let togglingKeys: Record<string, boolean> = {}
   let copyFeedback = ''
+  let localError = ''
 
+  // Clear persistent error store on mount; we use localError for transient errors
   $: {
     let filtered = $variables
 
@@ -36,7 +38,6 @@
       copyFeedback = $t('messages.copied')
       setTimeout(() => { copyFeedback = '' }, 1500)
     }).catch(() => {
-      // Fallback for older WebView2 versions
       const textarea = document.createElement('textarea')
       textarea.value = text
       textarea.style.position = 'fixed'
@@ -47,9 +48,7 @@
         document.execCommand('copy')
         copyFeedback = $t('messages.copied')
         setTimeout(() => { copyFeedback = '' }, 1500)
-      } catch {
-        // ignore
-      }
+      } catch { /* ignore */ }
       document.body.removeChild(textarea)
     })
   }
@@ -62,24 +61,34 @@
       cancelLabel: $t('buttons.cancel'),
       variant: 'danger',
       onConfirm: async () => {
+        localError = ''
         try {
           await deleteVariable(name, scope as 'user' | 'system')
-        } catch {
-          // Error already set in store
+        } catch (err) {
+          localError = err instanceof Error ? err.message : String(err)
+          setTimeout(() => { localError = '' }, 3000)
         }
       }
     })
   }
 
   async function handleToggle(name: string, scope: string) {
-    const key = name + scope
-    toggling.add(key)
+    const key = name + ':' + scope
+    // Use object assignment for Svelte reactivity (not Set)
+    togglingKeys = { ...togglingKeys, [key]: true }
+    localError = ''
+    // Clear the global error store to prevent duplicate display
+    error.set(null)
     try {
       await toggleVariable(name, scope as 'user' | 'system')
-    } catch {
-      // Error already set in store
+    } catch (err) {
+      // Show error as a transient toast, not persistent banner
+      localError = err instanceof Error ? err.message : String(err)
+      setTimeout(() => { localError = '' }, 3000)
     } finally {
-      toggling.delete(key)
+      const next = { ...togglingKeys }
+      delete next[key]
+      togglingKeys = next
     }
   }
 
@@ -147,9 +156,9 @@
     </button>
   </div>
 
-  {#if $error}
+  {#if localError}
     <div class="bg-red-50 border border-red-200 text-red-800 px-3 py-2 rounded-md text-xs dark:bg-red-900/30 dark:border-red-700 dark:text-red-300">
-      {$error}
+      {localError}
     </div>
   {/if}
 
@@ -191,7 +200,7 @@
               <td class="px-3 py-2">
                 <button
                   on:click={() => handleToggle(variable.name, variable.scope)}
-                  disabled={toggling.has(variable.name + variable.scope)}
+                  disabled={togglingKeys[variable.name + ':' + variable.scope] === true}
                   class="relative inline-flex h-4 w-7 items-center rounded-full transition disabled:opacity-50 {variable.isDisabled ? 'bg-gray-300 dark:bg-gray-600' : 'bg-blue-600 dark:bg-blue-500'}"
                   role="switch"
                   aria-checked={!variable.isDisabled}

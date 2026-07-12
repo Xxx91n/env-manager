@@ -105,5 +105,6 @@
   "messages.pathRenamed": "Запись PATH переименована",
   "messages.pathRenameEmpty": "Новый путь не может быть пустым",
   "messages.pathRenameInvalid": "Путь содержит недопустимые управляющие символы",
-  "messages.pathRenameTooLong": "Новый путь превышает максимальную длину"
+  "messages.pathRenameTooLong": "Новый путь превышает максимальную длину",
+  "messages.renameWarning": "Переименование удалит старую переменную и создаст новую"
 }
