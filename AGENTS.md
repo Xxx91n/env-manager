@@ -521,6 +521,32 @@ Scopes: `cli`, `gui`, `backup`, `registry`, `i18n`, `docs`, `build`
 - Backup file size cap: 50 MB maximum to prevent DoS via large files
 - CLI command whitelist in Rust IPC layer: only known commands can spawn subprocesses (list, get, set, delete, toggle, backup, restore, diff, merge, validate, profile, path, agents, help)
 - Process isolation: CREATE_NO_WINDOW flag prevents console flicker and information leakage
+- **Critical system variable protection**: system-scope modifications to PATH, PATHEXT, SystemRoot, windir, ComSpec, TEMP, TMP, USERPROFILE, SystemDrive, ProgramFiles, ProgramFiles(x86), ProgramData, HOMEDRIVE, HOMEPATH, NUMBER_OF_PROCESSORS, OS, PROCESSOR_* are blocked in SetVariable, DeleteVariable, and SetVariableWithoutNotify
+- **Toggle backup name collision prevention**: variables whose name ends with `_EnvManager_disabled` cannot be toggled, preventing backup key confusion
+- **Profile name validation**: rejects empty/whitespace names, names >255 chars, names with null/newline/carriage-return chars
+- **Profile variable name validation**: rejects empty names, names >255 chars, names containing `=`
+- **PathAdd directory validation**: rejects empty paths, null bytes, paths exceeding max length (for direct CLI usage)
+- **PathRename injection prevention**: validates new directory for empty values, null bytes, duplicates, max length
+- **Path total length validation**: SetPathEntries rejects PATH values exceeding 32767 chars before writing
+- **DiffBackups/MergeBackups file size validation**: both input files checked against 50 MB cap before deserialization (OOM prevention)
+- **ListEnvironment O(n) optimization**: GetValueNames() cached in a HashSet instead of called per-variable (was O(n^2))
+- **BroadcastSettingChange timeout reduced**: 500ms instead of 1000ms to prevent CLI exit delays
+- **RunToggle null-scope crash fix**: ParseScope null return now properly checked before dereference
+- **Control character rejection** in Rust IPC layer: rejects args containing control characters (prevents terminal injection)
+- **Read/write lock separation** in Rust IPC: read commands share a read lock (concurrent), write commands use an exclusive write lock
+- **Frontend write serialization**: writeChain in api.ts serializes all write operations to prevent UI-level races (double-click, rapid actions)
+
+### Agent Safety Guidelines
+
+When an AI agent uses the CLI directly:
+
+1. **Always use `--scope user`** for non-interactive workflows. System scope requires elevation and may fail silently.
+2. **Call `agents --json` first** to discover the full command contract, safety boundaries, and async support per command.
+3. **Read commands are safe to batch** (list, get, backup, diff, validate, agents, profile list/show/status, path list). They acquire a read lock and can run concurrently.
+4. **Write commands are serialized**. Do not fire multiple write commands in parallel - they will queue and execute in order, which may cause unexpected delays.
+5. **Never delete critical system variables**. The CLI blocks system-scope modifications to protected variables, but user-scope PATH deletion is allowed and could break the agent's own environment. Always backup first.
+6. **Profile names must be 1-255 chars** with no null bytes, newlines, or carriage returns. Variable names in profiles must not contain `=`.
+7. **Backup files must have `.json` extension** and cannot be in system directories. Files exceeding 50 MB are rejected.
 
 ---
 

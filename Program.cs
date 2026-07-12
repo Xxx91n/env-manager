@@ -41,6 +41,30 @@ class Program
     const int MaxLength = 32767;
     const long MaxBackupFileSize = 50 * 1024 * 1024; // 50 MB safety cap
 
+    // Variables that should never be deleted or overwritten in system scope.
+    // User-scope deletion of these is allowed but warns, as user might legitimately
+    // want to modify their own PATH. System scope is fully protected.
+    static readonly HashSet<string> ProtectedSystemVars = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "PATH", "PATHEXT", "PSMODULEPATH", "SystemRoot", "windir", "ComSpec",
+        "TEMP", "TMP", "USERPROFILE", "SystemDrive", "ProgramFiles",
+        "ProgramFiles(x86)", "ProgramData", "HOMEDRIVE", "HOMEPATH",
+        "NUMBER_OF_PROCESSORS", "OS", "PROCESSOR_ARCHITECTURE",
+        "PROCESSOR_IDENTIFIER", "PROCESSOR_LEVEL", "PROCESSOR_REVISION"
+    };
+
+    /// <summary>
+    /// Returns true if the variable is protected from system-scope modification.
+    /// For user scope, these are NOT protected (user can modify their own PATH).
+    /// </summary>
+    static bool IsProtectedVariable(string name, string scope)
+    {
+        if (scope == "system")
+            return ProtectedSystemVars.Contains(name);
+        // User scope: allow all modifications (user owns their environment)
+        return false;
+    }
+
     static bool DebugMode = false;
 
     static void DebugLog(string msg)
@@ -274,13 +298,17 @@ class Program
         {
             if (key != null)
             {
-                foreach (var name in key.GetValueNames())
+                // Cache value names to avoid O(n^2) calls to GetValueNames()
+                var allNames = key.GetValueNames();
+                var nameSet = new HashSet<string>(allNames, StringComparer.OrdinalIgnoreCase);
+
+                foreach (var name in allNames)
                 {
                     // Skip internal backup variables from toggle/profile features
                     if (name.Contains("_EnvManager_disabled") || name.Contains("_PowerToys_"))
                         continue;
                     string backupName = name + "_EnvManager_disabled";
-                    bool isDisabled = key.GetValueNames().Contains(backupName);
+                    bool isDisabled = nameSet.Contains(backupName);
                     items.Add(new EnvVariable
                     {
                         Name = name,
@@ -380,6 +408,13 @@ class Program
             return;
         }
 
+        // Protect critical system variables from being overwritten
+        if (IsProtectedVariable(name, scope))
+        {
+            Console.Error.WriteLine($"Error: Cannot modify protected system variable '{name}'");
+            return;
+        }
+
         value ??= "";
 
         if (value.Length > MaxLength)
@@ -429,6 +464,13 @@ class Program
             return;
         }
 
+        // Protect critical system variables from being deleted
+        if (IsProtectedVariable(name, scope))
+        {
+            Console.Error.WriteLine($"Error: Cannot delete protected system variable '{name}'");
+            return;
+        }
+
         var (hive, path) = GetScopeTarget(scope);
         using (var key = hive.OpenSubKey(path, true))
         {
@@ -455,7 +497,7 @@ class Program
         const uint WM_SETTINGCHANGE = 0x001A;
         const uint SMTO_ABORTIFHUNG = 0x0002;
         SendMessageTimeout((IntPtr)HWND_BROADCAST, WM_SETTINGCHANGE, IntPtr.Zero,
-            "Environment", SMTO_ABORTIFHUNG, 1000, out _);
+            "Environment", SMTO_ABORTIFHUNG, 500, out _);
     }
 
     // --- Profile commands ---
@@ -501,7 +543,8 @@ class Program
     static int RunToggle(string[] args)
     {
         string name = args[1];
-        string scope = ParseScope(args, 2, "user");
+        string? scope = ParseScope(args, 2, "user");
+        if (scope == null) return 1;
         DebugLog($"Toggle: {name} scope={scope}");
 
         if (string.IsNullOrEmpty(name))
@@ -511,6 +554,14 @@ class Program
         }
 
         string backupName = GetToggleBackupName(name);
+
+        // Prevent name collision: if the variable itself is a backup key, refuse to toggle
+        if (name.EndsWith("_EnvManager_disabled"))
+        {
+            Console.Error.WriteLine("Error: Cannot toggle a variable whose name ends with '_EnvManager_disabled'");
+            return 1;
+        }
+
         var currentValue = GetVariableValue(name, scope);
         var backupValue = GetVariableValue(backupName, scope);
 
@@ -679,6 +730,17 @@ class Program
 
     static int ProfileCreate(string name)
     {
+        // Validate profile name (injection prevention)
+        if (string.IsNullOrWhiteSpace(name) || name.Length > 255)
+        {
+            Console.Error.WriteLine("Error: Profile name must be 1-255 characters");
+            return 1;
+        }
+        if (name.Contains('\0') || name.Contains('\n') || name.Contains('\r'))
+        {
+            Console.Error.WriteLine("Error: Profile name contains invalid characters");
+            return 1;
+        }
         var profiles = LoadProfiles();
         if (FindProfile(profiles, name) != null)
         {
@@ -791,6 +853,11 @@ class Program
 
     static int ProfileAddVar(string profileName, string varName, string varValue)
     {
+        if (string.IsNullOrWhiteSpace(varName) || varName.Length > 255 || varName.Contains('='))
+        {
+            Console.Error.WriteLine("Error: Invalid variable name");
+            return 1;
+        }
         var profiles = LoadProfiles();
         var profile = FindProfile(profiles, profileName);
         if (profile == null)
@@ -883,6 +950,13 @@ class Program
     /// </summary>
     static void SetVariableWithoutNotify(string name, string value, string scope)
     {
+        // Protect critical system variables even in profile/toggle operations
+        if (IsProtectedVariable(name, scope))
+        {
+            Console.Error.WriteLine($"Error: Cannot modify protected system variable '{name}'");
+            return;
+        }
+
         var (hive, path) = GetScopeTarget(scope);
         using (var key = hive.OpenSubKey(path, true))
         {
@@ -1128,6 +1202,11 @@ class Program
     static void SetPathEntries(List<string> entries, string scope)
     {
         string joined = string.Join(";", entries);
+        if (joined.Length > MaxLength)
+        {
+            Console.Error.WriteLine($"Error: PATH value exceeds maximum length of {MaxLength} characters (current: {joined.Length})");
+            return;
+        }
         SetVariable("PATH", joined, scope);
     }
 
@@ -1147,6 +1226,23 @@ class Program
         string dir = args[2];
         string? scope = ParseScope(args, 3, "user");
         if (scope == null) return 1;
+
+        // Validate directory path (injection prevention for direct CLI usage)
+        if (string.IsNullOrWhiteSpace(dir))
+        {
+            Console.Error.WriteLine("Error: Directory path cannot be empty");
+            return 1;
+        }
+        if (dir.Contains('\0'))
+        {
+            Console.Error.WriteLine("Error: Directory path contains invalid characters");
+            return 1;
+        }
+        if (dir.Length > MaxLength)
+        {
+            Console.Error.WriteLine("Error: Directory path exceeds maximum length");
+            return 1;
+        }
 
         // Parse optional --index
         int? insertIndex = null;
@@ -1332,6 +1428,16 @@ class Program
         string oldFull = ValidateFilePath(oldPath, mustExist: true);
         string newFull = ValidateFilePath(newPath, mustExist: true);
 
+        // Size validation (OOM prevention)
+        foreach (var f in new[] { oldFull, newFull })
+        {
+            if (File.Exists(f) && new FileInfo(f).Length > MaxBackupFileSize)
+            {
+                Console.Error.WriteLine($"Error: File exceeds maximum size of {MaxBackupFileSize / 1024 / 1024} MB: {f}");
+                return 1;
+            }
+        }
+
         var old = JsonSerializer.Deserialize<BackupData>(File.ReadAllText(oldFull), JsonOpts);
         var nu = JsonSerializer.Deserialize<BackupData>(File.ReadAllText(newFull), JsonOpts);
 
@@ -1360,6 +1466,16 @@ class Program
         string oldFull = ValidateFilePath(oldPath, mustExist: true);
         string newFull = ValidateFilePath(newPath, mustExist: true);
         string outFull = ValidateFilePath(outputPath, mustExist: false);
+
+        // Size validation (OOM prevention)
+        foreach (var f in new[] { oldFull, newFull })
+        {
+            if (File.Exists(f) && new FileInfo(f).Length > MaxBackupFileSize)
+            {
+                Console.Error.WriteLine($"Error: File exceeds maximum size of {MaxBackupFileSize / 1024 / 1024} MB: {f}");
+                return 1;
+            }
+        }
 
         var old = JsonSerializer.Deserialize<BackupData>(File.ReadAllText(oldFull), JsonOpts);
         var nu = JsonSerializer.Deserialize<BackupData>(File.ReadAllText(newFull), JsonOpts);
