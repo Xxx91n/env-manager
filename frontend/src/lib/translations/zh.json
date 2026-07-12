@@ -109,5 +109,15 @@
   "messages.renameWarning": "重命名将删除旧变量并创建新变量",
   "messages.fromProfile": "来自配置文件: {name}",
   "profiles.clickToExpand": "展开",
-  "profiles.clickToCollapse": "收起"
+  "profiles.clickToCollapse": "收起",
+  "settings.fontSize": "字体大小",
+  "profiles.export": "导出",
+  "profiles.import": "导入",
+  "profiles.rename": "重命名",
+  "profiles.exportPrompt": "导出到文件 (路径):",
+  "profiles.importPrompt": "从文件导入 (路径):",
+  "profiles.renamePrompt": "将配置文件重命名为:",
+  "messages.profileExported": "配置文件导出成功",
+  "messages.profileImported": "配置文件导入成功",
+  "messages.profileRenamed": "配置文件重命名成功"
 }

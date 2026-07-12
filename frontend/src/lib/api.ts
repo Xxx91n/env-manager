@@ -365,6 +365,39 @@ export async function editProfileVar(
   }
 }
 
+export async function exportProfile(
+  profileName: string,
+  outputFile: string
+): Promise<string> {
+  try {
+    return await runRead('profile', ['export', profileName, '--output', outputFile])
+  } catch (err) {
+    error.set(err instanceof Error ? err.message : 'Failed to export profile')
+    throw err
+  }
+}
+
+export async function importProfile(inputFile: string): Promise<string> {
+  try {
+    return await runWrite('profile', ['import', inputFile])
+  } catch (err) {
+    error.set(err instanceof Error ? err.message : 'Failed to import profile')
+    throw err
+  }
+}
+
+export async function renameProfile(
+  oldName: string,
+  newName: string
+): Promise<string> {
+  try {
+    return await runWrite('profile', ['rename', oldName, newName])
+  } catch (err) {
+    error.set(err instanceof Error ? err.message : 'Failed to rename profile')
+    throw err
+  }
+}
+
 export interface ProfileStatus {
   name: string
   isEnabled: boolean

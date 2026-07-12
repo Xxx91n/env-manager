@@ -11,6 +11,9 @@
     addProfileVar,
     removeProfileVar,
     listVariables,
+    exportProfile,
+    importProfile,
+    renameProfile,
   } from '../api'
   import type { ProfileData, EnvVariable } from '../api'
 
@@ -73,6 +76,51 @@
       newProfileName = ''
       await refreshProfiles()
       showMessage($t('messages.profileCreated'), 'success')
+    } catch (err) {
+      showMessage(err instanceof Error ? err.message : String(err), 'error')
+    } finally {
+      actionLoading = false
+    }
+  }
+
+  async function handleExport(profile: ProfileData) {
+    const defaultPath = `${profile.name}.json`
+    const fileName = prompt($t('profiles.exportPrompt'), defaultPath)
+    if (!fileName) return
+    actionLoading = true
+    try {
+      await exportProfile(profile.name, fileName)
+      showMessage($t('messages.profileExported'), 'success')
+    } catch (err) {
+      showMessage(err instanceof Error ? err.message : String(err), 'error')
+    } finally {
+      actionLoading = false
+    }
+  }
+
+  async function handleImport() {
+    const fileName = prompt($t('profiles.importPrompt'), '')
+    if (!fileName) return
+    actionLoading = true
+    try {
+      await importProfile(fileName)
+      await refreshProfiles()
+      showMessage($t('messages.profileImported'), 'success')
+    } catch (err) {
+      showMessage(err instanceof Error ? err.message : String(err), 'error')
+    } finally {
+      actionLoading = false
+    }
+  }
+
+  async function handleRename(profile: ProfileData) {
+    const newName = prompt($t('profiles.renamePrompt'), profile.name)
+    if (!newName || newName === profile.name) return
+    actionLoading = true
+    try {
+      await renameProfile(profile.name, newName.trim())
+      await refreshProfiles()
+      showMessage($t('messages.profileRenamed'), 'success')
     } catch (err) {
       showMessage(err instanceof Error ? err.message : String(err), 'error')
     } finally {
@@ -202,6 +250,18 @@
       </svg>
       {$t('dialogs.createProfile')}
     </button>
+
+    <button
+      on:click={handleImport}
+      disabled={actionLoading}
+      class="flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 transition disabled:opacity-50 dark:text-gray-200 dark:bg-gray-800 dark:border-gray-600 dark:hover:bg-gray-700"
+      title={$t('profiles.import')}
+    >
+      <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+      </svg>
+      {$t('profiles.import')}
+    </button>
   </div>
 
   {#if loading}
@@ -245,6 +305,30 @@
                 <span class="inline-block h-3 w-3 transform rounded-full bg-white shadow transition {profile.isEnabled ? 'translate-x-3.5' : 'translate-x-0.5'}"></span>
               </button>
 
+              <!-- Export button -->
+              <button
+                on:click={() => handleExport(profile)}
+                disabled={actionLoading}
+                class="p-1 text-gray-400 hover:text-blue-600 rounded transition dark:hover:text-blue-400"
+                title={$t('profiles.export')}
+                aria-label={$t('profiles.export')}
+              >
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                </svg>
+              </button>
+              <!-- Rename button -->
+              <button
+                on:click={() => handleRename(profile)}
+                disabled={actionLoading}
+                class="p-1 text-gray-400 hover:text-blue-600 rounded transition dark:hover:text-blue-400"
+                title={$t('profiles.rename')}
+                aria-label={$t('profiles.rename')}
+              >
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                </svg>
+              </button>
               <!-- Delete button -->
               <button
                 on:click={() => handleDelete(profile)}

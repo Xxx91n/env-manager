@@ -109,5 +109,15 @@
   "messages.renameWarning": "Переименование удалит старую переменную и создаст новую",
   "messages.fromProfile": "Из профиля: {name}",
   "profiles.clickToExpand": "Развернуть",
-  "profiles.clickToCollapse": "Свернуть"
+  "profiles.clickToCollapse": "Свернуть",
+  "settings.fontSize": "Размер шрифта",
+  "profiles.export": "Экспорт",
+  "profiles.import": "Импорт",
+  "profiles.rename": "Переименовать",
+  "profiles.exportPrompt": "Экспорт в файл (путь):",
+  "profiles.importPrompt": "Импорт из файла (путь):",
+  "profiles.renamePrompt": "Переименовать профиль в:",
+  "messages.profileExported": "Профиль успешно экспортирован",
+  "messages.profileImported": "Профиль успешно импортирован",
+  "messages.profileRenamed": "Профиль успешно переименован"
 }

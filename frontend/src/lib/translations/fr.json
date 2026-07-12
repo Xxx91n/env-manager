@@ -109,5 +109,15 @@
   "messages.renameWarning": "Renommer supprimera l'ancienne variable et en creera une nouvelle",
   "messages.fromProfile": "Profil: {name}",
   "profiles.clickToExpand": "Developper",
-  "profiles.clickToCollapse": "Reduire"
+  "profiles.clickToCollapse": "Reduire",
+  "settings.fontSize": "Taille de police",
+  "profiles.export": "Exporter",
+  "profiles.import": "Importer",
+  "profiles.rename": "Renommer",
+  "profiles.exportPrompt": "Exporter vers un fichier (chemin):",
+  "profiles.importPrompt": "Importer depuis un fichier (chemin):",
+  "profiles.renamePrompt": "Renommer le profil en:",
+  "messages.profileExported": "Profil exporte avec succes",
+  "messages.profileImported": "Profil importe avec succes",
+  "messages.profileRenamed": "Profil renomme avec succes"
 }

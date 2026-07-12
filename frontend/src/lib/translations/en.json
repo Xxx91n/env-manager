@@ -109,5 +109,15 @@
   "messages.renameWarning": "Renaming will delete the old variable and create a new one",
   "messages.fromProfile": "From profile: {name}",
   "profiles.clickToExpand": "Expand",
-  "profiles.clickToCollapse": "Collapse"
+  "profiles.clickToCollapse": "Collapse",
+  "settings.fontSize": "Font Size",
+  "profiles.export": "Export",
+  "profiles.import": "Import",
+  "profiles.rename": "Rename",
+  "profiles.exportPrompt": "Export to file (path):",
+  "profiles.importPrompt": "Import from file (path):",
+  "profiles.renamePrompt": "Rename profile to:",
+  "messages.profileExported": "Profile exported successfully",
+  "messages.profileImported": "Profile imported successfully",
+  "messages.profileRenamed": "Profile renamed successfully"
 }

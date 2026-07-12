@@ -109,5 +109,15 @@
   "messages.renameWarning": "名前変更により古い変数が削除され、新しい変数が作成されます",
   "messages.fromProfile": "プロファイルから: {name}",
   "profiles.clickToExpand": "展開する",
-  "profiles.clickToCollapse": "折りたたむ"
+  "profiles.clickToCollapse": "折りたたむ",
+  "settings.fontSize": "フォントサイズ",
+  "profiles.export": "エクスポート",
+  "profiles.import": "インポート",
+  "profiles.rename": "名前変更",
+  "profiles.exportPrompt": "ファイルにエクスポート (パス):",
+  "profiles.importPrompt": "ファイルからインポート (パス):",
+  "profiles.renamePrompt": "プロファイルの名前を変更:",
+  "messages.profileExported": "プロファイルをエクスポートしました",
+  "messages.profileImported": "プロファイルをインポートしました",
+  "messages.profileRenamed": "プロファイルの名前を変更しました"
 }

@@ -109,5 +109,15 @@
   "messages.renameWarning": "إعادة التسمية ستحذف المتغير القديم وتنشئ متغيرًا جديدًا",
   "messages.fromProfile": "من الملف الشخصي: {name}",
   "profiles.clickToExpand": "توسيع",
-  "profiles.clickToCollapse": "طي"
+  "profiles.clickToCollapse": "طي",
+  "settings.fontSize": "حجم الخط",
+  "profiles.export": "تصدير",
+  "profiles.import": "استيراد",
+  "profiles.rename": "إعادة تسمية",
+  "profiles.exportPrompt": "تصدير إلى ملف (المسار):",
+  "profiles.importPrompt": "استيراد من ملف (المسار):",
+  "profiles.renamePrompt": "إعادة تسمية الملف الشخصي إلى:",
+  "messages.profileExported": "تم تصدير الملف الشخصي بنجاح",
+  "messages.profileImported": "تم استيراد الملف الشخصي بنجاح",
+  "messages.profileRenamed": "تم إعادة تسمية الملف الشخصي بنجاح"
 }

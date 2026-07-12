@@ -196,6 +196,9 @@ All commands follow: `env-manager-cli <command> [arguments] [--flags]`
 | `profile remove-var` | `profile remove-var <profile> <name>` | Remove a variable from a profile |
 | `profile edit-var` | `profile edit-var <profile> <old> <new> <val>` | Edit a variable in a profile |
 | `profile status` | `profile status <name>` | Check profile application status (JSON) |
+| `profile export` | `profile export <name> --output <file>` | Export profile to JSON file |
+| `profile import` | `profile import <file>` | Import profile from JSON file |
+| `profile rename` | `profile rename <old> <new>` | Rename a profile |
 | `path list` | `path list [--scope]` | List PATH entries (JSON) |
 | `path add` | `path add <dir> [--scope] [--index N]` | Add directory to PATH |
 | `path remove` | `path remove <dir> [--scope]` | Remove directory from PATH |
@@ -469,6 +472,14 @@ The project uses [CodeGraph](https://github.com/nicholasgriffintn/codegraph) for
 - Catch specific exceptions, never empty catch blocks
 - Explicit types on public API, `var` for locals
 
+### Font Size Scaling
+
+The GUI supports a font size scale setting in the Settings dialog. Users can choose from
+4 presets: Small (85%), Normal (100%), Large (115%), Extra Large (130%). The scale is
+applied by setting `document.documentElement.style.fontSize` to `13 * scale + 'px'`.
+This uses CSS rem units throughout the app, so all text scales proportionally.
+The setting persists in `localStorage` as `fontScale`.
+
 ### Add CLI to PATH
 
 The GUI Settings dialog includes a one-click "Add CLI to PATH" button that:
@@ -714,6 +725,9 @@ The GUI communicates with the CLI exclusively through `invoke('run_cli', { comma
 | CLI agents spec | `agents` | `getCliAgentsSpec()` | Yes |
 | Add CLI to PATH | `path add` | `addCliToPath()` | Yes |
 | Profile source annotation | `list` (profileSource field) | N/A (automatic) | Yes |
+| Profile export | `profile export` | `exportProfile()` | Yes |
+| Profile import | `profile import` | `importProfile()` | Yes |
+| Profile rename | `profile rename` | `renameProfile()` | Yes |
 | Rename PATH entry | `path rename` | `renamePathEntry()` | Yes |
 | Rename variable | `delete` + `set` | EditDialog (rename via delete+set) | Yes |
 

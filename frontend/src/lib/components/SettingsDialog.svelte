@@ -7,8 +7,12 @@
   import { t as tStore } from 'svelte-i18n'
 
   export let darkMode = false
+  export let fontScale: number = 1
 
   const dispatch = createEventDispatcher()
+
+  let selectedFontScale: number = fontScale
+  $: if (fontScale !== selectedFontScale) selectedFontScale = fontScale
 
   const languageNames: Record<string, string> = {
     en: 'English',
@@ -94,6 +98,19 @@
     } finally {
       cliToggleLoading = false
     }
+    // Notify parent to refresh all views (PATH entries changed)
+    dispatch('pathChanged')
+  }
+
+  function changeFontScale(scale: number) {
+    selectedFontScale = scale
+    fontScale = scale
+    try {
+      localStorage.setItem('fontScale', String(scale))
+    } catch {
+      // Ignore
+    }
+    dispatch('fontScaleChange', scale)
   }
 
   function handleClose() {
@@ -164,6 +181,38 @@
           {cliMessage}
         </p>
       {/if}
+
+      <div>
+        <label for="settings-font-size" class="block text-xs font-medium text-gray-600 mb-1.5 dark:text-gray-400">
+          {$t('settings.fontSize')}
+        </label>
+        <div class="flex items-center gap-2">
+          <button
+            on:click={() => changeFontScale(0.85)}
+            class="px-2 py-1 text-xs border rounded transition {selectedFontScale === 0.85 ? 'bg-blue-600 text-white border-blue-600 dark:bg-blue-500 dark:border-blue-500' : 'border-gray-300 text-gray-600 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-400 dark:hover:bg-gray-700'}"
+          >
+            A
+          </button>
+          <button
+            on:click={() => changeFontScale(1)}
+            class="px-2 py-1 text-sm border rounded transition {selectedFontScale === 1 ? 'bg-blue-600 text-white border-blue-600 dark:bg-blue-500 dark:border-blue-500' : 'border-gray-300 text-gray-600 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-400 dark:hover:bg-gray-700'}"
+          >
+            A
+          </button>
+          <button
+            on:click={() => changeFontScale(1.15)}
+            class="px-2 py-1 text-base border rounded transition {selectedFontScale === 1.15 ? 'bg-blue-600 text-white border-blue-600 dark:bg-blue-500 dark:border-blue-500' : 'border-gray-300 text-gray-600 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-400 dark:hover:bg-gray-700'}"
+          >
+            A
+          </button>
+          <button
+            on:click={() => changeFontScale(1.3)}
+            class="px-2 py-1 text-lg border rounded transition {selectedFontScale === 1.3 ? 'bg-blue-600 text-white border-blue-600 dark:bg-blue-500 dark:border-blue-500' : 'border-gray-300 text-gray-600 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-400 dark:hover:bg-gray-700'}"
+          >
+            A
+          </button>
+        </div>
+      </div>
     </div>
 
     <div class="px-5 py-3 border-t border-gray-200 flex justify-end dark:border-gray-700">

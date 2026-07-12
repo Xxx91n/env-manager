@@ -16,6 +16,7 @@
   let initError: string | null = null
   let showSettings = false
   let darkMode = false
+  let fontScale: number = 1
 
   $: if ($locale) currentLocale = $locale
 
@@ -23,10 +24,15 @@
     try {
       const stored = typeof localStorage !== 'undefined' ? localStorage.getItem('darkMode') : null
       darkMode = stored === 'true'
+      const storedScale = typeof localStorage !== 'undefined' ? localStorage.getItem('fontScale') : null
+      if (storedScale) {
+        fontScale = parseFloat(storedScale) || 1
+      }
     } catch {
       // Ignore
     }
     applyDarkMode(darkMode)
+    applyFontScale(fontScale)
 
     // Sync tray locale on startup with saved language
     setTimeout(() => {
@@ -50,8 +56,19 @@
     }
   }
 
+  function applyFontScale(scale: number) {
+    fontScale = scale
+    if (typeof document !== 'undefined') {
+      document.documentElement.style.fontSize = (13 * scale) + 'px'
+    }
+  }
+
   function handleThemeChange(e: CustomEvent<boolean>) {
     applyDarkMode(e.detail)
+  }
+
+  function handleFontScaleChange(e: CustomEvent<number>) {
+    applyFontScale(e.detail)
   }
 </script>
 
@@ -134,7 +151,7 @@
 
   <div class="px-5 py-4">
     {#if initError}
-      <div class="bg-red-50 border border-red-200 text-red-800 px-3 py-2 rounded-md mb-3 text-xs dark:bg-red-900/30 dark:border-red-700 dark:text-red-300">
+      <div class="fixed top-4 left-1/2 -translate-x-1/2 px-3 py-2 bg-red-600 text-white rounded-md text-xs shadow-lg z-50 pointer-events-none max-w-md">
         <p class="font-medium mb-0.5">{$t('errors.cliExecutionFailed')}</p>
         <p class="font-mono break-all opacity-80">{initError}</p>
       </div>
@@ -161,6 +178,12 @@
     darkMode={darkMode}
     on:close={() => (showSettings = false)}
     on:themeChange={handleThemeChange}
+    fontScale={fontScale}
+    on:fontScaleChange={handleFontScaleChange}
+    on:pathChanged={() => {
+      refreshTrigger.update(n => n + 1)
+      listVariables()
+    }}
   />
 {/if}
 

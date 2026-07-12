@@ -174,7 +174,7 @@
   </div>
 
   {#if localError}
-    <div class="bg-red-50 border border-red-200 text-red-800 px-3 py-2 rounded-md text-xs dark:bg-red-900/30 dark:border-red-700 dark:text-red-300">
+    <div class="fixed top-4 left-1/2 -translate-x-1/2 px-3 py-1.5 bg-red-600 text-white text-xs rounded-md shadow-lg z-50 pointer-events-none">
       {localError}
     </div>
   {/if}

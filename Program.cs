@@ -608,6 +608,9 @@ class Program
             "remove-var" => args.Length < 4 ? ArgError("Usage: env-manager profile remove-var <profile> <name>") : ProfileRemoveVar(args[2], args[3]),
             "edit-var" => args.Length < 6 ? ArgError("Usage: env-manager profile edit-var <profile> <old-name> <new-name> <new-value>") : ProfileEditVar(args[2], args[3], args[4], args[5]),
             "status" => args.Length < 3 ? ArgError("Usage: env-manager profile status <name>") : ProfileStatus(args[2]),
+            "export" => ProfileExport(args),
+            "import" => ProfileImport(args),
+            "rename" => args.Length < 4 ? ArgError("Usage: env-manager profile rename <old> <new>") : ProfileRename(args[2], args[3]),
             "help" => ShowProfileHelp(),
             _ => ArgError($"Unknown profile subcommand: {sub}")
         };
@@ -765,6 +768,141 @@ class Program
         return 0;
     }
 
+    static int ProfileExport(string[] args)
+    {
+        if (args.Length < 4 || args[2] != "--output")
+        {
+            Console.Error.WriteLine("Usage: env-manager profile export <name> --output <file>");
+            return 1;
+        }
+
+        string profileName = args[1];
+        string outputPath = ValidateFilePath(args[3], mustExist: false);
+
+        var profiles = LoadProfiles();
+        var profile = FindProfile(profiles, profileName);
+        if (profile == null)
+        {
+            Console.Error.WriteLine($"Error: Profile '{profileName}' not found");
+            return 1;
+        }
+
+        var exportData = new
+        {
+            name = profile.Name,
+            variables = profile.Variables.Select(v => new { name = v.Name, value = v.Value }).ToList()
+        };
+
+        string json = JsonSerializer.Serialize(exportData, JsonOptsIndented);
+        File.WriteAllText(outputPath, json);
+        Console.WriteLine($"Exported profile '{profileName}' to {outputPath}");
+        return 0;
+    }
+
+    static int ProfileImport(string[] args)
+    {
+        if (args.Length < 3)
+        {
+            Console.Error.WriteLine("Usage: env-manager profile import <file>");
+            return 1;
+        }
+
+        string inputPath = ValidateFilePath(args[2], mustExist: true);
+
+        string json = File.ReadAllText(inputPath);
+        using var doc = JsonDocument.Parse(json);
+
+        string profileName = doc.RootElement.GetProperty("name").GetString() ?? "";
+        if (string.IsNullOrWhiteSpace(profileName))
+        {
+            Console.Error.WriteLine("Error: Profile name is empty in import file");
+            return 1;
+        }
+
+        var profiles = LoadProfiles();
+        var existing = FindProfile(profiles, profileName);
+        if (existing != null)
+        {
+            Console.Error.WriteLine($"Error: Profile '{profileName}' already exists. Delete it first or rename in the import file.");
+            return 1;
+        }
+
+        var newProfile = new ProfileData
+        {
+            Id = Guid.NewGuid().ToString(),
+            Name = profileName,
+            IsEnabled = false
+        };
+
+        foreach (var varElem in doc.RootElement.GetProperty("variables").EnumerateArray())
+        {
+            string varName = varElem.GetProperty("name").GetString() ?? "";
+            string varValue = varElem.GetProperty("value").GetString() ?? "";
+            if (!string.IsNullOrEmpty(varName))
+            {
+                newProfile.Variables.Add(new ProfileVariable { Name = varName, Value = varValue });
+            }
+        }
+
+        profiles.Add(newProfile);
+        SaveProfiles(profiles);
+        Console.WriteLine($"Imported profile '{profileName}' with {newProfile.Variables.Count} variables");
+        return 0;
+    }
+
+    static int ProfileRename(string oldName, string newName)
+    {
+        if (string.IsNullOrWhiteSpace(newName))
+        {
+            Console.Error.WriteLine("Error: New profile name cannot be empty");
+            return 1;
+        }
+        if (newName.Length > 255)
+        {
+            Console.Error.WriteLine("Error: Profile name exceeds 255 characters");
+            return 1;
+        }
+        if (newName.Contains('\0') || newName.Contains('\n') || newName.Contains('\r'))
+        {
+            Console.Error.WriteLine("Error: Profile name contains invalid characters");
+            return 1;
+        }
+
+        var profiles = LoadProfiles();
+        var profile = FindProfile(profiles, oldName);
+        if (profile == null)
+        {
+            Console.Error.WriteLine($"Error: Profile '{oldName}' not found");
+            return 1;
+        }
+
+        // Check for name collision
+        if (profiles.Any(p => p.Name.Equals(newName, StringComparison.OrdinalIgnoreCase) && p.Id != profile.Id))
+        {
+            Console.Error.WriteLine($"Error: Profile '{newName}' already exists");
+            return 1;
+        }
+
+        // If profile is applied, we need to handle backup key renames
+        bool wasEnabled = profile.IsEnabled;
+        if (wasEnabled)
+        {
+            UnapplyProfile(profile);
+        }
+
+        string oldProfileName = profile.Name;
+        profile.Name = newName;
+        SaveProfiles(profiles);
+
+        if (wasEnabled)
+        {
+            ApplyProfile(profile);
+        }
+
+        Console.WriteLine($"Renamed profile '{oldProfileName}' -> '{newName}'");
+        return 0;
+    }
+
     static int ShowProfileHelp()
     {
         Console.WriteLine(@"Profile commands:
@@ -777,7 +915,10 @@ class Program
   profile add-var <profile> <name> <val>        Add a variable to a profile
   profile remove-var <profile> <name>           Remove a variable from a profile
   profile edit-var <profile> <old> <new> <val>  Edit a variable in a profile
-  profile status <name>                         Check profile application status");
+  profile status <name>                         Check profile application status
+  profile export <name> --output <file>          Export profile to JSON file
+  profile import <file>                          Import profile from JSON file
+  profile rename <old> <new>                     Rename a profile");
         return 0;
     }
 

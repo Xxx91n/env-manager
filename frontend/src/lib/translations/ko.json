@@ -109,5 +109,15 @@
   "messages.renameWarning": "이름 변경 시 이전 변수가 삭제되고 새 변수가 생성됩니다",
   "messages.fromProfile": "프로필에서: {name}",
   "profiles.clickToExpand": "펼치기",
-  "profiles.clickToCollapse": "접기"
+  "profiles.clickToCollapse": "접기",
+  "settings.fontSize": "글꼴 크기",
+  "profiles.export": "내보내기",
+  "profiles.import": "가져오기",
+  "profiles.rename": "이름 변경",
+  "profiles.exportPrompt": "파일로 내보내기 (경로):",
+  "profiles.importPrompt": "파일에서 가져오기 (경로):",
+  "profiles.renamePrompt": "프로필 이름 변경:",
+  "messages.profileExported": "프로필 내보내기 완료",
+  "messages.profileImported": "프로필 가져오기 완료",
+  "messages.profileRenamed": "프로필 이름 변경 완료"
 }
