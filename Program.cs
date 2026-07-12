@@ -301,21 +301,52 @@ class Program
                 // Cache value names to avoid O(n^2) calls to GetValueNames()
                 var allNames = key.GetValueNames();
                 var nameSet = new HashSet<string>(allNames, StringComparer.OrdinalIgnoreCase);
+                var processedNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
                 foreach (var name in allNames)
                 {
-                    // Skip internal backup variables from toggle/profile features
-                    if (name.Contains("_EnvManager_disabled") || name.Contains("_PowerToys_"))
+                    // Skip PowerToys internal backup variables (from PowerToys environment manager)
+                    if (name.Contains("_PowerToys_"))
                         continue;
-                    string backupName = name + "_EnvManager_disabled";
-                    bool isDisabled = nameSet.Contains(backupName);
-                    items.Add(new EnvVariable
+
+                    // Skip profile backup variables
+                    if (name.Contains("_EnvManager_backup_"))
+                        continue;
+
+                    // Skip toggle backup variables - they represent disabled variables
+                    // and will be shown as the disabled variable below
+                    if (name.EndsWith("_EnvManager_disabled"))
                     {
-                        Name = name,
-                        Value = isDisabled ? (key.GetValue(backupName)?.ToString() ?? "") : (key.GetValue(name)?.ToString() ?? ""),
-                        Scope = "user",
-                        IsDisabled = isDisabled
-                    });
+                        // Extract original variable name from backup name
+                        string originalName = name.Substring(0, name.Length - "_EnvManager_disabled".Length);
+                        if (!processedNames.Contains(originalName))
+                        {
+                            processedNames.Add(originalName);
+                            // The original variable was deleted when disabled, so show the backup
+                            // value with isDisabled=true
+                            items.Add(new EnvVariable
+                            {
+                                Name = originalName,
+                                Value = key.GetValue(name)?.ToString() ?? "",
+                                Scope = "user",
+                                IsDisabled = true
+                            });
+                        }
+                        continue;
+                    }
+
+                    // Normal active variable
+                    if (!processedNames.Contains(name))
+                    {
+                        processedNames.Add(name);
+                        items.Add(new EnvVariable
+                        {
+                            Name = name,
+                            Value = key.GetValue(name)?.ToString() ?? "",
+                            Scope = "user",
+                            IsDisabled = false
+                        });
+                    }
                 }
             }
         }
@@ -352,13 +383,22 @@ class Program
         {
             if (key != null)
             {
+                // First check if variable is disabled (backup exists but original deleted)
+                string backupName = GetToggleBackupName(name);
+                var backupVal = key.GetValue(backupName);
+                if (backupVal != null && key.GetValue(name) == null)
+                {
+                    // Variable is disabled: original deleted, backup exists
+                    var result = new { name, value = backupVal.ToString(), scope = "user", isDisabled = true };
+                    Console.WriteLine(JsonSerializer.Serialize(result, JsonOpts));
+                    return 0;
+                }
+
+                // Normal active variable
                 var v = key.GetValue(name);
                 if (v != null)
                 {
-                    string backupName = GetToggleBackupName(name);
-                    bool isDisabled = key.GetValueNames().Contains(backupName);
-                    string value = isDisabled ? (key.GetValue(backupName)?.ToString() ?? "") : v.ToString();
-                    var result = new { name, value, scope = "user", isDisabled };
+                    var result = new { name, value = v.ToString(), scope = "user", isDisabled = false };
                     Console.WriteLine(JsonSerializer.Serialize(result, JsonOpts));
                     return 0;
                 }

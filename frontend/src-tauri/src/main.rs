@@ -417,11 +417,30 @@ fn restore_window(app: &tauri::AppHandle) {
 
 fn main() {
     tauri::Builder::default()
-        .plugin(
+        .plugin({
+            // Configure logging to write to a 'logs' directory adjacent to the exe.
+            // This ensures portable versions keep logs alongside the executable,
+            // while MSI installs use the standard app data path (default behavior
+            // when the custom directory cannot be created).
+            let log_dir = std::env::current_exe()
+                .ok()
+                .and_then(|p| p.parent().map(|d| d.join("logs")))
+                .unwrap_or_else(|| std::path::PathBuf::from("logs"));
+
+            // Create logs directory if it doesn't exist
+            let _ = std::fs::create_dir_all(&log_dir);
+
             tauri_plugin_log::Builder::default()
                 .level(log::LevelFilter::Info)
-                .build(),
-        )
+                .targets([
+                    tauri_plugin_log::Target::new(tauri_plugin_log::TargetKind::Stdout),
+                    tauri_plugin_log::Target::new(tauri_plugin_log::TargetKind::Folder {
+                        path: log_dir,
+                        file_name: Some("env-manager.log".to_string()),
+                    }),
+                ])
+                .build()
+        })
         .setup(|app| {
             // Build tray menu items - text will be updated via update_tray_locale
             let show_item = MenuItem::with_id(app, "show", "Show", true, None::<&str>)?;
@@ -446,13 +465,17 @@ fn main() {
                     }
                 })
                 .on_tray_icon_event(|tray, event| {
-                    // Handle both single click and double click to restore the window.
-                    // Single click is the standard Windows tray interaction for
-                    // restoring a window. Double-click is a backup for older behavior.
+                    // Handle left-click and double-click to restore the window.
+                    // Right-click is handled by Tauri automatically to show the context menu.
                     let app = tray.app_handle();
                     match event {
-                        tauri::tray::TrayIconEvent::Click { .. } => {
-                            restore_window(app);
+                        tauri::tray::TrayIconEvent::Click { button, button_state, .. } => {
+                            // Only restore on left-click release (not right-click)
+                            if button == tauri::tray::MouseButton::Left
+                                && button_state == tauri::tray::MouseButtonState::Up
+                            {
+                                restore_window(app);
+                            }
                         }
                         tauri::tray::TrayIconEvent::DoubleClick { .. } => {
                             restore_window(app);
