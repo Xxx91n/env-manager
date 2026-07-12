@@ -11,6 +11,7 @@ class EnvVariable
     [JsonPropertyName("value")] public string Value { get; set; } = "";
     [JsonPropertyName("scope")] public string Scope { get; set; } = "";
     [JsonPropertyName("isDisabled")] public bool IsDisabled { get; set; } = false;
+    [JsonPropertyName("profileSource")] public string? ProfileSource { get; set; }
 }
 
 class BackupData
@@ -309,10 +310,6 @@ class Program
                     if (name.Contains("_PowerToys_"))
                         continue;
 
-                    // Skip profile backup variables
-                    if (name.Contains("_EnvManager_backup_"))
-                        continue;
-
                     // Skip toggle backup variables - they represent disabled variables
                     // and will be shown as the disabled variable below
                     if (name.EndsWith("_EnvManager_disabled"))
@@ -370,6 +367,30 @@ class Program
             }
         }
         catch (UnauthorizedAccessException) { }
+
+        // Annotate variables with their profile source (if any applied profile contains them)
+        try
+        {
+            var profiles = LoadProfiles();
+            var appliedProfiles = profiles.Where(p => p.IsEnabled).ToList();
+            foreach (var item in items)
+            {
+                foreach (var profile in appliedProfiles)
+                {
+                    var pv = profile.Variables.FirstOrDefault(v =>
+                        v.Name.Equals(item.Name, StringComparison.OrdinalIgnoreCase));
+                    if (pv != null && item.Value == pv.Value)
+                    {
+                        item.ProfileSource = profile.Name;
+                        break;
+                    }
+                }
+            }
+        }
+        catch (Exception e)
+        {
+            DebugLog("ListEnvironment: profile annotation failed: " + e.Message);
+        }
 
         var ordered = items.OrderBy(x => x.Name).ThenBy(x => x.Scope).ToList();
         Console.WriteLine(JsonSerializer.Serialize(ordered, JsonOpts));
@@ -530,10 +551,14 @@ class Program
                 key.DeleteValue(toggleBackupName, false);
             }
 
-            // Also clean up profile backup keys for this variable name
+            // Also clean up profile backup keys for this variable name.
+            // Profile backups use the format: <varName>_PowerToys_<profileName>
+            // We scan for _PowerToys_ backup keys that start with the variable name.
             foreach (var valName in key.GetValueNames())
             {
-                if (valName.StartsWith(name + "_EnvManager_backup_"))
+                // Match: <varName>_PowerToys_<anything> (the applied profile backup)
+                // Also match: <varName>_EnvManager_disabled (the toggle backup)
+                if (valName.StartsWith(name + "_PowerToys_") && !valName.EndsWith("_EnvManager_disabled"))
                 {
                     key.DeleteValue(valName, false);
                 }

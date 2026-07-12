@@ -6,7 +6,7 @@
   import SettingsDialog from './lib/components/SettingsDialog.svelte'
   import PathEditor from './lib/components/PathEditor.svelte'
   import ConfirmDialog from './lib/components/ConfirmDialog.svelte'
-  import { variables, loading, error, activeView, modal, isWriteInProgress, debugLogs } from './lib/stores'
+  import { variables, loading, error, activeView, modal, isWriteInProgress, debugLogs, refreshTrigger } from './lib/stores'
   import { listVariables, updateTrayLocale } from './lib/api'
   import { defaultLanguage } from './lib/i18n'
   import { get } from 'svelte/store'
@@ -73,7 +73,12 @@
       </div>
       <div class="flex items-center gap-2">
         <button
-          on:click={() => listVariables()}
+          on:click={() => {
+            // Refresh the current active view, not just variables
+            refreshTrigger.update(n => n + 1)
+            // Also refresh variables store directly (variables page + backups)
+            listVariables()
+          }}
           class="p-1.5 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-md transition dark:text-gray-400 dark:hover:text-gray-200 dark:hover:bg-gray-700"
           title={$t('buttons.refresh')}
           aria-label={$t('buttons.refresh')}

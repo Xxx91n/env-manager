@@ -5,6 +5,7 @@ export interface EnvVariable {
   value: string
   scope: 'user' | 'system'
   isDisabled?: boolean
+  profileSource?: string
 }
 
 export interface ProfileVariable {
@@ -42,6 +43,7 @@ export const activeView = writable<'variables' | 'profiles' | 'path'>('variables
 export const modal = writable<ModalConfig | null>(null)
 export const debugLogs = writable<DebugLogEntry[]>([])
 export const isWriteInProgress = writable(false)
+export const refreshTrigger = writable(0)
 
 export interface DebugLogEntry {
   timestamp: string

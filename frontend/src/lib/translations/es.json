@@ -106,5 +106,8 @@
   "messages.pathRenameEmpty": "La nueva ruta no puede estar vacia",
   "messages.pathRenameInvalid": "La ruta contiene caracteres de control no validos",
   "messages.pathRenameTooLong": "La nueva ruta excede la longitud maxima",
-  "messages.renameWarning": "Cambiar el nombre eliminara la variable anterior y creara una nueva"
+  "messages.renameWarning": "Cambiar el nombre eliminara la variable anterior y creara una nueva",
+  "messages.fromProfile": "De perfil: {name}",
+  "profiles.clickToExpand": "Expandir",
+  "profiles.clickToCollapse": "Contraer"
 }

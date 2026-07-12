@@ -106,5 +106,8 @@
   "messages.pathRenameEmpty": "新路径不能为空",
   "messages.pathRenameInvalid": "路径包含无效控制字符",
   "messages.pathRenameTooLong": "新路径超出最大长度",
-  "messages.renameWarning": "重命名将删除旧变量并创建新变量"
+  "messages.renameWarning": "重命名将删除旧变量并创建新变量",
+  "messages.fromProfile": "来自配置文件: {name}",
+  "profiles.clickToExpand": "展开",
+  "profiles.clickToCollapse": "收起"
 }

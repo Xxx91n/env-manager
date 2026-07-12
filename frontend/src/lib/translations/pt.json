@@ -106,5 +106,8 @@
   "messages.pathRenameEmpty": "O novo caminho nao pode estar vazio",
   "messages.pathRenameInvalid": "O caminho contem caracteres de controle invalidos",
   "messages.pathRenameTooLong": "O novo caminho excede o comprimento maximo",
-  "messages.renameWarning": "Renomear excluira a variavel anterior e criara uma nova"
+  "messages.renameWarning": "Renomear excluira a variavel anterior e criara uma nova",
+  "messages.fromProfile": "Do perfil: {name}",
+  "profiles.clickToExpand": "Expandir",
+  "profiles.clickToCollapse": "Recolher"
 }

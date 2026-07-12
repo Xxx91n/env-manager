@@ -263,7 +263,7 @@ visual feedback without the jarring full-list refresh that previously occurred.
 
 **Delete cleanup**: When `delete` is called on a disabled variable, the CLI also
 removes the corresponding `_EnvManager_disabled` backup key and any
-`_EnvManager_backup_*` profile backup keys for that variable name. This prevents
+`_PowerToys_<profileName>` profile backup keys for that variable name. This prevents
 orphaned registry entries from accumulating.
 
 ### Path Editor
@@ -278,6 +278,13 @@ The Rust layer (`main.rs`) exposes two Tauri commands:
 
 - `run_cli(command: String, args: Vec<String>) -> CliResponse` - Spawns the CLI subprocess, returns `{ success, data, error }`.
 - `cli_diagnostics() -> serde_json::Value` - Returns resolved CLI path, GUI exe directory, and CWD for debugging.
+
+### Cross-View Refresh
+
+The `refreshTrigger` store in `stores.ts` is a counter that increments when the header refresh
+button is clicked. Each page component (Variables, ProfilePage, PathEditor) subscribes to it via a
+reactive statement (`$: if ($refreshTrigger > 0) { refresh() }`) and re-fetches its data. This
+ensures the current view's data is refreshed regardless of which page is active.
 
 ### Race Condition Prevention
 
@@ -308,6 +315,12 @@ This is implemented in `main.rs` using Tauri 2's `tray::TrayIconBuilder`.
 changes the GUI language. The frontend calls `updateTrayLocale(showText, quitText, tooltip)`
 which rebuilds the tray menu with translated strings. This ensures the right-click
 context menu matches the GUI locale.
+
+### Toast Notification System
+
+All transient feedback messages (copy confirmation, action success/errors) are rendered as
+`fixed`-position overlay toasts with `pointer-events-none` and `z-50`. This ensures they
+appear on top of content without causing layout shifts or interfering with clicks.
 
 ### Internal Modal Dialog System
 
@@ -389,7 +402,13 @@ Profiles are stored at `%LOCALAPPDATA%\EnvManager\profiles.json`:
 - `name`: Profile name (unique)
 - `isEnabled`: Whether the profile is currently applied
 - `variables`: Array of `{ name, value }` pairs
-- When applied, original user variable values are backed up as `name_EnvManager_backup_<profileName>`
+- When applied, original user variable values are backed up as `name_PowerToys_<profileName>`
+  (Note: the backup key prefix uses `_PowerToys_` for compatibility with the PowerToys naming convention.
+  `ListEnvironment` skips any key containing `_PowerToys_` so these don't appear as regular variables.)
+- **Profile source attribution**: `ListEnvironment` annotates variables that were applied from a profile
+  by setting `profileSource` to the profile name. The GUI shows a badge next to the variable name
+  indicating which profile it came from. This helps users distinguish profile-applied variables
+  from manually-set ones.
 
 ---
 
@@ -694,6 +713,7 @@ The GUI communicates with the CLI exclusively through `invoke('run_cli', { comma
 | Tray locale sync | `update_tray_locale` | `updateTrayLocale()` | Yes |
 | CLI agents spec | `agents` | `getCliAgentsSpec()` | Yes |
 | Add CLI to PATH | `path add` | `addCliToPath()` | Yes |
+| Profile source annotation | `list` (profileSource field) | N/A (automatic) | Yes |
 | Rename PATH entry | `path rename` | `renamePathEntry()` | Yes |
 | Rename variable | `delete` + `set` | EditDialog (rename via delete+set) | Yes |
 

@@ -180,7 +180,7 @@
   {/if}
 
   {#if copyFeedback}
-    <div class="fixed top-4 left-1/2 -translate-x-1/2 px-3 py-1.5 bg-gray-800 text-white text-xs rounded-md shadow-lg z-50 dark:bg-gray-700">
+    <div class="fixed top-4 left-1/2 -translate-x-1/2 px-3 py-1.5 bg-gray-800 text-white text-xs rounded-md shadow-lg z-50 pointer-events-none dark:bg-gray-700">
       {copyFeedback}
     </div>
   {/if}
@@ -233,7 +233,17 @@
                 title={$t('messages.clickToCopy')}
                 on:click={() => copyToClipboard(variable.name)}
               >
-                {variable.name}
+                <div class="flex items-center gap-1.5">
+                  <span>{variable.name}</span>
+                  {#if variable.profileSource}
+                    <span
+                      class="inline-flex px-1 py-0.5 rounded text-[9px] font-medium bg-purple-50 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300"
+                      title={$t('messages.fromProfile', { values: { name: variable.profileSource } })}
+                    >
+                      {variable.profileSource}
+                    </span>
+                  {/if}
+                </div>
               </td>
               <td class="px-3 py-2 text-xs">
                 <span

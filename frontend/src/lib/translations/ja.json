@@ -106,5 +106,8 @@
   "messages.pathRenameEmpty": "新しいパスは空にできません",
   "messages.pathRenameInvalid": "パスに無効な制御文字が含まれています",
   "messages.pathRenameTooLong": "新しいパスが最大長を超えています",
-  "messages.renameWarning": "名前変更により古い変数が削除され、新しい変数が作成されます"
+  "messages.renameWarning": "名前変更により古い変数が削除され、新しい変数が作成されます",
+  "messages.fromProfile": "プロファイルから: {name}",
+  "profiles.clickToExpand": "展開する",
+  "profiles.clickToCollapse": "折りたたむ"
 }

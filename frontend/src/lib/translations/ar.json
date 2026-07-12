@@ -106,5 +106,8 @@
   "messages.pathRenameEmpty": "لا يمكن أن يكون المسار الجديد فارغا",
   "messages.pathRenameInvalid": "يحتوي المسار على أحرف تحكم غير صالحة",
   "messages.pathRenameTooLong": "المسار الجديد يتجاوز الحد الأقصى للطول",
-  "messages.renameWarning": "إعادة التسمية ستحذف المتغير القديم وتنشئ متغيرًا جديدًا"
+  "messages.renameWarning": "إعادة التسمية ستحذف المتغير القديم وتنشئ متغيرًا جديدًا",
+  "messages.fromProfile": "من الملف الشخصي: {name}",
+  "profiles.clickToExpand": "توسيع",
+  "profiles.clickToCollapse": "طي"
 }

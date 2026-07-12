@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte'
   import { t } from 'svelte-i18n'
-  import { showModal, isWriteInProgress } from '../stores'
+  import { showModal, isWriteInProgress, refreshTrigger } from '../stores'
   import {
     listPathEntries,
     addPathEntry,
@@ -29,6 +29,12 @@
   onMount(async () => {
     await refresh()
   })
+
+  // Watch refreshTrigger from App.svelte: refresh path entries when the
+  // header refresh button is clicked, regardless of active view.
+  $: if ($refreshTrigger > 0) {
+    refresh()
+  }
 
   async function refresh() {
     loading = true
@@ -238,17 +244,17 @@
 <div class="space-y-3">
 
 
-  {#if message}
-    <div class="p-2.5 rounded-md text-xs {messageType === 'success'
-      ? 'bg-green-50 border border-green-200 text-green-800 dark:bg-green-900/30 dark:border-green-700 dark:text-green-300'
-      : 'bg-red-50 border border-red-200 text-red-800 dark:bg-red-900/30 dark:border-red-700 dark:text-red-300'}">
-      {message}
+  {#if copyFeedback}
+    <div class="fixed top-4 left-1/2 -translate-x-1/2 px-3 py-1.5 bg-gray-800 text-white text-xs rounded-md shadow-lg z-50 pointer-events-none transition-opacity dark:bg-gray-700">
+      {copyFeedback}
     </div>
   {/if}
 
-  {#if copyFeedback}
-    <div class="fixed top-4 left-1/2 -translate-x-1/2 px-3 py-1.5 bg-gray-800 text-white text-xs rounded-md shadow-lg z-50 dark:bg-gray-700">
-      {copyFeedback}
+  {#if message}
+    <div class="fixed top-4 left-1/2 -translate-x-1/2 px-3 py-1.5 rounded-md text-xs shadow-lg z-50 pointer-events-none transition-opacity {messageType === 'success'
+      ? 'bg-green-600 text-white'
+      : 'bg-red-600 text-white'}">
+      {message}
     </div>
   {/if}
 

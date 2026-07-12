@@ -106,5 +106,8 @@
   "messages.pathRenameEmpty": "새 경로는 비워둘 수 없습니다",
   "messages.pathRenameInvalid": "경로에 잘못된 제어 문자가 포함되어 있습니다",
   "messages.pathRenameTooLong": "새 경로가 최대 길이를 초과했습니다",
-  "messages.renameWarning": "이름 변경 시 이전 변수가 삭제되고 새 변수가 생성됩니다"
+  "messages.renameWarning": "이름 변경 시 이전 변수가 삭제되고 새 변수가 생성됩니다",
+  "messages.fromProfile": "프로필에서: {name}",
+  "profiles.clickToExpand": "펼치기",
+  "profiles.clickToCollapse": "접기"
 }

@@ -6,6 +6,7 @@ export interface EnvVariable {
   value: string
   scope: 'user' | 'system'
   isDisabled?: boolean
+  profileSource?: string
 }
 
 export interface CLIResponse {
