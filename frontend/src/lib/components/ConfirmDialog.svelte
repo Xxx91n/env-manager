@@ -2,13 +2,22 @@
   import { t } from 'svelte-i18n'
   import { modal, closeModal } from '../stores'
 
-  function handleConfirm() {
+  let pending = false
+
+  async function handleConfirm() {
+    if (pending) return
     const config = $modal
+    pending = true
     closeModal()
-    config?.onConfirm?.()
+    try {
+      await config?.onConfirm?.()
+    } finally {
+      pending = false
+    }
   }
 
   function handleCancel() {
+    if (pending) return
     closeModal()
   }
 </script>

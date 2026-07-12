@@ -33,7 +33,7 @@
   "labels.value": "قيمة المتغير",
   "labels.scope": "النطاق",
   "labels.backupFile": "ملف النسخ الاحتياطي",
-  "messages.deleteConfirmText": "هل أنت متأكد من حذف '{name}'؟",
+  "messages.deleteConfirmText": "هل أنت متأكد من حذف {name}؟",
   "messages.variableAdded": "تمت إضافة المتغير بنجاح",
   "messages.variableUpdated": "تم تحديث المتغير بنجاح",
   "messages.variableDeleted": "تم حذف المتغير بنجاح",

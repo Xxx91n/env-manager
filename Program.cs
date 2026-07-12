@@ -521,6 +521,23 @@ class Program
             }
 
             key.DeleteValue(name, false);
+
+            // Also clean up toggle backup key if the variable was disabled.
+            // This prevents orphaned _EnvManager_disabled keys from accumulating.
+            string toggleBackupName = GetToggleBackupName(name);
+            if (key.GetValue(toggleBackupName) != null)
+            {
+                key.DeleteValue(toggleBackupName, false);
+            }
+
+            // Also clean up profile backup keys for this variable name
+            foreach (var valName in key.GetValueNames())
+            {
+                if (valName.StartsWith(name + "_EnvManager_backup_"))
+                {
+                    key.DeleteValue(valName, false);
+                }
+            }
         }
 
         BroadcastSettingChange();

@@ -33,7 +33,7 @@
   "labels.value": "Variablenwert",
   "labels.scope": "Bereich",
   "labels.backupFile": "Backup-Datei",
-  "messages.deleteConfirmText": "Moechten Sie '{name}' wirklich loeschen?",
+  "messages.deleteConfirmText": "Moechten Sie {name} wirklich loeschen?",
   "messages.variableAdded": "Variable erfolgreich hinzugefuegt",
   "messages.variableUpdated": "Variable erfolgreich aktualisiert",
   "messages.variableDeleted": "Variable erfolgreich geloescht",

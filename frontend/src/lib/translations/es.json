@@ -33,7 +33,7 @@
   "labels.value": "Valor de variable",
   "labels.scope": "Ambito",
   "labels.backupFile": "Archivo de copia de seguridad",
-  "messages.deleteConfirmText": "Esta seguro de que desea eliminar '{name}'?",
+  "messages.deleteConfirmText": "Esta seguro de que desea eliminar {name}?",
   "messages.variableAdded": "Variable anadida con exito",
   "messages.variableUpdated": "Variable actualizada con exito",
   "messages.variableDeleted": "Variable eliminada con exito",

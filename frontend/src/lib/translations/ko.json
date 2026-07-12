@@ -33,7 +33,7 @@
   "labels.value": "변수 값",
   "labels.scope": "범위",
   "labels.backupFile": "백업 파일",
-  "messages.deleteConfirmText": "'{name}'을(를) 삭제하시겠습니까?",
+  "messages.deleteConfirmText": "{name}을(를) 삭제하시겠습니까?",
   "messages.variableAdded": "변수가 성공적으로 추가되었습니다",
   "messages.variableUpdated": "변수가 성공적으로 업데이트되었습니다",
   "messages.variableDeleted": "변수가 성공적으로 삭제되었습니다",

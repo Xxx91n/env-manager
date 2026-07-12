@@ -33,7 +33,7 @@
   "labels.value": "変数の値",
   "labels.scope": "スコープ",
   "labels.backupFile": "バックアップファイル",
-  "messages.deleteConfirmText": "'{name}'を削除してもよろしいですか?",
+  "messages.deleteConfirmText": "{name}を削除してもよろしいですか?",
   "messages.variableAdded": "変数が正常に追加されました",
   "messages.variableUpdated": "変数が正常に更新されました",
   "messages.variableDeleted": "変数が正常に削除されました",

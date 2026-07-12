@@ -38,6 +38,8 @@
       showMessage(err instanceof Error ? err.message : String(err), 'error')
     } finally {
       loading = false
+      // Safety: clear actionLoading in case a prior action's finally was skipped
+      actionLoading = false
     }
   }
 
@@ -145,12 +147,14 @@
   }
 
   function cancelEdit() {
+    clearPendingBlur()
     editingIndex = null
     editValue = ''
     editError = ''
   }
 
   async function confirmEdit(oldPath: string) {
+    clearPendingBlur()
     const newPath = editValue.trim()
     editError = ''
 
@@ -202,34 +206,34 @@
     }
   }
 
-  // Click outside to cancel edit: when the edit input loses focus,
-  // cancel if no changes were made (value unchanged from original).
-  // If changes were made, keep the edit state so the user can click confirm.
+  // Click outside to cancel edit: uses a single blur handler with a
+  // micro-delay to let confirm/cancel button clicks register first.
+  // The previous global click handler + blur combo caused race conditions.
+  let blurTimeoutId: ReturnType<typeof setTimeout> | null = null
+
   function handleEditBlur(oldPath: string) {
-    // Short delay to let confirm/cancel button clicks register
-    setTimeout(() => {
+    // Clear any pending blur timeout to prevent duplicate triggers
+    if (blurTimeoutId) {
+      clearTimeout(blurTimeoutId)
+      blurTimeoutId = null
+    }
+    // Use a short delay so confirm/cancel button clicks register first
+    blurTimeoutId = setTimeout(() => {
       if (editingIndex !== null && editValue.trim() === oldPath) {
         cancelEdit()
       }
-    }, 100)
+      blurTimeoutId = null
+    }, 150)
   }
 
-  // Global click handler: clicking outside the edit row cancels immediately
-  function handleGlobalClick(event: MouseEvent) {
-    if (editingIndex === null) return
-    // Check if click is inside the edit row
-    const target = event.target as HTMLElement
-    if (target && (target.closest('.edit-row') || target.tagName === 'INPUT' || target.tagName === 'BUTTON')) {
-      return // Click inside edit controls, don't cancel
-    }
-    // Click outside: cancel only if no changes
-    if (editValue.trim() === entries[editingIndex]?.path) {
-      cancelEdit()
+  // Called when confirm/cancel buttons are clicked - clears the pending blur
+  function clearPendingBlur() {
+    if (blurTimeoutId) {
+      clearTimeout(blurTimeoutId)
+      blurTimeoutId = null
     }
   }
 </script>
-
-<svelte:window on:click={handleGlobalClick} />
 
 <div class="space-y-3">
 
@@ -306,7 +310,7 @@
               <td class="px-2 py-1.5 align-top">
                 {#if editingIndex === entry.index}
                   <!-- Inline edit mode -->
-                  <div class="flex items-center gap-1">
+                  <div class="flex items-center gap-1 edit-row">
                     <input
                       type="text"
                       bind:value={editValue}

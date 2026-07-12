@@ -256,6 +256,16 @@ This mirrors PowerToys' approach of preserving variable data while deactivating 
 
 **Safety**: The toggle operation verifies backup write success before deleting the original. If the backup fails, the original variable is preserved unchanged.
 
+**GUI optimistic update**: The GUI uses an optimistic UI pattern for toggle --
+the slider flips immediately on click, before the CLI response arrives. If the
+CLI operation fails, the slider reverts to its previous state. This gives instant
+visual feedback without the jarring full-list refresh that previously occurred.
+
+**Delete cleanup**: When `delete` is called on a disabled variable, the CLI also
+removes the corresponding `_EnvManager_disabled` backup key and any
+`_EnvManager_backup_*` profile backup keys for that variable name. This prevents
+orphaned registry entries from accumulating.
+
 ### Path Editor
 
 PATH variable edited as a list of directory entries. Entries can be added, removed, and reordered. Supports both user and system scopes.
@@ -317,6 +327,14 @@ The GUI uses an internal Svelte store-based modal system instead of browser `con
 The GUI supports 10 languages: English (en), Chinese (zh), Japanese (ja), Korean (ko), German (de), French (fr), Spanish (es), Portuguese (pt), Russian (ru), Arabic (ar).
 
 ### Rule: i18n sync is mandatory
+
+When adding any new user-facing string (button label, message, dialog text, error), you must:
+
+**ICU MessageFormat caveat**: The translation engine is `svelte-i18n` which uses
+`IntlMessageFormat` (ICU MessageFormat). In ICU, single quotes `'` are escape
+characters. **Never wrap a `{placeholder}` in single quotes** in translation
+strings -- `'{name}'` produces the literal text `{name}`, not the interpolated value.
+Use bare `{name}` or use double single quotes `''` to emit a literal quote.
 
 When adding any new user-facing string (button label, message, dialog text, error), you must:
 

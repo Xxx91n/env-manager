@@ -1,7 +1,7 @@
 <script lang="ts">
   import { t } from 'svelte-i18n'
-  import { variables, selectedScope, error, showModal } from '../stores'
-  import { deleteVariable, createBackup, toggleVariable, setVariable, deleteVariable as delVar } from '../api'
+  import { variables, selectedScope, error, showModal, isWriteInProgress } from '../stores'
+  import { deleteVariable, createBackup, toggleVariable, setVariable } from '../api'
   import EditDialog from './EditDialog.svelte'
   import BackupDialog from './BackupDialog.svelte'
 
@@ -74,15 +74,32 @@
 
   async function handleToggle(name: string, scope: string) {
     const key = name + ':' + scope
-    // Use object assignment for Svelte reactivity (not Set)
+    // Disable the toggle button while in-flight
     togglingKeys = { ...togglingKeys, [key]: true }
     localError = ''
-    // Clear the global error store to prevent duplicate display
     error.set(null)
+
+    // Optimistic UI: flip the slider immediately without waiting for CLI.
+    // If the CLI fails, we revert. This gives instant visual feedback.
+    const wasDisabled = !!$variables.find(v => v.name === name && v.scope === scope)?.isDisabled
+    variables.update(vars => vars.map(v => {
+      if (v.name === name && v.scope === scope) {
+        return { ...v, isDisabled: !wasDisabled }
+      }
+      return v
+    }))
+
     try {
       await toggleVariable(name, scope as 'user' | 'system')
+      // toggleVariable() in api.ts already calls listVariables() to confirm
     } catch (err) {
-      // Show error as a transient toast, not persistent banner
+      // Revert optimistic update on failure
+      variables.update(vars => vars.map(v => {
+        if (v.name === name && v.scope === scope) {
+          return { ...v, isDisabled: wasDisabled }
+        }
+        return v
+      }))
       localError = err instanceof Error ? err.message : String(err)
       setTimeout(() => { localError = '' }, 3000)
     } finally {
@@ -238,7 +255,8 @@
               <td class="px-3 py-2 text-right text-xs">
                 <button
                   on:click={() => handleEdit(variable)}
-                  class="inline-flex p-1 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded transition dark:hover:text-blue-400 dark:hover:bg-blue-900/30"
+                  disabled={$isWriteInProgress || togglingKeys[variable.name + ':' + variable.scope] === true}
+                  class="inline-flex p-1 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded transition disabled:opacity-30 disabled:cursor-not-allowed dark:hover:text-blue-400 dark:hover:bg-blue-900/30"
                   title={$t('buttons.edit')}
                   aria-label={$t('buttons.edit')}
                 >
@@ -248,7 +266,8 @@
                 </button>
                 <button
                   on:click={() => handleDelete(variable.name, variable.scope)}
-                  class="inline-flex p-1 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition dark:hover:text-red-400 dark:hover:bg-red-900/30"
+                  disabled={$isWriteInProgress || togglingKeys[variable.name + ':' + variable.scope] === true}
+                  class="inline-flex p-1 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition disabled:opacity-30 disabled:cursor-not-allowed dark:hover:text-red-400 dark:hover:bg-red-900/30"
                   title={$t('buttons.delete')}
                   aria-label={$t('buttons.delete')}
                 >

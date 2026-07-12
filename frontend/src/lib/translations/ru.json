@@ -33,7 +33,7 @@
   "labels.value": "Значение переменной",
   "labels.scope": "Область",
   "labels.backupFile": "Файл резервной копии",
-  "messages.deleteConfirmText": "Вы уверены, что хотите удалить '{name}'?",
+  "messages.deleteConfirmText": "Вы уверены, что хотите удалить {name}?",
   "messages.variableAdded": "Переменная успешно добавлена",
   "messages.variableUpdated": "Переменная успешно обновлена",
   "messages.variableDeleted": "Переменная успешно удалена",
