@@ -2,6 +2,9 @@
   import { createEventDispatcher } from 'svelte'
   import { t, locale } from 'svelte-i18n'
   import { locales, defaultLanguage } from '../i18n'
+  import { updateTrayLocale, addCliToPath } from '../api'
+  import { get } from 'svelte/store'
+  import { t as tStore } from 'svelte-i18n'
 
   export let darkMode = false
 
@@ -30,6 +33,14 @@
     } catch {
       // Ignore storage errors
     }
+    // Sync tray menu text and tooltip with the new locale
+    // Use the translated values via the $t store
+    setTimeout(() => {
+      const showText = get(tStore)('tray.show')
+      const quitText = get(tStore)('tray.quit')
+      const tooltip = get(tStore)('tray.tooltip')
+      updateTrayLocale(showText, quitText, tooltip)
+    }, 100)
   }
 
   function toggleDarkMode() {
@@ -40,6 +51,12 @@
       // Ignore storage errors
     }
     dispatch('themeChange', darkMode)
+  }
+
+  let addCliToPathResult: { added: boolean; message: string } | null = null
+
+  async function handleAddCliToPath() {
+    addCliToPathResult = await addCliToPath()
   }
 
   function handleClose() {
@@ -89,6 +106,20 @@
           ></span>
         </button>
       </div>
+    </div>
+
+    <div class="px-5 py-4 border-t border-gray-200">
+      <button
+        on:click={handleAddCliToPath}
+        class="w-full px-3 py-2 text-sm font-medium text-white bg-green-600 rounded-md hover:bg-green-700 transition"
+      >
+        {$t('settings.addCliToPath')}
+      </button>
+      {#if addCliToPathResult}
+        <p class="mt-2 text-xs text-center {addCliToPathResult.added ? 'text-green-600' : 'text-amber-600'}">
+          {addCliToPathResult.message}
+        </p>
+      {/if}
     </div>
 
     <div class="px-5 py-3 border-t border-gray-200 flex justify-end">

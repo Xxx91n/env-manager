@@ -85,6 +85,13 @@ Copy-Item $GuiExe -Destination $PortableDir -Force
 Get-ChildItem $CliDir | Where-Object { $_.Extension -in '.exe', '.dll', '.json' } | ForEach-Object {
   Copy-Item $_.FullName -Destination $PortableDir -Force
 }
+# Copy AGENTS.cli.md alongside CLI for agent distribution
+  $AgentsMd = Join-Path $ProjectRoot "AGENTS.cli.md"
+  if (Test-Path $AgentsMd) {
+    Copy-Item $AgentsMd -Destination $PortableDir -Force
+    Write-Host "[build] AGENTS.cli.md copied to portable"
+  }
+
 # Copy WebView2 runtime loader if Tauri placed it alongside the GUI exe
 $WebViewLoader = Join-Path (Split-Path -Parent $GuiExe) "WebView2Loader.dll"
 if (Test-Path $WebViewLoader) {

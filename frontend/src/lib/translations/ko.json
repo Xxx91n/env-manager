@@ -92,5 +92,6 @@
   "profiles.selectVariable": "변수 선택",
   "tray.show": "표시",
   "tray.quit": "종료",
-  "tray.tooltip": "Env Manager"
+  "tray.tooltip": "Env Manager",
+  "settings.addCliToPath": "CLI를 PATH에 추가"
 }

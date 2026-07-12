@@ -36,7 +36,8 @@ env-manager/
 ├── LICENSE                            # MIT
 ├── README.md                          # English documentation
 ├── README_CN.md                       # Chinese documentation
-├── AGENTS.md                          # This file
+├── AGENTS.md                          # This file (project-level, for repo developers/agents)
+AGENTS.cli.md                       # CLI-level agent guide (distributed with CLI binary)
 ├── .gitignore
 │
 ├── frontend/                          # Tauri GUI application
@@ -184,6 +185,7 @@ All commands follow: `env-manager-cli <command> [arguments] [--flags]`
 | `merge` | `merge <old> <new> --output <file>` | Merge two backup files |
 | `validate` | `validate <file>` | Validate backup file format |
 | `help` | `help` | Show help text |
+| `agents` | `agents [--path]` | Output CLI AGENTS.md spec (for AI integration) |
 | `profile list` | `profile list` | List all profiles (JSON) |
 | `profile create` | `profile create <name>` | Create a new empty profile |
 | `profile delete` | `profile delete <name>` | Delete a profile |
@@ -273,6 +275,11 @@ The GUI creates a system tray icon on startup. Features:
 - The tray tooltip is "Env Manager"
 
 This is implemented in `main.rs` using Tauri 2's `tray::TrayIconBuilder`.
+
+**i18n Sync**: The tray menu text and tooltip are dynamically updated when the user
+changes the GUI language. The frontend calls `updateTrayLocale(showText, quitText, tooltip)`
+which rebuilds the tray menu with translated strings. This ensures the right-click
+context menu matches the GUI locale.
 
 ### Internal Modal Dialog System
 
@@ -381,6 +388,8 @@ npm run test:e2e        # Playwright E2E tests
 | `src/lib/api.test.ts` | Tauri IPC bridge, all CLI command invocations, response parsing |
 | `src/lib/i18n.test.ts` | Locale registration, default locale, setup function, localStorage persistence |
 | `src/lib/translations.test.ts` | Translation key completeness across all 10 locales |
+| `src/lib/race.test.ts` | CLI/GUI race condition prevention, toggle safety, rapid toggle serialization |
+| `src/lib/sync.test.ts` | CLI/GUI state synchronization, mutation triggers refresh, error store lifecycle |
 
 ---
 
@@ -403,6 +412,17 @@ The project uses [CodeGraph](https://github.com/nicholasgriffintn/codegraph) for
 - Use `using` statements for Registry keys
 - Catch specific exceptions, never empty catch blocks
 - Explicit types on public API, `var` for locals
+
+### Add CLI to PATH
+
+The GUI Settings dialog includes a one-click "Add CLI to PATH" button that:
+1. Calls `cli_diagnostics` to resolve the actual CLI executable path (no hardcoding)
+2. Extracts the directory from the resolved path
+3. Checks if the directory is already in user PATH (prevents duplicates/infinite loops)
+4. If not present, adds it via `path add` CLI command
+5. Reports success or the reason for skipping
+
+This feature is implemented in `api.ts` as `addCliToPath()` and exposed in `SettingsDialog.svelte`.
 
 ### TypeScript / Svelte
 
@@ -487,10 +507,39 @@ Scopes: `cli`, `gui`, `backup`, `registry`, `i18n`, `docs`, `build`
 - Variable name validation: rejects empty names, names >255 chars (user scope), names containing `=`
 - Path traversal protection: backup files must have `.json` extension, writes to system directories blocked
 - Backup file size cap: 50 MB maximum to prevent DoS via large files
-- CLI command whitelist in Rust IPC layer: only known commands can spawn subprocesses (list, get, set, delete, toggle, backup, restore, diff, merge, validate, profile, path, help)
+- CLI command whitelist in Rust IPC layer: only known commands can spawn subprocesses (list, get, set, delete, toggle, backup, restore, diff, merge, validate, profile, path, agents, help)
 - Process isolation: CREATE_NO_WINDOW flag prevents console flicker and information leakage
 
 ---
+
+## Agent Integration
+
+### CLI Agents Command
+
+The CLI exposes an `agents` command that outputs the CLI-level AGENTS.md specification:
+- `env-manager-cli agents` - Outputs the full AGENTS.cli.md content to stdout
+- `env-manager-cli agents --path` - Outputs the file path of AGENTS.cli.md
+
+This follows the industry pattern where CLI tools expose a machine-readable specification
+file that AI agents and LLMs can read to understand the tool's API, safety boundaries,
+and integration patterns. After first invoking the CLI, agents should call `agents` to
+discover the full contract.
+
+### CLI-Level AGENTS.md
+
+`AGENTS.cli.md` is distributed alongside the CLI binary in both portable and MSI
+installations. It is bundled as a Tauri resource and resolved at runtime via
+`AppContext.BaseDirectory`. The file contains:
+- Command reference (all commands with examples)
+- Output format specification (JSON schemas)
+- Security boundaries and validation rules
+- Error handling conventions
+- Agent integration tips
+
+### GUI Agents API
+
+The frontend exposes `getCliAgentsSpec()` and `getCliAgentsPath()` in `api.ts`
+for programmatic access to the CLI specification from the GUI.
 
 ## How to Add a New CLI Command
 
@@ -579,13 +628,16 @@ The GUI communicates with the CLI exclusively through `invoke('run_cli', { comma
 | Path remove | `path remove` | `removePathEntry()` | Yes |
 | Path move-up | `path move-up` | `movePathEntryUp()` | Yes |
 | Path move-down | `path move-down` | `movePathEntryDown()` | Yes |
+| Tray locale sync | `update_tray_locale` | `updateTrayLocale()` | Yes |
+| CLI agents spec | `agents` | `getCliAgentsSpec()` | Yes |
+| Add CLI to PATH | `path add` | `addCliToPath()` | Yes |
 
 ### Alignment Checklist
 
 When adding a new GUI feature:
 1. Add the CLI command in `Program.cs`
 2. Add the API function in `frontend/src/lib/api.ts`
-3. Add the command to `ALLOWED_COMMANDS` in `main.rs` if it is a new top-level command (current: list, get, set, delete, toggle, backup, restore, diff, merge, validate, profile, path, help)
+3. Add the command to `ALLOWED_COMMANDS` in `main.rs` (current: list, get, set, delete, toggle, backup, restore, diff, merge, validate, profile, path, agents, help)
 4. Add UI in the appropriate `.svelte` component
 5. Add i18n strings to ALL translation files
 6. Update the alignment table above

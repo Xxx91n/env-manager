@@ -42,6 +42,7 @@ const ALLOWED_COMMANDS: &[&str] = &[
     "validate",
     "profile",
     "path",
+    "agents",
     "help",
 ];
 
@@ -248,13 +249,13 @@ fn main() {
                 .build(),
         )
         .setup(|app| {
-            // Build tray menu items
+            // Build tray menu items - text will be updated via update_tray_locale
             let show_item = MenuItem::with_id(app, "show", "Show", true, None::<&str>)?;
             let quit_item = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
             let menu = Menu::with_items(app, &[&show_item, &quit_item])?;
 
             // Create system tray icon
-            let _tray = TrayIconBuilder::new()
+            let _tray = TrayIconBuilder::with_id("main")
                 .icon(app.default_window_icon().unwrap().clone())
                 .tooltip("Env Manager")
                 .menu(&menu)
@@ -274,7 +275,6 @@ fn main() {
                     }
                 })
                 .on_tray_icon_event(|tray, event| {
-                    // Double-click on tray icon shows the window
                     if let tauri::tray::TrayIconEvent::DoubleClick { .. } = event {
                         let app = tray.app_handle();
                         if let Some(window) = app.get_webview_window("main") {
@@ -288,13 +288,52 @@ fn main() {
             Ok(())
         })
         .on_window_event(|window, event| {
-            // When the user closes the window, hide it to tray instead of exiting
             if let WindowEvent::CloseRequested { api, .. } = event {
                 let _ = window.hide();
                 api.prevent_close();
             }
         })
-        .invoke_handler(tauri::generate_handler![run_cli, cli_diagnostics])
+        .invoke_handler(tauri::generate_handler![run_cli, cli_diagnostics, update_tray_locale])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
+
+/// Updates the tray menu and tooltip based on the current GUI locale.
+/// Rebuilds the menu with new translated text, then swaps it on the tray.
+#[tauri::command]
+fn update_tray_locale(
+    app: tauri::AppHandle,
+    show_text: String,
+    quit_text: String,
+    tooltip: String,
+) {
+
+    info!(
+        "[tray] update_tray_locale: show='{}', quit='{}', tooltip='{}'",
+        show_text, quit_text, tooltip
+    );
+
+    if let Some(tray) = app.tray_by_id("main") {
+        // Rebuild the menu with translated text
+        match MenuItem::with_id(&app, "show", &show_text, true, None::<&str>) {
+            Ok(show_item) => {
+                match MenuItem::with_id(&app, "quit", &quit_text, true, None::<&str>) {
+                    Ok(quit_item) => {
+                        match Menu::with_items(&app, &[&show_item, &quit_item]) {
+                            Ok(menu) => {
+                                let _ = tray.set_menu(Some(menu));
+                                let _ = tray.set_tooltip(Some(&tooltip));
+                            }
+                            Err(e) => warn!("[tray] failed to build menu: {}", e),
+                        }
+                    }
+                    Err(e) => warn!("[tray] failed to create quit item: {}", e),
+                }
+            }
+            Err(e) => warn!("[tray] failed to create show item: {}", e),
+        }
+    } else {
+        warn!("[tray] tray icon not found for locale update");
+    }
+}
+

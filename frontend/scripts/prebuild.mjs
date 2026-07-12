@@ -55,4 +55,11 @@ for (const file of filesToCopy) {
   copyFileSync(resolve(cliOutputDir, file), resolve(binDir, file))
 }
 
+// Also copy AGENTS.cli.md from project root so it ships alongside CLI
+  const agentsMd = resolve(projectRoot, 'AGENTS.cli.md')
+  if (existsSync(agentsMd)) {
+    copyFileSync(agentsMd, resolve(binDir, 'AGENTS.cli.md'))
+    console.log('[prebuild] AGENTS.cli.md copied to bin')
+  }
+
 console.log(`[prebuild] CLI copied to ${binDir} (${filesToCopy.length} files from ${cliOutputDir})`)

@@ -92,5 +92,6 @@
   "profiles.selectVariable": "Выбрать переменную",
   "tray.show": "Показать",
   "tray.quit": "Выход",
-  "tray.tooltip": "Env Manager"
+  "tray.tooltip": "Env Manager",
+  "settings.addCliToPath": "Dobavit CLI v PATH"
 }

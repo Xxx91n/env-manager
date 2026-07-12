@@ -92,5 +92,6 @@
   "profiles.selectVariable": "変数を選択",
   "tray.show": "表示",
   "tray.quit": "終了",
-  "tray.tooltip": "Env Manager"
+  "tray.tooltip": "Env Manager",
+  "settings.addCliToPath": "CLI を PATH に追加"
 }

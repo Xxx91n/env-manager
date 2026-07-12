@@ -52,7 +52,7 @@ class Program
     static readonly HashSet<string> ValidCommands = new(StringComparer.OrdinalIgnoreCase)
     {
         "list", "get", "set", "delete", "toggle", "backup", "restore", "diff", "merge",
-        "validate", "help", "profile", "path"
+        "validate", "help", "profile", "path", "agents"
     };
 
     static readonly JsonSerializerOptions JsonOpts = new()
@@ -125,6 +125,7 @@ class Program
                 "validate" => args.Length < 2 ? ArgError("Usage: env-manager validate <file>") : ValidateBackup(args[1]),
                 "profile" => RunProfileCommand(args),
                 "path" => RunPathCommand(args),
+                "agents" => RunAgents(args),
                 "help" => ShowHelp(),
                 _ => 1
             };
@@ -1346,6 +1347,53 @@ class Program
         }
     }
 
+    /// <summary>
+    /// Outputs the CLI-level AGENTS.md file content to stdout, or prints the
+    /// file path when --path flag is used.
+    ///
+    /// This command allows AI agents and LLMs to discover the CLI's contract,
+    /// safety boundaries, and integration patterns after invoking the CLI.
+    ///
+    /// Standard industry pattern: CLI tools expose an "agents" subcommand that
+    /// outputs a machine-readable specification file. Agents call this command
+    /// after first interaction to understand the tool's API.
+    /// </summary>
+    static int RunAgents(string[] args)
+    {
+        bool pathOnly = args.Length > 1 && args[1] == "--path";
+
+        // Resolve AGENTS.md path: adjacent to the CLI executable, then fallback to AppContext.BaseDirectory
+        string agentsPath = "";
+        try
+        {
+            string exeDir = System.AppContext.BaseDirectory;
+            agentsPath = Path.Combine(exeDir, "AGENTS.cli.md");
+            if (!File.Exists(agentsPath))
+            {
+                // Try "AGENTS.md" as alternate name
+                agentsPath = Path.Combine(exeDir, "AGENTS.md");
+            }
+        }
+        catch { }
+
+        if (pathOnly)
+        {
+            Console.WriteLine(agentsPath);
+            return 0;
+        }
+
+        if (File.Exists(agentsPath))
+        {
+            Console.WriteLine(File.ReadAllText(agentsPath));
+        }
+        else
+        {
+            // Fallback: output minimal inline guide
+            Console.WriteLine("# Env Manager CLI\n\nCommands: list, get, set, delete, toggle, backup, restore, diff, merge, validate, profile, path, agents, help\n\nUse --debug for verbose logging. Use --scope user|system for scope control.");
+        }
+        return 0;
+    }
+
     static int ShowHelp()
     {
         Console.WriteLine(@"Env Manager v0.5.0
@@ -1363,6 +1411,7 @@ Commands:
   validate <file>            Validate backup
   profile <subcommand>       Manage variable profiles (see: profile help)
   path <subcommand>          Edit PATH variable as list (see: path help)
+  agents [--path]            Output AGENTS.md (CLI spec for AI agents), --path for file path only
   help                       Show help
   --debug                    Enable verbose stderr logging");
         return 0;

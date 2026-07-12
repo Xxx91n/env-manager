@@ -92,5 +92,6 @@
   "profiles.selectVariable": "Select a variable",
   "tray.show": "Show",
   "tray.quit": "Quit",
-  "tray.tooltip": "Env Manager"
+  "tray.tooltip": "Env Manager",
+  "settings.addCliToPath": "Add CLI to PATH"
 }

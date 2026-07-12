@@ -67,6 +67,26 @@ export async function getDiagnostics(): Promise<Diagnostics> {
   }
 }
 
+/**
+ * Updates the system tray menu text and tooltip to match the current GUI locale.
+ * Called whenever the user changes the language setting.
+ */
+export async function updateTrayLocale(
+  showText: string,
+  quitText: string,
+  tooltip: string
+): Promise<void> {
+  try {
+    await invoke('update_tray_locale', {
+      showText,
+      quitText,
+      tooltip,
+    })
+  } catch {
+    // Non-critical: tray stays in English if update fails
+  }
+}
+
 export async function listVariables(): Promise<void> {
   loading.set(true)
   error.set(null)
@@ -352,5 +372,73 @@ export async function movePathEntryDown(
   } catch (err) {
     error.set(err instanceof Error ? err.message : 'Failed to move PATH entry')
     throw err
+  }
+}
+
+
+/**
+ * Adds the CLI executable directory to the user's PATH environment variable.
+ * Automatically detects the CLI location via diagnostics, avoiding hardcoding.
+ * Prevents infinite loops by checking if the path is already in PATH.
+ */
+export async function addCliToPath(): Promise<{ added: boolean; message: string }> {
+  try {
+    const diag = await getDiagnostics()
+    const cliPath = diag.resolved_cli_path
+
+    if (!cliPath || cliPath === 'NOT FOUND' || cliPath === 'UNAVAILABLE') {
+      return { added: false, message: 'CLI path not found' }
+    }
+
+    // Extract directory from the CLI executable path
+    const lastSep = Math.max(cliPath.lastIndexOf('\\'), cliPath.lastIndexOf('/'))
+    const cliDir = cliPath.substring(0, lastSep)
+
+    if (!cliDir) {
+      return { added: false, message: 'Invalid CLI directory' }
+    }
+
+    // Check if already in PATH
+    const entries = await listPathEntries('user')
+    const alreadyExists = entries.some(
+      (e) => e.path.toLowerCase() === cliDir.toLowerCase()
+    )
+
+    if (alreadyExists) {
+      return { added: false, message: 'CLI directory already in PATH' }
+    }
+
+    // Add to PATH
+    await addPathEntry(cliDir, 'user')
+    return { added: true, message: cliDir }
+  } catch (err) {
+    return {
+      added: false,
+      message: err instanceof Error ? err.message : 'Failed to add CLI to PATH',
+    }
+  }
+}
+
+
+/**
+ * Retrieves the CLI AGENTS.md file content.
+ * Used for displaying CLI specification within the GUI or for AI integration.
+ */
+export async function getCliAgentsSpec(): Promise<string> {
+  try {
+    return await runCommand('agents', [])
+  } catch {
+    return 'CLI agents spec not available'
+  }
+}
+
+/**
+ * Gets the file path where AGENTS.cli.md is located.
+ */
+export async function getCliAgentsPath(): Promise<string> {
+  try {
+    return await runCommand('agents', ['--path'])
+  } catch {
+    return ''
   }
 }
