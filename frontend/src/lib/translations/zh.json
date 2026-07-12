@@ -93,5 +93,12 @@
   "tray.show": "显示",
   "tray.quit": "退出",
   "tray.tooltip": "环境变量管理器",
-  "settings.addCliToPath": "将 CLI 加入 PATH"
+  "settings.addCliToPath": "将 CLI 加入 PATH",
+  "messages.copied": "已复制到剪贴板",
+  "messages.clickToCopy": "点击复制",
+  "settings.cliInPath": "CLI在PATH中",
+  "settings.cliAdded": "CLI已添加到PATH",
+  "settings.cliRemoved": "CLI已从PATH移除",
+  "settings.cliAddFailed": "添加CLI到PATH失败",
+  "settings.cliRemoveFailed": "从PATH移除CLI失败"
 }

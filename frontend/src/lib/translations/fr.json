@@ -93,5 +93,12 @@
   "tray.show": "Afficher",
   "tray.quit": "Quitter",
   "tray.tooltip": "Env Manager",
-  "settings.addCliToPath": "Ajouter CLI au PATH"
+  "settings.addCliToPath": "Ajouter CLI au PATH",
+  "messages.copied": "Copie dans le presse-papiers",
+  "messages.clickToCopy": "Cliquer pour copier",
+  "settings.cliInPath": "CLI dans le PATH",
+  "settings.cliAdded": "CLI ajoute au PATH",
+  "settings.cliRemoved": "CLI supprime du PATH",
+  "settings.cliAddFailed": "Echec de l ajout du CLI au PATH",
+  "settings.cliRemoveFailed": "Echec de la suppression du CLI du PATH"
 }

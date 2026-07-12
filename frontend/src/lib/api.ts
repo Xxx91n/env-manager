@@ -37,6 +37,22 @@ export interface PathEntry {
   path: string
 }
 
+/**
+ * Strips the `\\?\` (Windows verbatim/long-path) prefix from a path string.
+ * This prefix can appear when Rust resolves paths via Tauri's resource
+ * directory or PathBuf on Windows. It must be removed before writing
+ * to the registry so PATH entries use clean drive-letter paths.
+ */
+function stripVerbatimPrefix(path: string): string {
+  if (path.startsWith('\\\\?\\')) {
+    return path.slice(4)
+  }
+  if (path.startsWith('\\\\?\\UNC\\')) {
+    return '\\' + path.slice(7)
+  }
+  return path
+}
+
 async function runCommand(cmd: string, args: string[] = []): Promise<string> {
   try {
     const result = await invoke<CLIResponse>('run_cli', {
@@ -57,7 +73,13 @@ async function runCommand(cmd: string, args: string[] = []): Promise<string> {
 
 export async function getDiagnostics(): Promise<Diagnostics> {
   try {
-    return await invoke<Diagnostics>('cli_diagnostics')
+    const diag = await invoke<Diagnostics>('cli_diagnostics')
+    // Defensive: strip any verbatim prefix that might slip through
+    return {
+      ...diag,
+      resolved_cli_path: stripVerbatimPrefix(diag.resolved_cli_path),
+      gui_exe_dir: stripVerbatimPrefix(diag.gui_exe_dir),
+    }
   } catch {
     return {
       resolved_cli_path: 'UNAVAILABLE',

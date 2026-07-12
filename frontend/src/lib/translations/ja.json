@@ -93,5 +93,12 @@
   "tray.show": "表示",
   "tray.quit": "終了",
   "tray.tooltip": "Env Manager",
-  "settings.addCliToPath": "CLI を PATH に追加"
+  "settings.addCliToPath": "CLI を PATH に追加",
+  "messages.copied": "クリップボードにコピーしました",
+  "messages.clickToCopy": "クリックしてコピー",
+  "settings.cliInPath": "PATH内のCLI",
+  "settings.cliAdded": "CLIをPATHに追加しました",
+  "settings.cliRemoved": "CLIをPATHから削除しました",
+  "settings.cliAddFailed": "PATHへのCLI追加に失敗しました",
+  "settings.cliRemoveFailed": "PATHからのCLI削除に失敗しました"
 }

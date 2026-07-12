@@ -93,5 +93,12 @@
   "tray.show": "Anzeigen",
   "tray.quit": "Beenden",
   "tray.tooltip": "Env Manager",
-  "settings.addCliToPath": "CLI zu PATH hinzufugen"
+  "settings.addCliToPath": "CLI zu PATH hinzufugen",
+  "messages.copied": "In Zwischenablage kopiert",
+  "messages.clickToCopy": "Klicken zum Kopieren",
+  "settings.cliInPath": "CLI im PATH",
+  "settings.cliAdded": "CLI zum PATH hinzugefugt",
+  "settings.cliRemoved": "CLI aus dem PATH entfernt",
+  "settings.cliAddFailed": "Fehler beim Hinzufugen des CLI zum PATH",
+  "settings.cliRemoveFailed": "Fehler beim Entfernen des CLI aus dem PATH"
 }

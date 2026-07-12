@@ -11,6 +11,7 @@
   let showEditDialog = false
   let showBackupDialog = false
   let toggling = new Set<string>()
+  let copyFeedback = ''
 
   $: {
     let filtered = $variables
@@ -28,6 +29,29 @@
     }
 
     filteredVars = filtered
+  }
+
+  function copyToClipboard(text: string) {
+    navigator.clipboard.writeText(text).then(() => {
+      copyFeedback = $t('messages.copied')
+      setTimeout(() => { copyFeedback = '' }, 1500)
+    }).catch(() => {
+      // Fallback for older WebView2 versions
+      const textarea = document.createElement('textarea')
+      textarea.value = text
+      textarea.style.position = 'fixed'
+      textarea.style.opacity = '0'
+      document.body.appendChild(textarea)
+      textarea.select()
+      try {
+        document.execCommand('copy')
+        copyFeedback = $t('messages.copied')
+        setTimeout(() => { copyFeedback = '' }, 1500)
+      } catch {
+        // ignore
+      }
+      document.body.removeChild(textarea)
+    })
   }
 
   function handleDelete(name: string, scope: string) {
@@ -129,6 +153,12 @@
     </div>
   {/if}
 
+  {#if copyFeedback}
+    <div class="fixed top-4 left-1/2 -translate-x-1/2 px-3 py-1.5 bg-gray-800 text-white text-xs rounded-md shadow-lg z-50 dark:bg-gray-700">
+      {copyFeedback}
+    </div>
+  {/if}
+
   <div class="overflow-x-auto bg-white rounded-md border border-gray-200 dark:bg-gray-800 dark:border-gray-700">
     {#if filteredVars.length === 0}
       <div class="px-4 py-8 text-center text-gray-400 text-xs dark:text-gray-500">
@@ -172,7 +202,11 @@
                   ></span>
                 </button>
               </td>
-              <td class="px-3 py-2 text-xs font-mono text-gray-900 dark:text-gray-100">
+              <td
+                class="px-3 py-2 text-xs font-mono text-gray-900 dark:text-gray-100 cursor-pointer hover:text-blue-600 dark:hover:text-blue-400 transition select-none"
+                title={$t('messages.clickToCopy')}
+                on:click={() => copyToClipboard(variable.name)}
+              >
                 {variable.name}
               </td>
               <td class="px-3 py-2 text-xs">
@@ -185,7 +219,11 @@
                   {variable.scope === 'user' ? $t('scope.user') : $t('scope.system')}
                 </span>
               </td>
-              <td class="px-3 py-2 text-xs text-gray-600 font-mono dark:text-gray-300 max-w-xs truncate" title={variable.value}>
+              <td
+                class="px-3 py-2 text-xs text-gray-600 font-mono dark:text-gray-300 max-w-xs truncate cursor-pointer hover:text-blue-600 dark:hover:text-blue-400 transition select-none"
+                title={`${$t('messages.clickToCopy')} ${variable.value}`}
+                on:click={() => copyToClipboard(variable.value)}
+              >
                 {variable.value}
               </td>
               <td class="px-3 py-2 text-right text-xs">

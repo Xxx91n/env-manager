@@ -20,6 +20,12 @@ use std::os::windows::process::CommandExt;
 #[cfg(windows)]
 const CREATE_NO_WINDOW: u32 = 0x08000000;
 
+/// Maximum allowed length for a single CLI argument (prevents buffer-exhaustion DoS).
+const MAX_ARG_LEN: usize = 32767;
+
+/// Maximum number of arguments passed to the CLI.
+const MAX_ARGS: usize = 64;
+
 #[derive(Serialize)]
 #[serde(crate = "serde")]
 struct CliResponse {
@@ -48,6 +54,26 @@ const ALLOWED_COMMANDS: &[&str] = &[
 
 /// Mutex to serialize CLI invocations.
 static CLI_MUTEX: Mutex<()> = Mutex::new(());
+
+/// Strips the `\\?\\` (verbatim/long-path) prefix from a Windows path string.
+/// Rust's PathBuf::display() can emit this prefix when the path was constructed
+/// from a long path or UNC source. We remove it so that registry values and
+/// PATH entries use clean drive-letter paths (e.g. `D:\Tools` not `\\?\\D:\Tools`).
+fn strip_verbatim_prefix(path: &str) -> String {
+    if path.starts_with(r"\\?\\") {
+        path[r"\\?\\".len()..].to_string()
+    } else if path.starts_with(r"\\\\?\\UNC\\") {
+        format!("\\\\{}", &path[r"\\\\?\\UNC\\".len()..])
+    } else {
+        path.to_string()
+    }
+}
+
+/// Cleans a PathBuf for display: removes verbatim prefix, normalizes separators.
+fn clean_path(path: PathBuf) -> String {
+    let display = path.display().to_string();
+    strip_verbatim_prefix(&display)
+}
 
 fn resolve_cli_path(app: &tauri::AppHandle) -> Option<PathBuf> {
     // 1. Tauri resource directory
@@ -147,16 +173,41 @@ fn build_cli_command(exe_path: &PathBuf, command: &str, args: &[String]) -> Comm
     cmd
 }
 
+/// Validates command and args before spawning the CLI subprocess.
+/// Returns Ok(()) if safe, Err(message) if rejected.
+fn validate_cli_input(command: &str, args: &[String]) -> Result<(), String> {
+    if !ALLOWED_COMMANDS.contains(&command) {
+        return Err(format!("Unknown command: {}", command));
+    }
+
+    if args.len() > MAX_ARGS {
+        return Err(format!("Too many arguments (max {})", MAX_ARGS));
+    }
+
+    for arg in args {
+        if arg.len() > MAX_ARG_LEN {
+            return Err(format!("Argument too long (max {} chars)", MAX_ARG_LEN));
+        }
+        // Reject null bytes (injection prevention)
+        if arg.contains('\0') {
+            return Err("Null bytes in arguments are not allowed".to_string());
+        }
+    }
+
+    Ok(())
+}
+
 #[tauri::command]
 fn run_cli(app: tauri::AppHandle, command: String, args: Vec<String>) -> CliResponse {
     info!("[run_cli] command={}, args={:?}", command, args);
 
-    if !ALLOWED_COMMANDS.contains(&command.as_str()) {
-        warn!("[run_cli] rejected unknown command: {}", command);
+    // Validate input before doing anything
+    if let Err(msg) = validate_cli_input(&command, &args) {
+        warn!("[run_cli] validation failed: {}", msg);
         return CliResponse {
             success: false,
             data: None,
-            error: Some(format!("Unknown command: {}", command)),
+            error: Some(msg),
         };
     }
 
@@ -228,17 +279,27 @@ fn cli_diagnostics(app: tauri::AppHandle) -> serde_json::Value {
     let exe_dir = std::env::current_exe()
         .ok()
         .and_then(|p| p.parent().map(|d| d.display().to_string()))
+        .map(|d| strip_verbatim_prefix(&d))
         .unwrap_or_default();
 
     let resolved = resolve_cli_path(&app)
-        .map(|p| p.display().to_string())
+        .map(|p| clean_path(p))
         .unwrap_or_else(|| "NOT FOUND".to_string());
 
     serde_json::json!({
         "resolved_cli_path": resolved,
         "gui_exe_dir": exe_dir,
-        "cwd": std::env::current_dir().map(|d| d.display().to_string()).unwrap_or_default(),
+        "cwd": std::env::current_dir().map(|d| clean_path(d)).unwrap_or_default(),
     })
+}
+
+/// Restores the main window: un-minimize, show, and set focus.
+fn restore_window(app: &tauri::AppHandle) {
+    if let Some(window) = app.get_webview_window("main") {
+        let _ = window.unminimize();
+        let _ = window.show();
+        let _ = window.set_focus();
+    }
 }
 
 fn main() {
@@ -263,10 +324,7 @@ fn main() {
                 .on_menu_event(|app, event| {
                     match event.id.as_ref() {
                         "show" => {
-                            if let Some(window) = app.get_webview_window("main") {
-                                let _ = window.show();
-                                let _ = window.set_focus();
-                            }
+                            restore_window(app);
                         }
                         "quit" => {
                             app.exit(0);
@@ -275,12 +333,12 @@ fn main() {
                     }
                 })
                 .on_tray_icon_event(|tray, event| {
+                    // Handle both single click and double click to restore the window.
+                    // This ensures clicking the tray icon always brings the window back,
+                    // whether it was minimized or hidden.
                     if let tauri::tray::TrayIconEvent::DoubleClick { .. } = event {
                         let app = tray.app_handle();
-                        if let Some(window) = app.get_webview_window("main") {
-                            let _ = window.show();
-                            let _ = window.set_focus();
-                        }
+                        restore_window(app);
                     }
                 })
                 .build(app)?;
@@ -288,9 +346,13 @@ fn main() {
             Ok(())
         })
         .on_window_event(|window, event| {
-            if let WindowEvent::CloseRequested { api, .. } = event {
-                let _ = window.hide();
-                api.prevent_close();
+            match event {
+                // Close button hides to tray instead of exiting
+                WindowEvent::CloseRequested { api, .. } => {
+                    let _ = window.hide();
+                    api.prevent_close();
+                }
+                _ => {}
             }
         })
         .invoke_handler(tauri::generate_handler![run_cli, cli_diagnostics, update_tray_locale])
@@ -336,4 +398,3 @@ fn update_tray_locale(
         warn!("[tray] tray icon not found for locale update");
     }
 }
-

@@ -93,5 +93,12 @@
   "tray.show": "Показать",
   "tray.quit": "Выход",
   "tray.tooltip": "Env Manager",
-  "settings.addCliToPath": "Dobavit CLI v PATH"
+  "settings.addCliToPath": "Dobavit CLI v PATH",
+  "messages.copied": "Скопировано в буфер обмена",
+  "messages.clickToCopy": "Нажмите, чтобы скопировать",
+  "settings.cliInPath": "CLI в PATH",
+  "settings.cliAdded": "CLI добавлен в PATH",
+  "settings.cliRemoved": "CLI удален из PATH",
+  "settings.cliAddFailed": "Не удалось добавить CLI в PATH",
+  "settings.cliRemoveFailed": "Не удалось удалить CLI из PATH"
 }

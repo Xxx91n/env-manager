@@ -93,5 +93,12 @@
   "tray.show": "Mostrar",
   "tray.quit": "Salir",
   "tray.tooltip": "Env Manager",
-  "settings.addCliToPath": "Anadir CLI al PATH"
+  "settings.addCliToPath": "Anadir CLI al PATH",
+  "messages.copied": "Copiado al portapapeles",
+  "messages.clickToCopy": "Haga clic para copiar",
+  "settings.cliInPath": "CLI en el PATH",
+  "settings.cliAdded": "CLI anadido al PATH",
+  "settings.cliRemoved": "CLI eliminado del PATH",
+  "settings.cliAddFailed": "Error al anadir CLI al PATH",
+  "settings.cliRemoveFailed": "Error al eliminar CLI del PATH"
 }

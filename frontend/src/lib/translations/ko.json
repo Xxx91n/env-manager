@@ -93,5 +93,12 @@
   "tray.show": "표시",
   "tray.quit": "종료",
   "tray.tooltip": "Env Manager",
-  "settings.addCliToPath": "CLI를 PATH에 추가"
+  "settings.addCliToPath": "CLI를 PATH에 추가",
+  "messages.copied": "클립보드에 복사되었습니다",
+  "messages.clickToCopy": "클릭하여 복사",
+  "settings.cliInPath": "PATH의 CLI",
+  "settings.cliAdded": "CLI가 PATH에 추가되었습니다",
+  "settings.cliRemoved": "CLI가 PATH에서 제거되었습니다",
+  "settings.cliAddFailed": "PATH에 CLI 추가 실패",
+  "settings.cliRemoveFailed": "PATH에서 CLI 제거 실패"
 }

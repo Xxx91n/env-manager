@@ -93,5 +93,12 @@
   "tray.show": "إظهار",
   "tray.quit": "خروج",
   "tray.tooltip": "Env Manager",
-  "settings.addCliToPath": "add CLI ila PATH"
+  "settings.addCliToPath": "add CLI ila PATH",
+  "messages.copied": "تم النسخ إلى الحافظة",
+  "messages.clickToCopy": "انقر للنسخ",
+  "settings.cliInPath": "CLI في PATH",
+  "settings.cliAdded": "تمت إضافة CLI إلى PATH",
+  "settings.cliRemoved": "تمت إزالة CLI من PATH",
+  "settings.cliAddFailed": "فشل في إضافة CLI إلى PATH",
+  "settings.cliRemoveFailed": "فشل في إزالة CLI من PATH"
 }

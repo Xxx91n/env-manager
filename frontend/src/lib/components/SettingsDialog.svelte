@@ -28,6 +28,8 @@
 
   let cliInPath = false
   let cliToggleLoading = false
+  let cliMessage = ''
+  let cliMessageType = ''
 
   onMount(async () => {
     // Check real system PATH on mount
@@ -42,7 +44,6 @@
       // Ignore storage errors
     }
     // Sync tray menu text and tooltip with the new locale
-    // Wait longer to ensure svelte-i18n has loaded the new locale messages
     setTimeout(() => {
       const showText = get(tStore)('tray.show')
       const quitText = get(tStore)('tray.quit')
@@ -64,16 +65,32 @@
   async function toggleCliInPath() {
     if (cliToggleLoading) return
     cliToggleLoading = true
+    cliMessage = ''
     try {
       if (cliInPath) {
-        // Remove from PATH
-        await removeCliFromPath()
+        const result = await removeCliFromPath()
+        // Immediately re-check real PATH to update toggle state
         cliInPath = await isCliInPath()
+        if (result.removed || !cliInPath) {
+          cliMessage = get(tStore)('settings.cliRemoved')
+          cliMessageType = 'success'
+        } else {
+          cliMessage = get(tStore)('settings.cliRemoveFailed')
+          cliMessageType = 'error'
+        }
       } else {
-        // Add to PATH
-        await addCliToPath()
+        const result = await addCliToPath()
+        // Immediately re-check real PATH to update toggle state
         cliInPath = await isCliInPath()
+        if (result.added || cliInPath) {
+          cliMessage = get(tStore)('settings.cliAdded')
+          cliMessageType = 'success'
+        } else {
+          cliMessage = get(tStore)('settings.cliAddFailed')
+          cliMessageType = 'error'
+        }
       }
+      setTimeout(() => { cliMessage = '' }, 3000)
     } finally {
       cliToggleLoading = false
     }
@@ -142,6 +159,11 @@
           ></span>
         </button>
       </div>
+      {#if cliMessage}
+        <p class="text-xs {cliMessageType === 'success' ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}">
+          {cliMessage}
+        </p>
+      {/if}
     </div>
 
     <div class="px-5 py-3 border-t border-gray-200 flex justify-end dark:border-gray-700">
