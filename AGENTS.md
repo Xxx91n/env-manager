@@ -237,7 +237,14 @@ Debug output goes to stderr with timestamps: `[debug] HH:mm:ss.fff message`. Thi
 
 Profiles are sets of preconfigured variables that can be applied/unapplied as a group. When applied, original values of affected user variables are backed up. Unapplying restores originals. Profiles only affect user scope.
 
-**Multi-profile support**: Multiple profiles can be applied simultaneously. Applying a profile does NOT unapply other active profiles. Each profile backs up the original variable value (if any) before overwriting. The first profile to back up a variable owns the original value; later profiles overwrite the current (profile-set) value but do not create additional backups.
+**Multi-profile support**: Multiple profiles can be applied simultaneously. Applying a profile does NOT unapply other active profiles.
+
+**Conflict resolution for overlapping variable names**: When multiple profiles define the same variable name, the last-applied profile's value wins. Each profile backs up the *current* value of the variable before overwriting it, using the backup key `<varname>_PowerToys_<profileName>`. This means:
+- Profile A backs up the original user value (if it existed)
+- Profile B backs up the current value (which is profile A's value, since A already applied)
+- Unapplying profile B restores to profile A's value (B's backup)
+- Unapplying profile A restores to the original user value (A's backup)
+- Unapply order matters: unapply the most-recently-applied profile first for correct restoration chain
 
 - Profile storage: `%LOCALAPPDATA%\EnvManager\profiles.json`
 - Profile variables override user variables when applied
@@ -419,7 +426,7 @@ Profiles are stored at `%LOCALAPPDATA%\EnvManager\profiles.json`:
   by setting `profileSource` to the profile name. The GUI shows a badge next to the variable name
   indicating which profile it came from. This helps users distinguish profile-applied variables
   from manually-set ones.
-- **Profile drag-to-reorder**: The GUI Profile page supports HTML5 drag-and-drop to reorder profiles. The order is persisted in `localStorage` as `envManager_profileOrder` and applied via `applyStoredOrder()` after `listProfiles()`. This is GUI-only sorting - no CLI calls, no profile data modification. Each profile card has a drag handle with a grab cursor.
+- **Profile drag-to-reorder**: The GUI Profile page supports pointer-event-based drag-and-drop to reorder profiles (uses `pointerdown`/`pointerenter`/`pointerup` instead of HTML5 DnD, which WebView2/Tauri intercepts at the OS level causing a forbidden cursor). The order is persisted in `localStorage` as `envManager_profileOrder` and applied via `applyStoredOrder()` after `listProfiles()`. This is GUI-only sorting - no CLI calls, no profile data modification. Each profile card has a drag handle with a grab cursor.
 
 ---
 
@@ -457,6 +464,8 @@ npm run test:e2e        # Playwright E2E tests
 | `src/lib/race.test.ts` | CLI/GUI race condition prevention, toggle safety, rapid toggle serialization |
 | `src/lib/sync.test.ts` | CLI/GUI state synchronization, mutation triggers refresh, error store lifecycle |
 | `src/lib/debug.test.ts` | Debug logging system, log entry management, 200-entry cap (memory leak prevention), isWriteInProgress tracking |
+| `src/lib/profile-drag.test.ts` | Profile drag-to-reorder logic, performReorder, applyStoredOrder, localStorage persistence |
+| `src/lib/multi-profile.test.ts` | Multi-profile conflict resolution, overlapping variable handling, backup chain, protected variable rejection |
 
 ---
 

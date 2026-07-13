@@ -31,6 +31,7 @@
   let cloneSource = ''
   let allVars: EnvVariable[] = []
   let dragIndex: number | null = null
+  let isDragging = false
   let dragOverIndex: number | null = null
 
   const PROFILE_ORDER_KEY = 'envManager_profileOrder'
@@ -66,6 +67,15 @@
   onMount(async () => {
     await refreshProfiles()
   })
+
+  // Global pointerup handler to cancel drag if released outside a profile card
+  function handleGlobalPointerUp() {
+    if (isDragging) {
+      dragIndex = null
+      dragOverIndex = null
+      isDragging = false
+    }
+  }
 
   // Watch refreshTrigger from App.svelte: refresh profiles when header
   // refresh button is clicked, regardless of active view.
@@ -249,44 +259,39 @@
     }
   }
 
-  function handleDragStart(e: DragEvent, index: number) {
+  // Pointer-based drag-to-reorder. We use pointer events instead of HTML5 DnD
+  // because WebView2 in Tauri intercepts HTML5 drag events at the OS level,
+  // causing the forbidden cursor to appear.
+  function handleDragStart(index: number) {
+    if (actionLoading) return
     dragIndex = index
-    // setData is required for the drag to be recognised in WebView2
-    if (e.dataTransfer) {
-      e.dataTransfer.effectAllowed = 'move'
-      e.dataTransfer.setData('text/plain', String(index))
-    }
+    isDragging = true
   }
 
-  function handleDragOver(e: DragEvent, index: number) {
-    // Must always preventDefault on dragover to allow drop (removes forbidden cursor)
-    e.preventDefault()
-    e.stopPropagation()
-    if (e.dataTransfer) {
-      e.dataTransfer.dropEffect = 'move'
-    }
-    dragOverIndex = index
+  function handleDragEnter(_index: number) {
+    if (!isDragging || dragIndex === null) return
+    dragOverIndex = _index
   }
 
-  function handleDrop(e: DragEvent, index: number) {
-    e.preventDefault()
-    if (dragIndex === null || dragIndex === index) {
+  function handleDrop(_index: number) {
+    if (!isDragging || dragIndex === null || dragIndex === _index) {
       dragIndex = null
       dragOverIndex = null
+      isDragging = false
       return
     }
-    const moved = profileList[dragIndex]
-    const newList = profileList.filter((_, idx) => idx !== dragIndex)
-    newList.splice(index, 0, moved)
-    profileList = newList
-    saveProfileOrder(profileList.map(p => p.name))
+    performReorder(dragIndex, _index)
     dragIndex = null
     dragOverIndex = null
+    isDragging = false
   }
 
-  function handleDragEnd() {
-    dragIndex = null
-    dragOverIndex = null
+  function performReorder(fromIdx: number, toIdx: number) {
+    const moved = profileList[fromIdx]
+    const newList = profileList.filter((_, idx) => idx !== fromIdx)
+    newList.splice(toIdx, 0, moved)
+    profileList = newList
+    saveProfileOrder(profileList.map(p => p.name))
   }
 
   function selectProfile(p: ProfileData) {
@@ -303,7 +308,7 @@
   }
 </script>
 
-<div class="space-y-3">
+<div class="space-y-3" on:pointerup={handleGlobalPointerUp}>
   <!-- Create profile bar -->
   <div class="flex gap-2">
     <input
@@ -351,16 +356,19 @@
       {#each profileList as profile, i (profile.name)}
         <div
           class="bg-white rounded-md border border-gray-200 dark:bg-gray-800 dark:border-gray-700 {dragOverIndex === i && dragIndex !== null ? 'ring-2 ring-blue-400' : ''}"
-          draggable="true"
-          on:dragstart={(e) => handleDragStart(e, i)}
-          on:dragover={(e) => handleDragOver(e, i)}
-          on:drop={(e) => handleDrop(e, i)}
-          on:dragend={handleDragEnd}
+          on:pointerenter={() => handleDragEnter(i)}
+          on:pointerup={() => handleDrop(i)}
           role="listitem"
         >
           <!-- Profile row with toggle -->
           <div class="flex items-center justify-between px-4 py-2.5">
-            <div class="flex items-center gap-1 cursor-grab text-gray-300 hover:text-gray-400 dark:text-gray-600 dark:hover:text-gray-500" title={$t('profiles.dragToSort')}>
+            <div
+              class="flex items-center gap-1 cursor-grab text-gray-300 hover:text-gray-400 dark:text-gray-600 dark:hover:text-gray-500 {isDragging && dragIndex === i ? 'opacity-50' : ''}"
+              title={$t('profiles.dragToSort')}
+              on:pointerdown={() => handleDragStart(i)}
+              role="button"
+              tabindex="0"
+            >
               <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
                 <path d="M7 4a1 1 0 11-2 0 1 1 0 012 0zM9 4a1 1 0 11-2 0 1 1 0 012 0zM11 4a1 1 0 11-2 0 1 1 0 012 0zM13 4a1 1 0 11-2 0 1 1 0 012 0zM7 8a1 1 0 11-2 0 1 1 0 012 0zM9 8a1 1 0 11-2 0 1 1 0 012 0zM11 8a1 1 0 11-2 0 1 1 0 012 0zM13 8a1 1 0 11-2 0 1 1 0 012 0zM7 12a1 1 0 11-2 0 1 1 0 012 0zM9 12a1 1 0 11-2 0 1 1 0 012 0zM11 12a1 1 0 11-2 0 1 1 0 012 0zM13 12a1 1 0 11-2 0 1 1 0 012 0zM7 16a1 1 0 11-2 0 1 1 0 012 0zM9 16a1 1 0 11-2 0 1 1 0 012 0zM11 16a1 1 0 11-2 0 1 1 0 012 0zM13 16a1 1 0 11-2 0 1 1 0 012 0z" />
               </svg>
