@@ -31,12 +31,35 @@ export interface ProfileData {
   id: string
   name: string
   isEnabled: boolean
+  appliedAt?: number | null
+  inherits: string[]
+  pathEntries: string[]
   variables: ProfileVariable[]
 }
 
 export interface PathEntry {
   index: number
   path: string
+  expandedPath: string
+  isDuplicate: boolean
+  exists: boolean
+}
+
+export interface AuditEntry {
+  id: string
+  timestamp: string
+  command: string
+  name: string
+  scope: 'user' | 'system'
+  oldValue: string | null
+  newValue: string | null
+}
+
+export interface ProfilePreview {
+  profile: string
+  inherits: string[]
+  variables: Array<{ name: string; value: string; currentValue: string | null; conflict: boolean }>
+  pathEntries: Array<{ path: string; expandedPath: string; exists: boolean }>
 }
 
 /**
@@ -85,7 +108,7 @@ async function runWriteOperation<T>(fn: () => Promise<T>): Promise<T> {
 
 async function runCommand(cmd: string, args: string[] = []): Promise<string> {
   const startTime = Date.now()
-  addDebugLog({ level: 'debug', message: `CLI: ${cmd} ${args.join(' ')}`, command: cmd })
+  addDebugLog({ level: 'debug', message: `CLI: ${cmd} (${args.length} args)`, command: cmd })
   try {
     const result = await invoke<CLIResponse>('run_cli', {
       command: cmd,
@@ -190,12 +213,15 @@ export async function getVariable(name: string): Promise<EnvVariable | null> {
 export async function setVariable(
   name: string,
   value: string,
-  scope: 'user' | 'system' = 'user'
+  scope: 'user' | 'system' = 'user',
+  overwrite = false
 ): Promise<void> {
   error.set(null)
 
   try {
-    await runWrite('set', [name, value, '--scope', scope])
+    const args = [name, value, '--scope', scope]
+    if (overwrite) args.push('--overwrite')
+    await runWrite('set', args)
     await listVariables()
   } catch (err) {
     error.set(err instanceof Error ? err.message : 'Failed to set variable')
@@ -203,6 +229,17 @@ export async function setVariable(
   }
 }
 
+export async function renameVariable(
+  oldName: string,
+  newName: string,
+  scope: 'user' | 'system' = 'user',
+  overwrite = false
+): Promise<void> {
+  const args = [oldName, newName, '--scope', scope]
+  if (overwrite) args.push('--overwrite')
+  await runWrite('rename', args)
+  await listVariables()
+}
 export async function deleteVariable(
   name: string,
   scope: 'user' | 'system' = 'user'
@@ -498,6 +535,53 @@ export async function renamePathEntry(
   }
 }
 
+
+export async function expandVariableValue(value: string): Promise<string> {
+  const output = await runRead('expand', [value])
+  return (JSON.parse(output) as { expanded: string }).expanded
+}
+
+export async function listHistory(limit = 200): Promise<AuditEntry[]> {
+  const output = await runRead('history', ['list', '--limit', String(limit)])
+  return JSON.parse(output) as AuditEntry[]
+}
+
+export async function undoHistory(id: string, force = false): Promise<void> {
+  const args = ['undo', id]
+  if (force) args.push('--force')
+  await runWrite('history', args)
+  await listVariables()
+}
+
+export async function bulkImport(file: string, scope: 'user' | 'system', overwrite = false, dryRun = false): Promise<Record<string, unknown>> {
+  const args = ['import', file, '--scope', scope]
+  if (overwrite) args.push('--overwrite')
+  if (dryRun) args.push('--dry-run')
+  const output = dryRun ? await runRead('bulk', args) : await runWrite('bulk', args)
+  if (!dryRun) await listVariables()
+  return JSON.parse(output) as Record<string, unknown>
+}
+
+export async function bulkExport(file: string, scope: 'user' | 'system'): Promise<void> {
+  await runRead('bulk', ['export', file, '--scope', scope])
+}
+
+export async function previewProfile(name: string): Promise<ProfilePreview> {
+  const output = await runRead('profile', ['preview', name])
+  return JSON.parse(output) as ProfilePreview
+}
+
+export async function setProfileInheritance(name: string, parents: string[]): Promise<void> {
+  await runWrite('profile', ['set-inherits', name, ...parents])
+}
+
+export async function addProfilePath(name: string, path: string): Promise<void> {
+  await runWrite('profile', ['add-path', name, path])
+}
+
+export async function removeProfilePath(name: string, path: string): Promise<void> {
+  await runWrite('profile', ['remove-path', name, path])
+}
 // --- CLI PATH management ---
 
 /**

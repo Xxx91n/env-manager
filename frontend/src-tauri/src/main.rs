@@ -39,6 +39,7 @@ const ALLOWED_COMMANDS: &[&str] = &[
     "list",
     "get",
     "set",
+    "rename",
     "delete",
     "toggle",
     "backup",
@@ -49,6 +50,9 @@ const ALLOWED_COMMANDS: &[&str] = &[
     "profile",
     "path",
     "agents",
+    "history",
+    "bulk",
+    "expand",
     "help",
 ];
 
@@ -61,6 +65,7 @@ const READ_COMMANDS: &[&str] = &[
     "diff",
     "validate",
     "agents",
+    "expand",
     "help",
 ];
 
@@ -70,6 +75,7 @@ const READ_COMMANDS: &[&str] = &[
 /// using `profile` / `path` as the top-level command, so we also inspect args.
 const WRITE_COMMANDS: &[&str] = &[
     "set",
+    "rename",
     "delete",
     "toggle",
     "restore",
@@ -101,7 +107,7 @@ fn is_read_only(command: &str, args: &[String]) -> bool {
     match command {
         "profile" => {
             match args.first().map(|s| s.as_str()) {
-                Some("list") | Some("show") | Some("status") => true,
+                Some("list") | Some("show") | Some("status") | Some("preview") | Some("export") => true,
                 _ => false, // create, delete, apply, unapply, add-var, remove-var, edit-var
             }
         }
@@ -111,6 +117,8 @@ fn is_read_only(command: &str, args: &[String]) -> bool {
                 _ => false, // add, remove, move-up, move-down
             }
         }
+        "history" => !matches!(args.first().map(|s| s.as_str()), Some("undo")),
+        "bulk" => !matches!(args.first().map(|s| s.as_str()), Some("import")) || args.iter().any(|arg| arg == "--dry-run"),
         _ => false,
     }
 }
@@ -281,7 +289,7 @@ fn validate_cli_input(command: &str, args: &[String]) -> Result<(), String> {
 
 #[tauri::command]
 fn run_cli(app: tauri::AppHandle, command: String, args: Vec<String>) -> CliResponse {
-    info!("[run_cli] command={}, args={:?}", command, args);
+    info!("[run_cli] command={}, argument_count={}", command, args.len());
 
     // Validate input before doing anything
     if let Err(msg) = validate_cli_input(&command, &args) {

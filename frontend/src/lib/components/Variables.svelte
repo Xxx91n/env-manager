@@ -2,7 +2,8 @@
   import { t } from 'svelte-i18n'
   import { variables, selectedScope, error, showModal, isWriteInProgress } from '../stores'
   import { showToast } from '../stores'
-  import { deleteVariable, createBackup, toggleVariable, setVariable } from '../api'
+  import { deleteVariable, createBackup, toggleVariable, setVariable, expandVariableValue } from '../api'
+  import { highlightParts } from '../features'
   import EditDialog from './EditDialog.svelte'
   import BackupDialog from './BackupDialog.svelte'
 
@@ -12,6 +13,8 @@
   let showEditDialog = false
   let showBackupDialog = false
   let togglingKeys: Record<string, boolean> = {}
+  let expandedValues: Record<string, string> = {}
+  let previewTimer: ReturnType<typeof setTimeout> | null = null
 
   // Clear persistent error store on mount; we use localError for transient errors
   $: {
@@ -32,6 +35,24 @@
     filteredVars = filtered
   }
 
+  function scheduleExpandedPreview(variable: { name: string; value: string; scope: string }) {
+    const key = variable.scope + ':' + variable.name
+    if (!variable.value.includes('%') || expandedValues[key]) return
+    if (previewTimer) clearTimeout(previewTimer)
+    previewTimer = setTimeout(async () => {
+      try {
+        const expanded = await expandVariableValue(variable.value)
+        expandedValues = { ...expandedValues, [key]: expanded }
+      } catch { /* preview is non-critical */ }
+    }, 250)
+  }
+
+  function previewTitle(variable: { name: string; value: string; scope: string }): string {
+    const expanded = expandedValues[variable.scope + ':' + variable.name]
+    return expanded && expanded !== variable.value
+      ? `${$t('messages.expandedValue')}: ${expanded}`
+      : `${$t('messages.clickToCopy')} ${variable.value}`
+  }
   function copyToClipboard(text: string) {
     navigator.clipboard.writeText(text).then(() => {
       showToast($t('messages.copied'), 'info', 1500)
@@ -216,7 +237,7 @@
                 on:click={() => copyToClipboard(variable.name)}
               >
                 <div class="flex items-center gap-1.5">
-                  <span>{variable.name}</span>
+                  <span>{#each highlightParts(variable.name, search) as part}<span class={part.match ? 'bg-yellow-200 text-gray-900 dark:bg-yellow-500/60 dark:text-white' : ''}>{part.text}</span>{/each}</span>
                   {#if variable.profileSource}
                     <span
                       class="inline-flex px-1 py-0.5 rounded text-[9px] font-medium bg-purple-50 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300"
@@ -239,7 +260,8 @@
               </td>
               <td
                 class="px-3 py-2 text-xs text-gray-600 font-mono dark:text-gray-300 max-w-xs truncate cursor-pointer hover:text-blue-600 dark:hover:text-blue-400 transition select-none"
-                title={`${$t('messages.clickToCopy')} ${variable.value}`}
+                title={previewTitle(variable)}
+                on:mouseenter={() => scheduleExpandedPreview(variable)}
                 on:click={() => copyToClipboard(variable.value)}
               >
                 {variable.value}

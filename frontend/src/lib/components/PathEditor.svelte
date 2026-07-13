@@ -290,7 +290,7 @@
         </thead>
         <tbody class="divide-y divide-gray-100 dark:divide-gray-700">
           {#each entries as entry (entry.index)}
-            <tr class="hover:bg-gray-50 transition dark:hover:bg-gray-750">
+            <tr class="hover:bg-gray-50 transition dark:hover:bg-gray-750 {entry.isDuplicate ? 'bg-amber-50/60 dark:bg-amber-900/10' : ''} {!entry.exists ? 'bg-red-50/60 dark:bg-red-900/10' : ''}">
               <td class="px-2 py-1.5 text-[10px] text-gray-400 dark:text-gray-500 align-top">{entry.index}</td>
               <td class="px-2 py-1.5 align-top">
                 {#if editingIndex === entry.index}
@@ -338,6 +338,11 @@
                     on:click={() => copyToClipboard(entry.path)}
                   >
                     {entry.path}
+                  </div>
+                  <div class="mt-0.5 flex items-center gap-2 text-[9px]">
+                    {#if entry.isDuplicate}<span class="text-amber-700 dark:text-amber-400">{$t('path.duplicate')}</span>{/if}
+                    {#if !entry.exists}<span class="text-red-700 dark:text-red-400">{$t('path.missing')}</span>{/if}
+                    {#if entry.expandedPath !== entry.path}<span class="font-mono text-gray-400 truncate" title={entry.expandedPath}>{entry.expandedPath}</span>{/if}
                   </div>
                 {/if}
               </td>

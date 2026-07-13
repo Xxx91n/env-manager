@@ -32,10 +32,13 @@ class ProfileData
     [JsonPropertyName("id")] public string Id { get; set; } = Guid.NewGuid().ToString();
     [JsonPropertyName("name")] public string Name { get; set; } = "";
     [JsonPropertyName("isEnabled")] public bool IsEnabled { get; set; } = false;
+    [JsonPropertyName("appliedAt")] public long? AppliedAt { get; set; }
+    [JsonPropertyName("inherits")] public List<string> Inherits { get; set; } = new();
+    [JsonPropertyName("pathEntries")] public List<string> PathEntries { get; set; } = new();
     [JsonPropertyName("variables")] public List<ProfileVariable> Variables { get; set; } = new();
 }
 
-class Program
+partial class Program
 {
     const string SystemEnvPath = @"SYSTEM\CurrentControlSet\Control\Session Manager\Environment";
     const string UserEnvPath = "Environment";
@@ -81,8 +84,8 @@ class Program
 
     static readonly HashSet<string> ValidCommands = new(StringComparer.OrdinalIgnoreCase)
     {
-        "list", "get", "set", "delete", "toggle", "backup", "restore", "diff", "merge",
-        "validate", "help", "profile", "path", "agents"
+        "list", "get", "set", "rename", "delete", "toggle", "backup", "restore", "diff", "merge",
+        "validate", "help", "profile", "path", "agents", "history", "bulk", "expand"
     };
 
     static readonly JsonSerializerOptions JsonOpts = new()
@@ -129,7 +132,7 @@ class Program
         }
         args = argList.ToArray();
 
-        DebugLog($"Args: {string.Join(" ", args)}");
+        DebugLog($"Command: {args.FirstOrDefault() ?? "none"}; argumentCount={Math.Max(0, args.Length - 1)}");
 
         string command = args[0];
         if (!ValidCommands.Contains(command))
@@ -139,13 +142,19 @@ class Program
             return 1;
         }
 
+        Mutex? mutationLock = null;
+        Dictionary<string, string?>? beforeSnapshot = null;
         try
         {
-            return command.ToLowerInvariant() switch
+            mutationLock = AcquireMutationLock(args);
+            if (mutationLock != null) beforeSnapshot = CaptureEnvironmentSnapshot();
+
+            int exitCode = command.ToLowerInvariant() switch
             {
                 "list" => ListEnvironment(),
                 "get" => args.Length < 2 ? ArgError("Usage: env-manager get <name>") : GetVariable(args[1]),
-                "set" => args.Length < 3 ? ArgError("Usage: env-manager set <name> <value> [--scope user|system]") : RunSet(args),
+                "set" => args.Length < 3 ? ArgError("Usage: env-manager set <name> <value> [--scope user|system] [--overwrite]") : RunSet(args),
+                "rename" => args.Length < 3 ? ArgError("Usage: env-manager rename <old> <new> [--scope user|system] [--overwrite]") : RunRename(args),
                 "delete" => args.Length < 2 ? ArgError("Usage: env-manager delete <name> [--scope user|system]") : RunDelete(args),
                 "toggle" => args.Length < 2 ? ArgError("Usage: env-manager toggle <name> [--scope user|system]") : RunToggle(args),
                 "backup" => RunBackup(args),
@@ -156,9 +165,25 @@ class Program
                 "profile" => RunProfileCommand(args),
                 "path" => RunPathCommand(args),
                 "agents" => RunAgents(args),
+                "history" => RunHistoryCommand(args),
+                "bulk" => RunBulkCommand(args),
+                "expand" => args.Length < 2 ? ArgError("Usage: env-manager expand <value>") : RunExpand(args[1]),
                 "help" => ShowHelp(),
                 _ => 1
             };
+
+            if (exitCode == 0 && beforeSnapshot != null)
+            {
+                try
+                {
+                    RecordSnapshotDiff(args[0] + (args.Length > 1 && args[0] is "profile" or "path" or "history" or "bulk" ? " " + args[1] : ""), beforeSnapshot, CaptureEnvironmentSnapshot());
+                }
+                catch (Exception auditError)
+                {
+                    DebugLog("Audit recording failed: " + auditError.GetType().Name);
+                }
+            }
+            return exitCode;
         }
         catch (UnauthorizedAccessException)
         {
@@ -169,6 +194,14 @@ class Program
         {
             Console.Error.WriteLine($"Error: {ex.Message}");
             return 1;
+        }
+        finally
+        {
+            if (mutationLock != null)
+            {
+                mutationLock.ReleaseMutex();
+                mutationLock.Dispose();
+            }
         }
     }
 
@@ -220,6 +253,9 @@ class Program
     {
         string? scope = ParseScope(args, 3, "user");
         if (scope == null) return 1;
+        string? existing = GetVariableValue(args[1], scope);
+        if (existing != null && existing != args[2] && !args.Contains("--overwrite"))
+            return ArgError("Error: Variable already exists with a different value; use --overwrite");
         SetVariable(args[1], args[2], scope);
         return 0;
     }
@@ -377,12 +413,13 @@ class Program
         try
         {
             var profiles = LoadProfiles();
-            var appliedProfiles = profiles.Where(p => p.IsEnabled).ToList();
+            var appliedProfiles = profiles.Where(p => p.IsEnabled)
+                .OrderByDescending(p => p.AppliedAt ?? 0).ToList();
             foreach (var item in items)
             {
                 foreach (var profile in appliedProfiles)
                 {
-                    var pv = profile.Variables.FirstOrDefault(v =>
+                    var pv = GetEffectiveProfileVariables(profile).FirstOrDefault(v =>
                         v.Name.Equals(item.Name, StringComparison.OrdinalIgnoreCase));
                     if (pv != null && item.Value == pv.Value)
                     {
@@ -490,7 +527,7 @@ class Program
         }
 
         var (hive, path) = GetScopeTarget(scope);
-        using (var key = hive.OpenSubKey(path, true))
+        using (var key = hive?.OpenSubKey(path, true))
         {
             if (key == null)
             {
@@ -538,7 +575,7 @@ class Program
         }
 
         var (hive, path) = GetScopeTarget(scope);
-        using (var key = hive.OpenSubKey(path, true))
+        using (var key = hive?.OpenSubKey(path, true))
         {
             if (key == null)
             {
@@ -609,6 +646,10 @@ class Program
             "apply" => args.Length < 3 ? ArgError("Usage: env-manager profile apply <name>") : ProfileApply(args[2]),
             "unapply" => args.Length < 3 ? ArgError("Usage: env-manager profile unapply <name>") : ProfileUnapply(args[2]),
             "show" => args.Length < 3 ? ArgError("Usage: env-manager profile show <name>") : ProfileShow(args[2]),
+            "preview" => args.Length < 3 ? ArgError("Usage: env-manager profile preview <name>") : ProfilePreview(args[2]),
+            "set-inherits" => args.Length < 3 ? ArgError("Usage: env-manager profile set-inherits <name> [parent ...]") : ProfileSetInherits(args),
+            "add-path" => args.Length < 4 ? ArgError("Usage: env-manager profile add-path <name> <directory>") : ProfileAddPath(args[2], args[3]),
+            "remove-path" => args.Length < 4 ? ArgError("Usage: env-manager profile remove-path <name> <directory>") : ProfileRemovePath(args[2], args[3]),
             "add-var" => args.Length < 5 ? ArgError("Usage: env-manager profile add-var <profile> <name> <value>") : ProfileAddVar(args[2], args[3], args[4]),
             "remove-var" => args.Length < 4 ? ArgError("Usage: env-manager profile remove-var <profile> <name>") : ProfileRemoveVar(args[2], args[3]),
             "edit-var" => args.Length < 6 ? ArgError("Usage: env-manager profile edit-var <profile> <old-name> <new-name> <new-value>") : ProfileEditVar(args[2], args[3], args[4], args[5]),
@@ -711,6 +752,9 @@ class Program
             return 1;
         }
 
+        if (profile.IsEnabled)
+            return ArgError("Error: Unapply the profile before changing its variables");
+
         var var = profile.Variables.FirstOrDefault(v => v.Name.Equals(oldVarName, StringComparison.OrdinalIgnoreCase));
         if (var == null)
         {
@@ -775,14 +819,14 @@ class Program
 
     static int ProfileExport(string[] args)
     {
-        if (args.Length < 4 || args[2] != "--output")
+        if (args.Length < 5 || args[3] != "--output")
         {
             Console.Error.WriteLine("Usage: env-manager profile export <name> --output <file>");
             return 1;
         }
 
-        string profileName = args[1];
-        string outputPath = ValidateFilePath(args[3], mustExist: false);
+        string profileName = args[2];
+        string outputPath = ValidateFilePath(args[4], mustExist: false);
 
         var profiles = LoadProfiles();
         var profile = FindProfile(profiles, profileName);
@@ -795,6 +839,8 @@ class Program
         var exportData = new
         {
             name = profile.Name,
+            inherits = profile.Inherits,
+            pathEntries = profile.PathEntries,
             variables = profile.Variables.Select(v => new { name = v.Name, value = v.Value }).ToList()
         };
 
@@ -838,6 +884,11 @@ class Program
             Name = profileName,
             IsEnabled = false
         };
+
+        if (doc.RootElement.TryGetProperty("inherits", out var inheritsElement))
+            newProfile.Inherits = inheritsElement.EnumerateArray().Select(item => item.GetString() ?? "").Where(item => item.Length > 0).ToList();
+        if (doc.RootElement.TryGetProperty("pathEntries", out var pathsElement))
+            newProfile.PathEntries = pathsElement.EnumerateArray().Select(item => item.GetString() ?? "").Where(item => item.Length > 0).ToList();
 
         foreach (var varElem in doc.RootElement.GetProperty("variables").EnumerateArray())
         {
@@ -925,22 +976,6 @@ class Program
   profile import <file>                          Import profile from JSON file
   profile rename <old> <new>                     Rename a profile");
         return 0;
-    }
-
-    static List<ProfileData> LoadProfiles()
-    {
-        if (!File.Exists(ProfilesFilePath))
-            return new List<ProfileData>();
-
-        string json = File.ReadAllText(ProfilesFilePath);
-        var profiles = JsonSerializer.Deserialize<List<ProfileData>>(json, JsonOpts);
-        return profiles ?? new List<ProfileData>();
-    }
-
-    static void SaveProfiles(List<ProfileData> profiles)
-    {
-        string json = JsonSerializer.Serialize(profiles, JsonOptsIndented);
-        File.WriteAllText(ProfilesFilePath, json);
     }
 
     static ProfileData? FindProfile(List<ProfileData> profiles, string name)
@@ -1049,7 +1084,18 @@ class Program
 
         ApplyProfile(profile);
         profile.IsEnabled = true;
-        SaveProfiles(profiles);
+        profile.AppliedAt = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+        try
+        {
+            SaveProfiles(profiles);
+        }
+        catch
+        {
+            UnapplyProfile(profile);
+            profile.IsEnabled = false;
+            profile.AppliedAt = null;
+            throw;
+        }
         Console.WriteLine($"Applied profile: {name} ({profile.Variables.Count} variables)");
         return 0;
     }
@@ -1070,9 +1116,24 @@ class Program
             return 0;
         }
 
+        if (!CanUnapplySafely(profile, profiles))
+            return ArgError("Error: A later-applied profile depends on overlapping variables; unapply it first");
+
         UnapplyProfile(profile);
         profile.IsEnabled = false;
-        SaveProfiles(profiles);
+        long? previousAppliedAt = profile.AppliedAt;
+        profile.AppliedAt = null;
+        try
+        {
+            SaveProfiles(profiles);
+        }
+        catch
+        {
+            ApplyProfile(profile);
+            profile.IsEnabled = true;
+            profile.AppliedAt = previousAppliedAt;
+            throw;
+        }
         Console.WriteLine($"Unapplied profile: {name}");
         return 0;
     }
@@ -1091,6 +1152,9 @@ class Program
             Console.Error.WriteLine($"Error: Profile '{profileName}' not found");
             return 1;
         }
+
+        if (profile.IsEnabled)
+            return ArgError("Error: Unapply the profile before changing its variables");
 
         profile.Variables.RemoveAll(v => v.Name.Equals(varName, StringComparison.OrdinalIgnoreCase));
         profile.Variables.Add(new ProfileVariable { Name = varName, Value = varValue });
@@ -1116,6 +1180,9 @@ class Program
             Console.Error.WriteLine($"Error: Profile '{profileName}' not found");
             return 1;
         }
+
+        if (profile.IsEnabled)
+            return ArgError("Error: Unapply the profile before changing its variables");
 
         int removed = profile.Variables.RemoveAll(v => v.Name.Equals(varName, StringComparison.OrdinalIgnoreCase));
         if (removed == 0)
@@ -1162,7 +1229,7 @@ class Program
     static string? GetVariableValue(string name, string scope)
     {
         var (hive, path) = GetScopeTarget(scope);
-        using (var key = hive.OpenSubKey(path, false))
+        using (var key = hive?.OpenSubKey(path, false))
         {
             if (key == null) return null;
             var v = key.GetValue(name, null, RegistryValueOptions.DoNotExpandEnvironmentNames);
@@ -1184,7 +1251,7 @@ class Program
         }
 
         var (hive, path) = GetScopeTarget(scope);
-        using (var key = hive.OpenSubKey(path, true))
+        using (var key = hive?.OpenSubKey(path, true))
         {
             if (key == null) return;
 
@@ -1211,108 +1278,11 @@ class Program
     static void DeleteVariableWithoutNotify(string name, string scope)
     {
         var (hive, path) = GetScopeTarget(scope);
-        using (var key = hive.OpenSubKey(path, true))
+        using (var key = hive?.OpenSubKey(path, true))
         {
             if (key == null) return;
             key.DeleteValue(name, false);
         }
-    }
-
-    /// <summary>
-    /// Applies a profile: for each variable, backs up the existing user variable
-    /// (if it exists) by renaming it to name_PowerToys_profileName, then sets
-    /// the profile variable value. Finally broadcasts the setting change.
-    /// </summary>
-    /// <summary>
-    /// Checks if a profile's variables are all correctly applied in the registry.
-    /// Mirrors PowerToys' IsCorrectlyApplied().
-    /// </summary>
-    static bool IsProfileCorrectlyApplied(ProfileData profile)
-    {
-        foreach (var var in profile.Variables)
-        {
-            var applied = GetVariableValue(var.Name, "user");
-            if (applied == null || applied != var.Value)
-                return false;
-        }
-        return true;
-    }
-
-    /// <summary>
-    /// Validates that all variables in a profile can be applied.
-    /// Mirrors PowerToys' IsApplicable().
-    /// </summary>
-    static bool IsProfileApplicable(ProfileData profile)
-    {
-        foreach (var var in profile.Variables)
-        {
-            if (string.IsNullOrWhiteSpace(var.Name) || var.Name.Length >= 255)
-                return false;
-            if (var.Name.Contains('='))
-                return false;
-            // Protected system variables cannot be in profiles
-            if (ProtectedSystemVars.Contains(var.Name))
-                return false;
-        }
-        return true;
-    }
-
-    static void ApplyProfile(ProfileData profile)
-    {
-        DebugLog("ApplyProfile: " + profile.Name);
-        foreach (var var in profile.Variables)
-        {
-            // Skip protected system variables - they cannot be overridden by profiles
-            if (ProtectedSystemVars.Contains(var.Name))
-            {
-                DebugLog($"Skipping protected variable: {var.Name}");
-                continue;
-            }
-
-            string backupName = GetBackupVariableName(var.Name, profile.Name);
-
-            // Back up existing user variable if it exists and no backup exists yet.
-            // If another active profile already set this variable, the first profile
-            // to back it up owns the original value. Later profiles overwrite the
-            // current (profile-set) value.
-            var existingValue = GetVariableValue(var.Name, "user");
-            if (existingValue != null)
-            {
-                var existingBackup = GetVariableValue(backupName, "user");
-                if (existingBackup == null)
-                {
-                    SetVariableWithoutNotify(backupName, existingValue, "user");
-                }
-            }
-
-            SetVariableWithoutNotify(var.Name, var.Value, "user");
-        }
-
-        BroadcastSettingChange();
-    }
-
-    /// <summary>
-    /// Unapplies a profile: for each variable, deletes the profile variable
-    /// and restores the backup if it exists.
-    /// </summary>
-    static void UnapplyProfile(ProfileData profile)
-    {
-        DebugLog("UnapplyProfile: " + profile.Name);
-        foreach (var var in profile.Variables)
-        {
-            string backupName = GetBackupVariableName(var.Name, profile.Name);
-
-            DeleteVariableWithoutNotify(var.Name, "user");
-
-            var backupValue = GetVariableValue(backupName, "user");
-            if (backupValue != null)
-            {
-                SetVariableWithoutNotify(var.Name, backupValue, "user");
-                DeleteVariableWithoutNotify(backupName, "user");
-            }
-        }
-
-        BroadcastSettingChange();
     }
 
     // Variables that should be edited as semicolon-separated lists.
@@ -1454,7 +1424,16 @@ class Program
         if (scope == null) return 1;
 
         var entries = GetPathEntries(scope);
-        var result = entries.Select((e, i) => new { index = i, path = e }).ToList();
+        var normalizedCounts = entries.GroupBy(NormalizePathEntry, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(g => g.Key, g => g.Count(), StringComparer.OrdinalIgnoreCase);
+        var result = entries.Select((e, i) => new
+        {
+            index = i,
+            path = e,
+            expandedPath = Environment.ExpandEnvironmentVariables(e),
+            isDuplicate = normalizedCounts.GetValueOrDefault(NormalizePathEntry(e)) > 1,
+            exists = Directory.Exists(Environment.ExpandEnvironmentVariables(e))
+        }).ToList();
         Console.WriteLine(JsonSerializer.Serialize(result, JsonOptsIndented));
         return 0;
     }
@@ -1872,7 +1851,8 @@ class Program
 Commands:
   list                       List all variables (JSON)
   get <name>                 Get variable (JSON)
-  set <name> <val> [--scope user|system] Set variable
+  set <name> <val> [--scope user|system] [--overwrite] Set variable
+  rename <old> <new> [--scope user|system] [--overwrite] Rename variable atomically
   delete <name> [--scope user|system]    Delete variable
   toggle <name> [--scope user|system]    Enable/disable a variable (backs up value)
   backup [--output <file>]   Create backup
@@ -1882,6 +1862,9 @@ Commands:
   validate <file>            Validate backup
   profile <subcommand>       Manage variable profiles (see: profile help)
   path <subcommand>          Edit PATH variable as list (see: path help)
+  history list|undo           View or undo audited changes
+  bulk import|export          Import/export .json, .env, or .csv
+  expand <value>              Expand nested %VARIABLE% references
   agents [--path|--json|--summary] Output CLI spec. --path: file only. --json: machine-readable. --summary: brief
   help                       Show help
   --debug                    Enable verbose stderr logging");

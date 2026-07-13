@@ -1,8 +1,9 @@
 <script lang="ts">
   import { createEventDispatcher } from 'svelte'
   import { t } from 'svelte-i18n'
-  import { setVariable, deleteVariable } from '../api'
-  import { showModal } from '../stores'
+  import { setVariable, renameVariable } from '../api'
+  import { showModal, variables } from '../stores'
+  import { hasVariableConflict } from '../features'
 
   export let variable = null
 
@@ -51,16 +52,31 @@
       return
     }
 
+    const conflict = hasVariableConflict($variables, name, scope, variable ? originalName : undefined)
+    if (conflict) {
+      showModal({
+        title: $t('messages.overwriteTitle'),
+        message: $t('messages.overwriteConfirm', { values: { name } }),
+        confirmLabel: $t('messages.overwrite'),
+        cancelLabel: $t('buttons.cancel'),
+        variant: 'warning',
+        onConfirm: () => saveValue(true),
+      })
+      return
+    }
+    await saveValue(false)
+  }
+
+  async function saveValue(overwrite: boolean) {
     localError = ''
     saving = true
     try {
       if (variable && nameChanged) {
-        // Rename: delete old variable, set new one
-        await deleteVariable(originalName, scope as 'user' | 'system')
-        await setVariable(name, value, scope as 'user' | 'system')
+        await renameVariable(originalName, name, scope as 'user' | 'system', overwrite)
+        await setVariable(name, value, scope as 'user' | 'system', true)
       } else {
         // Normal set (new variable or just value change)
-        await setVariable(name, value, scope as 'user' | 'system')
+        await setVariable(name, value, scope as 'user' | 'system', overwrite || !!variable)
       }
       dispatch('save')
     } catch (err) {

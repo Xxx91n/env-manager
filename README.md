@@ -10,16 +10,17 @@ Modern, lightweight Windows environment variable manager with CLI and GUI dual-m
 
 ### CLI Mode
 - 10 commands for complete environment variable management
-- Profile system: create, apply, and unapply sets of preconfigured variables
-- PATH editor: add, remove, and reorder PATH entries as a list
+- Simultaneous profiles with inheritance, conflict previews, PATH fragments, and safe reverse-order rollback
+- PATH editor with duplicate and missing-directory diagnostics
 - User and System scope support
-- JSON backup and restore with diff/merge
+- JSON backup/restore with diff/merge, audited history and guarded undo
+- Bulk `.env`, CSV, and JSON import/export with dry-run conflict previews
 - No admin required for user scope
 - Single 158KB executable, no runtime dependency
 
 ### GUI Mode
 - Native desktop app built with Tauri 2.0 (WebView2)
-- Real-time variable list with search and scope filtering
+- Real-time variable list with highlighted search matches, scope filtering, and expanded `%VAR%` previews
 - Inline add, edit, delete with confirmation
 - Backup and restore through the UI
 - 10-language internationalization: English, Chinese, Japanese, Korean, German, French, Spanish, Portuguese, Russian, Arabic
@@ -133,6 +134,13 @@ powershell -ExecutionPolicy Bypass -File scripts/build-all.ps1
 | `merge` | `merge <old> <new> --output <file>` | Merge two backup files |
 | `validate` | `validate <file>` | Verify backup file format |
 | `help` | `help` | Show help text |
+| `rename` | `rename <old> <new> [--scope] [--overwrite]` | Atomically rename a variable |
+| `history` | `history list [--limit N]` / `history undo <id>` | Inspect or undo audited changes |
+| `bulk` | `bulk import\|export <file> [--scope]` | Import/export JSON, .env, or CSV |
+| `expand` | `expand <value>` | Resolve nested `%VARIABLE%` references |
+| `profile preview` | `profile preview <name>` | Preview conflicts and PATH effects |
+| `profile set-inherits` | `profile set-inherits <name> [parent ...]` | Configure acyclic profile inheritance |
+| `profile add-path` | `profile add-path <name> <dir>` | Add a PATH fragment to a profile |
 | `profile list` | `profile list` | List all profiles |
 | `profile create` | `profile create <name>` | Create a new profile |
 | `profile apply` | `profile apply <name>` | Apply a profile (backs up existing vars) |

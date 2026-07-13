@@ -1,5 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte'
+  import Sortable from 'sortablejs'
+  import { moveItem } from '../features'
   import { t } from 'svelte-i18n'
   import { profiles, variables, showModal, refreshTrigger } from '../stores'
   import { showToast } from '../stores'
@@ -17,6 +19,9 @@
     renameProfile,
     pickOpenFile,
     pickSaveFile,
+    setProfileInheritance,
+    addProfilePath,
+    removeProfilePath,
   } from '../api'
   import type { ProfileData, EnvVariable } from '../api'
 
@@ -30,9 +35,7 @@
   let showAddVarPanel = false
   let cloneSource = ''
   let allVars: EnvVariable[] = []
-  let dragIndex: number | null = null
-  let isDragging = false
-  let dragOverIndex: number | null = null
+  let newPathEntry = ''
 
   const PROFILE_ORDER_KEY = 'envManager_profileOrder'
 
@@ -67,15 +70,6 @@
   onMount(async () => {
     await refreshProfiles()
   })
-
-  // Global pointerup handler to cancel drag if released outside a profile card
-  function handleGlobalPointerUp() {
-    if (isDragging) {
-      dragIndex = null
-      dragOverIndex = null
-      isDragging = false
-    }
-  }
 
   // Watch refreshTrigger from App.svelte: refresh profiles when header
   // refresh button is clicked, regardless of active view.
@@ -259,41 +253,53 @@
     }
   }
 
-  // Pointer-based drag-to-reorder. We use pointer events instead of HTML5 DnD
-  // because WebView2 in Tauri intercepts HTML5 drag events at the OS level,
-  // causing the forbidden cursor to appear.
-  function handleDragStart(index: number) {
-    if (actionLoading) return
-    dragIndex = index
-    isDragging = true
+  function sortableProfiles(node: HTMLElement) {
+    const sortable = Sortable.create(node, {
+      animation: 140,
+      handle: '.profile-drag-handle',
+      ghostClass: 'opacity-40',
+      chosenClass: 'ring-1',
+      dragClass: 'shadow-lg',
+      fallbackOnBody: true,
+      swapThreshold: 0.65,
+      onEnd: ({ oldIndex, newIndex }) => {
+        if (oldIndex === undefined || newIndex === undefined) return
+        profileList = moveItem(profileList, oldIndex, newIndex)
+        saveProfileOrder(profileList.map(profile => profile.name))
+      },
+    })
+    return { destroy: () => sortable.destroy() }
   }
 
-  function handleDragEnter(_index: number) {
-    if (!isDragging || dragIndex === null) return
-    dragOverIndex = _index
-  }
-
-  function handleDrop(_index: number) {
-    if (!isDragging || dragIndex === null || dragIndex === _index) {
-      dragIndex = null
-      dragOverIndex = null
-      isDragging = false
-      return
+  async function handleInheritance(parent: string, enabled: boolean) {
+    if (!selectedProfile) return
+    const parents = enabled
+      ? [...(selectedProfile.inherits ?? []), parent]
+      : (selectedProfile.inherits ?? []).filter(name => name !== parent)
+    try {
+      await setProfileInheritance(selectedProfile.name, parents)
+      await refreshProfiles()
+    } catch (err) {
+      showMessage(localizeError(err instanceof Error ? err.message : String(err)), 'error')
     }
-    performReorder(dragIndex, _index)
-    dragIndex = null
-    dragOverIndex = null
-    isDragging = false
   }
 
-  function performReorder(fromIdx: number, toIdx: number) {
-    const moved = profileList[fromIdx]
-    const newList = profileList.filter((_, idx) => idx !== fromIdx)
-    newList.splice(toIdx, 0, moved)
-    profileList = newList
-    saveProfileOrder(profileList.map(p => p.name))
+  async function handleAddPath() {
+    if (!selectedProfile || !newPathEntry.trim()) return
+    try {
+      await addProfilePath(selectedProfile.name, newPathEntry.trim())
+      newPathEntry = ''
+      await refreshProfiles()
+    } catch (err) {
+      showMessage(localizeError(err instanceof Error ? err.message : String(err)), 'error')
+    }
   }
 
+  async function handleRemovePath(path: string) {
+    if (!selectedProfile) return
+    await removeProfilePath(selectedProfile.name, path)
+    await refreshProfiles()
+  }
   function selectProfile(p: ProfileData) {
     // Toggle: if the same profile is already selected, collapse it
     if (selectedProfile?.name === p.name) {
@@ -308,7 +314,7 @@
   }
 </script>
 
-<div class="space-y-3" on:pointerup={handleGlobalPointerUp}>
+<div class="space-y-3">
   <!-- Create profile bar -->
   <div class="flex gap-2">
     <input
@@ -352,20 +358,17 @@
     </div>
   {:else}
     <!-- Profile list with toggle switches (like PowerToys) -->
-    <div class="space-y-2">
+    <div class="space-y-2" use:sortableProfiles>
       {#each profileList as profile, i (profile.name)}
         <div
-          class="bg-white rounded-md border border-gray-200 dark:bg-gray-800 dark:border-gray-700 {dragOverIndex === i && dragIndex !== null ? 'ring-2 ring-blue-400' : ''}"
-          on:pointerenter={() => handleDragEnter(i)}
-          on:pointerup={() => handleDrop(i)}
+          class="bg-white rounded-md border border-gray-200 dark:bg-gray-800 dark:border-gray-700"
           role="listitem"
         >
           <!-- Profile row with toggle -->
           <div class="flex items-center justify-between px-4 py-2.5">
             <div
-              class="flex items-center gap-1 cursor-grab text-gray-300 hover:text-gray-400 dark:text-gray-600 dark:hover:text-gray-500 {isDragging && dragIndex === i ? 'opacity-50' : ''}"
+              class="profile-drag-handle flex items-center gap-1 cursor-grab active:cursor-grabbing touch-none text-gray-300 hover:text-gray-500 dark:text-gray-600"
               title={$t('profiles.dragToSort')}
-              on:pointerdown={() => handleDragStart(i)}
               role="button"
               tabindex="0"
             >
@@ -441,6 +444,34 @@
           <!-- Expanded detail panel -->
           {#if selectedProfile?.name === profile.name}
             <div class="border-t border-gray-100 px-4 py-3 dark:border-gray-700">
+              <div class="grid grid-cols-2 gap-4 mb-3 pb-3 border-b border-gray-100 dark:border-gray-700">
+                <div>
+                  <div class="text-[10px] font-medium text-gray-500 mb-1">{$t('profiles.inherits')}</div>
+                  <div class="space-y-1 max-h-20 overflow-y-auto">
+                    {#each profileList.filter(candidate => candidate.name !== profile.name) as parent (parent.name)}
+                      <label class="flex items-center gap-1.5 text-[10px] text-gray-600 dark:text-gray-300">
+                        <input type="checkbox" disabled={profile.isEnabled} checked={profile.inherits?.includes(parent.name)} on:change={(event) => handleInheritance(parent.name, event.currentTarget.checked)} />
+                        <span class="truncate">{parent.name}</span>
+                      </label>
+                    {/each}
+                  </div>
+                </div>
+                <div>
+                  <div class="text-[10px] font-medium text-gray-500 mb-1">{$t('profiles.pathEntries')}</div>
+                  <div class="space-y-1 mb-1">
+                    {#each profile.pathEntries ?? [] as path (path)}
+                      <div class="flex items-center gap-1 text-[10px] font-mono">
+                        <span class="truncate flex-1" title={path}>{path}</span>
+                        <button on:click={() => handleRemovePath(path)} disabled={profile.isEnabled} class="text-red-500 disabled:opacity-30" aria-label={$t('buttons.delete')}>×</button>
+                      </div>
+                    {/each}
+                  </div>
+                  <div class="flex gap-1">
+                    <input bind:value={newPathEntry} disabled={profile.isEnabled} on:keydown={(event) => { if (event.key === 'Enter') handleAddPath() }} class="min-w-0 flex-1 px-2 py-1 text-[10px] font-mono border rounded dark:bg-gray-700 dark:border-gray-600" placeholder={$t('path.entryPlaceholder')} />
+                    <button on:click={handleAddPath} disabled={profile.isEnabled || !newPathEntry.trim()} class="px-2 text-[10px] text-blue-600 disabled:opacity-30">{$t('buttons.add')}</button>
+                  </div>
+                </div>
+              </div>
               {#if profile.variables.length === 0}
                 <p class="text-[10px] text-gray-400 dark:text-gray-500 py-2">{$t('profiles.noVariables')}</p>
               {:else}
@@ -481,10 +512,11 @@
                 <div class="space-y-1.5 pt-2 border-t border-gray-100 dark:border-gray-700">
                   <!-- Clone from existing variable -->
                   <div>
-                    <label class="block text-[10px] font-medium text-gray-500 dark:text-gray-400 mb-0.5">
+                    <label for="profile-clone-source" class="block text-[10px] font-medium text-gray-500 dark:text-gray-400 mb-0.5">
                       {$t('profiles.cloneFromExisting')}
                     </label>
                     <select
+                      id="profile-clone-source"
                       bind:value={cloneSource}
                       on:change={handleCloneSelect}
                       class="w-full px-2 py-1 text-[10px] border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100"

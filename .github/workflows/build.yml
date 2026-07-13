@@ -1,14 +1,21 @@
-name: CI/CD Build & Release
+name: CI/CD Build and Release
 
 on:
   push:
-    branches: [main, master]
+    branches: [main]
     tags: ['v*']
   pull_request:
-    branches: [main, master]
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: env-manager-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
-  lint-and-test:
+  verify:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
@@ -22,67 +29,99 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '20'
-
-      - name: Build CLI
-        run: dotnet build -c Release
-
-      - name: Install Frontend Dependencies
-        working-directory: frontend
-        run: npm ci
-
-      - name: Run Unit Tests
-        working-directory: frontend
-        run: npm test -- --run
-        continue-on-error: true
-
-  build-release:
-    runs-on: windows-latest
-    needs: lint-and-test
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup .NET
-        uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: '10.0.x'
-
-      - name: Setup Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
 
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
+
       - name: Build CLI
         run: dotnet build -c Release
 
-      - name: Build All (Portable + MSI)
+      - name: Run unit tests
         working-directory: frontend
-        run: |
-          npm install
-          powershell -ExecutionPolicy Bypass -File scripts/build-all.ps1
+        run: npx vitest run
 
-      - name: Upload Portable Artifact
-        uses: actions/upload-artifact@v4
+      - name: Build frontend
+        working-directory: frontend
+        run: npm run build
+
+      - name: Check Rust shell
+        working-directory: frontend/src-tauri
+        run: cargo check --locked
+
+      - name: Audit production npm dependencies
+        working-directory: frontend
+        run: npm audit --omit=dev --audit-level=high --registry=https://registry.npmjs.org
+
+  package:
+    runs-on: windows-latest
+    needs: verify
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Build portable and MSI distributions
+        working-directory: frontend
+        shell: powershell
+        run: ./scripts/build-all.ps1
+
+      - name: Verify package layout and MSI naming
+        shell: powershell
+        run: |
+          if (-not (Test-Path 'release/portable/env-manager.exe')) { throw 'GUI executable missing' }
+          if (-not (Test-Path 'release/portable/env-manager-cli.exe')) { throw 'CLI executable missing' }
+          if (-not (Test-Path 'release/portable/AGENTS.cli.md')) { throw 'CLI agent guide missing' }
+          $msi = Get-ChildItem 'release/msi/*.msi'
+          if ($msi.Count -ne 1) { throw 'Expected exactly one MSI' }
+          if ($msi.Name -match '_[a-zA-Z]{2}-[a-zA-Z]{2,3}\.msi$') { throw 'Localized MSI suffix is forbidden' }
+
+      - uses: actions/upload-artifact@v4
         with:
           name: env-manager-portable
-          path: 'release/portable/*'
-          if-no-files-found: warn
+          path: release/portable/*
+          if-no-files-found: error
 
-      - name: Upload MSI Artifact
-        uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v4
         with:
           name: env-manager-msi
-          path: 'release/msi/*.msi'
-          if-no-files-found: warn
+          path: release/msi/*.msi
+          if-no-files-found: error
 
-      - name: Create GitHub Release
-        if: startsWith(github.ref, 'refs/tags/v')
-        uses: softprops/action-gh-release@v2
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: windows-latest
+    needs: package
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
         with:
-          files: |
-            release/portable/*
-            release/msi/*.msi
+          pattern: env-manager-*
+          merge-multiple: true
+          path: artifacts
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: artifacts/*
           draft: true
           generate_release_notes: true

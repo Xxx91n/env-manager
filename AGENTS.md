@@ -146,7 +146,7 @@ cd frontend
 powershell -ExecutionPolicy Bypass -File scripts/build-all.ps1
 # Output:
 #   release/portable/  - env-manager.exe + env-manager-cli.exe + DLLs (flat)
-#   release/msi/       - Env Manager_X.Y.Z_x64_en-US.msi
+#   release/msi/       - Env Manager_X.Y.Z_x64.msi
 ```
 
 ### Intermediate Build Artifacts
@@ -259,6 +259,19 @@ Profiles are sets of preconfigured variables that can be applied/unapplied as a 
 - Values containing `%` are stored as `REG_EXPAND_SZ` (matches Windows default editor behavior)
 - List-type variables (`PATH`, `PATHEXT`, `PSMODULEPATH`, `_NT_SYMBOL_PATH`, etc.) are detected for list-style editing
 
+### Extended State and Safety Contracts
+
+- `set` refuses to overwrite a different existing value unless `--overwrite` is explicit. GUI confirmation supplies this flag.
+- `rename` writes and verifies the target before deleting the source. GUI renames must use this command, never delete-then-set.
+- All writes acquire the cross-process `Local\EnvManager.RegistryMutation` mutex. Rust and frontend locks are additional in-process layers.
+- Audit history is stored at `%LOCALAPPDATA%\EnvManager\audit.json`, capped at 2,000 entries. Undo refuses stale changes unless `--force` is explicit.
+- Bulk JSON/.env/CSV imports run a dry-run conflict preview in the GUI and roll back every write if any item fails verification.
+- Profiles may inherit other profiles. Cycles and missing parents are rejected; child variables override parent variables.
+- Profile PATH fragments append unique entries to user PATH and use the same backup chain as variables.
+- Applied profiles record `appliedAt`. Overlapping profiles must be unapplied in reverse application order; unsafe unapply is rejected.
+- Inheritance and PATH fragments cannot change while a profile is active. GUI controls must expose the same disabled state.
+- `profiles.json` is atomically replaced, backed up to `profiles.json.bak`, and recovered from a valid backup after JSON corruption.
+- CLI/Rust logs record command names and argument counts, never argument values. Environment values may contain credentials.
 ### Variable Toggle (Enable/Disable)
 
 Variables can be toggled on/off without deleting them. When disabled:

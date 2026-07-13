@@ -98,31 +98,33 @@ if (Test-Path $WebViewLoader) {
   Copy-Item $WebViewLoader -Destination $PortableDir -Force
 }
 
-Write-Host "[build] Step 4: Collect MSI installer" -ForegroundColor Cyan
-$MsiSearchDir = Join-Path (Split-Path -Parent $GuiExe) "bundle\msi"
-if (Test-Path $MsiSearchDir) {
-  # Get all MSI files, select only the one matching current version, and clean stale ones
-  $msiFiles = Get-ChildItem -Path $MsiSearchDir -Filter "*.msi" | Sort-Object Name -Descending
-  # Pick the freshest MSI (Tauri overwrites the same version file each build)
-  $latestMsi = $msiFiles | Select-Object -First 1
-  if ($latestMsi) {
-    # Strip any language suffix patterns:
-    #   "Env Manager_0.5.0_x64_en-US.msi"  -> "Env Manager_0.5.0_x64.msi"
-    #   "Env Manager_0.5.0_x64_zh-CN.msi"  -> "Env Manager_0.5.0_x64.msi"
-    #   "Env Manager_0.5.0_x64.msi"        -> "Env Manager_0.5.0_x64.msi" (no change)
-    $cleanName = $latestMsi.Name
-    $cleanName = $cleanName -replace '_[a-zA-Z]{2}-[a-zA-Z]{2,3}\.msi$', '.msi'
-    $destPath = Join-Path $MsiDir $cleanName
-    Copy-Item $latestMsi.FullName -Destination $destPath -Force
-    Write-Host "[build] MSI: $($latestMsi.Name) -> $cleanName" -ForegroundColor Green
-  }
-} else {
-  Write-Host "[build] WARNING: No MSI bundle directory found at $MsiSearchDir" -ForegroundColor Yellow
+Write-Host "[build] Step 4: Build MSI installer" -ForegroundColor Cyan
+$WixRoot = Join-Path $env:LOCALAPPDATA "tauri\WixTools314"
+$Candle = Join-Path $WixRoot "candle.exe"
+$Light = Join-Path $WixRoot "light.exe"
+if (-not (Test-Path $Candle) -or -not (Test-Path $Light)) {
+  throw "WiX tools not found at $WixRoot. Run one Tauri MSI setup or install WiX 3.14."
 }
-
+$Version = (Get-Content (Join-Path $ProjectRoot "frontend\package.json") -Raw | ConvertFrom-Json).version
+$WixSource = Join-Path $PSScriptRoot "installer.wxs"
+$WixObject = Join-Path $env:TEMP ("env-manager-" + [Guid]::NewGuid().ToString("N") + ".wixobj")
+$MsiPath = Join-Path $MsiDir ("Env Manager_" + $Version + "_x64.msi")
+try {
+  & $Candle -nologo -arch x64 ("-dVersion=" + $Version) ("-dSourceDir=" + $PortableDir) -out $WixObject $WixSource
+  if ($LASTEXITCODE -ne 0) { throw "WiX candle failed" }
+  & $Light -nologo -spdb -out $MsiPath $WixObject
+  if ($LASTEXITCODE -ne 0) { throw "WiX light failed" }
+} finally {
+  Remove-Item -LiteralPath $WixObject -Force -ErrorAction SilentlyContinue
+  Remove-Item -LiteralPath ([IO.Path]::ChangeExtension($WixObject, '.wixpdb')) -Force -ErrorAction SilentlyContinue
+}
+Write-Host "[build] MSI: $(Split-Path -Leaf $MsiPath)" -ForegroundColor Green
 Write-Host ""
 Write-Host "[build] Done. Output:" -ForegroundColor Green
 Write-Host "  Portable: $PortableDir"
 Get-ChildItem $PortableDir | ForEach-Object { Write-Host "    $($_.Name)" }
 Write-Host "  MSI:      $MsiDir"
 Get-ChildItem $MsiDir | ForEach-Object { Write-Host "    $($_.Name)" }
+if (Get-ChildItem -Path $ReleaseDir -Recurse -Filter "*.msi" | Where-Object { $_.Name -match '_[a-zA-Z]{2}-[a-zA-Z]{2,3}\.msi$' }) {
+  throw "Localized MSI suffix detected in release output"
+}

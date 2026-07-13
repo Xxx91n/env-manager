@@ -29,7 +29,8 @@ All commands: `env-manager-cli <command> [args] [--scope user|system] [--debug]`
 |---------|-------|-------------|
 | `list` | `list` | List all variables (user + system) as JSON array |
 | `get` | `get <name>` | Get single variable as JSON object |
-| `set` | `set <name> <value> [--scope user\|system]` | Set variable |
+| `set` | `set <name> <value> [--scope user\|system] [--overwrite]` | Set variable; explicit overwrite required for conflicts |
+| `rename` | `rename <old> <new> [--scope] [--overwrite]` | Atomically rename and verify before deleting source |
 | `delete` | `delete <name> [--scope user\|system]` | Delete variable |
 | `toggle` | `toggle <name> [--scope user\|system]` | Enable/disable variable |
 | `backup` | `backup [--output <file>]` | Backup all variables to JSON |
@@ -39,6 +40,9 @@ All commands: `env-manager-cli <command> [args] [--scope user|system] [--debug]`
 | `validate` | `validate <file>` | Validate backup file format |
 | `profile` | `profile <subcommand>` | Manage variable profiles |
 | `path` | `path <subcommand>` | Edit PATH as a list |
+| `history` | `history list [--limit N]` / `history undo <id>` | Audit and guarded rollback |
+| `bulk` | `bulk import\|export <file>` | JSON/.env/CSV interchange with dry-run |
+| `expand` | `expand <value>` | Resolve nested variable references |
 | `agents` | `agents` | Output this AGENTS.md file |
 | `help` | `help` | Show help text |
 
@@ -136,3 +140,13 @@ state. CLI-only usage must manually verify state after mutations.
    other active profiles. Each profile backs up original values independently.
 9. **Protected variables are blocked from profiles**: `IsProfileApplicable()` and `ProfileAddVar()`
    reject variables in the ProtectedSystemVars list (PATH, SystemRoot, APPDATA, etc.)
+
+## Concurrency and Destructive-Action Rules
+
+- All writes are serialized across CLI and GUI processes by a named Windows mutex. Do not add external parallel write loops.
+- Read operations may run concurrently. Run mutations sequentially and verify with `list`, `get`, `profile status`, or `path list`.
+- Never use `--overwrite`, `--force`, system scope, restore, or bulk import unless the caller explicitly accepts the destructive effect.
+- Run bulk import once with `--dry-run`; only rerun with `--overwrite` after reviewing conflicts.
+- Profiles with overlapping variables must be unapplied in reverse application order. Unsafe order is rejected.
+- Profile inheritance must remain acyclic. Active profiles cannot change inheritance or PATH fragments.
+- Logs intentionally omit argument values. Do not add environment values to logs because they may contain credentials.

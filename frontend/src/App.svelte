@@ -5,6 +5,7 @@
   import ProfilePage from './lib/components/ProfilePage.svelte'
   import SettingsDialog from './lib/components/SettingsDialog.svelte'
   import PathEditor from './lib/components/PathEditor.svelte'
+  import HistoryPage from './lib/components/HistoryPage.svelte'
   import ConfirmDialog from './lib/components/ConfirmDialog.svelte'
   import { variables, loading, error, activeView, modal, isWriteInProgress, debugLogs, refreshTrigger, toasts, dismissToast } from './lib/stores'
   import { listVariables, updateTrayLocale } from './lib/api'
@@ -146,7 +147,15 @@
       >
         {$t('nav.path')}
       </button>
-    </nav>
+      <button
+        on:click={() => activeView.set('history')}
+        disabled={$isWriteInProgress}
+        class="px-3 py-1.5 text-xs font-medium rounded-md transition {$activeView === 'history'
+          ? 'bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300'
+          : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100 dark:text-gray-400 dark:hover:text-gray-200 dark:hover:bg-gray-700'}"
+      >
+        {$t('nav.history')}
+      </button>    </nav>
   </header>
 
   <div class="px-5 py-4">
@@ -169,6 +178,8 @@
       <ProfilePage />
     {:else if $activeView === 'path'}
       <PathEditor />
+    {:else if $activeView === 'history'}
+      <HistoryPage />
     {/if}
   </div>
 </div>

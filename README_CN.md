@@ -10,16 +10,17 @@
 
 ### CLI 命令行模式
 - 10 个命令，完全掌控环境变量管理
-- 配置文件系统：创建、应用、取消应用一组预配置变量
-- PATH 编辑器：以列表形式添加、删除、排序 PATH 条目
+- 支持多配置同时启用、配置继承、冲突预览、PATH 片段和安全的逆序恢复
+- PATH 编辑器：支持添加、删除、排序、重复项和失效目录检测
 - 用户和系统作用域支持
-- JSON 备份与恢复，支持差异对比和合并
+- JSON 备份与恢复、差异对比、合并、变更历史和安全撤销
+- 支持 `.env`、CSV、JSON 批量导入导出及冲突预览
 - 用户作用域无需管理员权限
 - 单一 158KB 可执行文件，无运行时依赖
 
 ### GUI 图形界面
 - 基于 Tauri 2.0 的原生桌面应用 (WebView2)
-- 实时变量列表，支持搜索和作用域筛选
+- 实时变量列表，支持搜索高亮、作用域筛选和 `%VAR%` 展开预览
 - 内联增删改查，删除前确认
 - 界面内备份与恢复
 - 10 种语言国际化：英语、中文、日语、韩语、德语、法语、西班牙语、葡萄牙语、俄语、阿拉伯语
@@ -133,6 +134,13 @@ powershell -ExecutionPolicy Bypass -File scripts/build-all.ps1
 | `merge` | `merge <old> <new> --output <file>` | 合并两个备份文件 |
 | `validate` | `validate <file>` | 验证备份文件格式 |
 | `help` | `help` | 显示帮助 |
+| `rename` | `rename <old> <new> [--scope] [--overwrite]` | 原子重命名变量 |
+| `history` | `history list [--limit N]` / `history undo <id>` | 查看或撤销审计变更 |
+| `bulk` | `bulk import\|export <file> [--scope]` | 导入导出 JSON、.env 或 CSV |
+| `expand` | `expand <value>` | 递归展开 `%VARIABLE%` 引用 |
+| `profile preview` | `profile preview <name>` | 预览冲突和 PATH 影响 |
+| `profile set-inherits` | `profile set-inherits <name> [parent ...]` | 设置无环配置继承 |
+| `profile add-path` | `profile add-path <name> <dir>` | 向配置添加 PATH 片段 |
 | `profile list` | `profile list` | 列出所有配置文件 |
 | `profile create` | `profile create <name>` | 创建新配置文件 |
 | `profile apply` | `profile apply <name>` | 应用配置文件（备份现有变量） |

@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
+  <Product Id="*" Name="Env Manager" Language="1033" Version="$(var.Version)"
+           Manufacturer="Env Manager" UpgradeCode="349fb993-98bf-5bf6-984a-dae0cc68cbbb">
+    <Package InstallerVersion="450" Compressed="yes" InstallScope="perMachine" />
+    <MajorUpgrade DowngradeErrorMessage="A newer version of Env Manager is already installed." />
+    <MediaTemplate EmbedCab="yes" />
+
+    <Directory Id="TARGETDIR" Name="SourceDir">
+      <Directory Id="ProgramFiles64Folder">
+        <Directory Id="INSTALLDIR" Name="Env Manager" />
+      </Directory>
+      <Directory Id="ProgramMenuFolder">
+        <Directory Id="ApplicationProgramsFolder" Name="Env Manager" />
+      </Directory>
+    </Directory>
+
+    <DirectoryRef Id="INSTALLDIR">
+      <Component Id="GuiExecutable" Guid="*" Win64="yes">
+        <File Id="GuiFile" Source="$(var.SourceDir)\env-manager.exe" KeyPath="yes" />
+      </Component>
+      <Component Id="CliExecutable" Guid="*" Win64="yes">
+        <File Id="CliFile" Source="$(var.SourceDir)\env-manager-cli.exe" KeyPath="yes" />
+      </Component>
+      <Component Id="CliLibrary" Guid="*" Win64="yes">
+        <File Id="CliLibraryFile" Source="$(var.SourceDir)\env-manager-cli.dll" KeyPath="yes" />
+      </Component>
+      <Component Id="CliDeps" Guid="*" Win64="yes">
+        <File Id="CliDepsFile" Source="$(var.SourceDir)\env-manager-cli.deps.json" KeyPath="yes" />
+      </Component>
+      <Component Id="CliRuntime" Guid="*" Win64="yes">
+        <File Id="CliRuntimeFile" Source="$(var.SourceDir)\env-manager-cli.runtimeconfig.json" KeyPath="yes" />
+      </Component>
+      <Component Id="AgentGuide" Guid="*" Win64="yes">
+        <File Id="AgentGuideFile" Source="$(var.SourceDir)\AGENTS.cli.md" KeyPath="yes" />
+      </Component>
+      <Component Id="WebViewLoader" Guid="*" Win64="yes">
+        <File Id="WebViewLoaderFile" Source="$(var.SourceDir)\WebView2Loader.dll" KeyPath="yes" />
+      </Component>
+    </DirectoryRef>
+
+    <DirectoryRef Id="ApplicationProgramsFolder">
+      <Component Id="StartMenuShortcut" Guid="*" Win64="yes">
+        <Shortcut Id="ApplicationShortcut" Name="Env Manager" Target="[INSTALLDIR]env-manager.exe"
+                  WorkingDirectory="INSTALLDIR" />
+        <RemoveFolder Id="ApplicationProgramsFolder" On="uninstall" />
+        <RegistryValue Root="HKCU" Key="Software\EnvManager" Name="StartMenuShortcut"
+                       Type="integer" Value="1" KeyPath="yes" />
+      </Component>
+    </DirectoryRef>
+
+    <Feature Id="MainFeature" Title="Env Manager" Level="1">
+      <ComponentRef Id="GuiExecutable" />
+      <ComponentRef Id="CliExecutable" />
+      <ComponentRef Id="CliLibrary" />
+      <ComponentRef Id="CliDeps" />
+      <ComponentRef Id="CliRuntime" />
+      <ComponentRef Id="AgentGuide" />
+      <ComponentRef Id="WebViewLoader" />
+      <ComponentRef Id="StartMenuShortcut" />
+    </Feature>
+  </Product>
+</Wix>

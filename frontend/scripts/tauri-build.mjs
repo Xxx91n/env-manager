@@ -1,33 +1,22 @@
-// Detect the Rust host triple and pass it to `tauri build -- --target <triple>`.
-// This ensures Tauri's bundler looks in the same directory where cargo
-// actually places the binary (target/<triple>/release/ instead of target/release/),
-// which matters on hosts whose default triple is not the "plain" host
-// (e.g. x86_64-pc-windows-gnu with MinGW).
-import { execSync } from "node:child_process";
-import { exit } from "node:process";
+import { execSync, spawn } from 'node:child_process'
+import { exit } from 'node:process'
 
-let triple = "";
+let triple = ''
 try {
-  const out = execSync("rustc -vV", { encoding: "utf-8" });
-  const m = out.match(/host:\s*(\S+)/);
-  if (m) triple = m[1];
+  const output = execSync('rustc -vV', { encoding: 'utf-8' })
+  triple = output.match(/host:\s*(\S+)/)?.[1] ?? ''
 } catch {
-  // rustc not found - let tauri build fail naturally
+  // Tauri reports a clear error when rustc is unavailable.
 }
 
-const args = ["build"];
-if (triple) {
-  args.push("--target", triple);
-}
-// Forward any extra CLI args after `--`
-const userArgs = process.argv.slice(2);
-if (userArgs.length) {
-  args.push("--", ...userArgs);
-}
+const args = ['tauri', 'build', '--no-bundle']
+if (triple) args.push('--target', triple)
+args.push(...process.argv.slice(2))
 
-const { spawn } = await import("node:child_process");
-const child = spawn("npx", ["tauri", ...args], {
-  stdio: "inherit",
-  shell: true,
-});
-child.on("exit", (code) => exit(code ?? 1));
+const tauriCli = new URL('../node_modules/@tauri-apps/cli/tauri.js', import.meta.url)
+const child = spawn(process.execPath, [tauriCli.pathname.slice(1), ...args.slice(1)], { stdio: 'inherit', shell: false })
+child.on('error', (error) => {
+  console.error(`[tauri-build] Failed to start ${executable}: ${error.message}`)
+  exit(1)
+})
+child.on('exit', (code) => exit(code ?? 1))
