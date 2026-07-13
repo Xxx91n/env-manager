@@ -119,5 +119,13 @@
   "profiles.renamePrompt": "Переименовать профиль в:",
   "messages.profileExported": "Профиль успешно экспортирован",
   "messages.profileImported": "Профиль успешно импортирован",
-  "messages.profileRenamed": "Профиль успешно переименован"
+  "messages.profileRenamed": "Профиль успешно переименован",
+  "messages.profileAlreadyExists": "Profil s etim imenem uzhe sushestvuet",
+  "profiles.dragToSort": "Peretashite dlya izmeneniya poryadka profiley",
+  "dialogs.backupExportPrompt": "Vyberite mesto dlya sohraneniya backupa",
+  "messages.backupExported": "Backup uspeshno eksportirovan",
+  "messages.backupExportFailed": "Oshibka eksporta backupa",
+  "profiles.exportFilePrompt": "Vyberite mesto dlya eksporta profilya",
+  "profiles.importFilePrompt": "Vyberite fayl profilya dlya importa",
+  "messages.pathDuplicate": "Etot put uzhe sushestvuet v PATH"
 }

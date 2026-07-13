@@ -241,22 +241,21 @@
   }
 </script>
 
+{#if copyFeedback}
+  <div class="fixed top-4 left-1/2 -translate-x-1/2 px-3 py-1.5 bg-gray-800 text-white text-xs rounded-md shadow-lg z-50 pointer-events-none transition-opacity dark:bg-gray-700">
+    {copyFeedback}
+  </div>
+{/if}
+
+{#if message}
+  <div class="fixed top-4 left-1/2 -translate-x-1/2 px-3 py-1.5 rounded-md text-xs shadow-lg z-50 pointer-events-none transition-opacity {messageType === 'success'
+    ? 'bg-green-600 text-white'
+    : 'bg-red-600 text-white'}">
+    {message}
+  </div>
+{/if}
+
 <div class="space-y-3">
-
-
-  {#if copyFeedback}
-    <div class="fixed top-4 left-1/2 -translate-x-1/2 px-3 py-1.5 bg-gray-800 text-white text-xs rounded-md shadow-lg z-50 pointer-events-none transition-opacity dark:bg-gray-700">
-      {copyFeedback}
-    </div>
-  {/if}
-
-  {#if message}
-    <div class="fixed top-4 left-1/2 -translate-x-1/2 px-3 py-1.5 rounded-md text-xs shadow-lg z-50 pointer-events-none transition-opacity {messageType === 'success'
-      ? 'bg-green-600 text-white'
-      : 'bg-red-600 text-white'}">
-      {message}
-    </div>
-  {/if}
 
   <div class="flex items-center gap-2">
     <label for="path-scope" class="text-xs font-medium text-gray-600 dark:text-gray-400">{$t('path.scope')}</label>

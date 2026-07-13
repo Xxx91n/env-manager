@@ -119,5 +119,13 @@
   "profiles.renamePrompt": "إعادة تسمية الملف الشخصي إلى:",
   "messages.profileExported": "تم تصدير الملف الشخصي بنجاح",
   "messages.profileImported": "تم استيراد الملف الشخصي بنجاح",
-  "messages.profileRenamed": "تم إعادة تسمية الملف الشخصي بنجاح"
+  "messages.profileRenamed": "تم إعادة تسمية الملف الشخصي بنجاح",
+  "messages.profileAlreadyExists": " Profile mawjud biname mithl hadha",
+  "profiles.dragToSort": "Sahb li'ada tartib al-profiles",
+  "dialogs.backupExportPrompt": "Ikhtir mawqi' li-l-naskh al-ihtira'i",
+  "messages.backupExported": "Tamma naskh al-ihtira'i b-najah",
+  "messages.backupExportFailed": "Fashal fi naskh al-ihtira'i",
+  "profiles.exportFilePrompt": "Ikhtir mawqi' li-tasadwir al-profile",
+  "profiles.importFilePrompt": "Ikhtir milaf al-profile li-l-tasweed",
+  "messages.pathDuplicate": "Hatha al-masir mawjud fi PATH"
 }

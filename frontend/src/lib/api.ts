@@ -1,4 +1,5 @@
 import { invoke } from '@tauri-apps/api/core'
+import { open as openDialog, save as saveDialog } from '@tauri-apps/plugin-dialog'
 import { variables, loading, error, isWriteInProgress, addDebugLog } from './stores'
 
 export interface EnvVariable {
@@ -609,6 +610,32 @@ export async function removeCliFromPath(): Promise<{ removed: boolean; message: 
 /**
  * Retrieves the CLI AGENTS.md file content.
  */
+/**
+ * Opens a native Windows file open dialog for selecting a JSON file.
+ */
+export async function pickOpenFile(title: string, defaultPath?: string): Promise<string | null> {
+  const selected = await openDialog({
+    title,
+    defaultPath,
+    filters: [{ name: 'JSON', extensions: ['json'] }],
+    multiple: false,
+  })
+  if (selected === null) return null
+  return typeof selected === 'string' ? selected : null
+}
+
+/**
+ * Opens a native Windows file save dialog for selecting an export destination.
+ */
+export async function pickSaveFile(title: string, defaultPath?: string): Promise<string | null> {
+  const selected = await saveDialog({
+    title,
+    defaultPath,
+    filters: [{ name: 'JSON', extensions: ['json'] }],
+  })
+  return selected === null ? null : selected
+}
+
 export async function getCliAgentsSpec(): Promise<string> {
   try {
     return await runRead('agents', [])

@@ -417,6 +417,7 @@ fn restore_window(app: &tauri::AppHandle) {
 
 fn main() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_dialog::init())
         .plugin({
             // Configure logging to write to a 'logs' directory adjacent to the exe.
             // This ensures portable versions keep logs alongside the executable,

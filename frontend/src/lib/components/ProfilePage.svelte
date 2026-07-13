@@ -14,6 +14,8 @@
     exportProfile,
     importProfile,
     renameProfile,
+    pickOpenFile,
+    pickSaveFile,
   } from '../api'
   import type { ProfileData, EnvVariable } from '../api'
 
@@ -29,6 +31,38 @@
   let showAddVarPanel = false
   let cloneSource = ''
   let allVars: EnvVariable[] = []
+  let dragIndex: number | null = null
+  let dragOverIndex: number | null = null
+
+  const PROFILE_ORDER_KEY = 'envManager_profileOrder'
+
+  function loadProfileOrder(): string[] {
+    try {
+      const raw = localStorage.getItem(PROFILE_ORDER_KEY)
+      return raw ? JSON.parse(raw) : []
+    } catch { return [] }
+  }
+
+  function saveProfileOrder(names: string[]): void {
+    try {
+      localStorage.setItem(PROFILE_ORDER_KEY, JSON.stringify(names))
+    } catch { /* ignore */ }
+  }
+
+  function applyStoredOrder(list: ProfileData[]): ProfileData[] {
+    const order = loadProfileOrder()
+    if (order.length === 0) return list
+    const ordered: ProfileData[] = []
+    const remaining: ProfileData[] = []
+    for (const name of order) {
+      const found = list.find(p => p.name === name)
+      if (found) ordered.push(found)
+    }
+    for (const p of list) {
+      if (!order.includes(p.name)) remaining.push(p)
+    }
+    return [...ordered, ...remaining]
+  }
 
   onMount(async () => {
     await refreshProfiles()
@@ -43,7 +77,7 @@
   async function refreshProfiles() {
     loading = true
     try {
-      profileList = await listProfiles()
+      profileList = applyStoredOrder(await listProfiles())
       profiles.set(profileList)
       await listVariables()
       allVars = $variables
@@ -67,6 +101,19 @@
     }, 3000)
   }
 
+  // Map CLI hardcoded error messages to i18n keys for localization
+  function localizeError(errMsg: string): string {
+    // Profile already exists
+    if (/already exists/i.test(errMsg) && /profile/i.test(errMsg)) {
+      return $t('messages.profileAlreadyExists')
+    }
+    // PATH duplicate
+    if (/already exists in PATH/i.test(errMsg)) {
+      return $t('messages.pathDuplicate')
+    }
+    return errMsg
+  }
+
   async function handleCreate() {
     const name = newProfileName.trim()
     if (!name) return
@@ -77,7 +124,7 @@
       await refreshProfiles()
       showMessage($t('messages.profileCreated'), 'success')
     } catch (err) {
-      showMessage(err instanceof Error ? err.message : String(err), 'error')
+      showMessage(localizeError(err instanceof Error ? err.message : String(err)), 'error')
     } finally {
       actionLoading = false
     }
@@ -85,21 +132,21 @@
 
   async function handleExport(profile: ProfileData) {
     const defaultPath = `${profile.name}.json`
-    const fileName = prompt($t('profiles.exportPrompt'), defaultPath)
+    const fileName = await pickSaveFile($t('profiles.exportFilePrompt'), defaultPath)
     if (!fileName) return
     actionLoading = true
     try {
       await exportProfile(profile.name, fileName)
       showMessage($t('messages.profileExported'), 'success')
     } catch (err) {
-      showMessage(err instanceof Error ? err.message : String(err), 'error')
+      showMessage(localizeError(err instanceof Error ? err.message : String(err)), 'error')
     } finally {
       actionLoading = false
     }
   }
 
   async function handleImport() {
-    const fileName = prompt($t('profiles.importPrompt'), '')
+    const fileName = await pickOpenFile($t('profiles.importFilePrompt'), '')
     if (!fileName) return
     actionLoading = true
     try {
@@ -107,7 +154,7 @@
       await refreshProfiles()
       showMessage($t('messages.profileImported'), 'success')
     } catch (err) {
-      showMessage(err instanceof Error ? err.message : String(err), 'error')
+      showMessage(localizeError(err instanceof Error ? err.message : String(err)), 'error')
     } finally {
       actionLoading = false
     }
@@ -122,7 +169,7 @@
       await refreshProfiles()
       showMessage($t('messages.profileRenamed'), 'success')
     } catch (err) {
-      showMessage(err instanceof Error ? err.message : String(err), 'error')
+      showMessage(localizeError(err instanceof Error ? err.message : String(err)), 'error')
     } finally {
       actionLoading = false
     }
@@ -143,7 +190,7 @@
           await refreshProfiles()
           showMessage($t('messages.profileDeleted'), 'success')
         } catch (err) {
-          showMessage(err instanceof Error ? err.message : String(err), 'error')
+          showMessage(localizeError(err instanceof Error ? err.message : String(err)), 'error')
         } finally {
           actionLoading = false
         }
@@ -163,7 +210,7 @@
       }
       await refreshProfiles()
     } catch (err) {
-      showMessage(err instanceof Error ? err.message : String(err), 'error')
+      showMessage(localizeError(err instanceof Error ? err.message : String(err)), 'error')
     } finally {
       actionLoading = false
     }
@@ -180,7 +227,7 @@
       showAddVarPanel = false
       await refreshProfiles()
     } catch (err) {
-      showMessage(err instanceof Error ? err.message : String(err), 'error')
+      showMessage(localizeError(err instanceof Error ? err.message : String(err)), 'error')
     } finally {
       actionLoading = false
     }
@@ -202,10 +249,45 @@
       await removeProfileVar(selectedProfile.name, varName)
       await refreshProfiles()
     } catch (err) {
-      showMessage(err instanceof Error ? err.message : String(err), 'error')
+      showMessage(localizeError(err instanceof Error ? err.message : String(err)), 'error')
     } finally {
       actionLoading = false
     }
+  }
+
+  function handleDragStart(e: DragEvent, index: number) {
+    dragIndex = index
+    if (e.dataTransfer) {
+      e.dataTransfer.effectAllowed = 'move'
+    }
+  }
+
+  function handleDragOver(e: DragEvent, index: number) {
+    e.preventDefault()
+    if (e.dataTransfer) {
+      e.dataTransfer.dropEffect = 'move'
+    }
+    dragOverIndex = index
+  }
+
+  function handleDrop(e: DragEvent, index: number) {
+    e.preventDefault()
+    if (dragIndex === null || dragIndex === index) {
+      dragIndex = null
+      dragOverIndex = null
+      return
+    }
+    const moved = profileList.splice(dragIndex, 1)[0]
+    profileList.splice(index, 0, moved)
+    profileList = profileList
+    saveProfileOrder(profileList.map(p => p.name))
+    dragIndex = null
+    dragOverIndex = null
+  }
+
+  function handleDragEnd() {
+    dragIndex = null
+    dragOverIndex = null
   }
 
   function selectProfile(p: ProfileData) {
@@ -276,9 +358,21 @@
     <!-- Profile list with toggle switches (like PowerToys) -->
     <div class="space-y-2">
       {#each profileList as profile (profile.name)}
-        <div class="bg-white rounded-md border border-gray-200 dark:bg-gray-800 dark:border-gray-700">
+        <div
+          class="bg-white rounded-md border border-gray-200 dark:bg-gray-800 dark:border-gray-700 {dragOverIndex === profileList.indexOf(profile) && dragIndex !== null ? 'ring-2 ring-blue-400' : ''}"
+          draggable="true"
+          on:dragstart={(e) => handleDragStart(e, profileList.indexOf(profile))}
+          on:dragover={(e) => handleDragOver(e, profileList.indexOf(profile))}
+          on:drop={(e) => handleDrop(e, profileList.indexOf(profile))}
+          on:dragend={handleDragEnd}
+        >
           <!-- Profile row with toggle -->
           <div class="flex items-center justify-between px-4 py-2.5">
+            <div class="flex items-center gap-1 cursor-grab text-gray-300 hover:text-gray-400 dark:text-gray-600 dark:hover:text-gray-500" title={$t('profiles.dragToSort')}>
+              <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                <path d="M7 4a1 1 0 11-2 0 1 1 0 012 0zM9 4a1 1 0 11-2 0 1 1 0 012 0zM11 4a1 1 0 11-2 0 1 1 0 012 0zM13 4a1 1 0 11-2 0 1 1 0 012 0zM7 8a1 1 0 11-2 0 1 1 0 012 0zM9 8a1 1 0 11-2 0 1 1 0 012 0zM11 8a1 1 0 11-2 0 1 1 0 012 0zM13 8a1 1 0 11-2 0 1 1 0 012 0zM7 12a1 1 0 11-2 0 1 1 0 012 0zM9 12a1 1 0 11-2 0 1 1 0 012 0zM11 12a1 1 0 11-2 0 1 1 0 012 0zM13 12a1 1 0 11-2 0 1 1 0 012 0zM7 16a1 1 0 11-2 0 1 1 0 012 0zM9 16a1 1 0 11-2 0 1 1 0 012 0zM11 16a1 1 0 11-2 0 1 1 0 012 0zM13 16a1 1 0 11-2 0 1 1 0 012 0z" />
+              </svg>
+            </div>
             <button
               on:click={() => selectProfile(profile)}
               class="flex items-center gap-3 flex-1 text-left"

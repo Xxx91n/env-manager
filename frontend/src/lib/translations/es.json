@@ -119,5 +119,13 @@
   "profiles.renamePrompt": "Renombrar perfil a:",
   "messages.profileExported": "Perfil exportado con exito",
   "messages.profileImported": "Perfil importado con exito",
-  "messages.profileRenamed": "Perfil renombrado con exito"
+  "messages.profileRenamed": "Perfil renombrado con exito",
+  "messages.profileAlreadyExists": "Ya existe un perfil con este nombre",
+  "profiles.dragToSort": "Arrastrar para reordenar perfiles",
+  "dialogs.backupExportPrompt": "Seleccionar ubicacion para guardar respaldo",
+  "messages.backupExported": "Respaldo exportado exitosamente",
+  "messages.backupExportFailed": "Error al exportar respaldo",
+  "profiles.exportFilePrompt": "Seleccionar ubicacion para exportar perfil",
+  "profiles.importFilePrompt": "Seleccionar archivo de perfil para importar",
+  "messages.pathDuplicate": "Esta ruta ya existe en PATH"
 }

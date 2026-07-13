@@ -119,5 +119,13 @@
   "profiles.renamePrompt": "将配置文件重命名为:",
   "messages.profileExported": "配置文件导出成功",
   "messages.profileImported": "配置文件导入成功",
-  "messages.profileRenamed": "配置文件重命名成功"
+  "messages.profileRenamed": "配置文件重命名成功",
+  "messages.profileAlreadyExists": "同名配置文件已存在",
+  "profiles.dragToSort": "拖动可重新排序配置文件",
+  "dialogs.backupExportPrompt": "选择备份文件保存位置",
+  "messages.backupExported": "备份导出成功",
+  "messages.backupExportFailed": "备份导出失败",
+  "profiles.exportFilePrompt": "选择导出配置文件的位置",
+  "profiles.importFilePrompt": "选择要导入的配置文件",
+  "messages.pathDuplicate": "该路径已存在于PATH中"
 }

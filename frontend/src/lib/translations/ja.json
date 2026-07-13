@@ -119,5 +119,13 @@
   "profiles.renamePrompt": "プロファイルの名前を変更:",
   "messages.profileExported": "プロファイルをエクスポートしました",
   "messages.profileImported": "プロファイルをインポートしました",
-  "messages.profileRenamed": "プロファイルの名前を変更しました"
+  "messages.profileRenamed": "プロファイルの名前を変更しました",
+  "messages.profileAlreadyExists": "同名のプロファイルは既に存在します",
+  "profiles.dragToSort": "ドラッグしてプロファイルを並べ替え",
+  "dialogs.backupExportPrompt": "バックアップの保存先を選択",
+  "messages.backupExported": "バックアップのエクスポートに成功しました",
+  "messages.backupExportFailed": "バックアップのエクスポートに失敗しました",
+  "profiles.exportFilePrompt": "プロファイルのエクスポート先を選択",
+  "profiles.importFilePrompt": "インポートするプロファイルファイルを選択",
+  "messages.pathDuplicate": "このパスはPATHに既に存在します"
 }

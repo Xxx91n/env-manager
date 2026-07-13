@@ -119,5 +119,13 @@
   "profiles.renamePrompt": "프로필 이름 변경:",
   "messages.profileExported": "프로필 내보내기 완료",
   "messages.profileImported": "프로필 가져오기 완료",
-  "messages.profileRenamed": "프로필 이름 변경 완료"
+  "messages.profileRenamed": "프로필 이름 변경 완료",
+  "messages.profileAlreadyExists": "같은 이름의 프로필이 이미 존재합니다",
+  "profiles.dragToSort": "드래그하여 프로필 순서 변경",
+  "dialogs.backupExportPrompt": "백업 저장 위치 선택",
+  "messages.backupExported": "백업 내보내기 성공",
+  "messages.backupExportFailed": "백업 내보내기 실패",
+  "profiles.exportFilePrompt": "프로필 내보내기 위치 선택",
+  "profiles.importFilePrompt": "가져올 프로필 파일 선택",
+  "messages.pathDuplicate": "이 경로는 PATH에 이미 존재합니다"
 }
