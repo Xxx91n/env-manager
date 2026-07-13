@@ -251,8 +251,10 @@
 
   function handleDragStart(e: DragEvent, index: number) {
     dragIndex = index
+    // setData is required for the drag to be recognised in WebView2
     if (e.dataTransfer) {
       e.dataTransfer.effectAllowed = 'move'
+      e.dataTransfer.setData('text/plain', String(index))
     }
   }
 
@@ -273,9 +275,10 @@
       dragOverIndex = null
       return
     }
-    const moved = profileList.splice(dragIndex, 1)[0]
-    profileList.splice(index, 0, moved)
-    profileList = profileList
+    const moved = profileList[dragIndex]
+    const newList = profileList.filter((_, idx) => idx !== dragIndex)
+    newList.splice(index, 0, moved)
+    profileList = newList
     saveProfileOrder(profileList.map(p => p.name))
     dragIndex = null
     dragOverIndex = null
@@ -345,14 +348,15 @@
   {:else}
     <!-- Profile list with toggle switches (like PowerToys) -->
     <div class="space-y-2">
-      {#each profileList as profile (profile.name)}
+      {#each profileList as profile, i (profile.name)}
         <div
-          class="bg-white rounded-md border border-gray-200 dark:bg-gray-800 dark:border-gray-700 {dragOverIndex === profileList.indexOf(profile) && dragIndex !== null ? 'ring-2 ring-blue-400' : ''}"
+          class="bg-white rounded-md border border-gray-200 dark:bg-gray-800 dark:border-gray-700 {dragOverIndex === i && dragIndex !== null ? 'ring-2 ring-blue-400' : ''}"
           draggable="true"
-          on:dragstart={(e) => handleDragStart(e, profileList.indexOf(profile))}
-          on:dragover={(e) => handleDragOver(e, profileList.indexOf(profile))}
-          on:drop={(e) => handleDrop(e, profileList.indexOf(profile))}
+          on:dragstart={(e) => handleDragStart(e, i)}
+          on:dragover={(e) => handleDragOver(e, i)}
+          on:drop={(e) => handleDrop(e, i)}
           on:dragend={handleDragEnd}
+          role="listitem"
         >
           <!-- Profile row with toggle -->
           <div class="flex items-center justify-between px-4 py-2.5">
