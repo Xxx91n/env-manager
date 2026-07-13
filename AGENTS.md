@@ -237,12 +237,17 @@ Debug output goes to stderr with timestamps: `[debug] HH:mm:ss.fff message`. Thi
 
 Profiles are sets of preconfigured variables that can be applied/unapplied as a group. When applied, original values of affected user variables are backed up. Unapplying restores originals. Profiles only affect user scope.
 
+**Multi-profile support**: Multiple profiles can be applied simultaneously. Applying a profile does NOT unapply other active profiles. Each profile backs up the original variable value (if any) before overwriting. The first profile to back up a variable owns the original value; later profiles overwrite the current (profile-set) value but do not create additional backups.
+
 - Profile storage: `%LOCALAPPDATA%\EnvManager\profiles.json`
 - Profile variables override user variables when applied
 - Original values backed up before apply, restored on unapply
 - Profiles only affect user scope
 - `profile status` checks if a profile is correctly applied (mirrors PowerToys `IsCorrectlyApplied()`)
 - `IsProfileApplicable()` validation runs before apply - rejects profiles with invalid variable names (>255 chars, contains `=`)
+- `IsProfileApplicable()` also rejects profiles containing protected system variables (see ProtectedSystemVars below)
+- `ApplyProfile()` skips any protected system variables in the profile variable list
+- `ProfileAddVar()` rejects adding protected system variables to a profile
 - Variable name validation: user-scope names limited to 255 chars (registry limit), rejects `=` in names
 - Values containing `%` are stored as `REG_EXPAND_SZ` (matches Windows default editor behavior)
 - List-type variables (`PATH`, `PATHEXT`, `PSMODULEPATH`, `_NT_SYMBOL_PATH`, etc.) are detected for list-style editing
@@ -289,6 +294,10 @@ button is clicked. Each page component (Variables, ProfilePage, PathEditor) subs
 reactive statement (`$: if ($refreshTrigger > 0) { refresh() }`) and re-fetches its data. This
 ensures the current view's data is refreshed regardless of which page is active.
 
+The `SettingsDialog` also dispatches a `pathChanged` event after CLI PATH changes, which `App.svelte`
+intercepts to increment `refreshTrigger` and call `listVariables()`. This ensures the PathEditor
+and all other views update immediately after adding/removing CLI from PATH.
+
 ### Race Condition Prevention
 
 The Rust IPC layer uses a `static CLI_RWLOCK: RwLock<()>` to implement read/write lock separation:
@@ -321,9 +330,7 @@ context menu matches the GUI locale.
 
 ### Toast Notification System
 
-All transient feedback messages (copy confirmation, action success/errors) are rendered as
-`fixed`-position overlay toasts with `pointer-events-none` and `z-50`. This ensures they
-appear on top of content without causing layout shifts or interfering with clicks.
+All transient feedback messages (copy confirmation, action success/errors) use a **global toast store** (`showToast()` in `stores.ts`) rendered once in `App.svelte` as `fixed`-position overlays with `pointer-events-none` and `z-[60]`. No component renders its own toast. This ensures they appear on top of content without causing layout shifts or interfering with clicks. Toasts auto-dismiss after 3s (configurable) and can be clicked to dismiss early.
 
 ### Internal Modal Dialog System
 
@@ -412,6 +419,7 @@ Profiles are stored at `%LOCALAPPDATA%\EnvManager\profiles.json`:
   by setting `profileSource` to the profile name. The GUI shows a badge next to the variable name
   indicating which profile it came from. This helps users distinguish profile-applied variables
   from manually-set ones.
+- **Profile drag-to-reorder**: The GUI Profile page supports HTML5 drag-and-drop to reorder profiles. The order is persisted in `localStorage` as `envManager_profileOrder` and applied via `applyStoredOrder()` after `listProfiles()`. This is GUI-only sorting - no CLI calls, no profile data modification. Each profile card has a drag handle with a grab cursor.
 
 ---
 
@@ -475,7 +483,7 @@ The project uses [CodeGraph](https://github.com/nicholasgriffintn/codegraph) for
 ### Font Size Scaling
 
 The GUI supports a font size scale setting in the Settings dialog. Users can choose from
-4 presets: Small (85%), Normal (100%), Large (115%), Extra Large (130%). The scale is
+6 presets: Small (85%), Normal (100%), Large (115%), Extra Large (130%), XX-Large (145%), XXX-Large (160%). The scale is
 applied by setting `document.documentElement.style.fontSize` to `13 * scale + 'px'`.
 This uses CSS rem units throughout the app, so all text scales proportionally.
 The setting persists in `localStorage` as `fontScale`.
@@ -576,7 +584,7 @@ Scopes: `cli`, `gui`, `backup`, `registry`, `i18n`, `docs`, `build`
 - Backup file size cap: 50 MB maximum to prevent DoS via large files
 - CLI command whitelist in Rust IPC layer: only known commands can spawn subprocesses (list, get, set, delete, toggle, backup, restore, diff, merge, validate, profile, path, agents, help)
 - Process isolation: CREATE_NO_WINDOW flag prevents console flicker and information leakage
-- **Critical system variable protection**: system-scope modifications to PATH, PATHEXT, SystemRoot, windir, ComSpec, TEMP, TMP, USERPROFILE, SystemDrive, ProgramFiles, ProgramFiles(x86), ProgramData, HOMEDRIVE, HOMEPATH, NUMBER_OF_PROCESSORS, OS, PROCESSOR_* are blocked in SetVariable, DeleteVariable, and SetVariableWithoutNotify
+- **Critical system variable protection**: system-scope modifications to protected variables are blocked in SetVariable, DeleteVariable, and SetVariableWithoutNotify. The full ProtectedSystemVars list: PATH, PATHEXT, PSMODULEPATH, SystemRoot, windir, ComSpec, TEMP, TMP, USERPROFILE, SystemDrive, ProgramFiles, ProgramFiles(x86), ProgramData, HOMEDRIVE, HOMEPATH, NUMBER_OF_PROCESSORS, OS, PROCESSOR_ARCHITECTURE, PROCESSOR_IDENTIFIER, PROCESSOR_LEVEL, PROCESSOR_REVISION, ALLUSERSPROFILE, APPDATA, COMMONPROGRAMFILES, COMMONPROGRAMFILES(x86), COMPUTERNAME, LOCALAPPDATA, LOGONSERVER, OneDrive, OneDriveConsumer, PUBLIC, SESSIONNAME, USERDOMAIN, USERNAME. These are also blocked from being added to profiles via IsProfileApplicable() and ProfileAddVar().
 - **Toggle backup name collision prevention**: variables whose name ends with `_EnvManager_disabled` cannot be toggled, preventing backup key confusion
 - **Profile name validation**: rejects empty/whitespace names, names >255 chars, names with null/newline/carriage-return chars
 - **Profile variable name validation**: rejects empty names, names >255 chars, names containing `=`

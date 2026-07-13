@@ -4,6 +4,7 @@
   import { locales, defaultLanguage } from '../i18n'
   import { updateTrayLocale, isCliInPath, addCliToPath, removeCliFromPath } from '../api'
   import { get } from 'svelte/store'
+  import { showToast } from '../stores'
   import { t as tStore } from 'svelte-i18n'
 
   export let darkMode = false
@@ -32,8 +33,6 @@
 
   let cliInPath = false
   let cliToggleLoading = false
-  let cliMessage = ''
-  let cliMessageType = ''
 
   onMount(async () => {
     // Check real system PATH on mount
@@ -76,25 +75,20 @@
         // Immediately re-check real PATH to update toggle state
         cliInPath = await isCliInPath()
         if (result.removed || !cliInPath) {
-          cliMessage = get(tStore)('settings.cliRemoved')
-          cliMessageType = 'success'
+          showToast(get(tStore)('settings.cliRemoved'), 'success')
         } else {
-          cliMessage = get(tStore)('settings.cliRemoveFailed')
-          cliMessageType = 'error'
+          showToast(get(tStore)('settings.cliRemoveFailed'), 'error')
         }
       } else {
         const result = await addCliToPath()
         // Immediately re-check real PATH to update toggle state
         cliInPath = await isCliInPath()
         if (result.added || cliInPath) {
-          cliMessage = get(tStore)('settings.cliAdded')
-          cliMessageType = 'success'
+          showToast(get(tStore)('settings.cliAdded'), 'success')
         } else {
-          cliMessage = get(tStore)('settings.cliAddFailed')
-          cliMessageType = 'error'
+          showToast(get(tStore)('settings.cliAddFailed'), 'error')
         }
       }
-      setTimeout(() => { cliMessage = '' }, 3000)
     } finally {
       cliToggleLoading = false
     }
@@ -176,12 +170,6 @@
           ></span>
         </button>
       </div>
-      {#if cliMessage}
-        <p class="text-xs {cliMessageType === 'success' ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}">
-          {cliMessage}
-        </p>
-      {/if}
-
       <div>
         <label for="settings-font-size" class="block text-xs font-medium text-gray-600 mb-1.5 dark:text-gray-400">
           {$t('settings.fontSize')}
@@ -208,6 +196,18 @@
           <button
             on:click={() => changeFontScale(1.3)}
             class="px-2 py-1 text-lg border rounded transition {selectedFontScale === 1.3 ? 'bg-blue-600 text-white border-blue-600 dark:bg-blue-500 dark:border-blue-500' : 'border-gray-300 text-gray-600 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-400 dark:hover:bg-gray-700'}"
+          >
+            A
+          </button>
+          <button
+            on:click={() => changeFontScale(1.45)}
+            class="px-2 py-1 text-xl border rounded transition {selectedFontScale === 1.45 ? 'bg-blue-600 text-white border-blue-600 dark:bg-blue-500 dark:border-blue-500' : 'border-gray-300 text-gray-600 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-400 dark:hover:bg-gray-700'}"
+          >
+            A
+          </button>
+          <button
+            on:click={() => changeFontScale(1.6)}
+            class="px-2 py-1 text-2xl border rounded transition {selectedFontScale === 1.6 ? 'bg-blue-600 text-white border-blue-600 dark:bg-blue-500 dark:border-blue-500' : 'border-gray-300 text-gray-600 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-400 dark:hover:bg-gray-700'}"
           >
             A
           </button>

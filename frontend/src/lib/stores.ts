@@ -45,6 +45,32 @@ export const debugLogs = writable<DebugLogEntry[]>([])
 export const isWriteInProgress = writable(false)
 export const refreshTrigger = writable(0)
 
+// Global toast notification store - rendered once in App.svelte
+// to prevent layout shifts from per-component toast rendering
+export interface Toast {
+  id: number
+  message: string
+  type: 'success' | 'error' | 'info'
+  duration: number
+}
+
+export const toasts = writable<Toast[]>([])
+let toastId = 0
+
+export function showToast(message: string, type: 'success' | 'error' | 'info' = 'info', duration = 3000) {
+  const id = ++toastId
+  toasts.update(list => [...list, { id, message, type, duration }])
+  if (duration > 0) {
+    setTimeout(() => {
+      toasts.update(list => list.filter(t => t.id !== id))
+    }, duration)
+  }
+}
+
+export function dismissToast(id: number) {
+  toasts.update(list => list.filter(t => t.id !== id))
+}
+
 export interface DebugLogEntry {
   timestamp: string
   level: 'info' | 'warn' | 'error' | 'debug'

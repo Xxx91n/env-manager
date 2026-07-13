@@ -47,11 +47,16 @@ class Program
     // want to modify their own PATH. System scope is fully protected.
     static readonly HashSet<string> ProtectedSystemVars = new(StringComparer.OrdinalIgnoreCase)
     {
+        // Core Windows system variables
         "PATH", "PATHEXT", "PSMODULEPATH", "SystemRoot", "windir", "ComSpec",
         "TEMP", "TMP", "USERPROFILE", "SystemDrive", "ProgramFiles",
         "ProgramFiles(x86)", "ProgramData", "HOMEDRIVE", "HOMEPATH",
         "NUMBER_OF_PROCESSORS", "OS", "PROCESSOR_ARCHITECTURE",
-        "PROCESSOR_IDENTIFIER", "PROCESSOR_LEVEL", "PROCESSOR_REVISION"
+        "PROCESSOR_IDENTIFIER", "PROCESSOR_LEVEL", "PROCESSOR_REVISION",
+        // Additional system variables that should never be modified or put in profiles
+        "ALLUSERSPROFILE", "APPDATA", "COMMONPROGRAMFILES", "COMMONPROGRAMFILES(x86)",
+        "COMPUTERNAME", "LOCALAPPDATA", "LOGONSERVER", "OneDrive", "OneDriveConsumer",
+        "PUBLIC", "SESSIONNAME", "USERDOMAIN", "USERNAME"
     };
 
     /// <summary>
@@ -1030,18 +1035,16 @@ class Program
 
         if (!IsProfileApplicable(profile))
         {
-            Console.Error.WriteLine($"Error: Profile '{name}' contains invalid variables and cannot be applied");
+            Console.Error.WriteLine($"Error: Profile '{name}' contains invalid or protected variables and cannot be applied");
             return 1;
         }
 
-        // Unapply any currently enabled profile first
-        foreach (var p in profiles)
+        // Multiple profiles can be applied simultaneously.
+        // If this profile is already applied, it's a no-op.
+        if (profile.IsEnabled)
         {
-            if (p.IsEnabled && !p.Id.Equals(profile.Id))
-            {
-                UnapplyProfile(p);
-                p.IsEnabled = false;
-            }
+            Console.WriteLine($"Profile '{name}' is already applied");
+            return 0;
         }
 
         ApplyProfile(profile);
@@ -1076,7 +1079,7 @@ class Program
 
     static int ProfileAddVar(string profileName, string varName, string varValue)
     {
-        if (string.IsNullOrWhiteSpace(varName) || varName.Length > 255 || varName.Contains('='))
+        if (string.IsNullOrWhiteSpace(varName) || varName.Length > 255 || varName.Contains('=') || ProtectedSystemVars.Contains(varName))
         {
             Console.Error.WriteLine("Error: Invalid variable name");
             return 1;
@@ -1245,8 +1248,10 @@ class Program
         {
             if (string.IsNullOrWhiteSpace(var.Name) || var.Name.Length >= 255)
                 return false;
-
             if (var.Name.Contains('='))
+                return false;
+            // Protected system variables cannot be in profiles
+            if (ProtectedSystemVars.Contains(var.Name))
                 return false;
         }
         return true;
@@ -1257,9 +1262,19 @@ class Program
         DebugLog("ApplyProfile: " + profile.Name);
         foreach (var var in profile.Variables)
         {
+            // Skip protected system variables - they cannot be overridden by profiles
+            if (ProtectedSystemVars.Contains(var.Name))
+            {
+                DebugLog($"Skipping protected variable: {var.Name}");
+                continue;
+            }
+
             string backupName = GetBackupVariableName(var.Name, profile.Name);
 
-            // Back up existing user variable if it exists and no backup exists yet
+            // Back up existing user variable if it exists and no backup exists yet.
+            // If another active profile already set this variable, the first profile
+            // to back it up owns the original value. Later profiles overwrite the
+            // current (profile-set) value.
             var existingValue = GetVariableValue(var.Name, "user");
             if (existingValue != null)
             {

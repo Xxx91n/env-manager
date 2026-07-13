@@ -2,26 +2,22 @@
   import { createEventDispatcher } from 'svelte'
   import { t } from 'svelte-i18n'
   import { createBackup, restoreBackup, pickSaveFile, pickOpenFile } from '../api'
+  import { showToast } from '../stores'
 
   const dispatch = createEventDispatcher()
 
   let mode = 'export'
   let saving = false
-  let message = ''
-  let messageType = 'success'
 
   async function handleExport() {
     const fileName = await pickSaveFile($t('dialogs.backupExportPrompt'), 'env-manager-backup.json')
     if (!fileName) return
     saving = true
-    message = ''
     try {
       const result = await createBackup(fileName)
-      message = $t('messages.backupExported')
-      messageType = 'success'
+      showToast($t('messages.backupExported'), 'success')
     } catch (err) {
-      message = err instanceof Error ? err.message : $t('messages.backupExportFailed')
-      messageType = 'error'
+      showToast(err instanceof Error ? err.message : $t('messages.backupExportFailed'), 'error')
     } finally {
       saving = false
     }
@@ -32,14 +28,11 @@
     if (!filePath) return
 
     saving = true
-    message = ''
     try {
       await restoreBackup(filePath)
-      message = $t('messages.backupRestored')
-      messageType = 'success'
+      showToast($t('messages.backupRestored'), 'success')
     } catch (err) {
-      message = err instanceof Error ? err.message : $t('messages.backupExportFailed')
-      messageType = 'error'
+      showToast(err instanceof Error ? err.message : $t('messages.backupExportFailed'), 'error')
     } finally {
       saving = false
     }
@@ -114,14 +107,7 @@
         </button>
       {/if}
 
-      {#if message}
-        <div class="fixed top-4 left-1/2 -translate-x-1/2 px-3 py-1.5 rounded-md text-xs shadow-lg z-50 pointer-events-none transition-opacity {messageType === 'success'
-          ? 'bg-green-600 text-white'
-          : 'bg-red-600 text-white'}">
-          {message}
-        </div>
-      {/if}
-    </div>
+      </div>
 
     <div class="px-5 py-3 border-t border-gray-200 flex justify-end dark:border-gray-700">
       <button

@@ -2,6 +2,7 @@
   import { onMount } from 'svelte'
   import { t } from 'svelte-i18n'
   import { showModal, isWriteInProgress, refreshTrigger } from '../stores'
+  import { showToast } from '../stores'
   import {
     listPathEntries,
     addPathEntry,
@@ -17,9 +18,6 @@
   let loading = false
   let actionLoading = false
   let newEntry = ''
-  let message = ''
-  let messageType = ''
-  let copyFeedback = ''
 
   // Inline rename state
   let editingIndex: number | null = null
@@ -50,15 +48,12 @@
   }
 
   function showMessage(msg: string, type: string) {
-    message = msg
-    messageType = type
-    setTimeout(() => { message = ''; messageType = '' }, 3000)
+    showToast(msg, type === 'success' ? 'success' : type === 'error' ? 'error' : 'info')
   }
 
   function copyToClipboard(text: string) {
     navigator.clipboard.writeText(text).then(() => {
-      copyFeedback = $t('messages.copied')
-      setTimeout(() => { copyFeedback = '' }, 1500)
+      showToast($t('messages.copied'), 'info', 1500)
     }).catch(() => {
       const textarea = document.createElement('textarea')
       textarea.value = text
@@ -68,8 +63,7 @@
       textarea.select()
       try {
         document.execCommand('copy')
-        copyFeedback = $t('messages.copied')
-        setTimeout(() => { copyFeedback = '' }, 1500)
+        showToast($t('messages.copied'), 'info', 1500)
       } catch { /* ignore */ }
       document.body.removeChild(textarea)
     })
@@ -240,20 +234,6 @@
     }
   }
 </script>
-
-{#if copyFeedback}
-  <div class="fixed top-4 left-1/2 -translate-x-1/2 px-3 py-1.5 bg-gray-800 text-white text-xs rounded-md shadow-lg z-50 pointer-events-none transition-opacity dark:bg-gray-700">
-    {copyFeedback}
-  </div>
-{/if}
-
-{#if message}
-  <div class="fixed top-4 left-1/2 -translate-x-1/2 px-3 py-1.5 rounded-md text-xs shadow-lg z-50 pointer-events-none transition-opacity {messageType === 'success'
-    ? 'bg-green-600 text-white'
-    : 'bg-red-600 text-white'}">
-    {message}
-  </div>
-{/if}
 
 <div class="space-y-3">
 

@@ -59,6 +59,7 @@ frontend/src-tauri/.cargo/config.toml
 .temp/
 temp/
 tmp/
+_*.py
 *.tmp
 *.log
 tauri-dev.log

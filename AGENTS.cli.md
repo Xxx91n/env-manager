@@ -132,3 +132,7 @@ state. CLI-only usage must manually verify state after mutations.
 6. **Prefer user scope** unless system-wide changes are explicitly needed
 7. **Profile apply/unapply is atomic per-profile**: the CLI batches all
    variable changes and broadcasts WM_SETTINGCHANGE once at the end
+8. **Multiple profiles can be active simultaneously**: applying a profile does NOT unapply
+   other active profiles. Each profile backs up original values independently.
+9. **Protected variables are blocked from profiles**: `IsProfileApplicable()` and `ProfileAddVar()`
+   reject variables in the ProtectedSystemVars list (PATH, SystemRoot, APPDATA, etc.)

@@ -2,6 +2,7 @@
   import { onMount } from 'svelte'
   import { t } from 'svelte-i18n'
   import { profiles, variables, showModal, refreshTrigger } from '../stores'
+  import { showToast } from '../stores'
   import {
     listProfiles,
     createProfile,
@@ -23,8 +24,6 @@
   let selectedProfile: ProfileData | null = null
   let loading = false
   let actionLoading = false
-  let message = ''
-  let messageType = ''
   let newProfileName = ''
   let newVarName = ''
   let newVarValue = ''
@@ -93,12 +92,7 @@
   }
 
   function showMessage(msg: string, type: string) {
-    message = msg
-    messageType = type
-    setTimeout(() => {
-      message = ''
-      messageType = ''
-    }, 3000)
+    showToast(msg, type === 'success' ? 'success' : type === 'error' ? 'error' : 'info')
   }
 
   // Map CLI hardcoded error messages to i18n keys for localization
@@ -263,7 +257,9 @@
   }
 
   function handleDragOver(e: DragEvent, index: number) {
+    // Must always preventDefault on dragover to allow drop (removes forbidden cursor)
     e.preventDefault()
+    e.stopPropagation()
     if (e.dataTransfer) {
       e.dataTransfer.dropEffect = 'move'
     }
@@ -305,14 +301,6 @@
 </script>
 
 <div class="space-y-3">
-  {#if message}
-    <div class="fixed top-4 left-1/2 -translate-x-1/2 px-3 py-1.5 rounded-md text-xs shadow-lg z-50 pointer-events-none transition-opacity {messageType === 'success'
-      ? 'bg-green-600 text-white'
-      : 'bg-red-600 text-white'}">
-      {message}
-    </div>
-  {/if}
-
   <!-- Create profile bar -->
   <div class="flex gap-2">
     <input

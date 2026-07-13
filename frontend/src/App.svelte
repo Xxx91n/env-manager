@@ -6,7 +6,7 @@
   import SettingsDialog from './lib/components/SettingsDialog.svelte'
   import PathEditor from './lib/components/PathEditor.svelte'
   import ConfirmDialog from './lib/components/ConfirmDialog.svelte'
-  import { variables, loading, error, activeView, modal, isWriteInProgress, debugLogs, refreshTrigger } from './lib/stores'
+  import { variables, loading, error, activeView, modal, isWriteInProgress, debugLogs, refreshTrigger, toasts, dismissToast } from './lib/stores'
   import { listVariables, updateTrayLocale } from './lib/api'
   import { defaultLanguage } from './lib/i18n'
   import { get } from 'svelte/store'
@@ -185,6 +185,25 @@
       listVariables()
     }}
   />
+{/if}
+
+<!-- Global toast notification layer: renders toasts as fixed overlays
+     at app root level, preventing layout shifts from per-component rendering -->
+{#if $toasts.length > 0}
+  <div class="fixed top-4 left-1/2 -translate-x-1/2 z-[60] flex flex-col gap-2 pointer-events-none">
+    {#each $toasts as toast (toast.id)}
+      <div
+        class="px-3.5 py-2 rounded-md text-xs shadow-lg pointer-events-auto cursor-pointer transition-all {toast.type === 'success'
+          ? 'bg-green-600 text-white'
+          : toast.type === 'error'
+            ? 'bg-red-600 text-white'
+            : 'bg-gray-800 text-white dark:bg-gray-700'}"
+        on:click={() => dismissToast(toast.id)}
+      >
+        {toast.message}
+      </div>
+    {/each}
+  </div>
 {/if}
 
 <ConfirmDialog />

@@ -1,6 +1,7 @@
 <script lang="ts">
   import { t } from 'svelte-i18n'
   import { variables, selectedScope, error, showModal, isWriteInProgress } from '../stores'
+  import { showToast } from '../stores'
   import { deleteVariable, createBackup, toggleVariable, setVariable } from '../api'
   import EditDialog from './EditDialog.svelte'
   import BackupDialog from './BackupDialog.svelte'
@@ -11,8 +12,6 @@
   let showEditDialog = false
   let showBackupDialog = false
   let togglingKeys: Record<string, boolean> = {}
-  let copyFeedback = ''
-  let localError = ''
 
   // Clear persistent error store on mount; we use localError for transient errors
   $: {
@@ -35,8 +34,7 @@
 
   function copyToClipboard(text: string) {
     navigator.clipboard.writeText(text).then(() => {
-      copyFeedback = $t('messages.copied')
-      setTimeout(() => { copyFeedback = '' }, 1500)
+      showToast($t('messages.copied'), 'info', 1500)
     }).catch(() => {
       const textarea = document.createElement('textarea')
       textarea.value = text
@@ -46,8 +44,7 @@
       textarea.select()
       try {
         document.execCommand('copy')
-        copyFeedback = $t('messages.copied')
-        setTimeout(() => { copyFeedback = '' }, 1500)
+        showToast($t('messages.copied'), 'info', 1500)
       } catch { /* ignore */ }
       document.body.removeChild(textarea)
     })
@@ -61,12 +58,10 @@
       cancelLabel: $t('buttons.cancel'),
       variant: 'danger',
       onConfirm: async () => {
-        localError = ''
-        try {
+            try {
           await deleteVariable(name, scope as 'user' | 'system')
         } catch (err) {
-          localError = err instanceof Error ? err.message : String(err)
-          setTimeout(() => { localError = '' }, 3000)
+          showToast(err instanceof Error ? err.message : String(err), 'error')
         }
       }
     })
@@ -76,7 +71,6 @@
     const key = name + ':' + scope
     // Disable the toggle button while in-flight
     togglingKeys = { ...togglingKeys, [key]: true }
-    localError = ''
     error.set(null)
 
     // Optimistic UI: flip the slider immediately without waiting for CLI.
@@ -172,18 +166,6 @@
       {$t('buttons.backup')}
     </button>
   </div>
-
-  {#if localError}
-    <div class="fixed top-4 left-1/2 -translate-x-1/2 px-3 py-1.5 bg-red-600 text-white text-xs rounded-md shadow-lg z-50 pointer-events-none">
-      {localError}
-    </div>
-  {/if}
-
-  {#if copyFeedback}
-    <div class="fixed top-4 left-1/2 -translate-x-1/2 px-3 py-1.5 bg-gray-800 text-white text-xs rounded-md shadow-lg z-50 pointer-events-none dark:bg-gray-700">
-      {copyFeedback}
-    </div>
-  {/if}
 
   <div class="overflow-x-auto bg-white rounded-md border border-gray-200 dark:bg-gray-800 dark:border-gray-700">
     {#if filteredVars.length === 0}
