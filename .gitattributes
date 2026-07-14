@@ -1,0 +1,51 @@
+# Line ending policy for the Env Manager repository.
+# This file is the single source of truth for EOL normalization; it overrides
+# core.autocrlf, global git config, and editor defaults. See AGENTS.md.
+
+# Default: normalize all text files to LF on commit. Working-tree EOL on
+# Windows is controlled by the rules below.
+* text=auto eol=lf
+
+# Windows-native shell scripts MUST keep CRLF (cmd.exe dies on LF for some constructs).
+*.bat   text eol=crlf
+*.ps1   text eol=crlf
+*.cmd   text eol=crlf
+
+# Sources, scripts, configs, docs: LF everywhere.
+*.cs    text eol=lf
+*.ts    text eol=lf
+*.js    text eol=lf
+*.mjs   text eol=lf
+*.svelte text eol=lf
+*.rs    text eol=lf
+*.json  text eol=lf
+*.toml  text eol=lf
+*.yml   text eol=lf
+*.yaml  text eol=lf
+*.md    text eol=lf
+*.html  text eol=lf
+*.css   text eol=lf
+*.svg   text eol=lf
+*.sh    text eol=lf
+*.txt   text eol=lf
+*.lock  text eol=lf
+
+# Binary assets: never normalize, never diff.
+*.png   binary
+*.ico   binary
+*.icns  binary
+*.jpg   binary
+*.jpeg  binary
+*.gif   binary
+*.webp  binary
+*.exe   binary
+*.dll   binary
+*.node  binary
+*.pdb   binary
+*.msi   binary
+*.so    binary
+*.dylib binary
+
+# Generated / lockfile merges are noisy; keep them text but do not diff.
+package-lock.json -diff
+Cargo.lock        -diff

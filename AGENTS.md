@@ -542,7 +542,15 @@ This feature is implemented in `api.ts` as `addCliToPath()` and exposed in `Sett
 ### File encoding
 
 - All files: UTF-8 without BOM
-- Line endings: LF
+- Line endings: canonical policy is enforced by `.gitattributes` at the repo root
+  - Default text: LF on disk and in index
+  - Windows-native scripts (`.bat`, `.ps1`, `.cmd`): CRLF
+  - Binary assets (`.png`, `.ico`, `.icns`, `.jpg`, `.jpeg`, `.gif`, `.webp`, `.exe`, `.dll`, `.node`, `.pdb`, `.msi`, `.so`, `.dylib`): marked `binary`, never normalized
+- `core.autocrlf` is `false` at the repo level. Do not re-enable it.
+- `frontend/node_modules/` is gitignored; never tracked. If tracked files appear, run `git rm -r --cached frontend/node_modules` and commit.
+- After any `.gitattributes` change, run `git add --renormalize .` and commit the line-ending-only diff.
+- `apply_patch` does byte-exact matching. If a patch fails for context that looks identical, suspect CRLF/LF mismatch on disk and re-inspect the target region before retrying. Never write a file with mixed line endings (both `\r\n` and lone `\n`).
+- Full policy details and remediation commands: see `docs/line-ending-policy.md`
 
 ---
 
