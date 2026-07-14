@@ -41,6 +41,7 @@ package-lock.json.bak
 Thumbs.db
 
 # === Agent workflow (never commit) ===
+docs/
 
 # === CodeGraph index (local, regenerated per machine) ===
 .codegraph/

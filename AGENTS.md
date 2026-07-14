@@ -550,7 +550,6 @@ This feature is implemented in `api.ts` as `addCliToPath()` and exposed in `Sett
 - `frontend/node_modules/` is gitignored; never tracked. If tracked files appear, run `git rm -r --cached frontend/node_modules` and commit.
 - After any `.gitattributes` change, run `git add --renormalize .` and commit the line-ending-only diff.
 - `apply_patch` does byte-exact matching. If a patch fails for context that looks identical, suspect CRLF/LF mismatch on disk and re-inspect the target region before retrying. Never write a file with mixed line endings (both `\r\n` and lone `\n`).
-- Full policy details and remediation commands: see `docs/line-ending-policy.md`
 
 ---
 
