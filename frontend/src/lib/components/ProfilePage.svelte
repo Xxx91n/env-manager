@@ -1,12 +1,10 @@
 <script lang="ts">
   import { onMount } from 'svelte'
-  import { moveItem } from '../features'
   import {
-    createDragState, beginDrag, enterTarget, finishDrag, cancelDrag,
     loadProfileOrder as loadStoredOrder, saveProfileOrder as saveStoredOrder,
     applyStoredOrder as applyStored,
   } from '../profileDrag'
-  import type { DragState } from '../profileDrag'
+  
   import { t } from 'svelte-i18n'
   import { profiles, variables, showModal, refreshTrigger } from '../stores'
   import { showToast } from '../stores'
@@ -41,12 +39,13 @@
   let cloneSource = ''
   let allVars: EnvVariable[] = []
   let newPathEntry = ''
-  let dragState: DragState = createDragState()
+  // Drag state as plain component-level variables for Svelte reactivity
+  let dragIndex: number | null = null
+  let dragOverIndex: number | null = null
+  let isDragging = false
   let pointerY = 0
   let startY = 0
-  $: dragIndex = dragState.dragIndex
-  $: dragOverIndex = dragState.dragOverIndex
-  $: isDragging = dragState.isDragging
+  $: deltaY = isDragging ? pointerY - startY : 0
 
   // loadProfileOrder/saveProfileOrder/applyStoredOrder imported from ../profileDrag
   // as loadStoredOrder/saveStoredOrder/applyStored respectively.
@@ -238,23 +237,40 @@
   }
 
   function beginPointerDrag(event: PointerEvent, index: number): void {
-    beginDrag(dragState, index, { button: event.button, preventDefault: () => event.preventDefault() })
+    if (event.button !== 0) return
+    event.preventDefault()
+    dragIndex = index
+    dragOverIndex = index
+    isDragging = true
     pointerY = event.clientY
     startY = event.clientY
   }
 
   function enterPointerTarget(index: number): void {
-    enterTarget(dragState, index)
+    if (isDragging) dragOverIndex = index
   }
 
   function finishPointerDrag(index: number): void {
-    profileList = finishDrag(dragState, index, profileList)
-    pointerY = 0
-    startY = 0
+    if (!isDragging || dragIndex === null) {
+      cancelPointerDrag()
+      return
+    }
+    const targetIndex = dragOverIndex ?? index
+    if (dragIndex !== targetIndex) {
+      const item = profileList[dragIndex]
+      const newList = [...profileList]
+      newList.splice(dragIndex, 1)
+      newList.splice(targetIndex, 0, item)
+      profileList = newList
+      saveStoredOrder(profileList.map((p) => p.name))
+    }
+    cancelPointerDrag()
   }
 
   function cancelPointerDrag(): void {
-    cancelDrag(dragState)
+    dragIndex = null
+    dragOverIndex = null
+    isDragging = false
     pointerY = 0
     startY = 0
   }
@@ -302,7 +318,7 @@
   }
 </script>
 
-<svelte:window on:pointermove={(e) => { if (dragState.isDragging) pointerY = e.clientY }} on:pointerup={cancelPointerDrag} on:pointercancel={cancelPointerDrag} />
+<svelte:window on:pointermove={(e) => { if (isDragging) pointerY = e.clientY }} on:pointerup={cancelPointerDrag} on:pointercancel={cancelPointerDrag} />
 
 <div class="space-y-3">
   <!-- Create profile bar -->
@@ -352,7 +368,7 @@
       {#each profileList as profile, i (profile.name)}
         <div
           class="bg-white rounded-md border border-gray-200 transition-[border-color,box-shadow,opacity,transform] dark:bg-gray-800 dark:border-gray-700 {isDragging && dragIndex === i ? 'opacity-80 shadow-lg z-10 scale-[1.02]' : ''} {isDragging && dragOverIndex === i && dragIndex !== i ? 'ring-2 ring-blue-500 border-blue-500' : ''}"
-          style={isDragging && dragIndex === i ? `transform: translateY(${pointerY - startY}px); cursor: grabbing;` : ''}
+          style={isDragging && dragIndex === i ? `transform: translateY(${deltaY}px); cursor: grabbing;` : ''}
           role="listitem"
           data-profile-name={profile.name}
           on:pointerenter={() => enterPointerTarget(i)}

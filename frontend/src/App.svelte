@@ -6,6 +6,7 @@
   import SettingsDialog from './lib/components/SettingsDialog.svelte'
   import PathEditor from './lib/components/PathEditor.svelte'
   import HistoryPage from './lib/components/HistoryPage.svelte'
+  import ProtectionPage from './lib/components/ProtectionPage.svelte'
   import ConfirmDialog from './lib/components/ConfirmDialog.svelte'
   import { variables, loading, error, activeView, modal, isWriteInProgress, debugLogs, refreshTrigger, toasts, dismissToast } from './lib/stores'
   import { listVariables, updateTrayLocale } from './lib/api'
@@ -155,7 +156,16 @@
           : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100 dark:text-gray-400 dark:hover:text-gray-200 dark:hover:bg-gray-700'}"
       >
         {$t('nav.history')}
-      </button>    </nav>
+      </button>
+      <button
+        on:click={() => activeView.set('protection')}
+        class="px-3 py-1.5 text-xs font-medium rounded-md transition {$activeView === 'protection'
+          ? 'bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300'
+          : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100 dark:text-gray-400 dark:hover:text-gray-200 dark:hover:bg-gray-700'}"
+      >
+        {$t('nav.protection')}
+      </button>
+    </nav>
   </header>
 
   <div class="px-5 py-4">
@@ -180,6 +190,8 @@
       <PathEditor />
     {:else if $activeView === 'history'}
       <HistoryPage />
+    {:else if $activeView === 'protection'}
+      <ProtectionPage />
     {/if}
   </div>
 </div>

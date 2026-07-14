@@ -211,6 +211,9 @@ All commands follow: `env-manager-cli <command> [arguments] [--flags]`
 | `bulk import` | `bulk import <file> [--scope] [--overwrite] [--dry-run]` | Import variables from .json/.env/.csv |
 | `bulk export` | `bulk export <file> [--scope]` | Export variables to .json/.env/.csv |
 | `expand` | `expand <value>` | Expand nested %VAR% references |
+| `protection list` | `protection list` | List protected vars and PATH entries (JSON) |
+| `protection add-path` | `protection add-path <dir>` | Add custom protected PATH entry |
+| `protection remove-path` | `protection remove-path <dir>` | Remove custom protected PATH entry |
 
 ### Debug Mode
 
@@ -607,7 +610,7 @@ Scopes: `cli`, `gui`, `backup`, `registry`, `i18n`, `docs`, `build`
 - Backup file size cap: 50 MB maximum to prevent DoS via large files
 - CLI command whitelist in Rust IPC layer: only known commands can spawn subprocesses (list, get, set, delete, toggle, backup, restore, diff, merge, validate, profile, path, agents, help)
 - Process isolation: CREATE_NO_WINDOW flag prevents console flicker and information leakage
-- **Critical system variable protection**: system-scope modifications to protected variables are blocked in SetVariable, DeleteVariable, and SetVariableWithoutNotify. The full ProtectedSystemVars list: PATH, PATHEXT, PSMODULEPATH, SystemRoot, windir, ComSpec, TEMP, TMP, USERPROFILE, SystemDrive, ProgramFiles, ProgramFiles(x86), ProgramData, HOMEDRIVE, HOMEPATH, NUMBER_OF_PROCESSORS, OS, PROCESSOR_ARCHITECTURE, PROCESSOR_IDENTIFIER, PROCESSOR_LEVEL, PROCESSOR_REVISION, ALLUSERSPROFILE, APPDATA, COMMONPROGRAMFILES, COMMONPROGRAMFILES(x86), COMPUTERNAME, LOCALAPPDATA, LOGONSERVER, OneDrive, OneDriveConsumer, PUBLIC, SESSIONNAME, USERDOMAIN, USERNAME. These are also blocked from being added to profiles via IsProfileApplicable() and ProfileAddVar().
+- **Critical system variable protection**: system-scope modifications to protected variables are blocked in SetVariable, DeleteVariable, and SetVariableWithoutNotify. The full ProtectedSystemVars list: PATHEXT, PSMODULEPATH, SystemRoot, windir, ComSpec, TEMP, TMP, USERPROFILE, SystemDrive, ProgramFiles, ProgramFiles(x86), ProgramData, HOMEDRIVE, HOMEPATH, NUMBER_OF_PROCESSORS, OS, PROCESSOR_ARCHITECTURE, PROCESSOR_IDENTIFIER, PROCESSOR_LEVEL, PROCESSOR_REVISION, ALLUSERSPROFILE, APPDATA, COMMONPROGRAMFILES, COMMONPROGRAMFILES(x86), COMPUTERNAME, LOCALAPPDATA, LOGONSERVER, OneDrive, OneDriveConsumer, PUBLIC, SESSIONNAME, USERDOMAIN, USERNAME. PATH is NOT in this list - it is protected per-entry via ProtectedPathEntries (built-in Windows system paths) plus custom entries stored in protected-paths.json. SetPathEntries checks IsProtectedPathEntry before allowing removal of any PATH entry. These are also blocked from being added to profiles via IsProfileApplicable() and ProfileAddVar().
 - **Toggle backup name collision prevention**: variables whose name ends with `_EnvManager_disabled` cannot be toggled, preventing backup key confusion
 - **Profile name validation**: rejects empty/whitespace names, names >255 chars, names with null/newline/carriage-return chars
 - **Profile variable name validation**: rejects empty names, names >255 chars, names containing `=`

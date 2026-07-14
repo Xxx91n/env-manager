@@ -50,8 +50,8 @@ partial class Program
     // want to modify their own PATH. System scope is fully protected.
     static readonly HashSet<string> ProtectedSystemVars = new(StringComparer.OrdinalIgnoreCase)
     {
-        // Core Windows system variables
-        "PATH", "PATHEXT", "PSMODULEPATH", "SystemRoot", "windir", "ComSpec",
+        // Core Windows system variables (PATH is handled separately via ProtectedPathEntries)
+        "PATHEXT", "PSMODULEPATH", "SystemRoot", "windir", "ComSpec",
         "TEMP", "TMP", "USERPROFILE", "SystemDrive", "ProgramFiles",
         "ProgramFiles(x86)", "ProgramData", "HOMEDRIVE", "HOMEPATH",
         "NUMBER_OF_PROCESSORS", "OS", "PROCESSOR_ARCHITECTURE",
@@ -62,8 +62,54 @@ partial class Program
         "PUBLIC", "SESSIONNAME", "USERDOMAIN", "USERNAME"
     };
 
+    // PATH entries that are critical for Windows to function. These cannot be
+    // removed from PATH (system or user). Reordering is allowed. Adding is always allowed.
+    // Users can customize this list via the CLI 'protection' commands.
+    static readonly HashSet<string> ProtectedPathEntries = new(StringComparer.OrdinalIgnoreCase)
+    {
+        @"C:\Windows\System32",
+        @"C:\Windows",
+        @"C:\Windows\System32\Wbem",
+        @"C:\Windows\System32\WindowsPowerShell1.0",
+    };
+
+    static List<string> CustomProtectedPathEntries
+    {
+        get
+        {
+            try
+            {
+                string file = Path.Combine(AppDataDirectory, "protected-paths.json");
+                if (!File.Exists(file)) return new();
+                return JsonSerializer.Deserialize<List<string>>(File.ReadAllText(file), JsonOpts) ?? new();
+            }
+            catch { return new(); }
+        }
+    }
+
+    static void SaveCustomProtectedPathEntries(List<string> entries)
+    {
+        string file = Path.Combine(AppDataDirectory, "protected-paths.json");
+        AtomicWriteJson(file, entries.Distinct(StringComparer.OrdinalIgnoreCase).ToList());
+    }
+
+    static bool IsProtectedPathEntry(string entry)
+    {
+        string normalized = entry.TrimEnd('\\', '/').Trim();
+        if (ProtectedPathEntries.Any(p => p.TrimEnd('\\', '/').Equals(normalized, StringComparison.OrdinalIgnoreCase)))
+            return true;
+        foreach (var custom in CustomProtectedPathEntries)
+        {
+            if (custom.TrimEnd('\\', '/').Equals(normalized, StringComparison.OrdinalIgnoreCase))
+                return true;
+        }
+        return false;
+    }
+
     /// <summary>
     /// Returns true if the variable is protected from system-scope modification.
+    /// PATH is no longer wholesale-protected; individual PATH entries are checked
+    /// via IsProtectedPathEntry when they are about to be removed.
     /// For user scope, these are NOT protected (user can modify their own PATH).
     /// </summary>
     static bool IsProtectedVariable(string name, string scope)
@@ -85,7 +131,7 @@ partial class Program
     static readonly HashSet<string> ValidCommands = new(StringComparer.OrdinalIgnoreCase)
     {
         "list", "get", "set", "rename", "delete", "toggle", "backup", "restore", "diff", "merge",
-        "validate", "help", "profile", "path", "agents", "history", "bulk", "expand"
+        "validate", "help", "profile", "path", "agents", "history", "bulk", "expand", "protection"
     };
 
     static readonly JsonSerializerOptions JsonOpts = new()
@@ -168,6 +214,7 @@ partial class Program
                 "history" => RunHistoryCommand(args),
                 "bulk" => RunBulkCommand(args),
                 "expand" => args.Length < 2 ? ArgError("Usage: env-manager expand <value>") : RunExpand(args[1]),
+                "protection" => RunProtectionCommand(args),
                 "help" => ShowHelp(),
                 _ => 1
             };
@@ -1423,27 +1470,22 @@ partial class Program
            return;
        }
 
-       // PATH is edited through this dedicated surface, not through SetVariable.
-       // Bypass the protected-variable guard (which would block system-scope PATH)
-       // and write directly, preserving ExpandString kind, then broadcast.
-       var (hive, path) = GetScopeTarget(scope);
-       using (var key = hive?.OpenSubKey(path, true))
+       // Validate: don't allow removing protected PATH entries.
+       // Compare current entries vs new entries to find what's being removed.
+       var currentEntries = GetPathEntries(scope);
+       var removed = currentEntries.Where(e => !entries.Any(x => NormalizePathEntry(x).Equals(NormalizePathEntry(e), StringComparison.OrdinalIgnoreCase))).ToList();
+       foreach (var r in removed)
        {
-           if (key == null)
+           if (IsProtectedPathEntry(r))
            {
-               Console.Error.WriteLine($"Error: Cannot open registry key for scope '{scope}'");
+               Console.Error.WriteLine($"Error: Cannot remove protected PATH entry: {r}");
                return;
            }
-
-           RegistryValueKind kind = RegistryValueKind.String;
-           try { kind = key.GetValueKind("PATH"); }
-           catch (IOException) { /* PATH doesn't exist yet */ }
-
-           if (joined.Contains('%')) kind = RegistryValueKind.ExpandString;
-
-           key.SetValue("PATH", joined, kind);
        }
-       BroadcastSettingChange();
+
+       // Write PATH via SetVariable (no longer bypassing the guard).
+       // PATH itself is not in ProtectedSystemVars anymore, so SetVariable allows it.
+       SetVariable("PATH", joined, scope);
    }
 
     static int PathList(string[] args)
@@ -1893,6 +1935,7 @@ Commands:
   history list|undo           View or undo audited changes
   bulk import|export          Import/export .json, .env, or .csv
   expand <value>              Expand nested %VARIABLE% references
+  protection list|add-path|remove-path  View or manage protected PATH entries
   agents [--path|--json|--summary] Output CLI spec. --path: file only. --json: machine-readable. --summary: brief
   help                       Show help
   --debug                    Enable verbose stderr logging");

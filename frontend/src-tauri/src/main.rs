@@ -54,6 +54,7 @@ const ALLOWED_COMMANDS: &[&str] = &[
     "bulk",
     "expand",
     "help",
+    "protection",
 ];
 
 /// Read-only commands that can run concurrently with each other.
@@ -119,6 +120,7 @@ fn is_read_only(command: &str, args: &[String]) -> bool {
         }
         "history" => !matches!(args.first().map(|s| s.as_str()), Some("undo")),
         "bulk" => !matches!(args.first().map(|s| s.as_str()), Some("import")) || args.iter().any(|arg| arg == "--dry-run"),
+        "protection" => matches!(args.first().map(|s| s.as_str()), Some("list")),
         _ => false,
     }
 }

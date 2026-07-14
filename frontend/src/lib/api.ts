@@ -748,3 +748,26 @@ export async function getCliAgentsPath(): Promise<string> {
     return ''
   }
 }
+
+// --- Protection list API ---
+
+export interface ProtectionData {
+  protectedVars: string[]
+  protectedPaths: {
+    builtIn: string[]
+    custom: string[]
+  }
+}
+
+export async function listProtection(): Promise<ProtectionData> {
+  const output = await runRead('protection', ['list'])
+  return JSON.parse(output) as ProtectionData
+}
+
+export async function addProtectedPath(entry: string): Promise<void> {
+  await runWrite('protection', ['add-path', entry])
+}
+
+export async function removeProtectedPath(entry: string): Promise<void> {
+  await runWrite('protection', ['remove-path', entry])
+}
