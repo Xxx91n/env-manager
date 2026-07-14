@@ -1,141 +1,134 @@
 import { describe, it, expect, beforeEach } from 'vitest'
+import {
+  createDragState,
+  beginDrag,
+  enterTarget,
+  finishDrag,
+  cancelDrag,
+  loadProfileOrder,
+  saveProfileOrder,
+  applyStoredOrder,
+} from './profileDrag'
 
-/**
- * Tests for profile drag-to-reorder logic.
- * The actual drag implementation is pointer-event-based (pointerdown on handle,
- * pointerenter on cards, pointerup to drop).
- * We test the reorder logic that the component uses internally.
- */
+const PROFILE_ORDER_KEY = 'envManager_profileOrder'
 
-describe('Profile drag-to-reorder logic', () => {
-  // Simulate the performReorder function
-  function performReorder<T>(list: T[], fromIdx: number, toIdx: number): T[] {
-    const moved = list[fromIdx]
-    const newList = list.filter((_, idx) => idx !== fromIdx)
-    newList.splice(toIdx, 0, moved)
-    return newList
-  }
+interface Item {
+  name: string
+}
 
-  // Simulate localStorage order persistence
-  const PROFILE_ORDER_KEY = 'envManager_profileOrder'
+function makeList(names: string[]): Item[] {
+  return names.map((n) => ({ name: n }))
+}
 
-  function saveProfileOrder(names: string[]): void {
-    localStorage.setItem(PROFILE_ORDER_KEY, JSON.stringify(names))
-  }
-
-  function loadProfileOrder(): string[] {
-    try {
-      const raw = localStorage.getItem(PROFILE_ORDER_KEY)
-      return raw ? JSON.parse(raw) : []
-    } catch {
-      return []
-    }
-  }
-
-  function applyStoredOrder<T extends { name: string }>(
-    list: T[],
-    order: string[]
-  ): T[] {
-    if (order.length === 0) return list
-    const ordered: T[] = []
-    const remaining: T[] = []
-    for (const name of order) {
-      const found = list.find((p) => p.name === name)
-      if (found) ordered.push(found)
-    }
-    for (const p of list) {
-      if (!order.includes(p.name)) remaining.push(p)
-    }
-    return [...ordered, ...remaining]
-  }
-
+describe('Pointer-event drag state machine', () => {
   beforeEach(() => {
     localStorage.clear()
   })
 
-  it('moves profile from index 0 to index 2', () => {
-    const list = [
-      { name: 'A', variables: [] },
-      { name: 'B', variables: [] },
-      { name: 'C', variables: [] },
-      { name: 'D', variables: [] },
-    ]
-    const result = performReorder(list, 0, 2)
+  it('moves item from index 0 to index 2', () => {
+    const state = createDragState()
+    const list = makeList(['A', 'B', 'C', 'D'])
+
+    beginDrag(state, 0, { button: 0 })
+    enterTarget(state, 2)
+    const result = finishDrag(state, 2, list)
+
     expect(result.map((p) => p.name)).toEqual(['B', 'C', 'A', 'D'])
   })
 
-  it('moves profile from index 3 to index 0', () => {
-    const list = [
-      { name: 'A', variables: [] },
-      { name: 'B', variables: [] },
-      { name: 'C', variables: [] },
-      { name: 'D', variables: [] },
-    ]
-    const result = performReorder(list, 3, 0)
+  it('moves item from last index to first', () => {
+    const state = createDragState()
+    const list = makeList(['A', 'B', 'C', 'D'])
+
+    beginDrag(state, 3, { button: 0 })
+    enterTarget(state, 0)
+    const result = finishDrag(state, 0, list)
+
     expect(result.map((p) => p.name)).toEqual(['D', 'A', 'B', 'C'])
   })
 
-  it('no-op when from and to are the same index', () => {
-    const list = [
-      { name: 'A', variables: [] },
-      { name: 'B', variables: [] },
-      { name: 'C', variables: [] },
-    ]
-    const result = performReorder(list, 1, 1)
+  it('is a no-op when dragging onto the same index', () => {
+    const state = createDragState()
+    const list = makeList(['A', 'B', 'C'])
+
+    beginDrag(state, 1, { button: 0 })
+    enterTarget(state, 1)
+    const result = finishDrag(state, 1, list)
+
     expect(result.map((p) => p.name)).toEqual(['A', 'B', 'C'])
+    // localStorage should NOT have been written
+    expect(localStorage.getItem(PROFILE_ORDER_KEY)).toBeNull()
   })
 
-  it('persists order to localStorage', () => {
-    const names = ['B', 'C', 'A', 'D']
-    saveProfileOrder(names)
-    const loaded = loadProfileOrder()
-    expect(loaded).toEqual(names)
-  })
+  it('ignores right-click (button !== 0)', () => {
+    const state = createDragState()
+    const list = makeList(['A', 'B'])
 
-  it('applies stored order to a fresh profile list', () => {
-    const order = ['C', 'A', 'B']
-    saveProfileOrder(order)
+    beginDrag(state, 0, { button: 2 })
+    // Even if pointer events fire on target, state should not be dragging
+    expect(state.isDragging).toBe(false)
+    enterTarget(state, 1)
+    const result = finishDrag(state, 1, list)
 
-    // Simulate a fresh fetch from CLI (may return in different order)
-    const freshList = [
-      { name: 'A', variables: [] },
-      { name: 'B', variables: [] },
-      { name: 'C', variables: [] },
-    ]
-
-    const stored = loadProfileOrder()
-    const result = applyStoredOrder(freshList, stored)
-    expect(result.map((p) => p.name)).toEqual(['C', 'A', 'B'])
-  })
-
-  it('handles profiles not in stored order (appends at end)', () => {
-    const order = ['A', 'B']
-    saveProfileOrder(order)
-
-    const freshList = [
-      { name: 'C', variables: [] },
-      { name: 'A', variables: [] },
-      { name: 'B', variables: [] },
-      { name: 'D', variables: [] },
-    ]
-
-    const stored = loadProfileOrder()
-    const result = applyStoredOrder(freshList, stored)
-    expect(result.map((p) => p.name)).toEqual(['A', 'B', 'C', 'D'])
-  })
-
-  it('handles empty stored order (returns list as-is)', () => {
-    const freshList = [
-      { name: 'A', variables: [] },
-      { name: 'B', variables: [] },
-    ]
-    const result = applyStoredOrder(freshList, loadProfileOrder())
     expect(result.map((p) => p.name)).toEqual(['A', 'B'])
   })
 
-  it('reordering works with single profile', () => {
-    const list = [{ name: 'A', variables: [] }]
-    const result = performReorder(list, 0, 0)
-    expect(result.map((p) => p.name)).toEqual(['A'])
+  it('cancels drag without affecting the list', () => {
+    const state = createDragState()
+    const list = makeList(['A', 'B', 'C'])
+
+    beginDrag(state, 0, { button: 0 })
+    expect(state.isDragging).toBe(true)
+    cancelDrag(state)
+    expect(state.isDragging).toBe(false)
+    expect(state.dragIndex).toBeNull()
+
+    const result = finishDrag(state, 2, list)
+    expect(result.map((p) => p.name)).toEqual(['A', 'B', 'C'])
+    expect(localStorage.getItem(PROFILE_ORDER_KEY)).toBeNull()
+  })
+
+  it('persists order to localStorage after successful drag', () => {
+    const state = createDragState()
+    const list = makeList(['A', 'B', 'C'])
+
+    beginDrag(state, 0, { button: 0 })
+    enterTarget(state, 2)
+    finishDrag(state, 2, list)
+
+    const stored = loadProfileOrder()
+    expect(stored).toEqual(['B', 'C', 'A'])
+  })
+
+  it('handles single item (no reorder possible)', () => {
+    const state = createDragState()
+    const list = makeList(['Only'])
+
+    beginDrag(state, 0, { button: 0 })
+    enterTarget(state, 0)
+    const result = finishDrag(state, 0, list)
+
+    expect(result.map((p) => p.name)).toEqual(['Only'])
+    expect(localStorage.getItem(PROFILE_ORDER_KEY)).toBeNull()
+  })
+
+  it('applyStoredOrder restores custom order from localStorage', () => {
+    saveProfileOrder(['C', 'A', 'B'])
+    const freshList = makeList(['A', 'B', 'C'])
+    const result = applyStoredOrder(freshList)
+    expect(result.map((p) => p.name)).toEqual(['C', 'A', 'B'])
+  })
+
+  it('applyStoredOrder appends new profiles not in stored order', () => {
+    saveProfileOrder(['A', 'B'])
+    const freshList = makeList(['C', 'A', 'B', 'D'])
+    const result = applyStoredOrder(freshList)
+    expect(result.map((p) => p.name)).toEqual(['A', 'B', 'C', 'D'])
+  })
+
+  it('applyStoredOrder returns list as-is when no stored order', () => {
+    const freshList = makeList(['A', 'B'])
+    const result = applyStoredOrder(freshList)
+    expect(result.map((p) => p.name)).toEqual(['A', 'B'])
   })
 })

@@ -205,6 +205,12 @@ All commands follow: `env-manager-cli <command> [arguments] [--flags]`
 | `path move-up` | `path move-up <index> [--scope]` | Move PATH entry up |
 | `path move-down` | `path move-down <index> [--scope]` | Move PATH entry down |
 | `path rename` | `path rename <old> <new> [--scope]` | Rename a PATH entry |
+| `history list` | `history list [--limit N]` | List audit history (JSON, most recent first) |
+| `history undo` | `history undo <id> [--force]` | Undo a specific audit entry |
+| `history delete` | `history delete <id>` or `history delete --all [--scope user\|system]` | Delete a history record or clear all by scope |
+| `bulk import` | `bulk import <file> [--scope] [--overwrite] [--dry-run]` | Import variables from .json/.env/.csv |
+| `bulk export` | `bulk export <file> [--scope]` | Export variables to .json/.env/.csv |
+| `expand` | `expand <value>` | Expand nested %VAR% references |
 
 ### Debug Mode
 
@@ -237,15 +243,10 @@ Debug output goes to stderr with timestamps: `[debug] HH:mm:ss.fff message`. Thi
 
 Profiles are sets of preconfigured variables that can be applied/unapplied as a group. When applied, original values of affected user variables are backed up. Unapplying restores originals. Profiles only affect user scope.
 
-**Multi-profile support**: Multiple profiles can be applied simultaneously. Applying a profile does NOT unapply other active profiles.
+**Single active profile policy**: Only one profile can be active at a time. Applying a new profile automatically unapplies any currently-active profile first. This simplifies conflict resolution and prevents backup-chain complexity.
 
-**Conflict resolution for overlapping variable names**: When multiple profiles define the same variable name, the last-applied profile's value wins. Each profile backs up the *current* value of the variable before overwriting it, using the backup key `<varname>_PowerToys_<profileName>`. This means:
-- Profile A backs up the original user value (if it existed)
-- Profile B backs up the current value (which is profile A's value, since A already applied)
-- Unapplying profile B restores to profile A's value (B's backup)
-- Unapplying profile A restores to the original user value (A's backup)
-- Unapply order matters: unapply the most-recently-applied profile first for correct restoration chain
-
+**Backup and restore**: When a profile is applied, the original user variable values are backed up using the key `<varname>_PowerToys_<profileName>`. Unapplying restores the original values. Since only one profile is active at a time, there is no backup-chain complexity - each profile owns its own backup keys independently.
+- Profile inheritance can be changed while a profile is active: the CLI automatically unapplies, updates inheritance, and re-applies the profile with the new resolved variable set
 - Profile storage: `%LOCALAPPDATA%\EnvManager\profiles.json`
 - Profile variables override user variables when applied
 - Original values backed up before apply, restored on unapply
@@ -478,7 +479,7 @@ npm run test:e2e        # Playwright E2E tests
 | `src/lib/sync.test.ts` | CLI/GUI state synchronization, mutation triggers refresh, error store lifecycle |
 | `src/lib/debug.test.ts` | Debug logging system, log entry management, 200-entry cap (memory leak prevention), isWriteInProgress tracking |
 | `src/lib/profile-drag.test.ts` | Profile drag-to-reorder logic, performReorder, applyStoredOrder, localStorage persistence |
-| `src/lib/multi-profile.test.ts` | Multi-profile conflict resolution, overlapping variable handling, backup chain, protected variable rejection |
+| `src/lib/multi-profile.test.ts` | Single-profile policy verification, backup/restore, protected variable rejection |
 
 ---
 

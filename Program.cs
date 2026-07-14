@@ -1074,7 +1074,14 @@ partial class Program
             return 1;
         }
 
-        // Multiple profiles can be applied simultaneously.
+        // Single active profile policy: unapply any currently-active profile before applying the new one.
+        foreach (var other in profiles.Where(p => p.IsEnabled && p.Id != profile.Id).ToList())
+        {
+            UnapplyProfile(other);
+            other.IsEnabled = false;
+            other.AppliedAt = null;
+            Console.WriteLine($"Unapplied profile: {other.Name} (single-profile policy)");
+        }
         // If this profile is already applied, it's a no-op.
         if (profile.IsEnabled)
         {
@@ -1408,15 +1415,36 @@ partial class Program
     /// Writes PATH entries back to the registry for a given scope.
     /// </summary>
     static void SetPathEntries(List<string> entries, string scope)
-    {
-        string joined = string.Join(";", entries);
-        if (joined.Length > MaxLength)
-        {
-            Console.Error.WriteLine($"Error: PATH value exceeds maximum length of {MaxLength} characters (current: {joined.Length})");
-            return;
-        }
-        SetVariable("PATH", joined, scope);
-    }
+   {
+       string joined = string.Join(";", entries);
+       if (joined.Length > MaxLength)
+       {
+           Console.Error.WriteLine($"Error: PATH value exceeds maximum length of {MaxLength} characters (current: {joined.Length})");
+           return;
+       }
+
+       // PATH is edited through this dedicated surface, not through SetVariable.
+       // Bypass the protected-variable guard (which would block system-scope PATH)
+       // and write directly, preserving ExpandString kind, then broadcast.
+       var (hive, path) = GetScopeTarget(scope);
+       using (var key = hive?.OpenSubKey(path, true))
+       {
+           if (key == null)
+           {
+               Console.Error.WriteLine($"Error: Cannot open registry key for scope '{scope}'");
+               return;
+           }
+
+           RegistryValueKind kind = RegistryValueKind.String;
+           try { kind = key.GetValueKind("PATH"); }
+           catch (IOException) { /* PATH doesn't exist yet */ }
+
+           if (joined.Contains('%')) kind = RegistryValueKind.ExpandString;
+
+           key.SetValue("PATH", joined, kind);
+       }
+       BroadcastSettingChange();
+   }
 
     static int PathList(string[] args)
     {

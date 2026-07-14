@@ -127,30 +127,51 @@ partial class Program
     }
 
     static int RunHistoryCommand(string[] args)
-    {
-        string sub = args.Length > 1 ? args[1].ToLowerInvariant() : "list";
-        if (sub == "list")
-        {
-            int limit = 200;
-            int flag = Array.IndexOf(args, "--limit");
-            if (flag >= 0 && flag + 1 < args.Length && int.TryParse(args[flag + 1], out int parsed)) limit = Math.Clamp(parsed, 1, 1000);
-            Console.WriteLine(JsonSerializer.Serialize(LoadAuditHistory().TakeLast(limit).Reverse(), JsonOptsIndented));
-            return 0;
-        }
-        if (sub == "undo" && args.Length > 2)
-        {
-            var entry = LoadAuditHistory().FirstOrDefault(e => e.Id.Equals(args[2], StringComparison.OrdinalIgnoreCase));
-            if (entry == null) return ArgError("Error: Audit entry not found");
-            string? current = GetVariableValue(entry.Name, entry.Scope);
-            if (current != entry.NewValue && !args.Contains("--force"))
-                return ArgError("Error: Variable changed since this audit entry; use --force to override");
-            if (entry.OldValue == null) DeleteVariableWithoutNotify(entry.Name, entry.Scope);
-            else SetVariableWithoutNotify(entry.Name, entry.OldValue, entry.Scope);
-            BroadcastSettingChange();
-            Console.WriteLine(JsonSerializer.Serialize(new { undone = entry.Id, entry.Name, entry.Scope }, JsonOpts));
-            return 0;
-        }
-        return ArgError("Usage: env-manager history list [--limit N] | history undo <id> [--force]");
+   {
+       string sub = args.Length > 1 ? args[1].ToLowerInvariant() : "list";
+       if (sub == "list")
+       {
+           int limit = 200;
+           int flag = Array.IndexOf(args, "--limit");
+           if (flag >= 0 && flag + 1 < args.Length && int.TryParse(args[flag + 1], out int parsed)) limit = Math.Clamp(parsed, 1, 1000);
+           Console.WriteLine(JsonSerializer.Serialize(LoadAuditHistory().TakeLast(limit).Reverse(), JsonOptsIndented));
+           return 0;
+       }
+       if (sub == "undo" && args.Length > 2)
+       {
+           var entry = LoadAuditHistory().FirstOrDefault(e => e.Id.Equals(args[2], StringComparison.OrdinalIgnoreCase));
+           if (entry == null) return ArgError("Error: Audit entry not found");
+           string? current = GetVariableValue(entry.Name, entry.Scope);
+           if (current != entry.NewValue && !args.Contains("--force"))
+               return ArgError("Error: Variable changed since this audit entry; use --force to override");
+           if (entry.OldValue == null) DeleteVariableWithoutNotify(entry.Name, entry.Scope);
+           else SetVariableWithoutNotify(entry.Name, entry.OldValue, entry.Scope);
+           BroadcastSettingChange();
+           Console.WriteLine(JsonSerializer.Serialize(new { undone = entry.Id, entry.Name, entry.Scope }, JsonOpts));
+           return 0;
+       }
+       if (sub == "delete")
+       {
+           if (args.Length < 3) return ArgError("Usage: env-manager history delete <id> | history delete --all [--scope user|system]");
+           var history = LoadAuditHistory();
+           if (args[2] == "--all")
+           {
+               string? scope = ParseScope(args, 3, "all");
+               if (scope == null) return 1;
+               if (scope == "all") history.Clear();
+               else history.RemoveAll(e => e.Scope == scope);
+               AtomicWriteJson(AuditFilePath, history);
+               Console.WriteLine(JsonSerializer.Serialize(new { deleted = "all", scope }, JsonOpts));
+               return 0;
+           }
+           var entry = history.FirstOrDefault(e => e.Id.Equals(args[2], StringComparison.OrdinalIgnoreCase));
+           if (entry == null) return ArgError("Error: Audit entry not found");
+           history.Remove(entry);
+           AtomicWriteJson(AuditFilePath, history);
+           Console.WriteLine(JsonSerializer.Serialize(new { deleted = entry.Id }, JsonOpts));
+           return 0;
+       }
+       return ArgError("Usage: env-manager history list [--limit N] | history undo <id> [--force] | history delete <id> | history delete --all [--scope user|system]");
     }
 
     static int RunExpand(string value)
@@ -369,11 +390,14 @@ partial class Program
         var profiles = LoadProfiles();
         var profile = FindProfile(profiles, args[2]);
         if (profile == null) return ArgError("Error: Profile not found");
-        if (profile.IsEnabled) return ArgError("Error: Unapply the profile before changing inheritance");
+        bool wasEnabled = profile.IsEnabled;
+        if (wasEnabled) UnapplyProfile(profile);
         profile.Inherits = args.Skip(3).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
         ResolveProfileVariables(profile, profiles);
         ResolveProfilePaths(profile, profiles);
         SaveProfiles(profiles);
+        // If the profile was active, re-apply it with the new inheritance chain
+        if (wasEnabled) { ApplyProfile(profile); profile.AppliedAt = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(); SaveProfiles(profiles); }
         Console.WriteLine(JsonSerializer.Serialize(new { profile = profile.Name, profile.Inherits }, JsonOpts));
         return 0;
     }

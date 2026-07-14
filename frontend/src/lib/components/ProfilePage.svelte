@@ -1,7 +1,12 @@
 <script lang="ts">
   import { onMount } from 'svelte'
-  import Sortable from 'sortablejs'
   import { moveItem } from '../features'
+  import {
+    createDragState, beginDrag, enterTarget, finishDrag, cancelDrag,
+    loadProfileOrder as loadStoredOrder, saveProfileOrder as saveStoredOrder,
+    applyStoredOrder as applyStored,
+  } from '../profileDrag'
+  import type { DragState } from '../profileDrag'
   import { t } from 'svelte-i18n'
   import { profiles, variables, showModal, refreshTrigger } from '../stores'
   import { showToast } from '../stores'
@@ -36,36 +41,15 @@
   let cloneSource = ''
   let allVars: EnvVariable[] = []
   let newPathEntry = ''
+  let dragState: DragState = createDragState()
+  let pointerY = 0
+  let startY = 0
+  $: dragIndex = dragState.dragIndex
+  $: dragOverIndex = dragState.dragOverIndex
+  $: isDragging = dragState.isDragging
 
-  const PROFILE_ORDER_KEY = 'envManager_profileOrder'
-
-  function loadProfileOrder(): string[] {
-    try {
-      const raw = localStorage.getItem(PROFILE_ORDER_KEY)
-      return raw ? JSON.parse(raw) : []
-    } catch { return [] }
-  }
-
-  function saveProfileOrder(names: string[]): void {
-    try {
-      localStorage.setItem(PROFILE_ORDER_KEY, JSON.stringify(names))
-    } catch { /* ignore */ }
-  }
-
-  function applyStoredOrder(list: ProfileData[]): ProfileData[] {
-    const order = loadProfileOrder()
-    if (order.length === 0) return list
-    const ordered: ProfileData[] = []
-    const remaining: ProfileData[] = []
-    for (const name of order) {
-      const found = list.find(p => p.name === name)
-      if (found) ordered.push(found)
-    }
-    for (const p of list) {
-      if (!order.includes(p.name)) remaining.push(p)
-    }
-    return [...ordered, ...remaining]
-  }
+  // loadProfileOrder/saveProfileOrder/applyStoredOrder imported from ../profileDrag
+  // as loadStoredOrder/saveStoredOrder/applyStored respectively.
 
   onMount(async () => {
     await refreshProfiles()
@@ -80,7 +64,7 @@
   async function refreshProfiles() {
     loading = true
     try {
-      profileList = applyStoredOrder(await listProfiles())
+      profileList = applyStored(await listProfiles())
       profiles.set(profileList)
       await listVariables()
       allVars = $variables
@@ -253,22 +237,26 @@
     }
   }
 
-  function sortableProfiles(node: HTMLElement) {
-    const sortable = Sortable.create(node, {
-      animation: 140,
-      handle: '.profile-drag-handle',
-      ghostClass: 'opacity-40',
-      chosenClass: 'ring-1',
-      dragClass: 'shadow-lg',
-      fallbackOnBody: true,
-      swapThreshold: 0.65,
-      onEnd: ({ oldIndex, newIndex }) => {
-        if (oldIndex === undefined || newIndex === undefined) return
-        profileList = moveItem(profileList, oldIndex, newIndex)
-        saveProfileOrder(profileList.map(profile => profile.name))
-      },
-    })
-    return { destroy: () => sortable.destroy() }
+  function beginPointerDrag(event: PointerEvent, index: number): void {
+    beginDrag(dragState, index, { button: event.button, preventDefault: () => event.preventDefault() })
+    pointerY = event.clientY
+    startY = event.clientY
+  }
+
+  function enterPointerTarget(index: number): void {
+    enterTarget(dragState, index)
+  }
+
+  function finishPointerDrag(index: number): void {
+    profileList = finishDrag(dragState, index, profileList)
+    pointerY = 0
+    startY = 0
+  }
+
+  function cancelPointerDrag(): void {
+    cancelDrag(dragState)
+    pointerY = 0
+    startY = 0
   }
 
   async function handleInheritance(parent: string, enabled: boolean) {
@@ -314,6 +302,8 @@
   }
 </script>
 
+<svelte:window on:pointermove={(e) => { if (dragState.isDragging) pointerY = e.clientY }} on:pointerup={cancelPointerDrag} on:pointercancel={cancelPointerDrag} />
+
 <div class="space-y-3">
   <!-- Create profile bar -->
   <div class="flex gap-2">
@@ -358,11 +348,15 @@
     </div>
   {:else}
     <!-- Profile list with toggle switches (like PowerToys) -->
-    <div class="space-y-2" use:sortableProfiles>
+    <div class="space-y-2" role="list" data-testid="profile-list">
       {#each profileList as profile, i (profile.name)}
         <div
-          class="bg-white rounded-md border border-gray-200 dark:bg-gray-800 dark:border-gray-700"
+          class="bg-white rounded-md border border-gray-200 transition-[border-color,box-shadow,opacity,transform] dark:bg-gray-800 dark:border-gray-700 {isDragging && dragIndex === i ? 'opacity-80 shadow-lg z-10 scale-[1.02]' : ''} {isDragging && dragOverIndex === i && dragIndex !== i ? 'ring-2 ring-blue-500 border-blue-500' : ''}"
+          style={isDragging && dragIndex === i ? `transform: translateY(${pointerY - startY}px); cursor: grabbing;` : ''}
           role="listitem"
+          data-profile-name={profile.name}
+          on:pointerenter={() => enterPointerTarget(i)}
+          on:pointerup={() => finishPointerDrag(i)}
         >
           <!-- Profile row with toggle -->
           <div class="flex items-center justify-between px-4 py-2.5">
@@ -371,8 +365,11 @@
               title={$t('profiles.dragToSort')}
               role="button"
               tabindex="0"
+              aria-label={$t('profiles.dragToSort')}
+              data-testid={`profile-drag-handle-${i}`}
+              on:pointerdown={(event) => beginPointerDrag(event, i)}
             >
-              <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+              <svg class="w-3 h-3 pointer-events-none" draggable="false" fill="currentColor" viewBox="0 0 20 20">
                 <path d="M7 4a1 1 0 11-2 0 1 1 0 012 0zM9 4a1 1 0 11-2 0 1 1 0 012 0zM11 4a1 1 0 11-2 0 1 1 0 012 0zM13 4a1 1 0 11-2 0 1 1 0 012 0zM7 8a1 1 0 11-2 0 1 1 0 012 0zM9 8a1 1 0 11-2 0 1 1 0 012 0zM11 8a1 1 0 11-2 0 1 1 0 012 0zM13 8a1 1 0 11-2 0 1 1 0 012 0zM7 12a1 1 0 11-2 0 1 1 0 012 0zM9 12a1 1 0 11-2 0 1 1 0 012 0zM11 12a1 1 0 11-2 0 1 1 0 012 0zM13 12a1 1 0 11-2 0 1 1 0 012 0zM7 16a1 1 0 11-2 0 1 1 0 012 0zM9 16a1 1 0 11-2 0 1 1 0 012 0zM11 16a1 1 0 11-2 0 1 1 0 012 0zM13 16a1 1 0 11-2 0 1 1 0 012 0z" />
               </svg>
             </div>
@@ -450,7 +447,7 @@
                   <div class="space-y-1 max-h-20 overflow-y-auto">
                     {#each profileList.filter(candidate => candidate.name !== profile.name) as parent (parent.name)}
                       <label class="flex items-center gap-1.5 text-[10px] text-gray-600 dark:text-gray-300">
-                        <input type="checkbox" disabled={profile.isEnabled} checked={profile.inherits?.includes(parent.name)} on:change={(event) => handleInheritance(parent.name, event.currentTarget.checked)} />
+                        <input type="checkbox" checked={profile.inherits?.includes(parent.name)} on:change={(event) => handleInheritance(parent.name, event.currentTarget.checked)} />
                         <span class="truncate">{parent.name}</span>
                       </label>
                     {/each}

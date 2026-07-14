@@ -553,6 +553,16 @@ export async function undoHistory(id: string, force = false): Promise<void> {
   await listVariables()
 }
 
+export async function deleteHistory(id: string): Promise<void> {
+  await runWrite('history', ['delete', id])
+}
+
+export async function clearHistory(scope: 'user' | 'system' | 'all' = 'all'): Promise<void> {
+  const args = ['delete', '--all']
+  if (scope !== 'all') args.push('--scope', scope)
+  await runWrite('history', args)
+}
+
 export async function bulkImport(file: string, scope: 'user' | 'system', overwrite = false, dryRun = false): Promise<Record<string, unknown>> {
   const args = ['import', file, '--scope', scope]
   if (overwrite) args.push('--overwrite')
