@@ -46,7 +46,7 @@ export function createDragState(): DragState {
 
 export function beginDrag(state: DragState, index: number, event?: { button?: number }): void {
   if (event?.button !== undefined && event.button !== 0) return
-  if (event?.preventDefault) event.preventDefault()
+  if (event && 'preventDefault' in event && typeof event.preventDefault === 'function') event.preventDefault()
   state.dragIndex = index
   state.dragOverIndex = index
   state.isDragging = true
