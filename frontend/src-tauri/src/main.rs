@@ -131,11 +131,6 @@ fn is_read_only(command: &str, args: &[String]) -> bool {
 /// This prevents write-write and read-write races while allowing read-read concurrency.
 static CLI_RWLOCK: RwLock<()> = RwLock::new(());
 
-/// Fallback mutex for write commands that also need to serialize against
-/// each other within the write lock. The write lock alone is sufficient
-/// since only one writer can hold it at a time.
-static _WRITE_MUTEX: Mutex<()> = Mutex::new(());
-
 /// Strips the `\\?\` (verbatim/long-path) prefix from a Windows path string.
 /// Rust's PathBuf::display() can emit this prefix when the path was constructed
 /// from a long path or UNC source. We remove it so that registry values and

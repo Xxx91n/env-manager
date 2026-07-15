@@ -1,6 +1,6 @@
 <script lang="ts">
   import { t } from 'svelte-i18n'
-  import { variables, selectedScope, search, filteredVariables, error, showModal, isWriteInProgress } from '../stores'
+  import { variables, selectedScope, search, debouncedSearch, filteredVariables, error, showModal, isWriteInProgress } from '../stores'
   import { showToast } from '../stores'
   import { deleteVariable, createBackup, toggleVariable, setVariable, expandVariableValue, addProtectedVar, removeProtectedVar, listVariables } from '../api'
   import { highlightParts } from '../features'
@@ -13,6 +13,7 @@
   let showBackupDialog = false
   let togglingKeys: Record<string, boolean> = {}
   let expandedValues: Record<string, string> = {}
+  const MAX_EXPANDED_CACHE = 500
   let previewTimer: ReturnType<typeof setTimeout> | null = null
 
   // filteredVars is the memoized derived store filteredVariables from stores.ts
@@ -25,6 +26,13 @@
     previewTimer = setTimeout(async () => {
       try {
         const expanded = await expandVariableValue(variable.value)
+        const entries = Object.entries(expandedValues)
+        if (entries.length >= MAX_EXPANDED_CACHE) {
+          // Evict oldest entry (FIFO approximation, prevents unbounded memory growth)
+          entries.sort((a, b) => a[0].localeCompare(b[0]))
+          const evicted = entries.slice(0, entries.length - MAX_EXPANDED_CACHE + 1)
+          for (const [k] of evicted) delete expandedValues[k]
+        }
         expandedValues = { ...expandedValues, [key]: expanded }
       } catch { /* preview is non-critical */ }
     }, 250)
@@ -240,7 +248,7 @@
                 on:click={() => copyToClipboard(variable.name)}
               >
                 <div class="flex items-center gap-1.5">
-                  <span>{#each highlightParts(variable.name, $search) as part}<span class={part.match ? 'bg-yellow-200 text-gray-900 dark:bg-yellow-500/60 dark:text-white' : ''}>{part.text}</span>{/each}</span>
+                  <span>{#each highlightParts(variable.name, $debouncedSearch) as part}<span class={part.match ? 'bg-yellow-200 text-gray-900 dark:bg-yellow-500/60 dark:text-white' : ''}>{part.text}</span>{/each}</span>
                   {#if variable.profileSource}
                     <span
                       class="inline-flex px-1 py-0.5 rounded text-[9px] font-medium bg-purple-50 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300"

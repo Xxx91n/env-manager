@@ -189,18 +189,28 @@ export async function updateTrayLocale(
 
 // Cache for the most recently fetched full variable list.
 // Used by secondary surfaces (e.g. ProtectionPage) to avoid duplicate CLI calls.
+// TTL-based: cached data expires after 5 seconds so secondary pages see fresh
+// data without hammering the CLI on every page switch.
+const VARIABLES_CACHE_TTL_MS = 5000
 let lastVariablesRaw: EnvVariable[] = []
+let lastVariablesCacheTime = 0
 
 /**
  * Returns the raw variable list without touching the global `variables` store,
  * so secondary pages can read the data independently.
- * If `force` is false and we already have data, returns the cached copy.
+ * If `force` is false and cached data is still fresh (within TTL), returns the cache.
+ * If `force` is true, always refetch.
  */
 export async function listVariablesRaw(force = false): Promise<EnvVariable[]> {
-  if (!force && lastVariablesRaw.length > 0) return lastVariablesRaw
+  const now = Date.now()
+  const cacheFresh = !force
+    && lastVariablesRaw.length > 0
+    && (now - lastVariablesCacheTime) < VARIABLES_CACHE_TTL_MS
+  if (cacheFresh) return lastVariablesRaw
   try {
     const output = await runRead('list')
     lastVariablesRaw = JSON.parse(output) as EnvVariable[]
+    lastVariablesCacheTime = now
     return lastVariablesRaw
   } catch {
     return []

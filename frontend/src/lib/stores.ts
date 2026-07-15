@@ -1,4 +1,4 @@
-import { writable, derived } from 'svelte/store'
+import { writable, derived, readable } from 'svelte/store'
 
 export interface EnvVariable {
   name: string
@@ -6,6 +6,8 @@ export interface EnvVariable {
   scope: 'user' | 'system'
   isDisabled?: boolean
   profileSource?: string
+  isProtected?: boolean
+  isBuiltinProtected?: boolean
 }
 
 export interface ProfileVariable {
@@ -40,11 +42,30 @@ export const error = writable<string | null>(null)
 export const selectedScope = writable<'user' | 'system' | 'all'>('all')
 export const search = writable('')
 
-// Derived store: caches filtered variables based on scope + search.
-// Svelte derived stores memoize: the filter only recomputes when a dependency changes.
-// This avoids re-running the filter on every unrelated component update.
+// Debounced search store: delays propagating search input by 150ms so
+// rapid typing does not re-run the filter on every keystroke. This is
+// critical for production machines with thousands of environment variables
+// where each filter pass can take 10-50ms.
+let searchDebounceId: ReturnType<typeof setTimeout> | null = null
+export const debouncedSearch = readable('', (set) => {
+  const unsubscribe = search.subscribe((value) => {
+    if (searchDebounceId) clearTimeout(searchDebounceId)
+    searchDebounceId = setTimeout(() => {
+      set(value)
+    }, 150)
+  })
+  return () => {
+    if (searchDebounceId) clearTimeout(searchDebounceId)
+    unsubscribe()
+  }
+})
+
+// Derived store: caches filtered variables based on scope + debounced search.
+// Uses the debounced search so filter only runs after the user stops typing.
+// Svelte derived stores memoize: the filter only recomputes when a dependency
+// changes, not on every unrelated component update.
 export const filteredVariables = derived(
-  [variables, selectedScope, search],
+  [variables, selectedScope, debouncedSearch],
   ([$variables, $selectedScope, $search]) => {
     let result = $variables
     if ($selectedScope !== 'all') {
@@ -62,7 +83,7 @@ export const filteredVariables = derived(
   },
 )
 export const profiles = writable<ProfileData[]>([])
-export const activeView = writable<'variables' | 'profiles' | 'path' | 'history'>('variables')
+export const activeView = writable<'variables' | 'profiles' | 'path' | 'history' | 'protection'>('variables')
 export const modal = writable<ModalConfig | null>(null)
 export const debugLogs = writable<DebugLogEntry[]>([])
 export const isWriteInProgress = writable(false)

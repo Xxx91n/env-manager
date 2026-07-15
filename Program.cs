@@ -770,6 +770,16 @@ partial class Program
             return 1;
         }
 
+        // Refuse to toggle protected variables. Toggling would create a backup
+        // key then delete the original; if the delete is blocked by the
+        // protection guard inside DeleteVariableWithoutNotify, the backup
+        // would exist alongside an undeleted original, leaving inconsistent state.
+        if (IsProtectedVariable(name, scope ?? "user"))
+        {
+            Console.Error.WriteLine($"Error: Cannot toggle protected variable '{name}'");
+            return 1;
+        }
+
         string backupName = GetToggleBackupName(name);
 
         // Prevent name collision: if the variable itself is a backup key, refuse to toggle
@@ -779,19 +789,19 @@ partial class Program
             return 1;
         }
 
-        var currentValue = GetVariableValue(name, scope);
-        var backupValue = GetVariableValue(backupName, scope);
+        var currentValue = GetVariableValue(name, scope!);
+        var backupValue = GetVariableValue(backupName, scope!);
 
         if (backupValue != null)
         {
             // Re-enable: restore original value from backup, then delete backup.
             // Write-first order ensures data is not lost if delete fails.
-            SetVariableWithoutNotify(name, backupValue, scope);
+            SetVariableWithoutNotify(name, backupValue, scope!);
             // Verify the restore succeeded before removing backup
-            var restoredCheck = GetVariableValue(name, scope);
+            var restoredCheck = GetVariableValue(name, scope!);
             if (restoredCheck != null)
             {
-                DeleteVariableWithoutNotify(backupName, scope);
+                DeleteVariableWithoutNotify(backupName, scope!);
                 BroadcastSettingChange();
                 Console.WriteLine(JsonSerializer.Serialize(new { name, scope, isDisabled = false }, JsonOpts));
             }
@@ -805,12 +815,12 @@ partial class Program
         {
             // Disable: write backup first, then delete original.
             // Write-first order ensures data is not lost if delete fails.
-            SetVariableWithoutNotify(backupName, currentValue, scope);
+            SetVariableWithoutNotify(backupName, currentValue, scope!);
             // Verify backup was written before removing original
-            var backupCheck = GetVariableValue(backupName, scope);
+            var backupCheck = GetVariableValue(backupName, scope!);
             if (backupCheck != null)
             {
-                DeleteVariableWithoutNotify(name, scope);
+                DeleteVariableWithoutNotify(name, scope!);
                 BroadcastSettingChange();
                 Console.WriteLine(JsonSerializer.Serialize(new { name, scope, isDisabled = true }, JsonOpts));
             }
@@ -1370,6 +1380,16 @@ partial class Program
     /// </summary>
     static void DeleteVariableWithoutNotify(string name, string scope)
     {
+        // Protect critical system variables from deletion even in internal paths
+        // (rollback, toggle, profile cleanup). Without this guard, a rollback
+        // after a failed bulk import could delete a protected variable whose
+        // original value was null.
+        if (IsProtectedVariable(name, scope))
+        {
+            Console.Error.WriteLine($"Error: Cannot delete protected system variable '{name}'");
+            return;
+        }
+
         var (hive, path) = GetScopeTarget(scope);
         using (var key = hive?.OpenSubKey(path, true))
         {
@@ -1735,6 +1755,7 @@ partial class Program
         }
 
         int restored = 0;
+        int skipped = 0;
         foreach (var v in backup.Variables)
         {
             if (scope == "all" || v.Scope == scope)
@@ -1742,13 +1763,20 @@ partial class Program
                 if (v.Scope != "user" && v.Scope != "system")
                 {
                     Console.Error.WriteLine($"Skipping '{v.Name}': invalid scope '{v.Scope}'");
+                    skipped++;
+                    continue;
+                }
+                if (IsProtectedVariable(v.Name, v.Scope))
+                {
+                    Console.Error.WriteLine($"Skipping protected variable '{v.Name}' ({v.Scope})");
+                    skipped++;
                     continue;
                 }
                 SetVariable(v.Name, v.Value, v.Scope);
                 restored++;
             }
         }
-        Console.WriteLine($"Restored {restored} variables");
+        Console.WriteLine($"Restored {restored} variables" + (skipped > 0 ? $", skipped {skipped}" : ""));
     }
 
     static int DiffBackups(string oldPath, string newPath)
