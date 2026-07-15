@@ -8,6 +8,8 @@ export interface EnvVariable {
   scope: 'user' | 'system'
   isDisabled?: boolean
   profileSource?: string
+  isProtected?: boolean
+  isBuiltinProtected?: boolean
 }
 
 export interface CLIResponse {
@@ -43,6 +45,8 @@ export interface PathEntry {
   expandedPath: string
   isDuplicate: boolean
   exists: boolean
+  isProtected: boolean
+  isBuiltinProtected: boolean
 }
 
 export interface AuditEntry {
@@ -752,7 +756,10 @@ export async function getCliAgentsPath(): Promise<string> {
 // --- Protection list API ---
 
 export interface ProtectionData {
-  protectedVars: string[]
+  protectedVars: {
+    builtIn: string[]
+    custom: string[]
+  }
   protectedPaths: {
     builtIn: string[]
     custom: string[]
@@ -770,4 +777,12 @@ export async function addProtectedPath(entry: string): Promise<void> {
 
 export async function removeProtectedPath(entry: string): Promise<void> {
   await runWrite('protection', ['remove-path', entry])
+}
+
+export async function addProtectedVar(name: string): Promise<void> {
+  await runWrite('protection', ['add-var', name])
+}
+
+export async function removeProtectedVar(name: string): Promise<void> {
+  await runWrite('protection', ['remove-var', name])
 }

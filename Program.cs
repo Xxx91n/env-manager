@@ -12,6 +12,8 @@ class EnvVariable
     [JsonPropertyName("scope")] public string Scope { get; set; } = "";
     [JsonPropertyName("isDisabled")] public bool IsDisabled { get; set; } = false;
     [JsonPropertyName("profileSource")] public string? ProfileSource { get; set; }
+    [JsonPropertyName("isProtected")] public bool IsProtected { get; set; } = false;
+    [JsonPropertyName("isBuiltinProtected")] public bool IsBuiltinProtected { get; set; } = false;
 }
 
 class BackupData
@@ -70,7 +72,7 @@ partial class Program
         @"C:\Windows\System32",
         @"C:\Windows",
         @"C:\Windows\System32\Wbem",
-        @"C:\Windows\System32\WindowsPowerShell1.0",
+        @"C:\Windows\System32\WindowsPowerShell\v1.0\",
     };
 
     static List<string> CustomProtectedPathEntries
@@ -106,6 +108,34 @@ partial class Program
         return false;
     }
 
+    // --- Custom protected variables (user-lockable) ---
+    // Users can lock any variable via the GUI lock button or CLI 'protection add-var'.
+    // Locked variables cannot be toggled, edited, or deleted.
+    static List<string> CustomProtectedVars
+    {
+        get
+        {
+            try
+            {
+                string file = Path.Combine(AppDataDirectory, "protected-vars.json");
+                if (!File.Exists(file)) return new();
+                return JsonSerializer.Deserialize<List<string>>(File.ReadAllText(file), JsonOpts) ?? new();
+            }
+            catch { return new(); }
+        }
+    }
+
+    static void SaveCustomProtectedVars(List<string> vars)
+    {
+        string file = Path.Combine(AppDataDirectory, "protected-vars.json");
+        AtomicWriteJson(file, vars.Distinct(StringComparer.OrdinalIgnoreCase).ToList());
+    }
+
+    static bool IsCustomProtectedVar(string name)
+    {
+        return CustomProtectedVars.Any(v => v.Equals(name, StringComparison.OrdinalIgnoreCase));
+    }
+
     /// <summary>
     /// Returns true if the variable is protected from system-scope modification.
     /// PATH is no longer wholesale-protected; individual PATH entries are checked
@@ -114,10 +144,21 @@ partial class Program
     /// </summary>
     static bool IsProtectedVariable(string name, string scope)
     {
-        if (scope == "system")
-            return ProtectedSystemVars.Contains(name);
-        // User scope: allow all modifications (user owns their environment)
+        // Built-in system protection (system scope only)
+        if (scope == "system" && ProtectedSystemVars.Contains(name))
+            return true;
+        // User-locked variables (any scope)
+        if (IsCustomProtectedVar(name))
+            return true;
         return false;
+    }
+
+    /// <summary>
+    /// Returns true if a variable is protected by built-in rules (cannot be unlocked).
+    /// </summary>
+    static bool IsBuiltinProtectedVar(string name)
+    {
+        return ProtectedSystemVars.Contains(name);
     }
 
     static bool DebugMode = false;
@@ -479,6 +520,20 @@ partial class Program
         catch (Exception e)
         {
             DebugLog("ListEnvironment: profile annotation failed: " + e.Message);
+        }
+
+        // Annotate variables with protection status (built-in and custom)
+        try
+        {
+            foreach (var item in items)
+            {
+                item.IsProtected = IsProtectedVariable(item.Name, item.Scope);
+                item.IsBuiltinProtected = IsBuiltinProtectedVar(item.Name) && item.Scope == "system";
+            }
+        }
+        catch (Exception e)
+        {
+            DebugLog("ListEnvironment: protection annotation failed: " + e.Message);
         }
 
         var ordered = items.OrderBy(x => x.Name).ThenBy(x => x.Scope).ToList();
@@ -1502,7 +1557,9 @@ partial class Program
             path = e,
             expandedPath = Environment.ExpandEnvironmentVariables(e),
             isDuplicate = normalizedCounts.GetValueOrDefault(NormalizePathEntry(e)) > 1,
-            exists = Directory.Exists(Environment.ExpandEnvironmentVariables(e))
+            exists = Directory.Exists(Environment.ExpandEnvironmentVariables(e)),
+            isProtected = IsProtectedPathEntry(e),
+            isBuiltinProtected = ProtectedPathEntries.Any(p => p.TrimEnd('\\', '/').Equals(e.TrimEnd('\\', '/').Trim(), StringComparison.OrdinalIgnoreCase))
         }).ToList();
         Console.WriteLine(JsonSerializer.Serialize(result, JsonOptsIndented));
         return 0;
@@ -1935,7 +1992,7 @@ Commands:
   history list|undo           View or undo audited changes
   bulk import|export          Import/export .json, .env, or .csv
   expand <value>              Expand nested %VARIABLE% references
-  protection list|add-path|remove-path  View or manage protected PATH entries
+  protection list|add-path|remove-path|add-var|remove-var  View or manage protected variables and PATH entries
   agents [--path|--json|--summary] Output CLI spec. --path: file only. --json: machine-readable. --summary: brief
   help                       Show help
   --debug                    Enable verbose stderr logging");

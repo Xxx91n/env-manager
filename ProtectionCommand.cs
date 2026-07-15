@@ -9,21 +9,26 @@ partial class Program
 
         if (sub == "list")
         {
-            // Output: { protectedVars: ["PATHEXT", ...], protectedPaths: { builtIn: [...], custom: [...] } }
-            var builtIn = ProtectedPathEntries.ToList();
-            var custom = CustomProtectedPathEntries;
+            // Output: { protectedVars: { builtIn: [...], custom: [...] },
+            //           protectedPaths: { builtIn: [...], custom: [...] } }
             var result = new
             {
-                protectedVars = ProtectedSystemVars.OrderBy(x => x).ToList(),
+                protectedVars = new
+                {
+                    builtIn = ProtectedSystemVars.OrderBy(x => x).ToList(),
+                    custom = CustomProtectedVars,
+                },
                 protectedPaths = new
                 {
-                    builtIn = builtIn,
-                    custom = custom,
+                    builtIn = ProtectedPathEntries.ToList(),
+                    custom = CustomProtectedPathEntries,
                 },
             };
             Console.WriteLine(JsonSerializer.Serialize(result, JsonOptsIndented));
             return 0;
         }
+
+        // --- Custom protected PATH entries ---
 
         if (sub == "add-path" && args.Length > 2)
         {
@@ -61,13 +66,51 @@ partial class Program
             return 0;
         }
 
-        if (sub == "remove-var" && args.Length > 2)
+        // --- Custom protected variables (user-lockable) ---
+
+        if (sub == "add-var" && args.Length > 2)
         {
-            // This only removes from the *displayed* protection list.
-            // Built-in ProtectedSystemVars is hardcoded and cannot be removed.
-            return ArgError("Error: Built-in protected variables cannot be removed. Only custom protected PATH entries can be managed.");
+            string varName = args[2];
+            if (string.IsNullOrWhiteSpace(varName) || varName.Length > 255 || varName.Contains('\0'))
+                return ArgError("Error: Invalid variable name");
+
+            // Built-in protected variables cannot be added via custom list
+            // (they are already protected; adding would conflict with removable logic)
+            var custom = CustomProtectedVars;
+            if (!custom.Any(v => v.Equals(varName, StringComparison.OrdinalIgnoreCase)))
+            {
+                custom.Add(varName);
+                SaveCustomProtectedVars(custom);
+            }
+            Console.WriteLine($"Added protected variable: {varName}");
+            return 0;
         }
 
-        return ArgError("Usage: env-manager protection list | protection add-path <dir> | protection remove-path <dir>");
+        if (sub == "remove-var" && args.Length > 2)
+        {
+            string varName = args[2];
+            // Cannot remove built-in protected variables
+            if (ProtectedSystemVars.Contains(varName))
+                return ArgError("Error: Cannot remove built-in protected variable. Only custom protected variables can be unlocked.");
+
+            // Cannot remove built-in protected PATH entries
+            if (ProtectedPathEntries.Any(p => p.TrimEnd('\\', '/').Equals(varName.TrimEnd('\\', '/'), StringComparison.OrdinalIgnoreCase)))
+                return ArgError("Error: Cannot remove built-in protected PATH entry");
+
+            var custom = CustomProtectedVars;
+            int removed = custom.RemoveAll(v => v.Equals(varName, StringComparison.OrdinalIgnoreCase));
+            if (removed > 0)
+            {
+                SaveCustomProtectedVars(custom);
+                Console.WriteLine($"Removed protected variable: {varName}");
+            }
+            else
+            {
+                Console.Error.WriteLine($"Warning: '{varName}' not found in custom protected variable list");
+            }
+            return 0;
+        }
+
+        return ArgError("Usage: env-manager protection list | add-path <dir> | remove-path <dir> | add-var <name> | remove-var <name>");
     }
 }

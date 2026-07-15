@@ -2,7 +2,7 @@
   import { t } from 'svelte-i18n'
   import { variables, selectedScope, error, showModal, isWriteInProgress } from '../stores'
   import { showToast } from '../stores'
-  import { deleteVariable, createBackup, toggleVariable, setVariable, expandVariableValue } from '../api'
+  import { deleteVariable, createBackup, toggleVariable, setVariable, expandVariableValue, addProtectedVar, removeProtectedVar, listVariables } from '../api'
   import { highlightParts } from '../features'
   import EditDialog from './EditDialog.svelte'
   import BackupDialog from './BackupDialog.svelte'
@@ -124,6 +124,26 @@
     }
   }
 
+  async function handleLockToggle(name: string, isProtected: boolean, isBuiltin: boolean) {
+    // Built-in protected variables cannot be unlocked
+    if (isBuiltin) {
+      showToast($t('protection.cannotUnlockBuiltin'), 'error')
+      return
+    }
+    try {
+      if (isProtected) {
+        await removeProtectedVar(name)
+        showToast($t('protection.varUnlocked'), 'success')
+      } else {
+        await addProtectedVar(name)
+        showToast($t('protection.varLocked'), 'success')
+      }
+      await listVariables()
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : String(err), 'error')
+    }
+  }
+
   function handleEdit(v) {
     editingVar = v
     showEditDialog = true
@@ -216,7 +236,7 @@
         </thead>
         <tbody class="divide-y divide-gray-100 dark:divide-gray-700">
           {#each filteredVars as variable (variable.name + variable.scope)}
-            <tr class="hover:bg-gray-50 transition dark:hover:bg-gray-750 {variable.isDisabled ? 'opacity-50' : ''}">
+            <tr class="hover:bg-gray-50 transition dark:hover:bg-gray-750 {variable.isDisabled ? 'opacity-50' : ''} {variable.isProtected ? 'bg-gray-100/60 dark:bg-gray-800/60' : ''}">
               <td class="px-3 py-2">
                 <button
                   on:click={() => handleToggle(variable.name, variable.scope)}
@@ -267,6 +287,20 @@
                 {variable.value}
               </td>
               <td class="px-3 py-2 text-right text-xs">
+                <button
+                  on:click={() => handleLockToggle(variable.name, !!variable.isProtected, !!variable.isBuiltinProtected)}
+                  class="inline-flex p-1 {variable.isProtected ? 'text-amber-500' : 'text-gray-400 hover:text-amber-500 hover:bg-amber-50'} rounded transition dark:hover:bg-amber-900/30"
+                  title={variable.isProtected ? (variable.isBuiltinProtected ? $t('protection.lockedBuiltin') : $t('protection.unlockVar')) : $t('protection.lockVar')}
+                  aria-label={variable.isProtected ? $t('protection.unlockVar') : $t('protection.lockVar')}
+                >
+                  <svg class="w-3.5 h-3.5" fill="{variable.isProtected ? 'currentColor' : 'none'}" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+                    {#if variable.isProtected}
+                      <path stroke-linecap="round" stroke-linejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                    {:else}
+                      <path stroke-linecap="round" stroke-linejoin="round" d="M8 11V7a4 4 0 018 0v4M5 9h14a1 1 0 011 1v8a1 1 0 01-1 1H5a1 1 0 01-1-1v-8a1 1 0 011-1z" />
+                    {/if}
+                  </svg>
+                </button>
                 <button
                   on:click={() => handleEdit(variable)}
                   disabled={$isWriteInProgress || togglingKeys[variable.name + ':' + variable.scope] === true}

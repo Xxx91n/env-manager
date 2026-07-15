@@ -214,6 +214,8 @@ All commands follow: `env-manager-cli <command> [arguments] [--flags]`
 | `protection list` | `protection list` | List protected vars and PATH entries (JSON) |
 | `protection add-path` | `protection add-path <dir>` | Add custom protected PATH entry |
 | `protection remove-path` | `protection remove-path <dir>` | Remove custom protected PATH entry |
+| `protection add-var` | `protection add-var <name>` | Lock a variable (add to custom protected vars) |
+| `protection remove-var` | `protection remove-var <name>` | Unlock a variable (remove from custom protected vars) |
 
 ### Debug Mode
 
@@ -618,6 +620,10 @@ Scopes: `cli`, `gui`, `backup`, `registry`, `i18n`, `docs`, `build`
 - CLI command whitelist in Rust IPC layer: only known commands can spawn subprocesses (list, get, set, delete, toggle, backup, restore, diff, merge, validate, profile, path, agents, help)
 - Process isolation: CREATE_NO_WINDOW flag prevents console flicker and information leakage
 - **Critical system variable protection**: system-scope modifications to protected variables are blocked in SetVariable, DeleteVariable, and SetVariableWithoutNotify. The full ProtectedSystemVars list: PATHEXT, PSMODULEPATH, SystemRoot, windir, ComSpec, TEMP, TMP, USERPROFILE, SystemDrive, ProgramFiles, ProgramFiles(x86), ProgramData, HOMEDRIVE, HOMEPATH, NUMBER_OF_PROCESSORS, OS, PROCESSOR_ARCHITECTURE, PROCESSOR_IDENTIFIER, PROCESSOR_LEVEL, PROCESSOR_REVISION, ALLUSERSPROFILE, APPDATA, COMMONPROGRAMFILES, COMMONPROGRAMFILES(x86), COMPUTERNAME, LOCALAPPDATA, LOGONSERVER, OneDrive, OneDriveConsumer, PUBLIC, SESSIONNAME, USERDOMAIN, USERNAME. PATH is NOT in this list - it is protected per-entry via ProtectedPathEntries (built-in Windows system paths) plus custom entries stored in protected-paths.json. SetPathEntries checks IsProtectedPathEntry before allowing removal of any PATH entry. These are also blocked from being added to profiles via IsProfileApplicable() and ProfileAddVar().
+
+- **Custom protected variables (user-lockable)**: Users can lock any variable via the GUI lock button or CLI `protection add-var`. Locked variables are stored in `%LOCALAPPDATA%\EnvManager\protected-vars.json`. Locked variables cannot be toggled, edited, or deleted. The `list` command annotates each variable with `isProtected` (true if protected by built-in or custom rules) and `isBuiltinProtected` (true only if protected by hardcoded built-in rules, not user locks). Built-in protected variable (system scope) cannot be unlocked; custom locks can be removed via `protection remove-var`.
+- **Path Editor lock buttons**: PATH entries can be locked/unlocked via the GUI lock button or CLI `protection add-path`/`remove-path`. Locked PATH entries are grayed out and their move/remove buttons are disabled. Built-in protected PATH entries (e.g. `C:\Windows\System32`) cannot be unlocked; custom locks can be removed.
+- **Protection page layout**: The protection page has two tabs: Protected Variables and Protected PATH Entries. Each tab shows built-in protected items first, then custom (user-locked) items below. Custom items can be added from a dropdown of existing variables/PATH entries only (no free-text entry for vars).
 - **Toggle backup name collision prevention**: variables whose name ends with `_EnvManager_disabled` cannot be toggled, preventing backup key confusion
 - **Profile name validation**: rejects empty/whitespace names, names >255 chars, names with null/newline/carriage-return chars
 - **Profile variable name validation**: rejects empty names, names >255 chars, names containing `=`

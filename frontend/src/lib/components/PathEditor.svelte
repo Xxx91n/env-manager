@@ -10,6 +10,8 @@
     movePathEntryUp,
     movePathEntryDown,
     renamePathEntry,
+    addProtectedPath,
+    removeProtectedPath,
   } from '../api'
   import type { PathEntry } from '../api'
 
@@ -67,6 +69,25 @@
       } catch { /* ignore */ }
       document.body.removeChild(textarea)
     })
+  }
+
+  async function handlePathLockToggle(path: string, isProtected: boolean, isBuiltin: boolean) {
+    if (isBuiltin) {
+      showToast($t('protection.cannotUnlockBuiltin'), 'error')
+      return
+    }
+    try {
+      if (isProtected) {
+        await removeProtectedPath(path)
+        showToast($t('protection.pathUnlocked'), 'success')
+      } else {
+        await addProtectedPath(path)
+        showToast($t('protection.pathLocked'), 'success')
+      }
+      await refresh()
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : String(err), 'error')
+    }
   }
 
   async function handleScopeChange() {
@@ -290,7 +311,7 @@
         </thead>
         <tbody class="divide-y divide-gray-100 dark:divide-gray-700">
           {#each entries as entry (entry.index)}
-            <tr class="hover:bg-gray-50 transition dark:hover:bg-gray-750 {entry.isDuplicate ? 'bg-amber-50/60 dark:bg-amber-900/10' : ''} {!entry.exists ? 'bg-red-50/60 dark:bg-red-900/10' : ''}">
+            <tr class="hover:bg-gray-50 transition dark:hover:bg-gray-750 {entry.isDuplicate ? 'bg-amber-50/60 dark:bg-amber-900/10' : ''} {!entry.exists ? 'bg-red-50/60 dark:bg-red-900/10' : ''} {entry.isProtected ? 'bg-gray-100/60 dark:bg-gray-800/60' : ''}">
               <td class="px-2 py-1.5 text-[10px] text-gray-400 dark:text-gray-500 align-top">{entry.index}</td>
               <td class="px-2 py-1.5 align-top">
                 {#if editingIndex === entry.index}
@@ -348,6 +369,21 @@
               </td>
               <td class="px-2 py-1.5 text-right align-top">
                 {#if editingIndex !== entry.index}
+                  <!-- Lock button -->
+                  <button
+                    on:click={() => handlePathLockToggle(entry.path, !!entry.isProtected, !!entry.isBuiltinProtected)}
+                    class="inline-flex p-1 {entry.isProtected ? 'text-amber-500' : 'text-gray-400 hover:text-amber-500 hover:bg-amber-50'} rounded transition dark:hover:bg-amber-900/30"
+                    title={entry.isProtected ? (entry.isBuiltinProtected ? $t('protection.lockedBuiltin') : $t('protection.unlockPath')) : $t('protection.lockPath')}
+                    aria-label={entry.isProtected ? $t('protection.unlockPath') : $t('protection.lockPath')}
+                  >
+                    <svg class="w-3 h-3" fill="{entry.isProtected ? 'currentColor' : 'none'}" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+                      {#if entry.isProtected}
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                      {:else}
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M8 11V7a4 4 0 018 0v4M5 9h14a1 1 0 011 1v8a1 1 0 01-1 1H5a1 1 0 01-1-1v-8a1 1 0 011-1z" />
+                      {/if}
+                    </svg>
+                  </button>
                   <!-- Rename button -->
                   <button
                     on:click={() => startEdit(entry.index, entry.path)}
@@ -362,7 +398,7 @@
                   </button>
                   <button
                     on:click={() => handleMoveUp(entry.index)}
-                    disabled={actionLoading || entry.index === 0}
+                    disabled={actionLoading || entry.index === 0 || entry.isProtected}
                     class="inline-flex p-1 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded transition disabled:opacity-30 dark:hover:text-blue-400 dark:hover:bg-blue-900/30"
                     title={$t('path.moveUp')}
                     aria-label={$t('path.moveUp')}
@@ -373,7 +409,7 @@
                   </button>
                   <button
                     on:click={() => handleMoveDown(entry.index)}
-                    disabled={actionLoading || entry.index === entries.length - 1}
+                    disabled={actionLoading || entry.index === entries.length - 1 || entry.isProtected}
                     class="inline-flex p-1 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded transition disabled:opacity-30 dark:hover:text-blue-400 dark:hover:bg-blue-900/30"
                     title={$t('path.moveDown')}
                     aria-label={$t('path.moveDown')}
@@ -384,8 +420,8 @@
                   </button>
                   <button
                     on:click={() => handleRemove(entry.path)}
-                    disabled={actionLoading}
-                    class="inline-flex p-1 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition dark:hover:text-red-400 dark:hover:bg-red-900/30"
+                    disabled={actionLoading || entry.isProtected}
+                    class="inline-flex p-1 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition disabled:opacity-30 disabled:cursor-not-allowed dark:hover:text-red-400 dark:hover:bg-red-900/30"
                     title={$t('path.removeEntry')}
                     aria-label={$t('path.removeEntry')}
                   >
