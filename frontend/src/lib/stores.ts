@@ -1,4 +1,4 @@
-import { writable } from 'svelte/store'
+import { writable, derived } from 'svelte/store'
 
 export interface EnvVariable {
   name: string
@@ -38,6 +38,29 @@ export const variables = writable<EnvVariable[]>([])
 export const loading = writable(false)
 export const error = writable<string | null>(null)
 export const selectedScope = writable<'user' | 'system' | 'all'>('all')
+export const search = writable('')
+
+// Derived store: caches filtered variables based on scope + search.
+// Svelte derived stores memoize: the filter only recomputes when a dependency changes.
+// This avoids re-running the filter on every unrelated component update.
+export const filteredVariables = derived(
+  [variables, selectedScope, search],
+  ([$variables, $selectedScope, $search]) => {
+    let result = $variables
+    if ($selectedScope !== 'all') {
+      result = result.filter((v) => v.scope === $selectedScope)
+    }
+    const q = $search.trim().toLowerCase()
+    if (q) {
+      result = result.filter(
+        (v) =>
+          v.name.toLowerCase().includes(q) ||
+          v.value.toLowerCase().includes(q),
+      )
+    }
+    return result
+  },
+)
 export const profiles = writable<ProfileData[]>([])
 export const activeView = writable<'variables' | 'profiles' | 'path' | 'history'>('variables')
 export const modal = writable<ModalConfig | null>(null)

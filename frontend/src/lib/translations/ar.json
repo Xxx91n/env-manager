@@ -136,6 +136,7 @@
   "protection.protectedPaths": "إدخالات PATH المحمية",
   "protection.varsCount": "{count} متغيرات محمية",
   "protection.varsNote": "لا يمكن إزالة المتغيرات المحمية المدمجة. هي حرجة لعمل Windows.",
+  "protection.builtinSystemOnly": "الحماية المدمجة تنطبق فقط على نطاق النظام",
   "protection.builtinPaths": "PATH المحمي المدمج",
   "protection.customPaths": "PATH المحمي المخصص",
   "protection.noCustomPaths": "لا توجد إدخالات PATH محمية مخصصة",

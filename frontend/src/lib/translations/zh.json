@@ -136,6 +136,7 @@
   "protection.protectedPaths": "受保护PATH条目",
   "protection.varsCount": "{count} 个受保护变量",
   "protection.varsNote": "内置受保护变量无法移除。它们对 Windows 正常运行至关重要。",
+  "protection.builtinSystemOnly": "内置保护仅适用于系统作用域",
   "protection.builtinPaths": "内置受保护PATH",
   "protection.customPaths": "自定义受保护PATH",
   "protection.noCustomPaths": "没有自定义受保护PATH条目",

@@ -136,6 +136,7 @@
   "protection.protectedPaths": "保護対象PATHエントリ",
   "protection.varsCount": "{count} 個の保護対象変数",
   "protection.varsNote": "組み込みの保護対象変数は削除できません。Windowsの動作に不可欠です。",
+  "protection.builtinSystemOnly": "組み込み保護はシステムスコープにのみ適用されます",
   "protection.builtinPaths": "組み込み保護PATH",
   "protection.customPaths": "カスタム保護PATH",
   "protection.noCustomPaths": "カスタム保護PATHエントリがありません",

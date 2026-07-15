@@ -136,6 +136,7 @@
   "protection.protectedPaths": "Protected PATH Entries",
   "protection.varsCount": "{count} protected variables",
   "protection.varsNote": "Built-in protected variables cannot be removed. They are critical for Windows to function.",
+  "protection.builtinSystemOnly": "Built-in protection applies to system scope only",
   "protection.builtinPaths": "Built-in Protected PATH",
   "protection.customPaths": "Custom Protected PATH",
   "protection.noCustomPaths": "No custom protected PATH entries",

@@ -82,6 +82,13 @@ env-manager-cli.exe path add "C:\MyTools\bin" --scope user
 env-manager-cli.exe path move-up 2 --scope user
 env-manager-cli.exe path remove "C:\OldTools\bin" --scope user
 
+# 保护名单管理（锁定变量 / PATH 条目以禁止修改）
+env-manager-cli.exe protection list
+env-manager-cli.exe protection add-var JAVA_HOME
+env-manager-cli.exe protection remove-var JAVA_HOME
+env-manager-cli.exe protection add-path "C:\MyTools\bin"
+env-manager-cli.exe protection remove-path "C:\MyTools\bin"
+
 ### GUI 使用
 
 从便携版目录或开始菜单启动 `env-manager.exe`。GUI 通过 Tauri IPC 调用 CLI 后端，两种模式始终操作同一状态。

@@ -47,33 +47,17 @@ partial class Program
     const int MaxLength = 32767;
     const long MaxBackupFileSize = 50 * 1024 * 1024; // 50 MB safety cap
 
-    // Variables that should never be deleted or overwritten in system scope.
-    // User-scope deletion of these is allowed but warns, as user might legitimately
-    // want to modify their own PATH. System scope is fully protected.
-    static readonly HashSet<string> ProtectedSystemVars = new(StringComparer.OrdinalIgnoreCase)
-    {
-        // Core Windows system variables (PATH is handled separately via ProtectedPathEntries)
-        "PATHEXT", "PSMODULEPATH", "SystemRoot", "windir", "ComSpec",
-        "TEMP", "TMP", "USERPROFILE", "SystemDrive", "ProgramFiles",
-        "ProgramFiles(x86)", "ProgramData", "HOMEDRIVE", "HOMEPATH",
-        "NUMBER_OF_PROCESSORS", "OS", "PROCESSOR_ARCHITECTURE",
-        "PROCESSOR_IDENTIFIER", "PROCESSOR_LEVEL", "PROCESSOR_REVISION",
-        // Additional system variables that should never be modified or put in profiles
-        "ALLUSERSPROFILE", "APPDATA", "COMMONPROGRAMFILES", "COMMONPROGRAMFILES(x86)",
-        "COMPUTERNAME", "LOCALAPPDATA", "LOGONSERVER", "OneDrive", "OneDriveConsumer",
-        "PUBLIC", "SESSIONNAME", "USERDOMAIN", "USERNAME"
-    };
+    // Built-in protected system variables and PATH entries are loaded from external
+    // JSON config files in %LOCALAPPDATA%\EnvManager (see EnvFeatures.cs).
+    // They start from hardcoded defaults on first run and can be edited without
+    // recompiling. The HashSet wrapping is for O(1) case-insensitive lookups.
+    static HashSet<string> ProtectedSystemVars => new(
+        LoadBuiltinProtectedVars(),
+        StringComparer.OrdinalIgnoreCase);
 
-    // PATH entries that are critical for Windows to function. These cannot be
-    // removed from PATH (system or user). Reordering is allowed. Adding is always allowed.
-    // Users can customize this list via the CLI 'protection' commands.
-    static readonly HashSet<string> ProtectedPathEntries = new(StringComparer.OrdinalIgnoreCase)
-    {
-        @"C:\Windows\System32",
-        @"C:\Windows",
-        @"C:\Windows\System32\Wbem",
-        @"C:\Windows\System32\WindowsPowerShell\v1.0\",
-    };
+    static HashSet<string> ProtectedPathEntries => new(
+        LoadBuiltinProtectedPaths(),
+        StringComparer.OrdinalIgnoreCase);
 
     static List<string> CustomProtectedPathEntries
     {

@@ -1,14 +1,13 @@
 <script lang="ts">
   import { t } from 'svelte-i18n'
-  import { variables, selectedScope, error, showModal, isWriteInProgress } from '../stores'
+  import { variables, selectedScope, search, filteredVariables, error, showModal, isWriteInProgress } from '../stores'
   import { showToast } from '../stores'
   import { deleteVariable, createBackup, toggleVariable, setVariable, expandVariableValue, addProtectedVar, removeProtectedVar, listVariables } from '../api'
   import { highlightParts } from '../features'
   import EditDialog from './EditDialog.svelte'
   import BackupDialog from './BackupDialog.svelte'
 
-  let filteredVars = $variables
-  let search = ''
+  let filteredVars = $filteredVariables
   let editingVar = null
   let showEditDialog = false
   let showBackupDialog = false
@@ -16,24 +15,8 @@
   let expandedValues: Record<string, string> = {}
   let previewTimer: ReturnType<typeof setTimeout> | null = null
 
-  // Clear persistent error store on mount; we use localError for transient errors
-  $: {
-    let filtered = $variables
-
-    if ($selectedScope !== 'all') {
-      filtered = filtered.filter((v) => v.scope === $selectedScope)
-    }
-
-    if (search) {
-      filtered = filtered.filter(
-        (v) =>
-          v.name.toLowerCase().includes(search.toLowerCase()) ||
-          v.value.toLowerCase().includes(search.toLowerCase())
-      )
-    }
-
-    filteredVars = filtered
-  }
+  // filteredVars is the memoized derived store filteredVariables from stores.ts
+  $: filteredVars = $filteredVariables
 
   function scheduleExpandedPreview(variable: { name: string; value: string; scope: string }) {
     const key = variable.scope + ':' + variable.name
@@ -173,7 +156,7 @@
       <input
         type="text"
         placeholder={$t('messages.searchPlaceholder')}
-        bind:value={search}
+        bind:value={$search}
         class="w-full pl-8 pr-3 py-1.5 text-xs border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-800 dark:border-gray-600 dark:text-gray-100"
       />
     </div>
@@ -257,7 +240,7 @@
                 on:click={() => copyToClipboard(variable.name)}
               >
                 <div class="flex items-center gap-1.5">
-                  <span>{#each highlightParts(variable.name, search) as part}<span class={part.match ? 'bg-yellow-200 text-gray-900 dark:bg-yellow-500/60 dark:text-white' : ''}>{part.text}</span>{/each}</span>
+                  <span>{#each highlightParts(variable.name, $search) as part}<span class={part.match ? 'bg-yellow-200 text-gray-900 dark:bg-yellow-500/60 dark:text-white' : ''}>{part.text}</span>{/each}</span>
                   {#if variable.profileSource}
                     <span
                       class="inline-flex px-1 py-0.5 rounded text-[9px] font-medium bg-purple-50 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300"

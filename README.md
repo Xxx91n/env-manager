@@ -82,6 +82,13 @@ env-manager-cli.exe path add "C:\MyTools\bin" --scope user
 env-manager-cli.exe path move-up 2 --scope user
 env-manager-cli.exe path remove "C:\OldTools\bin" --scope user
 
+# Protection management (lock variables / PATH entries from modification)
+env-manager-cli.exe protection list
+env-manager-cli.exe protection add-var JAVA_HOME
+env-manager-cli.exe protection remove-var JAVA_HOME
+env-manager-cli.exe protection add-path "C:\MyTools\bin"
+env-manager-cli.exe protection remove-path "C:\MyTools\bin"
+
 ### GUI Usage
 
 Launch `env-manager.exe` from the portable package or Start Menu. The GUI communicates with the CLI backend through Tauri IPC, so both modes always operate on the same state.

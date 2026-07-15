@@ -1,21 +1,27 @@
 <script lang="ts">
   import { onMount } from 'svelte'
   import { t } from 'svelte-i18n'
-  import { showToast, showModal, refreshTrigger } from '../stores'
-  import { listProtection, addProtectedPath, removeProtectedPath, addProtectedVar, removeProtectedVar, listVariables, listPathEntries } from '../api'
+  import { showToast, showModal, refreshTrigger, selectedScope } from '../stores'
+  import { listProtection, addProtectedPath, removeProtectedPath, addProtectedVar, removeProtectedVar, listVariablesRaw, listPathEntries } from '../api'
   import type { ProtectionData } from '../api'
 
   let data: ProtectionData | null = null
   let loading = false
   let activeTab: 'vars' | 'paths' = 'vars'
 
-  // For adding custom protected vars from existing variables
-  let availableVars: { name: string; scope: string }[] = []
-  let selectedVarName = ''
+  // All available variables from the system (cached via listVariablesRaw)
+  let allVars: { name: string; scope: string }[] = []
+  // All available PATH entries from both scopes
+  let allPathEntries: { path: string; scope: string }[] = []
 
-  // For adding custom protected paths from existing PATH entries
-  let availablePathEntries: string[] = []
+  let selectedVarName = ''
   let selectedPathEntry = ''
+
+  // Local scope filter — initialises from the shared store (defaults to 'all')
+  let scopeFilter: 'all' | 'user' | 'system' = 'all'
+
+  // Sync local filter with shared store on mount
+  $: scopeFilter = $selectedScope === 'all' ? 'all' : $selectedScope as 'user' | 'system'
 
   onMount(refresh)
 
@@ -25,31 +31,50 @@
     loading = true
     try {
       data = await listProtection()
-      // Load available vars and paths for the "add from existing" dropdowns
-      const [varsResult, pathsResult] = await Promise.all([
-        (async () => {
-          try { return await listVariables() } catch { return null }
-        })(),
-        (async () => {
-          try { return await listPathEntries('user') } catch { return null }
-        })(),
+      // Load all available vars and path entries in parallel
+      const [varsResult, userPaths, systemPaths] = await Promise.all([
+        listVariablesRaw(true),
+        (async () => { try { return await listPathEntries('user') } catch { return [] } })(),
+        (async () => { try { return await listPathEntries('system') } catch { return [] } })(),
       ])
       if (varsResult) {
-        availableVars = varsResult
+        allVars = varsResult
           .filter(v => !data!.protectedVars.builtIn.includes(v.name) && !data!.protectedVars.custom.includes(v.name))
           .map(v => ({ name: v.name, scope: v.scope }))
       }
-      if (pathsResult) {
-        availablePathEntries = pathsResult
-          .map(e => e.path)
-          .filter(p => !data!.protectedPaths.builtIn.includes(p) && !data!.protectedPaths.custom.includes(p))
-      }
+      // Combine user + system PATH entries
+      allPathEntries = [
+        ...userPaths.map(e => ({ path: e.path, scope: 'user' })),
+        ...systemPaths.map(e => ({ path: e.path, scope: 'system' })),
+      ].filter(p => !data!.protectedPaths.builtIn.includes(p.path) && !data!.protectedPaths.custom.includes(p.path))
     } catch (err) {
       showToast(err instanceof Error ? err.message : String(err), 'error')
     } finally {
       loading = false
     }
   }
+
+  // Filter available vars and path entries by current scope selection
+  $: filteredVars = scopeFilter === 'all'
+    ? allVars
+    : allVars.filter(v => v.scope === scopeFilter)
+  $: filteredPathEntries = scopeFilter === 'all'
+    ? allPathEntries
+    : allPathEntries.filter(p => p.scope === scopeFilter)
+
+  // Filter built-in vars display by scope — built-in protection is system-only,
+  // so we show all built-ins regardless of filter (they only apply to system scope).
+  $: filteredBuiltinVars = scopeFilter === 'all'
+    ? (data?.protectedVars.builtIn ?? [])
+    : scopeFilter === 'system'
+      ? (data?.protectedVars.builtIn ?? [])
+      : [] // user scope has no built-in protection
+  $: filteredBuiltinPaths = data?.protectedPaths.builtIn ?? []
+
+  // Custom vars have no scope info from CLI, so we show them regardless
+  // (custom protection applies to any scope the user locks from).
+  $: filteredCustomVars = data?.protectedVars.custom ?? []
+  $: filteredCustomPaths = data?.protectedPaths.custom ?? []
 
   async function handleAddVar() {
     const name = selectedVarName.trim()
@@ -121,8 +146,8 @@
 </script>
 
 <div class="space-y-3">
-  <!-- Tab selector -->
-  <div class="flex items-center gap-2">
+  <!-- Tab selector + scope filter + refresh -->
+  <div class="flex items-center gap-2 flex-wrap">
     <div class="inline-flex rounded-md border border-gray-200 dark:border-gray-700 overflow-hidden">
       <button
         on:click={() => activeTab = 'vars'}
@@ -141,6 +166,16 @@
         {$t('protection.protectedPaths')}
       </button>
     </div>
+
+    <select
+      bind:value={$selectedScope}
+      class="px-2.5 py-1.5 text-xs border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white dark:bg-gray-800 dark:border-gray-600 dark:text-gray-100"
+    >
+      <option value="all">{$t('table.scope')}</option>
+      <option value="user">{$t('scope.user')}</option>
+      <option value="system">{$t('scope.system')}</option>
+    </select>
+
     <button on:click={refresh} class="ml-auto px-3 py-1.5 text-xs text-gray-600 hover:bg-gray-100 rounded-md dark:text-gray-300 dark:hover:bg-gray-700">
       {$t('buttons.refresh')}
     </button>
@@ -155,36 +190,61 @@
   {:else if activeTab === 'vars'}
     <!-- Protected Variables Tab -->
     <div class="space-y-4">
+      <!-- Add custom protected var (from existing) — placed ABOVE custom list -->
+      <div class="flex gap-2">
+        <select
+          bind:value={selectedVarName}
+          on:keydown={(e) => { if (e.key === 'Enter') handleAddVar() }}
+          class="flex-1 px-3 py-1.5 text-xs border border-gray-300 rounded-md font-mono focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-800 dark:border-gray-600 dark:text-gray-100"
+        >
+          <option value="">-- {$t('protection.selectVar')} --</option>
+          {#each filteredVars as v (v.name + v.scope)}
+            <option value={v.name}>{v.name} ({v.scope})</option>
+          {/each}
+        </select>
+        <button
+          on:click={handleAddVar}
+          disabled={!selectedVarName.trim()}
+          class="px-3 py-1.5 text-xs font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 transition disabled:opacity-50 dark:bg-blue-500 dark:hover:bg-blue-600"
+        >
+          {$t('protection.lockVar')}
+        </button>
+      </div>
+
       <!-- Built-in protected vars -->
       <div class="bg-white border border-gray-200 rounded-md overflow-hidden dark:bg-gray-800 dark:border-gray-700">
         <div class="px-4 py-2.5 border-b border-gray-200 bg-gray-50 dark:bg-gray-750 dark:border-gray-700">
-          <span class="text-xs font-medium text-gray-600 dark:text-gray-300">{$t('protection.builtinVars')} ({data.protectedVars.builtIn.length})</span>
+          <span class="text-xs font-medium text-gray-600 dark:text-gray-300">{$t('protection.builtinVars')} ({filteredBuiltinVars.length})</span>
         </div>
-        <div class="max-h-64 overflow-y-auto">
-          <div class="grid grid-cols-2 sm:grid-cols-3 gap-1 p-3">
-            {#each data.protectedVars.builtIn as varName (varName)}
-              <div class="flex items-center gap-1.5 px-2 py-1 rounded bg-gray-50 dark:bg-gray-750">
-                <svg class="w-3 h-3 text-amber-500 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
-                  <path fill-rule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clip-rule="evenodd" />
-                </svg>
-                <span class="text-xs font-mono text-gray-700 dark:text-gray-200 truncate" title={varName}>{varName}</span>
-              </div>
-            {/each}
+        {#if scopeFilter === 'user'}
+          <div class="px-4 py-6 text-center text-[10px] text-gray-400">{$t('protection.builtinSystemOnly')}</div>
+        {:else}
+          <div class="max-h-64 overflow-y-auto">
+            <div class="grid grid-cols-2 sm:grid-cols-3 gap-1 p-3">
+              {#each filteredBuiltinVars as varName (varName)}
+                <div class="flex items-center gap-1.5 px-2 py-1 rounded bg-gray-50 dark:bg-gray-750">
+                  <svg class="w-3 h-3 text-amber-500 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                    <path fill-rule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clip-rule="evenodd" />
+                  </svg>
+                  <span class="text-xs font-mono text-gray-700 dark:text-gray-200 truncate" title={varName}>{varName}</span>
+                </div>
+              {/each}
+            </div>
           </div>
-        </div>
+        {/if}
       </div>
       <div class="text-[10px] text-gray-400 px-1">{$t('protection.varsNote')}</div>
 
       <!-- Custom protected vars (user-locked) -->
       <div class="bg-white border border-gray-200 rounded-md overflow-hidden dark:bg-gray-800 dark:border-gray-700">
         <div class="px-4 py-2.5 border-b border-gray-200 bg-gray-50 dark:bg-gray-750 dark:border-gray-700">
-          <span class="text-xs font-medium text-gray-600 dark:text-gray-300">{$t('protection.customVars')} ({data.protectedVars.custom.length})</span>
+          <span class="text-xs font-medium text-gray-600 dark:text-gray-300">{$t('protection.customVars')} ({filteredCustomVars.length})</span>
         </div>
-        {#if data.protectedVars.custom.length === 0}
+        {#if filteredCustomVars.length === 0}
           <div class="px-4 py-6 text-center text-[10px] text-gray-400">{$t('protection.noCustomVars')}</div>
         {:else}
           <div class="divide-y divide-gray-100 dark:divide-gray-700">
-            {#each data.protectedVars.custom as varName (varName)}
+            {#each filteredCustomVars as varName (varName)}
               <div class="flex items-center justify-between px-4 py-2">
                 <span class="text-xs font-mono text-gray-700 dark:text-gray-200 truncate" title={varName}>{varName}</span>
                 <button
@@ -202,38 +262,38 @@
           </div>
         {/if}
       </div>
-
-      <!-- Add custom protected var from existing -->
-      <div class="flex gap-2">
-        <select
-          bind:value={selectedVarName}
-          on:keydown={(e) => { if (e.key === 'Enter') handleAddVar() }}
-          class="flex-1 px-3 py-1.5 text-xs border border-gray-300 rounded-md font-mono focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-800 dark:border-gray-600 dark:text-gray-100"
-        >
-          <option value="">-- {$t('protection.selectVar')} --</option>
-          {#each availableVars as v (v.name + v.scope)}
-            <option value={v.name}>{v.name} ({v.scope})</option>
-          {/each}
-        </select>
-        <button
-          on:click={handleAddVar}
-          disabled={!selectedVarName.trim()}
-          class="px-3 py-1.5 text-xs font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 transition disabled:opacity-50 dark:bg-blue-500 dark:hover:bg-blue-600"
-        >
-          {$t('protection.lockVar')}
-        </button>
-      </div>
     </div>
   {:else}
     <!-- Protected PATH Entries Tab -->
     <div class="space-y-4">
+      <!-- Add custom protected path (from existing PATH) — placed ABOVE custom list -->
+      <div class="flex gap-2">
+        <select
+          bind:value={selectedPathEntry}
+          on:keydown={(e) => { if (e.key === 'Enter') handleAddPath() }}
+          class="flex-1 px-3 py-1.5 text-xs border border-gray-300 rounded-md font-mono focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-800 dark:border-gray-600 dark:text-gray-100"
+        >
+          <option value="">-- {$t('protection.selectPath')} --</option>
+          {#each filteredPathEntries as p (p.path)}
+            <option value={p.path}>{p.path} ({p.scope})</option>
+          {/each}
+        </select>
+        <button
+          on:click={handleAddPath}
+          disabled={!selectedPathEntry.trim()}
+          class="px-3 py-1.5 text-xs font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 transition disabled:opacity-50 dark:bg-blue-500 dark:hover:bg-blue-600"
+        >
+          {$t('protection.lockPath')}
+        </button>
+      </div>
+
       <!-- Built-in protected path entries -->
       <div class="bg-white border border-gray-200 rounded-md overflow-hidden dark:bg-gray-800 dark:border-gray-700">
         <div class="px-4 py-2.5 border-b border-gray-200 bg-gray-50 dark:bg-gray-750 dark:border-gray-700">
           <span class="text-xs font-medium text-gray-600 dark:text-gray-300">{$t('protection.builtinPaths')}</span>
         </div>
         <div class="divide-y divide-gray-100 dark:divide-gray-700">
-          {#each data.protectedPaths.builtIn as entry (entry)}
+          {#each filteredBuiltinPaths as entry (entry)}
             <div class="flex items-center justify-between px-4 py-2">
               <span class="text-xs font-mono text-gray-700 dark:text-gray-200 truncate" title={entry}>{entry}</span>
               <span class="text-[10px] text-gray-400 flex-shrink-0 ml-2">{$t('protection.builtin')}</span>
@@ -247,11 +307,11 @@
         <div class="px-4 py-2.5 border-b border-gray-200 bg-gray-50 dark:bg-gray-750 dark:border-gray-700 flex items-center justify-between">
           <span class="text-xs font-medium text-gray-600 dark:text-gray-300">{$t('protection.customPaths')}</span>
         </div>
-        {#if data.protectedPaths.custom.length === 0}
+        {#if filteredCustomPaths.length === 0}
           <div class="px-4 py-6 text-center text-[10px] text-gray-400">{$t('protection.noCustomPaths')}</div>
         {:else}
           <div class="divide-y divide-gray-100 dark:divide-gray-700">
-            {#each data.protectedPaths.custom as entry (entry)}
+            {#each filteredCustomPaths as entry (entry)}
               <div class="flex items-center justify-between px-4 py-2">
                 <span class="text-xs font-mono text-gray-700 dark:text-gray-200 truncate" title={entry}>{entry}</span>
                 <button
@@ -268,27 +328,6 @@
             {/each}
           </div>
         {/if}
-      </div>
-
-      <!-- Add custom protected path from existing PATH entries -->
-      <div class="flex gap-2">
-        <select
-          bind:value={selectedPathEntry}
-          on:keydown={(e) => { if (e.key === 'Enter') handleAddPath() }}
-          class="flex-1 px-3 py-1.5 text-xs border border-gray-300 rounded-md font-mono focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-800 dark:border-gray-600 dark:text-gray-100"
-        >
-          <option value="">-- {$t('protection.selectPath')} --</option>
-          {#each availablePathEntries as entry (entry)}
-            <option value={entry}>{entry}</option>
-          {/each}
-        </select>
-        <button
-          on:click={handleAddPath}
-          disabled={!selectedPathEntry.trim()}
-          class="px-3 py-1.5 text-xs font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 transition disabled:opacity-50 dark:bg-blue-500 dark:hover:bg-blue-600"
-        >
-          {$t('protection.lockPath')}
-        </button>
       </div>
     </div>
   {/if}

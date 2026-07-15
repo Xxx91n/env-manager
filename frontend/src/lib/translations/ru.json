@@ -136,6 +136,7 @@
   "protection.protectedPaths": "Защищенные записи PATH",
   "protection.varsCount": "{count} защищенных переменных",
   "protection.varsNote": "Встроенные защищенные переменные нельзя удалить. Они критичны для работы Windows.",
+  "protection.builtinSystemOnly": "Встроенная защита применяется только к системной области",
   "protection.builtinPaths": "Встроенный защищенный PATH",
   "protection.customPaths": "Пользовательский защищенный PATH",
   "protection.noCustomPaths": "Нет пользовательских защищенных записей PATH",

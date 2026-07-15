@@ -187,6 +187,26 @@ export async function updateTrayLocale(
   }
 }
 
+// Cache for the most recently fetched full variable list.
+// Used by secondary surfaces (e.g. ProtectionPage) to avoid duplicate CLI calls.
+let lastVariablesRaw: EnvVariable[] = []
+
+/**
+ * Returns the raw variable list without touching the global `variables` store,
+ * so secondary pages can read the data independently.
+ * If `force` is false and we already have data, returns the cached copy.
+ */
+export async function listVariablesRaw(force = false): Promise<EnvVariable[]> {
+  if (!force && lastVariablesRaw.length > 0) return lastVariablesRaw
+  try {
+    const output = await runRead('list')
+    lastVariablesRaw = JSON.parse(output) as EnvVariable[]
+    return lastVariablesRaw
+  } catch {
+    return []
+  }
+}
+
 export async function listVariables(): Promise<void> {
   loading.set(true)
   error.set(null)
@@ -195,6 +215,7 @@ export async function listVariables(): Promise<void> {
     const output = await runRead('list')
     const parsed: EnvVariable[] = JSON.parse(output)
     variables.set(parsed)
+    lastVariablesRaw = parsed
   } catch (err) {
     const msg = err instanceof Error ? err.message : 'Failed to list variables'
     error.set(msg)

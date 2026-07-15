@@ -42,6 +42,73 @@ partial class Program
 
     static string AuditFilePath => Path.Combine(AppDataDirectory, "audit.json");
 
+    /// <summary>
+    /// Path to the externally-editable built-in protected variables list.
+    /// Created on first run from <see cref="DefaultBuiltinProtectedVars"/> if missing.
+    /// Users / admins can edit this file to customize protection without recompiling.
+    /// </summary>
+    static string BuiltinProtectedVarsFile => Path.Combine(AppDataDirectory, "builtin-protected-vars.json");
+
+    /// <summary>
+    /// Path to the externally-editable built-in protected PATH entries list.
+    /// Created on first run from <see cref="DefaultBuiltinProtectedPaths"/> if missing.
+    /// </summary>
+    static string BuiltinProtectedPathsFile => Path.Combine(AppDataDirectory, "builtin-protected-paths.json");
+
+    static readonly string[] DefaultBuiltinProtectedVars =
+    {
+        "PATHEXT", "PSMODULEPATH", "SystemRoot", "windir", "ComSpec",
+        "TEMP", "TMP", "USERPROFILE", "SystemDrive", "ProgramFiles",
+        "ProgramFiles(x86)", "ProgramData", "HOMEDRIVE", "HOMEPATH",
+        "NUMBER_OF_PROCESSORS", "OS", "PROCESSOR_ARCHITECTURE",
+        "PROCESSOR_IDENTIFIER", "PROCESSOR_LEVEL", "PROCESSOR_REVISION",
+        "ALLUSERSPROFILE", "APPDATA", "COMMONPROGRAMFILES", "COMMONPROGRAMFILES(x86)",
+        "COMPUTERNAME", "LOCALAPPDATA", "LOGONSERVER", "OneDrive", "OneDriveConsumer",
+        "PUBLIC", "SESSIONNAME", "USERDOMAIN", "USERNAME",
+    };
+
+    static readonly string[] DefaultBuiltinProtectedPaths =
+    {
+        @"C:\Windows\System32",
+        @"C:\Windows",
+        @"C:\Windows\System32\Wbem",
+        @"C:\Windows\System32\WindowsPowerShell\v1.0\",
+    };
+
+    static List<string> LoadBuiltinProtectedVars()
+    {
+        try
+        {
+            if (!File.Exists(BuiltinProtectedVarsFile))
+            {
+                AtomicWriteJson(BuiltinProtectedVarsFile, DefaultBuiltinProtectedVars.ToList());
+            }
+            return JsonSerializer.Deserialize<List<string>>(File.ReadAllText(BuiltinProtectedVarsFile), JsonOpts)
+                ?? DefaultBuiltinProtectedVars.ToList();
+        }
+        catch
+        {
+            return DefaultBuiltinProtectedVars.ToList();
+        }
+    }
+
+    static List<string> LoadBuiltinProtectedPaths()
+    {
+        try
+        {
+            if (!File.Exists(BuiltinProtectedPathsFile))
+            {
+                AtomicWriteJson(BuiltinProtectedPathsFile, DefaultBuiltinProtectedPaths.ToList());
+            }
+            return JsonSerializer.Deserialize<List<string>>(File.ReadAllText(BuiltinProtectedPathsFile), JsonOpts)
+                ?? DefaultBuiltinProtectedPaths.ToList();
+        }
+        catch
+        {
+            return DefaultBuiltinProtectedPaths.ToList();
+        }
+    }
+
     static bool IsWriteInvocation(string[] args)
     {
         if (args.Length == 0) return false;

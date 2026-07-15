@@ -136,6 +136,7 @@
   "protection.protectedPaths": "Entradas PATH protegidas",
   "protection.varsCount": "{count} variables protegidas",
   "protection.varsNote": "Las variables protegidas integradas no se pueden eliminar. Son criticas para Windows.",
+  "protection.builtinSystemOnly": "La proteccion integrada solo se aplica al ambito del sistema",
   "protection.builtinPaths": "PATH protegido integrado",
   "protection.customPaths": "PATH protegido personalizado",
   "protection.noCustomPaths": "Sin entradas PATH protegidas personalizadas",
