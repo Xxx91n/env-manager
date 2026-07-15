@@ -358,7 +358,37 @@ context menu matches the GUI locale.
 
 All transient feedback messages (copy confirmation, action success/errors) use a **global toast store** (`showToast()` in `stores.ts`) rendered once in `App.svelte` as `fixed`-position overlays with `pointer-events-none` and `z-[60]`. No component renders its own toast. This ensures they appear on top of content without causing layout shifts or interfering with clicks. Toasts auto-dismiss after 3s (configurable) and can be clicked to dismiss early.
 
-### Internal Modal Dialog System
+### Frontend Caching Mechanism
+
+The GUI implements a multi-layer caching strategy for production-scale environments with thousands of environment variables:
+
+1. **Debounced search** (`debouncedSearch` store in `stores.ts`): Search input is debounced by 150ms before triggering filter recompute. This prevents re-running the `filteredVariables` derived store on every keystroke. Without this, typing in the search box with 10,000+ variables would cause noticeable UI lag.
+
+2. **TTL-based `listVariablesRaw` cache** (`api.ts`): Secondary surfaces (e.g. ProtectionPage) fetch variables via `listVariablesRaw()` which caches the result for 5 seconds. This avoids redundant CLI `list` calls when switching between pages. Pass `force=true` to bypass the cache (used after mutations).
+
+3. **Derived `filteredVariables` store** (`stores.ts`): The `derived` store memoizes the scope+search filter. It only recomputes when `$variables`, `$selectedScope`, or `$debouncedSearch` change -- not on every unrelated component update. This is the primary mechanism preventing O(N) filter passes from running on every render cycle.
+
+4. **LRU-capped `expandedValues`** (`Variables.svelte`): The `%VAR%` expansion preview cache is capped at 500 entries. When the cap is reached, the oldest entry is evicted in FIFO order. This prevents unbounded memory growth from hover-preview caching when scrolling through large variable lists.
+
+5. **Debug log cap** (`addDebugLog` in `stores.ts`): Debug logs are capped at 200 entries. Older entries are sliced off. This prevents the debug log array from growing unboundedly during long sessions.
+
+### Security Hardening (Audit Findings)
+
+The following guards were added after a full security audit of CLI, Rust IPC, and GUI layers:
+
+1. **`DeleteVariableWithoutNotify` guard**: Previously, this internal function had no `IsProtectedVariable` check. A bulk import rollback could delete a protected system variable whose original value was null (because rollback calls `DeleteVariableWithoutNotify` when `original == null`). Now all internal delete paths respect the protection list.
+
+2. **`RunToggle` entry guard**: Toggle creates a backup key then deletes the original. If the original is protected, `DeleteVariableWithoutNotify` would silently skip the delete (after the guard fix), leaving the backup key AND the original -- inconsistent state. Now `RunToggle` rejects protected variables at the entry point before any registry mutation.
+
+3. **`RestoreBackup` explicit skip reporting**: `RestoreBackup` calls `SetVariable`, which internally rejects protected variables. Previously this was a silent failure -- the user saw "Restored N variables" without knowing some were skipped. Now it reports skipped count and logs each skipped variable name to stderr.
+
+4. **Path traversal protection** (existing, verified): `ValidateFilePath` rejects non-`.json` extensions and blocks writes to `\Windows`, `\Program Files`, `\Program Files (x86)`. This prevents path traversal attacks via crafted backup file paths.
+
+5. **Rust IPC input validation** (existing, verified): `validate_cli_input` enforces command whitelist, max 64 args, max 32,767 chars per arg, null byte rejection, and control character rejection. This prevents argument injection, buffer exhaustion DoS, and terminal injection.
+
+6. **Mutex-based cross-process locking** (existing, verified): All write operations acquire `Local\EnvManager.RegistryMutation` mutex in the CLI, plus `CLI_RWLOCK` write lock in Rust, plus `writeChain` serialization in the frontend. Three layers of protection prevent concurrent mutations.
+
+### ### Internal Modal Dialog System
 
 The GUI uses an internal Svelte store-based modal system instead of browser `confirm()`/`alert()`. The `modal` writable store in `stores.ts` holds the current `ModalConfig`. The `ConfirmDialog.svelte` component renders globally in `App.svelte`. All confirmation dialogs (delete variable, delete profile, etc.) use `showModal()` from `stores.ts`.
 
