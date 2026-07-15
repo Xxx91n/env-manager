@@ -20,6 +20,43 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Enforce line-ending policy
+        shell: powershell
+        run: |
+          # 1) git whitespace/CRLF error check (uses .gitattributes)
+          $ws = & git diff --check 2>&1
+          if ($LASTEXITCODE -ne 0) {
+            Write-Error "git diff --check failed; whitespace/CRLF errors:"
+            $ws | ForEach-Object { Write-Error $_ }
+            exit 1
+          }
+          # 2) Scan tracked text files for stray CRLF (only .bat/.ps1/.cmd allowed CRLF)
+          $crlfOk = @('.bat','.ps1','.cmd')
+          $binExt = @('.png','.ico','.icns','.jpg','.jpeg','.gif','.webp','.exe','.dll','.node','.pdb','.msi','.so','.dylib','.bin','.zip','.gz','.tar','.7z')
+          $bad = @()
+          foreach ($f in (git ls-files)) {
+            if ($f -like 'frontend/node_modules/*') { continue }
+            $ext = [IO.Path]::GetExtension($f).ToLowerInvariant()
+            if ($crlfOk -contains $ext) { continue }
+            if ($binExt -contains $ext) { continue }
+            if (-not (Test-Path $f)) { continue }
+            $bytes = [IO.File]::ReadAllBytes($f)
+            if ($bytes.Length -gt 1MB) { continue }
+            $hasCrlf = $false
+            for ($i = 0; $i -lt $bytes.Length; $i++) {
+              if ($bytes[$i] -eq 13 -and $i + 1 -lt $bytes.Length -and $bytes[$i+1] -eq 10) {
+                $hasCrlf = $true; break
+              }
+            }
+            if ($hasCrlf) { $bad += $f }
+          }
+          if ($bad.Count -gt 0) {
+            Write-Error "Unexpected CRLF in text files (expected LF; .gitattributes policy):"
+            $bad | ForEach-Object { Write-Error $_ }
+            exit 1
+          }
+          Write-Host 'Line-ending policy OK'
+
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
         with:
