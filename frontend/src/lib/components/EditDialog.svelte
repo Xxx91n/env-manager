@@ -1,9 +1,10 @@
 <script lang="ts">
   import { createEventDispatcher } from 'svelte'
   import { t } from 'svelte-i18n'
-  import { setVariable, renameVariable } from '../api'
+  import { setVariable, renameVariable, changeScope } from '../api'
   import { showModal, variables } from '../stores'
   import { hasVariableConflict } from '../features'
+  import type { EnvVariable } from '../api'  // for typed param'
 
   export let variable = null
 
@@ -42,16 +43,14 @@
       return
     }
 
-    // Check for protected system variable (consistent with CLI security)
-    const protectedVars = ['PATH', 'PATHEXT', 'PSMODULEPATH', 'SystemRoot', 'windir',
-      'ComSpec', 'TEMP', 'TMP', 'USERPROFILE', 'SystemDrive', 'ProgramFiles',
-      'ProgramFiles(x86)', 'ProgramData', 'HOMEDRIVE', 'HOMEPATH',
-      'NUMBER_OF_PROCESSORS', 'OS', 'PROCESSOR_ARCHITECTURE']
-    if (scope === 'system' && protectedVars.some(v => v.toLowerCase() === name.toLowerCase())) {
-      localError = `Cannot modify protected system variable: ${name}`
+    // Rely on the CLI-driven isProtected flag (kept in sync with the
+    // protection list JSON files) instead of a hardcoded list that would
+    // drift from the config-driven protection rules. A protected variable
+    // cannot be edited: the GUI lock button is the single path to unlock.
+    if (variable && variable.isProtected) {
+      localError = $t('protection.protectedCannotEdit', { values: { name: variable.name } })
       return
     }
-
     const conflict = hasVariableConflict($variables, name, scope, variable ? originalName : undefined)
     if (conflict) {
       showModal({
@@ -69,9 +68,27 @@
 
   async function saveValue(overwrite: boolean) {
     localError = ''
+    const scopeChanged = !!variable && scope !== variable.scope
     saving = true
     try {
-      if (variable && nameChanged) {
+      if (variable && scopeChanged && nameChanged) {
+        // Rare 3-way mutation: scope change + name change. Use change-scope
+        // then set the new value under the new name in the new scope.
+        await changeScope(originalName, scope as 'user' | 'system', variable.scope as 'user' | 'system', true)
+        await renameVariable(originalName, name, scope as 'user' | 'system', overwrite)
+        if (value !== variable.value) {
+          await setVariable(name, value, scope as 'user' | 'system', true)
+        }
+      } else if (variable && scopeChanged) {
+        // Scope changed, name unchanged. Only clobber an existing target
+        // variable when the user confirmed via the conflict modal; the CLI
+        // change-scope command itself rejects target collisions without
+        // --overwrite, preserving the safety contract.
+        await changeScope(name, scope as 'user' | 'system', variable.scope as 'user' | 'system', overwrite)
+        if (value !== variable.value) {
+          await setVariable(name, value, scope as 'user' | 'system', true)
+        }
+      } else if (variable && nameChanged) {
         await renameVariable(originalName, name, scope as 'user' | 'system', overwrite)
         await setVariable(name, value, scope as 'user' | 'system', true)
       } else {
@@ -149,7 +166,7 @@
         <select
           id="edit-scope"
           bind:value={scope}
-          disabled={!!variable}
+          disabled={!!(variable && variable.isProtected)}
           class="w-full px-3 py-1.5 text-xs border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white disabled:bg-gray-100 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100"
         >
           <option value="user">{$t('scope.user')}</option>

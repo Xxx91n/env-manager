@@ -208,6 +208,20 @@ partial class Program
        {
            var entry = LoadAuditHistory().FirstOrDefault(e => e.Id.Equals(args[2], StringComparison.OrdinalIgnoreCase));
            if (entry == null) return ArgError("Error: Audit entry not found");
+
+           // Profile-level audit entries use Scope="profile" and are reverted
+           // via TryUndoProfileAudit (restoring the profiles.json state). They
+           // do not touch the registry, so no stale-value check applies.
+           if (entry.Scope == "profile")
+           {
+               bool handled = TryUndoProfileAudit(entry);
+               if (!handled) return ArgError("Error: This profile change cannot be undone");
+               Console.WriteLine(JsonSerializer.Serialize(new { undone = entry.Id, entry.Name, entry.Scope }, JsonOpts));
+               return 0;
+           }
+
+           // Registry-level entries: only undo if the live value still matches
+           // the recorded newValue. Otherwise force the user to --force.
            string? current = GetVariableValue(entry.Name, entry.Scope);
            if (current != entry.NewValue && !args.Contains("--force"))
                return ArgError("Error: Variable changed since this audit entry; use --force to override");

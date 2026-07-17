@@ -294,9 +294,9 @@
                 </button>
                 <button
                   on:click={() => handleEdit(variable)}
-                  disabled={$isWriteInProgress || togglingKeys[variable.name + ':' + variable.scope] === true}
+                  disabled={$isWriteInProgress || togglingKeys[variable.name + ':' + variable.scope] === true || !!variable.isProtected}
                   class="inline-flex p-1 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded transition disabled:opacity-30 disabled:cursor-not-allowed dark:hover:text-blue-400 dark:hover:bg-blue-900/30"
-                  title={$t('buttons.edit')}
+                  title={variable.isProtected ? $t('protection.lockedCannotEdit') : $t('buttons.edit')}
                   aria-label={$t('buttons.edit')}
                 >
                   <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
@@ -305,9 +305,9 @@
                 </button>
                 <button
                   on:click={() => handleDelete(variable.name, variable.scope)}
-                  disabled={$isWriteInProgress || togglingKeys[variable.name + ':' + variable.scope] === true}
+                  disabled={$isWriteInProgress || togglingKeys[variable.name + ':' + variable.scope] === true || !!variable.isProtected}
                   class="inline-flex p-1 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition disabled:opacity-30 disabled:cursor-not-allowed dark:hover:text-red-400 dark:hover:bg-red-900/30"
-                  title={$t('buttons.delete')}
+                  title={variable.isProtected ? $t('protection.lockedCannotDelete') : $t('buttons.delete')}
                   aria-label={$t('buttons.delete')}
                 >
                   <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">

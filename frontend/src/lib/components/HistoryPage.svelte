@@ -8,7 +8,7 @@
 
   let allHistory: AuditEntry[] = []
   let loading = false
-  let scope: 'user' | 'system' | 'all' = 'all'
+  let scope: 'user' | 'system' | 'profile' | 'all' = 'all'
 
   // Derived: filter history by selected scope
   $: filteredHistory = scope === 'all' ? allHistory : allHistory.filter(e => e.scope === scope)
@@ -138,6 +138,7 @@
       <option value="all">{$t('scope.all')}</option>
       <option value="user">{$t('scope.user')}</option>
       <option value="system">{$t('scope.system')}</option>
+      <option value="profile">{$t('scope.profile')}</option>
     </select>
     <button on:click={handleImport} class="px-3 py-1.5 text-xs font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700">{$t('bulk.import')}</button>
     <button on:click={handleExport} class="px-3 py-1.5 text-xs font-medium border border-gray-300 rounded-md hover:bg-gray-50 dark:border-gray-600 dark:hover:bg-gray-700">{$t('bulk.export')}</button>
@@ -168,9 +169,13 @@
           {#each filteredHistory as entry (entry.id)}
             <tr class="hover:bg-gray-50 dark:hover:bg-gray-750">
               <td class="px-3 py-2 text-[10px] text-gray-500">{new Date(entry.timestamp).toLocaleString()}</td>
-              <td class="px-3 py-2 text-[10px] font-mono truncate" title={entry.command}>{entry.command.split(' ')[0]}</td>
+              <td class="px-3 py-2 text-[10px] font-mono truncate" title={entry.command}>{entry.scope === 'profile' ? entry.command : entry.command.split(' ')[0]}</td>
               <td class="px-3 py-2 text-[10px]">
-                <span class="px-1.5 py-0.5 rounded text-[9px] font-medium {entry.scope === 'user' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300' : 'bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300'}">{entry.scope}</span>
+                {#if entry.scope === 'profile'}
+                  <span class="px-1.5 py-0.5 rounded text-[9px] font-medium bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300">{$t('scope.profile')}</span>
+                {:else}
+                  <span class="px-1.5 py-0.5 rounded text-[9px] font-medium {entry.scope === 'user' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300' : 'bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300'}">{entry.scope === 'user' ? $t('scope.user') : $t('scope.system')}</span>
+                {/if}
               </td>
               <td class="px-3 py-2 text-xs font-mono truncate" title={entry.name}>{entry.name}</td>
               <td class="px-3 py-2 text-[10px] font-mono text-gray-500 truncate" title={`${entry.oldValue ?? 'null'} -> ${entry.newValue ?? 'null'}`}>{entry.oldValue ?? 'null'} -> {entry.newValue ?? 'null'}</td>

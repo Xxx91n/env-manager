@@ -198,5 +198,10 @@
   "update.available": "Доступно: v{version}",
   "update.download": "Скачать v{version}",
   "update.upToDate": "Последняя версия",
-  "update.error": "Ошибка проверки обновлений"
+  "update.error": "Ошибка проверки обновлений",
+  "scope.profile": "Профиль",
+  "protection.protectedCannotEdit": "Невозможно редактировать заблокированную переменную: {name}",
+  "protection.protectedCannotChangeScope": "Невозможно изменить область заблокированной переменной",
+  "protection.lockedCannotEdit": "Заблокировано: редактирование недоступно",
+  "protection.lockedCannotDelete": "Заблокировано: удаление недоступно"
 }

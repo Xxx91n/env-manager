@@ -387,9 +387,9 @@
                   <!-- Rename button -->
                   <button
                     on:click={() => startEdit(entry.index, entry.path)}
-                    disabled={actionLoading}
+                    disabled={actionLoading || !!entry.isProtected}
                     class="inline-flex p-1 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded transition disabled:opacity-30 dark:hover:text-blue-400 dark:hover:bg-blue-900/30"
-                    title={$t('path.rename')}
+                    title={entry.isProtected ? $t('protection.lockedCannotEdit') : $t('path.rename')}
                     aria-label={$t('path.rename')}
                   >
                     <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">

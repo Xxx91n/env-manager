@@ -40,6 +40,7 @@ const ALLOWED_COMMANDS: &[&str] = &[
     "get",
     "set",
     "rename",
+    "change-scope",
     "delete",
     "toggle",
     "backup",
@@ -79,6 +80,7 @@ const READ_COMMANDS: &[&str] = &[
 const WRITE_COMMANDS: &[&str] = &[
     "set",
     "rename",
+    "change-scope",
     "delete",
     "toggle",
     "restore",

@@ -8,6 +8,17 @@ partial class Program
         string newName = args[2];
         string? scope = ParseScope(args, 3, "user");
         if (scope == null) return 1;
+
+        // Refuse to rename a protected variable. Without this entry guard,
+        // SetVariableWithoutNotify(newName) could succeed while
+        // DeleteVariableWithoutNotify(oldName) is blocked by the internal
+        // protected-variable guard, leaving the variable duplicated and the
+        // registry in an inconsistent state.
+        if (IsProtectedVariable(oldName, scope))
+            return ArgError("Error: Cannot rename protected variable " + oldName);
+        if (IsProtectedVariable(newName, scope))
+            return ArgError("Error: Cannot overwrite protected variable " + newName);
+
         ValidateVariableInput(newName, "", scope);
         string? oldValue = GetVariableValue(oldName, scope);
         if (oldValue == null) return ArgError("Error: Source variable not found");

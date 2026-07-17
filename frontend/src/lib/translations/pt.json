@@ -198,5 +198,10 @@
   "update.available": "Atualizacao: v{version}",
   "update.download": "Baixar v{version}",
   "update.upToDate": "Versao mais recente",
-  "update.error": "Falha ao verificar atualizacoes"
+  "update.error": "Falha ao verificar atualizacoes",
+  "scope.profile": "Perfil",
+  "protection.protectedCannotEdit": "Não é possível editar a variável bloqueada: {name}",
+  "protection.protectedCannotChangeScope": "Não é possível alterar o escopo de uma variável bloqueada",
+  "protection.lockedCannotEdit": "Bloqueado: não é possível editar",
+  "protection.lockedCannotDelete": "Bloqueado: não é possível excluir"
 }

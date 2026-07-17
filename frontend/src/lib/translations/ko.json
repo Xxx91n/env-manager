@@ -198,5 +198,10 @@
   "update.available": "새 버전: v{version}",
   "update.download": "다운로드 v{version}",
   "update.upToDate": "최신 버전입니다",
-  "update.error": "업데이트 확인 실패"
+  "update.error": "업데이트 확인 실패",
+  "scope.profile": "프로필",
+  "protection.protectedCannotEdit": "잠긴 변수를 편집할 수 없습니다: {name}",
+  "protection.protectedCannotChangeScope": "잠긴 변수의 범위를 변경할 수 없습니다",
+  "protection.lockedCannotEdit": "잠김: 편집 불가",
+  "protection.lockedCannotDelete": "잠김: 삭제 불가"
 }

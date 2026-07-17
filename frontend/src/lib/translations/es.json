@@ -198,5 +198,10 @@
   "update.available": "Actualizacion: v{version}",
   "update.download": "Descargar v{version}",
   "update.upToDate": "Ultima version",
-  "update.error": "Error al buscar actualizaciones"
+  "update.error": "Error al buscar actualizaciones",
+  "scope.profile": "Perfil",
+  "protection.protectedCannotEdit": "No se puede editar la variable bloqueada: {name}",
+  "protection.protectedCannotChangeScope": "No se puede cambiar el ámbito de una variable bloqueada",
+  "protection.lockedCannotEdit": "Bloqueado: no se puede editar",
+  "protection.lockedCannotDelete": "Bloqueado: no se puede eliminar"
 }

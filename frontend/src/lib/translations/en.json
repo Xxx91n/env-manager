@@ -198,5 +198,10 @@
   "update.available": "Update available: v{version}",
   "update.download": "Download v{version}",
   "update.upToDate": "You are using the latest version",
-  "update.error": "Failed to check for updates"
+  "update.error": "Failed to check for updates",
+  "scope.profile": "Profile",
+  "protection.protectedCannotEdit": "Cannot edit locked variable: {name}",
+  "protection.protectedCannotChangeScope": "Cannot change scope of a locked variable",
+  "protection.lockedCannotEdit": "Locked: cannot edit",
+  "protection.lockedCannotDelete": "Locked: cannot delete"
 }

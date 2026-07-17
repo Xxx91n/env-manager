@@ -198,5 +198,10 @@
   "update.available": "Mise a jour: v{version}",
   "update.download": "Telecharger v{version}",
   "update.upToDate": "Version la plus recente",
-  "update.error": "Echec de la verification"
+  "update.error": "Echec de la verification",
+  "scope.profile": "Profil",
+  "protection.protectedCannotEdit": "Impossible de modifier la variable verrouillée: {name}",
+  "protection.protectedCannotChangeScope": "Impossible de changer la portée d'une variable verrouillée",
+  "protection.lockedCannotEdit": "Verrouillé: modification impossible",
+  "protection.lockedCannotDelete": "Verrouillé: suppression impossible"
 }

@@ -198,5 +198,10 @@
   "update.available": "تحديث: v{version}",
   "update.download": "تنزيل v{version}",
   "update.upToDate": "أحدث إصدار",
-  "update.error": "فشل التحقق من التحديثات"
+  "update.error": "فشل التحقق من التحديثات",
+  "scope.profile": "ملف التعريف",
+  "protection.protectedCannotEdit": "لا يمكن تحرير المتغير المقفل: {name}",
+  "protection.protectedCannotChangeScope": "لا يمكن تغيير نطاق متغير مقفل",
+  "protection.lockedCannotEdit": "مقفل: لا يمكن التحرير",
+  "protection.lockedCannotDelete": "مقفل: لا يمكن الحذف"
 }

@@ -198,5 +198,10 @@
   "update.available": "Update verfuegbar: v{version}",
   "update.download": "Download v{version}",
   "update.upToDate": "Sie verwenden die neueste Version",
-  "update.error": "Update-Pruefung fehlgeschlagen"
+  "update.error": "Update-Pruefung fehlgeschlagen",
+  "scope.profile": "Profil",
+  "protection.protectedCannotEdit": "Gesperrte Variable kann nicht bearbeitet werden: {name}",
+  "protection.protectedCannotChangeScope": "Geltungsbereich einer gesperrten Variable kann nicht geändert werden",
+  "protection.lockedCannotEdit": "Gesperrt: Bearbeiten nicht möglich",
+  "protection.lockedCannotDelete": "Gesperrt: Löschen nicht möglich"
 }

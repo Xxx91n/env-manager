@@ -198,5 +198,10 @@
   "update.available": "新バージョン: v{version}",
   "update.download": "ダウンロード v{version}",
   "update.upToDate": "最新版です",
-  "update.error": "更新確認に失敗しました"
+  "update.error": "更新確認に失敗しました",
+  "scope.profile": "プロファイル",
+  "protection.protectedCannotEdit": "ロックされた変数は編集できません: {name}",
+  "protection.protectedCannotChangeScope": "ロックされた変数のスコープは変更できません",
+  "protection.lockedCannotEdit": "ロック中: 編集不可",
+  "protection.lockedCannotDelete": "ロック中: 削除不可"
 }

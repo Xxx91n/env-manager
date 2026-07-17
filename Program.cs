@@ -155,8 +155,8 @@ partial class Program
 
     static readonly HashSet<string> ValidCommands = new(StringComparer.OrdinalIgnoreCase)
     {
-        "list", "get", "set", "rename", "delete", "toggle", "backup", "restore", "diff", "merge",
-        "validate", "help", "profile", "path", "agents", "history", "bulk", "expand", "protection"
+        "list", "get", "set", "rename", "change-scope", "delete", "toggle", "backup", "restore", "diff", "merge",
+        "validate", "help", "profile", "path", "agents", "history", "bulk", "expand", "protection", "update"
     };
 
     static readonly JsonSerializerOptions JsonOpts = new()
@@ -226,6 +226,7 @@ partial class Program
                 "get" => args.Length < 2 ? ArgError("Usage: env-manager get <name>") : GetVariable(args[1]),
                 "set" => args.Length < 3 ? ArgError("Usage: env-manager set <name> <value> [--scope user|system] [--overwrite]") : RunSet(args),
                 "rename" => args.Length < 3 ? ArgError("Usage: env-manager rename <old> <new> [--scope user|system] [--overwrite]") : RunRename(args),
+                "change-scope" => args.Length < 3 ? ArgError("Usage: env-manager change-scope <name> <new-scope> [--scope user|system] [--overwrite]") : RunChangeScope(args),
                 "delete" => args.Length < 2 ? ArgError("Usage: env-manager delete <name> [--scope user|system]") : RunDelete(args),
                 "toggle" => args.Length < 2 ? ArgError("Usage: env-manager toggle <name> [--scope user|system]") : RunToggle(args),
                 "backup" => RunBackup(args),
@@ -364,7 +365,7 @@ partial class Program
     /// Parses --scope flag from args starting at the given index.
     /// Returns null and prints an error if the scope value is invalid.
     /// </summary>
-    static string? ParseScope(string[] args, int flagIndex, string defaultValue)
+    static string? ParseScope(string[] args, int flagIndex, string? defaultValue)
     {
         if (args.Length > flagIndex && args[flagIndex] == "--scope" && args.Length > flagIndex + 1)
         {
@@ -875,6 +876,7 @@ partial class Program
             DeleteVariableWithoutNotify(oldVarName, "user");
         }
 
+        var preEditVar = new ProfileVariable { Name = var.Name, Value = var.Value };
         var.Name = newVarName;
         var.Value = newVarValue;
         SaveProfiles(profiles);
@@ -885,6 +887,8 @@ partial class Program
             BroadcastSettingChange();
         }
 
+        var postEditVar = new ProfileVariable { Name = newVarName, Value = newVarValue };
+        RecordProfileAudit("profile edit-var", profileName, JsonSerializer.Serialize(preEditVar, JsonOpts), JsonSerializer.Serialize(postEditVar, JsonOpts));
         Console.WriteLine($"Edited variable '{oldVarName}' -> '{newVarName}' in profile '{profileName}'");
         return 0;
     }
@@ -1052,6 +1056,7 @@ partial class Program
             ApplyProfile(profile);
         }
 
+        RecordProfileAudit("profile rename", newName, oldProfileName, newName);
         Console.WriteLine($"Renamed profile '{oldProfileName}' -> '{newName}'");
         return 0;
     }
@@ -1115,8 +1120,9 @@ partial class Program
             IsEnabled = false,
             Variables = new List<ProfileVariable>()
         };
-        profiles.Add(profile);
+        var createdSummary = ProfileSummary(profile);
         SaveProfiles(profiles);
+        RecordProfileAudit("profile create", name, null, createdSummary);
         Console.WriteLine($"Created profile: {name}");
         return 0;
     }
@@ -1136,8 +1142,10 @@ partial class Program
             UnapplyProfile(profile);
         }
 
+        var deletedSummary = ProfileSummary(profile);
         profiles.Remove(profile);
         SaveProfiles(profiles);
+        RecordProfileAudit("profile delete", name, deletedSummary, null);
         Console.WriteLine($"Deleted profile: {name}");
         return 0;
     }
@@ -1261,7 +1269,8 @@ partial class Program
             return ArgError("Error: Unapply the profile before changing its variables");
 
         profile.Variables.RemoveAll(v => v.Name.Equals(varName, StringComparison.OrdinalIgnoreCase));
-        profile.Variables.Add(new ProfileVariable { Name = varName, Value = varValue });
+        var addedVar = new ProfileVariable { Name = varName, Value = varValue };
+        profile.Variables.Add(addedVar);
         SaveProfiles(profiles);
 
         // If profile is currently applied, propagate the change to the registry
@@ -1271,6 +1280,7 @@ partial class Program
             BroadcastSettingChange();
         }
 
+        RecordProfileAudit("profile add-var", profileName, null, JsonSerializer.Serialize(addedVar, JsonOpts));
         Console.WriteLine($"Added variable '{varName}' to profile '{profileName}'");
         return 0;
     }
@@ -1288,6 +1298,7 @@ partial class Program
         if (profile.IsEnabled)
             return ArgError("Error: Unapply the profile before changing its variables");
 
+        var removedVar = profile.Variables.FirstOrDefault(v => v.Name.Equals(varName, StringComparison.OrdinalIgnoreCase));
         int removed = profile.Variables.RemoveAll(v => v.Name.Equals(varName, StringComparison.OrdinalIgnoreCase));
         if (removed == 0)
         {
@@ -1296,6 +1307,7 @@ partial class Program
         }
 
         SaveProfiles(profiles);
+        RecordProfileAudit("profile remove-var", profileName, JsonSerializer.Serialize(removedVar, JsonOpts), null);
 
         // If profile is currently applied, restore backup if it exists
         if (profile.IsEnabled)
@@ -2053,6 +2065,7 @@ Commands:
   get <name>                 Get variable (JSON)
   set <name> <val> [--scope user|system] [--overwrite] Set variable
   rename <old> <new> [--scope user|system] [--overwrite] Rename variable atomically
+  change-scope <name> <new-scope> [--scope user|system] [--overwrite] Move variable to another scope atomically
   delete <name> [--scope user|system]    Delete variable
   toggle <name> [--scope user|system]    Enable/disable a variable (backs up value)
   backup [--output <file>]   Create backup

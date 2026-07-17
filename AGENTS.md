@@ -1,11 +1,23 @@
-# Env Manager - Project Specification
+# Env Manager
+
+## context-mode routing (MANDATORY)
+
+- File edits (including patches) MUST go through ctx_batch_execute / ctx_execute_file, not apply_patch.
+- ctx_* first; fallback to Codex builtins only when ctx_* can't do the same job. Read-to-analyze / search / large grep: ctx_batch_execute(commands, queries) or ctx_search(queries) — never Get-Content/Select-String into context. For data analysis use ctx_execute(code) and print only the answer.
+- Web/HTTP: ctx_fetch_and_index(url, source) then ctx_search(queries). curl/wget/inline HTTP are forbidden.
+- Shell OK for git, mkdir, rm, mv, cd, ls, npm install, dotnet build, cargo build, vitest, scripts/build-all.ps1 (execution, not analysis; output is bounded and acceptable).
+- Windows paths in ctx sandbox: use bash form /d/Aworker/env-manager/... (lowercase drive, no D:\). PowerShell cmdlets need `pwsh -NoProfile -Command "..."`. $-using PowerShell logic must go in a .ps1 and run with `-File` (inline $ is stripped by the host transport).
+- After resume: ctx_search(sort:"timeline") before asking the user anything. Search prior session memory before re-reading sources.
+- Output artifacts as files + path + one-line summary; never inline large content. Descriptive source labels for ctx_search(source:"label").
+- Keep this block at the very top. Any later agent editing this file must keep the context-mode routing block intact and on top. Extended project spec follows.
+
+## Env Manager - Project Specification
 
 This document is the single source of truth for the Env Manager project. All developers, AI agents, and LLMs must follow this specification. When any project feature or structure changes, this document must be updated immediately in the same commit.
 
 ---
 
 ## Project Overview
-
 - **Name**: Env Manager
 - **Version**: 0.5.0
 - **License**: MIT
@@ -177,6 +189,8 @@ All commands follow: `env-manager-cli <command> [arguments] [--flags]`
 | `list` | `list` | List all variables (user + system) |
 | `get` | `get <name>` | Get variable value |
 | `set` | `set <name> <value> [--scope user\|system]` | Set variable (default: user) |
+| `rename` | `rename <old> <new> [--scope user\|system] [--overwrite]` | Rename a variable atomically (write-then-verify-then-delete) |
+| `change-scope` | `change-scope <name> <new-scope> [--scope user\|system] [--overwrite]` | Move a variable from one scope to another atomically; refuses protected vars and cross-scope collisions without --overwrite; relocates any `_EnvManager_disabled` backup key |
 | `delete` | `delete <name> [--scope user\|system]` | Delete variable (default: user) |
 | `toggle` | `toggle <name> [--scope user\|system]` | Enable/disable variable (backs up value, default: user) |
 | `backup` | `backup [--output <file>]` | Backup all variables to JSON |
@@ -405,6 +419,8 @@ The following guards were added after a full security audit of CLI, Rust IPC, an
 
 6. **Mutex-based cross-process locking** (existing, verified): All write operations acquire `Local\EnvManager.RegistryMutation` mutex in the CLI, plus `CLI_RWLOCK` write lock in Rust, plus `writeChain` serialization in the frontend. Three layers of protection prevent concurrent mutations.
 
+7. **`RunRename` and `RunChangeScope` entry guards**: After the `DeleteVariableWithoutNotify` guard (#1) was added, renaming a protected variable could have left the registry inconsistent: `SetVariableWithoutNotify(newName)` would succeed while `DeleteVariableWithoutNotify(oldName)` was silently blocked by the internal protected-variable guard. Now both `RunRename` (on `oldName` AND `newName`) and `RunChangeScope` (on the source scope AND target scope) reject protected variables at the entry point, before any registry mutation. `RunChangeScope` also relocates any `_EnvManager_disabled` toggle-backup key from the source scope to the target scope so the disable state follows the variable. Reordering PATH entries (move-up / move-down) intentionally remains unprotected because reordering data is never destructive.
+
 ### Internal Modal Dialog System
 
 The GUI uses an internal Svelte store-based modal system instead of browser `confirm()`/`alert()`. The `modal` writable store in `stores.ts` holds the current `ModalConfig`. The `ConfirmDialog.svelte` component renders globally in `App.svelte`. All confirmation dialogs (delete variable, delete profile, etc.) use `showModal()` from `stores.ts`.
@@ -536,7 +552,7 @@ npm run test:e2e        # Playwright E2E tests
 | `src/lib/debug.test.ts` | Debug logging system, log entry management, 200-entry cap (memory leak prevention), isWriteInProgress tracking |
 | `src/lib/profile-drag.test.ts` | Profile drag-to-reorder logic, performReorder, applyStoredOrder, localStorage persistence |
 | `src/lib/multi-profile.test.ts` | Single-profile policy verification, backup/restore, protected variable rejection |
-
+| `src/lib/change-scope-protection-profile.test.ts` | change-scope CLI invocation/args, protected-variable rejection, profile audit record + undo, profile-entry retrieval from history |
 ---
 
 ## CodeGraph
@@ -827,27 +843,76 @@ The GUI communicates with the CLI exclusively through `invoke('run_cli', { comma
 | Profile import | `profile import` | `importProfile()` | Yes |
 | Profile rename | `profile rename` | `renameProfile()` | Yes |
 | Rename PATH entry | `path rename` | `renamePathEntry()` | Yes |
-| Rename variable | `delete` + `set` | EditDialog (rename via delete+set) | Yes |
+| Rename variable | `rename` | `renameVariable()`, `EditDialog` | Yes |
+| Change variable scope | `change-scope` | `changeScope()`, `EditDialog` | Yes |
+| Profile audit history | N/A (automatic) | N/A (automatic) | Yes |
 
-### Variable Rename (GUI)
+### Variable Rename and Scope Change (GUI)
 
-The GUI EditDialog allows renaming a variable by editing the name field. When the name changes:
-1. The old variable is deleted via `deleteVariable(originalName, scope)`
-2. The new variable is set via `setVariable(newName, value, scope)`
+The GUI EditDialog supports three orthogonal mutations on an existing variable:
+rename, change scope, and value edit. These combine into four paths the
+EditDialog dispatches through `changeScope`, `renameVariable`, and
+`setVariable` API calls (all serialized via the frontend `writeChain` and the
+Rust `RwLock` write lock):
 
-This two-step approach is used because the Windows Registry does not support atomic key renaming. The operation is serialized through the frontend `writeChain` and Rust `RwLock` write lock, ensuring no race condition can interleave the delete and set.
+1. **Name changed only** -> `renameVariable(original, name, scope, overwrite)`
+   -> CLI `rename` (writes+verifies target, then deletes source; no delete-then-set race).
+2. **Scope changed only** -> `changeScope` -> CLI `change-scope` (writes to the
+   new hive, verifies, then deletes the source entry; preserves the
+   `_EnvManager_disabled` toggle backup by relocating it as well).
+3. **Scope and name both changed** -> `changeScope(original, scope, oldScope, true)`
+   followed by `renameVariable(original, name, scope, overwrite)` and an
+   optional `setVariable(name, value, scope, true)` if the value also changed.
+4. **Value only** -> `setVariable(name, value, scope, overwrite)`.
 
-**Security**: The rename operation inherits all security checks:
-- Protected system variables cannot be renamed (same list as SetVariable/DeleteVariable)
-- Variable name validation: no empty names, no `=`, max 255 chars (user scope)
-- The CLI-side `set` and `delete` commands enforce the same guards
+The `--overwrite` flag is passed through only when the user explicitly
+confirmed the conflict modal. The EditDialog never silently clobbers an
+existing target-scope variable by injecting a synthetic `true`. If the target
+scope already holds a same-name (case-insensitive) variable, the conflict modal
+fires first and the user must confirm.
+
+**Security**: Both `rename` and `change-scope` share the same protection contract:
+- `IsProtectedVariable(oldName, scope)` is checked at entry; protected variables
+  cannot be renamed or moved out of their scope. This entry guard was added
+  after audit: previously `SetVariableWithoutNotify(newName)` could succeed
+  while `DeleteVariableWithoutNotify(oldName)` was blocked by the internal
+  protected-variable guard, leaving the variable duplicated and the registry in
+  an inconsistent state.
+- `IsProtectedVariable(newName, scope)` is checked for the target slot so a
+  rename or scope-move cannot land on top of a protected variable.
+- Variable name validation: no empty names, no `=`, max 255 chars (user scope).
+- `change-scope` refuses cross-scope name collisions unless `--overwrite` is
+  explicit, mirroring the `rename` contract.
+
+### Profile Audit History
+
+Profile-level mutations (`create`, `delete`, `rename`, `add-var`,
+`remove-var`, `edit-var`) modify `profiles.json` rather than the registry, so
+they bypass the standard snapshot diff the CLI writes for registry mutations
+in `Main()`. They are recorded explicitly via `RecordProfileAudit()` (see
+`ProfileAudit.cs`) so the user can see profile changes in `history list` and
+undo them via `history undo <id>`.
+
+- Audit entries for profile mutations carry `Scope = "profile"` so the GUI and
+  `history` command can distinguish them from registry-level entries.
+- `OldValue` / `NewValue` store a compact JSON summary of the affected profile
+  (`id`, `name`, `isEnabled`, `inherits`, `pathEntries`, `variables`) so an undo
+  restores that profile state without clobbering other profiles.
+- `TryUndoProfileAudit(entry)` in `ProfileAudit.cs` reverses create (delete the
+  profile), delete (re-create from `OldValue`), rename (restore old name),
+  add-var (remove the added variable), remove-var (re-add the removed variable),
+  and edit-var (restore the pre-edit variable). `apply`, `unapply`,
+  `set-inherits`, `add-path`, and `remove-path` are non-undoable no-ops.
+- `RunHistoryCommand` dispatches profile entries to `TryUndoProfileAudit` and
+  registry entries to the stale-value-verified undo path. The two paths never
+  overlap.
 
 ### Alignment Checklist
 
 When adding a new GUI feature:
 1. Add the CLI command in `Program.cs`
 2. Add the API function in `frontend/src/lib/api.ts`
-3. Add the command to `ALLOWED_COMMANDS` in `main.rs` (current: list, get, set, delete, toggle, backup, restore, diff, merge, validate, profile, path, agents, help)
+3. Add the command to `ALLOWED_COMMANDS` in `main.rs` (current: list, get, set, rename, change-scope, delete, toggle, backup, restore, diff, merge, validate, help, profile, path, agents, history, bulk, expand, protection, update). Also add write commands to `WRITE_COMMANDS` and read commands to `READ_COMMANDS` as appropriate.
 4. Add UI in the appropriate `.svelte` component
 5. Add i18n strings to ALL translation files
 6. Update the alignment table above
@@ -932,4 +997,4 @@ A commit that does not update AGENTS.md when the project has changed is consider
 
 ---
 
-**Last updated**: 2026-07-12
+**Last updated**: 2026-07-18

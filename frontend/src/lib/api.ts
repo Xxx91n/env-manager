@@ -315,6 +315,34 @@ export async function renameVariable(
   await runWrite('rename', args)
   await listVariables()
 }
+/**
+ * Atomically changes a variable scope from one hive to another. The CLI
+ * refuses to move protected variables and refuses cross-scope collisions
+ * unless overwrite is explicit. Use this when the user edits an existing
+ * variable and changes its scope in the EditDialog.
+ */
+export async function changeScope(
+  name: string,
+  newScope: 'user' | 'system',
+  oldScope?: 'user' | 'system',
+  overwrite = false
+): Promise<void> {
+  error.set(null)
+  try {
+    const args = [name, newScope]
+    if (oldScope) {
+      args.push('--scope', oldScope)
+    }
+    if (overwrite) args.push('--overwrite')
+    await runWrite('change-scope', args)
+    await invalidateApiCache()
+    await listVariables()
+  } catch (err) {
+    error.set(err instanceof Error ? err.message : 'Failed to change variable scope')
+    throw err
+  }
+}
+
 export async function deleteVariable(
   name: string,
   scope: 'user' | 'system' = 'user'
