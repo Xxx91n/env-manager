@@ -1,529 +1,110 @@
-# Env Manager
+# Env Manager - Project Operating Instructions
+
+This document is the single source of truth for the Env Manager project. All developers, AI agents, and LLMs must follow this specification. When any project feature or structure changes, update this file in the same commit. Detailed references live in `docs/` - keep this file concise; link out instead of inlining large tables.
+
+---
 
 ## context-mode routing (MANDATORY)
 
 - File edits (including patches) MUST go through ctx_batch_execute / ctx_execute_file, not apply_patch.
-- ctx_* first; fallback to Codex builtins only when ctx_* can't do the same job. Read-to-analyze / search / large grep: ctx_batch_execute(commands, queries) or ctx_search(queries) — never Get-Content/Select-String into context. For data analysis use ctx_execute(code) and print only the answer.
+- ctx_* first; fallback to Codex builtins only when ctx_* can't do the same job. Read-to-analyze / search / large grep: ctx_batch_execute(commands, queries) or ctx_search(queries) - never Get-Content/Select-String into context. For data analysis use ctx_execute(code) and print only the answer.
 - Web/HTTP: ctx_fetch_and_index(url, source) then ctx_search(queries). curl/wget/inline HTTP are forbidden.
 - Shell OK for git, mkdir, rm, mv, cd, ls, npm install, dotnet build, cargo build, vitest, scripts/build-all.ps1 (execution, not analysis; output is bounded and acceptable).
-- Windows paths in ctx sandbox: use bash form /d/Aworker/env-manager/... (lowercase drive, no D:\). PowerShell cmdlets need `pwsh -NoProfile -Command "..."`. $-using PowerShell logic must go in a .ps1 and run with `-File` (inline $ is stripped by the host transport).
-- After resume: ctx_search(sort:"timeline") before asking the user anything. Search prior session memory before re-reading sources.
-- Output artifacts as files + path + one-line summary; never inline large content. Descriptive source labels for ctx_search(source:"label").
+- Windows paths in ctx sandbox: use bash form /d/Aworker/env-manager/... (lowercase drive, no D:\). PowerShell cmdlets need `pwsh -NoProfile -Command "..."`. `$`-using PowerShell logic must go in a `.ps1` and run with `-File` (inline `$` is stripped by the host transport).
+- After resume: `ctx_search(sort:"timeline")` before asking the user anything. Search prior session memory before re-reading sources.
+- Output artifacts as files + path + one-line summary; never inline large content. Descriptive source labels for `ctx_search(source:"label")`.
 - Keep this block at the very top. Any later agent editing this file must keep the context-mode routing block intact and on top. Extended project spec follows.
-
-## Env Manager - Project Specification
-
-This document is the single source of truth for the Env Manager project. All developers, AI agents, and LLMs must follow this specification. When any project feature or structure changes, this document must be updated immediately in the same commit.
 
 ---
 
 ## Project Overview
+
 - **Name**: Env Manager
 - **Version**: 0.5.0
 - **License**: MIT
 - **Repository**: https://github.com/Xxx91n/env-manager
-- **Languages**: C# (.NET 10), TypeScript, Svelte, Rust
+- **Languages**: C# (.NET 10), TypeScript, Svelte 4, Rust
 - **Goal**: A modern, lightweight Windows environment variable manager with CLI and GUI dual-mode support, inspired by Microsoft PowerToys environment variable editor but standalone and agent-friendly.
-
----
 
 ## Architecture
 
-The application has three layers:
+Three layers:
+1. **CLI backend** (`Program.cs`) - C# .NET 10 console app, reads/writes Windows Registry directly, compiles to `env-manager-cli.exe`.
+2. **Tauri shell** (`frontend/src-tauri/`) - Rust app, embeds CLI as bundled resource, spawns CLI subprocesses, returns JSON via Tauri IPC.
+3. **Svelte frontend** (`frontend/src/`) - TypeScript + Svelte 4 + TailwindCSS in WebView2. Talks to Rust only via `invoke('run_cli', ...)`.
 
-1. **CLI backend** (`Program.cs`) - C# .NET 10 console application that reads/writes the Windows Registry directly. Compiles to `env-manager-cli.exe`. Handles all variable CRUD, backup/restore, diff/merge operations.
-2. **Tauri shell** (`frontend/src-tauri/`) - Rust application that embeds the CLI as a bundled resource. Spawns CLI subprocesses for each operation and returns structured JSON responses to the frontend via Tauri IPC commands.
-3. **Svelte frontend** (`frontend/src/`) - TypeScript + Svelte 4 + TailwindCSS UI rendered in a WebView2 window. Communicates with the Rust layer exclusively through `invoke('run_cli', ...)`.
+The GUI has NO local web server. Dev: Vite at `localhost:5173`. Production: Tauri embeds static assets via its `tauri://` custom protocol.
 
-The GUI does NOT depend on a local web server. In development, Vite serves the frontend at `localhost:5173`. In production, Tauri embeds the built static assets via its `tauri://` custom protocol - no server, no network.
-
----
+See [docs/architecture.md](docs/architecture.md) for IPC bridge, race condition prevention, system tray, toast, caching, auto-update, security hardening, modal dialog system, rename/change-scope contracts, profile audit history, and the GUI/CLI alignment table.
 
 ## Project Structure
 
 ```
 env-manager/
-├── Program.cs                         # C# CLI implementation
-├── env-manager.csproj                 # .NET 10 project (AssemblyName: env-manager-cli)
-├── LICENSE                            # MIT
-├── README.md                          # English documentation
-├── README_CN.md                       # Chinese documentation
-├── AGENTS.md                          # This file (project-level, for repo developers/agents)
-AGENTS.cli.md                       # CLI-level agent guide (distributed with CLI binary)
-├── .gitignore
-│
-├── frontend/                          # Tauri GUI application
-│   ├── index.html
-│   ├── package.json
-│   ├── vite.config.ts
-│   ├── svelte.config.js
-│   ├── tailwind.config.js
-│   ├── postcss.config.js
-│   ├── tsconfig.json
-│   ├── playwright.config.ts
-│   ├── scripts/
-│   │   ├── prebuild.mjs              # Builds CLI, copies to src-tauri/bin/
-│   │   ├── tauri-build.mjs           # Wraps tauri build, auto-detects host triple
-│   │   └── build-all.ps1             # Consolidated build: release/portable + release/msi
-│   ├── src/
-│   │   ├── main.ts                   # App entry, initializes i18n
-│   │   ├── App.svelte                # Root component
-│   │   ├── App.test.ts
-│   │   └── lib/
-│   │       ├── api.ts                # Tauri IPC bridge, CLI invocation
-│   │       ├── stores.ts             # Svelte reactive stores
-│   │       ├── i18n.ts               # Internationalization setup
-│   │       ├── components/
-│   │       │   ├── Variables.svelte  # Variable list, search, filter
-│   │       │   ├── EditDialog.svelte # Create/edit variable dialog
-│   │       │   ├── BackupDialog.svelte # Backup/export dialog
-│   │       │   ├── ProfileDialog.svelte # Profile management dialog
-│   │       │   ├── PathEditor.svelte   # PATH variable list editor
-│   │       │   └── SettingsDialog.svelte # Settings (language, theme)
-│   │       └── translations/
-│   │           ├── en.json
-│   │           ├── zh.json
-│   │           ├── ja.json
-│   │           ├── ko.json
-│   │           ├── de.json
-│   │           ├── fr.json
-│   │           ├── es.json
-│   │           ├── pt.json
-│   │           ├── ru.json
-│   │           └── ar.json
-│   ├── src-tauri/
-│   │   ├── src/main.rs               # Tauri commands: run_cli, cli_diagnostics
-│   │   ├── Cargo.toml
-│   │   ├── Cargo.lock
-│   │   ├── tauri.conf.json           # Bundle config, resources mapping
-│   │   ├── build.rs
-│   │   ├── capabilities/default.json
-│   │   ├── icons/                    # Application icons
-│   │   └── bin/                      # CLI files copied by prebuild (gitignored)
-│   └── tests/
-│       ├── setup.ts                  # Vitest global mocks
-│       └── e2e/app.spec.ts
-│
-├── release/                           # Build output (gitignored)
-│   ├── portable/                     # GUI exe + CLI files, flat layout
-│   └── msi/                          # MSI installer
-│
-├── bin/                               # CLI build output (gitignored)
-├── obj/                               # CLI build intermediates (gitignored)
-└── dist/                              # Frontend build output (gitignored)
++- Program.cs                  # C# CLI implementation
++- env-manager.csproj          # .NET 10 project (AssemblyName: env-manager-cli)
++- AGENTS.md                   # This file (project-level operating instructions)
++- AGENTS.cli.md               # CLI-level agent guide (distributed with CLI binary)
++- README.md / README_CN.md    # English / Chinese documentation
++- docs/                       # Detailed reference (cli-commands, architecture, build-and-release, backup-and-profiles)
++- frontend/                   # Tauri GUI application (src/, src-tauri/, tests/)
++- release/                    # Build output (gitignored): portable/, cli-only/, msi/
++- bin/ obj/ dist/             # Intermediate build output (gitignored)
 ```
 
----
+## CLI Command Quick Reference
 
-## Build System
+Full table, scope, debug, error handling, profiles, toggle, path editor, path resolution: see [docs/cli-commands.md](docs/cli-commands.md).
 
-### Prerequisites
+Read-only (concurrent-safe, read-locked): `list`, `get`, `backup`, `diff`, `validate`, `agents`, `profile list/show/status`, `path list`, `path dedupe --dry-run`, `history list`, `bulk export`, `expand`, `protection list`, `update check`.
 
-- .NET 10 SDK
-- Node.js 18+ with npm
-- Rust toolchain (rustc + cargo). Either GNU (stable-x86_64-pc-windows-gnu) or MSVC (stable-x86_64-pc-windows-msvc) target works. The build system auto-detects the host triple and does not hardcode any specific target or linker path.
+Write (serialized, write-locked): `set`, `rename`, `change-scope`, `delete`, `toggle`, `restore`, `merge`, `profile create/delete/apply/unapply/add-var/remove-var/edit-var/rename`, `path add/remove/move-up/move-down/rename/dedupe`, `history undo/delete`, `bulk import`, `protection add-path/remove-path/add-var/remove-var`.
 
-### Build CLI only
+All commands: `env-manager-cli <command> [arguments] [--flags]`. `--debug`/`-d` anywhere enables verbose stderr. `--scope user|system` (default user). Exit 0/1.
 
-```powershell
-dotnet build -c Release
-# Output: bin/Release/net10.0-windows/env-manager-cli.exe
-```
+## Hard Boundaries (Red Lines)
 
-### Build GUI (development with hot reload)
+These invariants must never be violated by any code change:
 
-```powershell
-cd frontend
-npm install
-npm run tauri-dev
-# Opens a Tauri window with Vite dev server at localhost:5173
-```
+- **Protected variables**: built-in protected system variables (loaded from `%LOCALAPPDATA%\EnvManager\builtin-protected-vars.json`) cannot be set, deleted, toggled, renamed, scope-changed, or added to a profile at system scope. Custom user-locked variables (`protected-vars.json`) cannot be toggled, edited, or deleted until unlocked. See `IsProtectedVariable`.
+- **Protected PATH entries**: built-in protected PATH entries (`builtin-protected-paths.json`) and custom locked entries (`protected-paths.json`) cannot be removed or edited via `path remove`/`rename`. See `IsProtectedPathEntry`. Reordering (`move-up`/`move-down`) is allowed - reordering is not destructive.
+- **Cross-process mutex**: all write operations acquire `Local\EnvManager.RegistryMutation` mutex. Plus Rust `CLI_RWLOCK` write lock. Plus frontend `writeChain` serialization. Three layers, never bypass.
+- **Variable rename/scope-change contract**: `rename` writes+verifies target before deleting source. `change-scope` writes new scope, verifies, deletes source, relocates `_EnvManager_disabled` backup. Both reject protected `oldName`/`newName`/source-scope/target-scope at entry point. Never delete-then-set for renames.
+- **GUI EditDialog 3-way save ordering**: `rename(old scope)` -> `changeScope(overwrite flag, never hardcoded true)` -> `setVariable(value, overwrite flag)`. The `--overwrite` flag flows only from explicit user confirmation of the conflict modal, never an injected synthetic `true`.
+- **Profile audit**: `TryUndoProfileAudit` uses allow-list of known subcommands plus Id-based conflict detection; unknown `profile <x>` subcommands emit error and `return false` (never silently succeed); try/catch fallback returns false so `--force` contract works.
+- **`RunChangeScope` ambiguous-scope rejection**: when a variable exists in both user and system scope, the caller must specify `--scope` explicitly; auto-detection is rejected (no silent pick of user).
+- **`path dedupe` HashSet isolation**: the dedupe `seen` HashSet only records non-protected entries, so protected entries are never treated as duplicates of themselves or each other.
+- **Backup file validation**: `.json` extension required; writes to `\Windows`, `\Program Files`, `\Program Files (x86)` blocked; 50 MB cap.
+- **Rust IPC input validation**: command whitelist, max 64 args, max 32,767 chars per arg, null bytes and control characters rejected.
+- **Audit history**: `%LOCALAPPDATA%\EnvManager\audit.json`, capped at 2,000 entries. Undo refuses stale changes unless `--force` explicit. Profile entries carry `Scope = "profile"` and route to `TryUndoProfileAudit`.
+- **Logs never record environment values** - CLI/Rust log command names and argument counts only. Values may contain credentials.
 
-### Build GUI (production)
+### Agent Safety Guidelines
 
-The `tauri-build` npm script runs `scripts/tauri-build.mjs`, which auto-detects the Rust host triple via `rustc -vV` and passes `--target <triple>` to `tauri build`. This ensures the Tauri bundler looks in the same output directory where cargo actually places the binary (`target/<triple>/release/`), which is critical on hosts whose default triple is not the plain host (e.g. `x86_64-pc-windows-gnu` with MinGW).
-
-```powershell
-cd frontend
-npm run tauri-build
-# Compiles Rust, bundles frontend, produces:
-#   frontend/src-tauri/target/<triple>/release/env-manager.exe
-#   frontend/src-tauri/target/<triple>/release/bundle/msi/*.msi
-```
-
-### Build everything (consolidated output)
-
-```powershell
-cd frontend
-powershell -ExecutionPolicy Bypass -File scripts/build-all.ps1
-# Output:
-#   release/portable/  - env-manager.exe + env-manager-cli.exe + DLLs (flat)
-#   release/msi/       - Env Manager_X.Y.Z_x64.msi
-```
-
-### Intermediate Build Artifacts
-
-The `bin/Release/` directory (specifically `bin/Release/net10.0-windows/`) is an intermediate build output from `dotnet build`. It is NOT the final distribution. Its role:
-
-1. `dotnet build -c Release` produces CLI DLLs and exe here
-2. `frontend/scripts/prebuild.mjs` copies from here to `frontend/src-tauri/bin/` for Tauri resource bundling
-3. `frontend/scripts/build-all.ps1` copies from here to `release/portable/` for the portable distribution
-
-This directory is gitignored and should not be manually distributed. It is regenerated on every build. The TFM output path may be `net10.0` or `net10.0-windows` depending on the .NET SDK version; the build scripts auto-detect which exists.
-
-### Build output layout
-
-The `release/` directory is the canonical output for distribution:
-
-- `release/portable/` contains the GUI executable (`env-manager.exe`) and all CLI runtime files side-by-side. This is the portable distribution - no installation needed, just run the exe.
-- `release/msi/` contains the Windows MSI installer. When installed, the CLI exe and its DLLs are bundled as Tauri resources and resolved at runtime via `BaseDirectory::Resource`.
-
----
-
-## CLI Command Specification
-
-All commands follow: `env-manager-cli <command> [arguments] [--flags]`
-
-| Command | Usage | Description |
-|---------|-------|-------------|
-| `list` | `list` | List all variables (user + system) |
-| `get` | `get <name>` | Get variable value |
-| `set` | `set <name> <value> [--scope user\|system]` | Set variable (default: user) |
-| `rename` | `rename <old> <new> [--scope user\|system] [--overwrite]` | Rename a variable atomically (write-then-verify-then-delete) |
-| `change-scope` | `change-scope <name> <new-scope> [--scope user\|system] [--overwrite]` | Move a variable from one scope to another atomically; refuses protected vars and cross-scope collisions without --overwrite; relocates any `_EnvManager_disabled` backup key |
-| `delete` | `delete <name> [--scope user\|system]` | Delete variable (default: user) |
-| `toggle` | `toggle <name> [--scope user\|system]` | Enable/disable variable (backs up value, default: user) |
-| `backup` | `backup [--output <file>]` | Backup all variables to JSON |
-| `restore` | `restore <file> [--scope user\|system]` | Restore variables from JSON |
-| `diff` | `diff <old> <new>` | Compare two backup files |
-| `merge` | `merge <old> <new> --output <file>` | Merge two backup files |
-| `validate` | `validate <file>` | Validate backup file format |
-| `help` | `help` | Show help text |
-| `agents` | `agents [--path\|--json\|--summary]` | Output CLI AGENTS.md spec. --path: file only. --json: machine-readable JSON. --summary: brief |
-| `profile list` | `profile list` | List all profiles (JSON) |
-| `profile create` | `profile create <name>` | Create a new empty profile |
-| `profile delete` | `profile delete <name>` | Delete a profile |
-| `profile show` | `profile show <name>` | Show profile details (JSON) |
-| `profile apply` | `profile apply <name>` | Apply a profile (backs up existing user vars) |
-| `profile unapply` | `profile unapply <name>` | Unapply a profile (restores backed-up user vars) |
-| `profile add-var` | `profile add-var <profile> <name> <val>` | Add a variable to a profile |
-| `profile remove-var` | `profile remove-var <profile> <name>` | Remove a variable from a profile |
-| `profile edit-var` | `profile edit-var <profile> <old> <new> <val>` | Edit a variable in a profile |
-| `profile status` | `profile status <name>` | Check profile application status (JSON) |
-| `profile export` | `profile export <name> --output <file>` | Export profile to JSON file |
-| `profile import` | `profile import <file>` | Import profile from JSON file |
-| `profile rename` | `profile rename <old> <new>` | Rename a profile |
-| `path list` | `path list [--scope]` | List PATH entries (JSON) |
-| `path add` | `path add <dir> [--scope] [--index N]` | Add directory to PATH |
-| `path remove` | `path remove <dir> [--scope]` | Remove directory from PATH |
-| `path move-up` | `path move-up <index> [--scope]` | Move PATH entry up |
-| `path move-down` | `path move-down <index> [--scope]` | Move PATH entry down |
-| `path rename` | `path rename <old> <new> [--scope]` | Rename a PATH entry |
-| `path dedupe` | `path dedupe [--scope] [--dry-run]` | Remove duplicate PATH entries (case-insensitive, preserves first, never removes protected entries; --dry-run reports without mutating) |
-| `history list` | `history list [--limit N]` | List audit history (JSON, most recent first) |
-| `history undo` | `history undo <id> [--force]` | Undo a specific audit entry |
-| `history delete` | `history delete <id>` or `history delete --all [--scope user\|system]` | Delete a history record or clear all by scope |
-| `bulk import` | `bulk import <file> [--scope] [--overwrite] [--dry-run]` | Import variables from .json/.env/.csv |
-| `bulk export` | `bulk export <file> [--scope]` | Export variables to .json/.env/.csv |
-| `expand` | `expand <value>` | Expand nested %VAR% references |
-| `protection list` | `protection list` | List protected vars and PATH entries (JSON) |
-| `protection add-path` | `protection add-path <dir>` | Add custom protected PATH entry |
-| `protection remove-path` | `protection remove-path <dir>` | Remove custom protected PATH entry |
-| `protection add-var` | `protection add-var <name>` | Lock a variable (add to custom protected vars) |
-| `protection remove-var` | `protection remove-var <name>` | Unlock a variable (remove from custom protected vars) |
-| `update check` | `update check` | Check for latest version via GitHub Releases API |
-
-### Debug Mode
-
-Pass `--debug` (or `-d`) anywhere in the args to enable verbose stderr logging:
-
-```powershell
-env-manager-cli list --debug
-env-manager-cli set MY_VAR value --scope user --debug
-```
-
-Debug output goes to stderr with timestamps: `[debug] HH:mm:ss.fff message`. This does not affect stdout JSON output. The GUI's Rust layer captures and logs all stderr to the Tauri log.
-
-### Scope
-
-- `user`: `HKEY_CURRENT_USER\Environment` (no elevation required)
-- `system`: `HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\Session Manager\Environment` (requires administrator)
-
-### Error handling
-
-- Errors go to stderr, success output to stdout
-- Exit code: 0 = success, 1 = failure
-- The GUI catches CLI errors and displays them as transient toasts (auto-dismiss after 3s),
-  not as persistent banners. This prevents duplicate error display when both the CLI
-  stderr and the GUI error store would show the same message.
-
-- Errors go to stderr, success output to stdout
-- Exit code: 0 = success, 1 = failure
-
-### Profiles
-
-Profiles are sets of preconfigured variables that can be applied/unapplied as a group. When applied, original values of affected user variables are backed up. Unapplying restores originals. Profiles only affect user scope.
-
-**Single active profile policy**: Only one profile can be active at a time. Applying a new profile automatically unapplies any currently-active profile first. This simplifies conflict resolution and prevents backup-chain complexity.
-
-**Backup and restore**: When a profile is applied, the original user variable values are backed up using the key `<varname>_PowerToys_<profileName>`. Unapplying restores the original values. Since only one profile is active at a time, there is no backup-chain complexity - each profile owns its own backup keys independently.
-- Profile inheritance can be changed while a profile is active: the CLI automatically unapplies, updates inheritance, and re-applies the profile with the new resolved variable set
-- Profile storage: `%LOCALAPPDATA%\EnvManager\profiles.json`
-- Profile variables override user variables when applied
-- Original values backed up before apply, restored on unapply
-- Profiles only affect user scope
-- `profile status` checks if a profile is correctly applied (mirrors PowerToys `IsCorrectlyApplied()`)
-- `IsProfileApplicable()` validation runs before apply - rejects profiles with invalid variable names (>255 chars, contains `=`)
-- `IsProfileApplicable()` also rejects profiles containing protected system variables (see ProtectedSystemVars below)
-- `ApplyProfile()` skips any protected system variables in the profile variable list
-- `ProfileAddVar()` rejects adding protected system variables to a profile
-- Variable name validation: user-scope names limited to 255 chars (registry limit), rejects `=` in names
-- Values containing `%` are stored as `REG_EXPAND_SZ` (matches Windows default editor behavior)
-- List-type variables (`PATH`, `PATHEXT`, `PSMODULEPATH`, `_NT_SYMBOL_PATH`, etc.) are detected for list-style editing
-
-### Extended State and Safety Contracts
-
-- `set` refuses to overwrite a different existing value unless `--overwrite` is explicit. GUI confirmation supplies this flag.
-- `rename` writes and verifies the target before deleting the source. GUI renames must use this command, never delete-then-set.
-- All writes acquire the cross-process `Local\EnvManager.RegistryMutation` mutex. Rust and frontend locks are additional in-process layers.
-- Audit history is stored at `%LOCALAPPDATA%\EnvManager\audit.json`, capped at 2,000 entries. Undo refuses stale changes unless `--force` is explicit.
-- Bulk JSON/.env/CSV imports run a dry-run conflict preview in the GUI and roll back every write if any item fails verification.
-- Profiles may inherit other profiles. Cycles and missing parents are rejected; child variables override parent variables.
-- Profile PATH fragments append unique entries to user PATH and use the same backup chain as variables.
-- Applied profiles record `appliedAt`. Overlapping profiles must be unapplied in reverse application order; unsafe unapply is rejected.
-- Inheritance and PATH fragments cannot change while a profile is active. GUI controls must expose the same disabled state.
-- `profiles.json` is atomically replaced, backed up to `profiles.json.bak`, and recovered from a valid backup after JSON corruption.
-- CLI/Rust logs record command names and argument counts, never argument values. Environment values may contain credentials.
-### Variable Toggle (Enable/Disable)
-
-Variables can be toggled on/off without deleting them. When disabled:
-- The original value is backed up to a registry key named `<name>_EnvManager_disabled`
-- The original variable is deleted from the active environment
-- The `list` command shows disabled variables with `isDisabled: true` and their backed-up value
-- Re-enabling restores the original value and deletes the backup key
-
-This mirrors PowerToys' approach of preserving variable data while deactivating it.
-
-**Safety**: The toggle operation verifies backup write success before deleting the original. If the backup fails, the original variable is preserved unchanged.
-
-**GUI optimistic update**: The GUI uses an optimistic UI pattern for toggle --
-the slider flips immediately on click, before the CLI response arrives. If the
-CLI operation fails, the slider reverts to its previous state. This gives instant
-visual feedback without the jarring full-list refresh that previously occurred.
-
-**Delete cleanup**: When `delete` is called on a disabled variable, the CLI also
-removes the corresponding `_EnvManager_disabled` backup key and any
-`_PowerToys_<profileName>` profile backup keys for that variable name. This prevents
-orphaned registry entries from accumulating.
-
-### Path Editor
-
-PATH variable edited as a list of directory entries. Entries can be added, removed, and reordered. Supports both user and system scopes.
-
-Duplicate removal is available via `path dedupe` (mirrors PowerToys issue #40402 'Remove duplicates from PATH'). The CLI preserves the first occurrence of each entry (case-insensitive `OrdinalIgnoreCase` matching) and never removes protected PATH entries, so the built-in Windows system paths cannot be silently dropped by a dedupe. A `--dry-run` flag reports what would be removed without modifying the registry. The GUI PathEditor exposes this as two toolbar buttons: a dry-run preview (eyeball icon) and a destructive execute (trash icon). Both go through the routing rules above (`--dry-run` is read-locked, the real run is write-locked).
-
----
-
-## IPC Bridge
-
-The Rust layer (`main.rs`) exposes two Tauri commands:
-
-- `run_cli(command: String, args: Vec<String>) -> CliResponse` - Spawns the CLI subprocess, returns `{ success, data, error }`.
-- `cli_diagnostics() -> serde_json::Value` - Returns resolved CLI path, GUI exe directory, and CWD for debugging.
-
-### Cross-View Refresh
-
-The `refreshTrigger` store in `stores.ts` is a counter that increments when the header refresh
-button is clicked. Each page component (Variables, ProfilePage, PathEditor) subscribes to it via a
-reactive statement (`$: if ($refreshTrigger > 0) { refresh() }`) and re-fetches its data. This
-ensures the current view's data is refreshed regardless of which page is active.
-
-The `SettingsDialog` also dispatches a `pathChanged` event after CLI PATH changes, which `App.svelte`
-intercepts to increment `refreshTrigger` and call `listVariables()`. This ensures the PathEditor
-and all other views update immediately after adding/removing CLI from PATH.
-
-### Race Condition Prevention
-
-The Rust IPC layer uses a `static CLI_RWLOCK: RwLock<()>` to implement read/write lock separation:
-
-- **Read commands** (`list`, `get`, `backup`, `diff`, `validate`, `agents`, `profile list/show/status`, `path list`, `path dedupe --dry-run`) acquire a **read lock** that allows concurrent execution. Multiple read operations can run in parallel without blocking each other.
-- **Write commands** (`set`, `delete`, `toggle`, `restore`, `merge`, `profile create/delete/apply/unapply/add-var/remove-var/edit-var`, `path add/remove/move-up/move-down/rename/dedupe`) acquire a **write lock** that is exclusive. Only one write can run at a time, and no read can interleave with a write.
-
-This means:
-- Concurrent reads (e.g. loading variables list + loading profiles) run in parallel, improving responsiveness.
-- All mutations are serialized, preventing race conditions where a read could see a partial mutation.
-
-The frontend also serializes write operations via a `writeChain` promise in `api.ts`. This ensures that even if a user double-clicks a button, the write operations execute in order rather than racing. Read operations (`runRead()`) are not serialized on the frontend side, allowing them to fire concurrently.
-
-The `is_read_only()` function in `main.rs` determines the lock type by inspecting both the command and its first argument (subcommand for `profile` and `path`).
-
-### System Tray
-
-The GUI creates a system tray icon on startup. Features:
-- Closing the main window hides it to tray instead of exiting
-- Double-clicking the tray icon restores the window
-- Right-click context menu: Show, Quit
-- The tray tooltip is "Env Manager"
-
-This is implemented in `main.rs` using Tauri 2's `tray::TrayIconBuilder`.
-
-**i18n Sync**: The tray menu text and tooltip are dynamically updated when the user
-changes the GUI language. The frontend calls `updateTrayLocale(showText, quitText, tooltip)`
-which rebuilds the tray menu with translated strings. This ensures the right-click
-context menu matches the GUI locale.
-
-### Toast Notification System
-
-All transient feedback messages (copy confirmation, action success/errors) use a **global toast store** (`showToast()` in `stores.ts`) rendered once in `App.svelte` as `fixed`-position overlays with `pointer-events-none` and `z-[60]`. No component renders its own toast. This ensures they appear on top of content without causing layout shifts or interfering with clicks. Toasts auto-dismiss after 3s (configurable) and can be clicked to dismiss early.
-
-### Frontend Caching Mechanism
-
-The GUI implements a multi-layer caching strategy for production-scale environments with thousands of environment variables:
-
-1. **Debounced search** (`debouncedSearch` store in `stores.ts`): Search input is debounced by 150ms before triggering filter recompute. This prevents re-running the `filteredVariables` derived store on every keystroke. Without this, typing in the search box with 10,000+ variables would cause noticeable UI lag.
-
-2. **TTL-based `listVariablesRaw` cache** (`api.ts`): Secondary surfaces (e.g. ProtectionPage) fetch variables via `listVariablesRaw()` which caches the result for 5 seconds. This avoids redundant CLI `list` calls when switching between pages. Pass `force=true` to bypass the cache (used after mutations).
-
-3. **Derived `filteredVariables` store** (`stores.ts`): The `derived` store memoizes the scope+search filter. It only recomputes when `$variables`, `$selectedScope`, or `$debouncedSearch` change -- not on every unrelated component update. This is the primary mechanism preventing O(N) filter passes from running on every render cycle.
-
-4. **LRU-capped `expandedValues`** (`Variables.svelte`): The `%VAR%` expansion preview cache is capped at 500 entries. When the cap is reached, the oldest entry is evicted in FIFO order. This prevents unbounded memory growth from hover-preview caching when scrolling through large variable lists.
-
-5. **Debug log cap** (`addDebugLog` in `stores.ts`): Debug logs are capped at 200 entries. Older entries are sliced off. This prevents the debug log array from growing unboundedly during long sessions.
-
-6. **Write-through cache invalidation** (`invalidateApiCache` in `api.ts`): After any write operation completes, `runWriteOperation` calls `invalidateApiCache()` which resets the variables cache timestamp and clears the PATH entries cache. This ensures secondary pages (ProtectionPage, etc.) always see fresh data after a mutation, without needing `force=true` on every read.
-
-7. **PATH entries cache** (`pathEntriesCache` in `api.ts`): `listPathEntries` now caches results per-scope (user/system) with the same 5-second TTL as the variables cache. ProtectionPage and PathEditor benefit from this when switching scopes, avoiding redundant CLI `path list` invocations.
-
-8. **ProtectionPage cached reads**: ProtectionPage's `refresh()` now uses `listVariablesRaw()` (cached) instead of `listVariablesRaw(true)` (force). Caches are automatically invalidated after writes, so the data is always fresh without redundant CLI calls on every page switch.
-
-### Auto-Update
-
-The application checks for updates via the GitHub Releases API.
-
-**GUI**: The Settings dialog has a "Check for Updates" button. Clicking it invokes `check_for_updates` Tauri command in `main.rs`, which uses PowerShell `Invoke-RestMethod` to query `https://api.github.com/repos/Xxx91n/env-manager/releases/latest`. The response is parsed in Rust, compared against the current version, and returned to the frontend. If a newer version exists, a download link to the release page is shown. The check is triggered manually by the user - no background polling.
-
-**CLI**: The `update check` command uses `System.Net.Http.HttpClient` to query the same GitHub Releases API. Output is JSON with `currentVersion`, `latestVersion`, `isUpdateAvailable`, and `releaseUrl`. This command is read-only and safe for concurrent execution.
-
-**Standalone CLI package**: The build system produces `release/cli-only/` containing only the CLI binary and its runtime dependencies (DLLs, JSON config, AGENTS.cli.md) - no GUI. This allows users who only need the CLI to download a smaller package. Mode detection: the CLI can detect whether a GUI exe exists in the same directory by checking for `env-manager.exe` alongside `env-manager-cli.exe`. If no GUI exe is found, it operates in standalone CLI mode.
-
-### Security Hardening (Audit Findings)
-
-The following guards were added after a full security audit of CLI, Rust IPC, and GUI layers:
-
-1. **`DeleteVariableWithoutNotify` guard**: Previously, this internal function had no `IsProtectedVariable` check. A bulk import rollback could delete a protected system variable whose original value was null (because rollback calls `DeleteVariableWithoutNotify` when `original == null`). Now all internal delete paths respect the protection list.
-
-2. **`RunToggle` entry guard**: Toggle creates a backup key then deletes the original. If the original is protected, `DeleteVariableWithoutNotify` would silently skip the delete (after the guard fix), leaving the backup key AND the original -- inconsistent state. Now `RunToggle` rejects protected variables at the entry point before any registry mutation.
-
-3. **`RestoreBackup` explicit skip reporting**: `RestoreBackup` calls `SetVariable`, which internally rejects protected variables. Previously this was a silent failure -- the user saw "Restored N variables" without knowing some were skipped. Now it reports skipped count and logs each skipped variable name to stderr.
-
-4. **Path traversal protection** (existing, verified): `ValidateFilePath` rejects non-`.json` extensions and blocks writes to `\Windows`, `\Program Files`, `\Program Files (x86)`. This prevents path traversal attacks via crafted backup file paths.
-
-5. **Rust IPC input validation** (existing, verified): `validate_cli_input` enforces command whitelist, max 64 args, max 32,767 chars per arg, null byte rejection, and control character rejection. This prevents argument injection, buffer exhaustion DoS, and terminal injection.
-
-6. **Mutex-based cross-process locking** (existing, verified): All write operations acquire `Local\EnvManager.RegistryMutation` mutex in the CLI, plus `CLI_RWLOCK` write lock in Rust, plus `writeChain` serialization in the frontend. Three layers of protection prevent concurrent mutations.
-
-7. **`RunRename` and `RunChangeScope` entry guards**: After the `DeleteVariableWithoutNotify` guard (#1) was added, renaming a protected variable could have left the registry inconsistent: `SetVariableWithoutNotify(newName)` would succeed while `DeleteVariableWithoutNotify(oldName)` was silently blocked by the internal protected-variable guard. Now both `RunRename` (on `oldName` AND `newName`) and `RunChangeScope` (on the source scope AND target scope) reject protected variables at the entry point, before any registry mutation. `RunChangeScope` also relocates any `_EnvManager_disabled` toggle-backup key from the source scope to the target scope so the disable state follows the variable. Reordering PATH entries (move-up / move-down) intentionally remains unprotected because reordering data is never destructive.
-
-### Internal Modal Dialog System
-
-The GUI uses an internal Svelte store-based modal system instead of browser `confirm()`/`alert()`. The `modal` writable store in `stores.ts` holds the current `ModalConfig`. The `ConfirmDialog.svelte` component renders globally in `App.svelte`. All confirmation dialogs (delete variable, delete profile, etc.) use `showModal()` from `stores.ts`.
-
-### CLI Path Resolution and Auto-Update
-
-The `update` command is classified as read-only in the Rust IPC layer (listed in both `ALLOWED_COMMANDS` and `READ_COMMANDS`), allowing concurrent execution with other read operations.
-
-### CLI path resolution order:
-1. Tauri resource directory (`BaseDirectory::Resource`) - production MSI install
-2. Adjacent to GUI exe - portable distribution
-3. Dev mode relative paths - `../../../../bin/Release/net10.0/`
-4. Current working directory
-5. PATH fallback (`where env-manager-cli.exe`)
-
----
+1. Always use `--scope user` for non-interactive workflows. System scope requires elevation and may fail silently.
+2. Call `agents --json` first to discover the full command contract, safety boundaries, and async support.
+3. Read commands are safe to batch concurrently. Write commands are serialized - do not fire multiple writes in parallel.
+4. Never delete critical system variables. Always backup first.
+5. Profile names: 1-255 chars, no null bytes, newlines, carriage returns. Variable names in profiles: no `=`.
+6. Backup files: `.json` extension, not in system directories, under 50 MB.
 
 ## i18n (Internationalization)
 
-The GUI supports 10 languages: English (en), Chinese (zh), Japanese (ja), Korean (ko), German (de), French (fr), Spanish (es), Portuguese (pt), Russian (ru), Arabic (ar).
+10 languages: en, zh, ja, ko, de, fr, es, pt, ru, ar. Engine: `svelte-i18n` (ICU MessageFormat).
 
-### Rule: i18n sync is mandatory
+**i18n sync is mandatory when adding any new user-facing string** (button label, message, dialog text, error):
+1. Add the key to `frontend/src/lib/translations/en.json` (the reference).
+2. Add the same key with translated value to ALL other 9 translation files.
+3. Use `$t('key')` in Svelte components - never hardcode display text.
+4. Register any new locale in `frontend/src/lib/i18n.ts` (both `register()` call and `supportedLocales` array).
 
-When adding any new user-facing string (button label, message, dialog text, error), you must:
+ICU caveat: single quotes `'` are escape characters. Never wrap a `{placeholder}` in single quotes - `'{name}'` produces the literal text `{name}`. Use bare `{name}` or double single quotes `''` for a literal quote.
 
-**ICU MessageFormat caveat**: The translation engine is `svelte-i18n` which uses
-`IntlMessageFormat` (ICU MessageFormat). In ICU, single quotes `'` are escape
-characters. **Never wrap a `{placeholder}` in single quotes** in translation
-strings -- `'{name}'` produces the literal text `{name}`, not the interpolated value.
-Use bare `{name}` or use double single quotes `''` to emit a literal quote.
-
-When adding any new user-facing string (button label, message, dialog text, error), you must:
-
-1. Add the key to `frontend/src/lib/translations/en.json` (the reference)
-2. Add the same key with translated value to ALL other translation files in `frontend/src/lib/translations/`
-3. Use `$t('key')` in Svelte components - never hardcode display text
-4. Register any new locale in `frontend/src/lib/i18n.ts` (both `register()` call and `supportedLocales` array)
-
-The default locale (en) is loaded synchronously via `addMessages()` to ensure the UI renders immediately under Tauri's custom protocol. Other locales load lazily via dynamic import.
-
----
-
-## Backup JSON Format
-
-```json
-{
-  "timestamp": "2026-07-10T12:34:56Z",
-  "version": "1.0.0",
-  "variables": [
-    {
-      "name": "PATH",
-      "value": "C:\\Windows\\System32;...",
-      "scope": "user"
-    }
-  ]
-}
-```
-
-- `timestamp`: RFC3339 / ISO 8601, UTC
-- `version`: Semantic version (currently "1.0.0")
-- `variables`: Array of `{ name, value, scope }`, may be empty
-- `scope`: Must be "user" or "system"
-
-## Profile JSON Format
-
-Profiles are stored at `%LOCALAPPDATA%\EnvManager\profiles.json`:
-
-```json
-[
-  {
-    "id": "uuid-string",
-    "name": "dev-profile",
-    "isEnabled": false,
-    "variables": [
-      { "name": "JAVA_HOME", "value": "C:\\Program Files\\Java\\jdk-21" }
-    ]
-  }
-]
-```
-
-- `id`: Unique identifier (GUID)
-- `name`: Profile name (unique)
-- `isEnabled`: Whether the profile is currently applied
-- `variables`: Array of `{ name, value }` pairs
-- When applied, original user variable values are backed up as `name_PowerToys_<profileName>`
-  (Note: the backup key prefix uses `_PowerToys_` for compatibility with the PowerToys naming convention.
-  `ListEnvironment` skips any key containing `_PowerToys_` so these don't appear as regular variables.)
-- **Profile source attribution**: `ListEnvironment` annotates variables that were applied from a profile
-  by setting `profileSource` to the profile name. The GUI shows a badge next to the variable name
-  indicating which profile it came from. This helps users distinguish profile-applied variables
-  from manually-set ones.
-- **Profile drag-to-reorder**: The GUI Profile page supports pointer-event-based drag-and-drop to reorder profiles (uses `pointerdown`/`pointerenter`/`pointerup` instead of HTML5 DnD, which WebView2/Tauri intercepts at the OS level causing a forbidden cursor). The order is persisted in `localStorage` as `envManager_profileOrder` and applied via `applyStoredOrder()` after `listProfiles()`. This is GUI-only sorting - no CLI calls, no profile data modification. Each profile card has a drag handle with a grab cursor.
-
----
+Default locale (en) loads synchronously via `addMessages()` so the UI renders under Tauri's custom protocol. Other locales load lazily.
 
 ## Testing
 
-### Test framework
-
-Frontend unit tests use Vitest with jsdom environment. Tests live alongside source files as `*.test.ts`. The test setup file at `frontend/tests/setup.ts` provides global mocks for `@tauri-apps/api/core` `invoke` and `svelte-i18n`.
+Frontend unit tests use Vitest with jsdom. Tests live alongside source as `*.test.ts`. Setup at `frontend/tests/setup.ts` mocks `@tauri-apps/api/core` `invoke` and `svelte-i18n`.
 
 ```powershell
 cd frontend
@@ -533,102 +114,52 @@ npm run test:coverage   # With coverage report
 npm run test:e2e        # Playwright E2E tests
 ```
 
-### Mandatory testing rules
+Mandatory rules:
+1. **Before every commit**: `npx vitest run` from `frontend/`, all tests must pass.
+2. **New feature = new tests**: new CLI command, GUI component, store, API function, or i18n key must add unit test coverage in the same commit.
+3. **i18n key completeness**: `src/lib/translations.test.ts` validates every `en.json` key exists in all 9 non-English files with non-empty values.
+4. **Build verification after code changes**: run `powershell -NoProfile -ExecutionPolicy Bypass -File frontend/scripts/build-all.ps1` and verify `release/portable/env-manager.exe` launches. Do not commit code that breaks the build. See [docs/build-and-release.md](docs/build-and-release.md).
+5. **No emoji in tests** - same no-emoji rule as the rest of the project.
 
-1. **Before every commit**: run `npx vitest run` from `frontend/` and ensure all tests pass. A commit with failing tests is considered incomplete.
-2. **New feature = new tests**: any new CLI command, GUI component, store, API function, or i18n key must have corresponding unit test coverage added in the same commit.
-3. **i18n key completeness**: `src/lib/translations.test.ts` validates that every key in `en.json` exists in all 9 non-English translation files with non-empty values. Adding a key to `en.json` without adding it to all other files will fail the test.
-4. **Build verification after code changes**: after modifying code on the local machine, you must compile the release build to verify the full pipeline works. Run `powershell -ExecutionPolicy Bypass -File frontend/scripts/build-all.ps1` and verify `release/portable/env-manager.exe` launches successfully. Do not commit code that breaks the build.
-5. **No emoji in tests**: test names and assertions follow the same no-emoji rule as the rest of the project.
-
-### Test file inventory
+Test file inventory:
 
 | File | Coverage |
 |------|----------|
 | `src/App.test.ts` | Root component rendering, navigation |
-| `src/lib/stores.test.ts` | All Svelte stores (variables, loading, error, scope filter, search, settings) |
-| `src/lib/api.test.ts` | Tauri IPC bridge, all CLI command invocations, response parsing |
-| `src/lib/i18n.test.ts` | Locale registration, default locale, setup function, localStorage persistence |
+| `src/lib/stores.test.ts` | Svelte stores (variables, loading, error, scope, search, settings) |
+| `src/lib/api.test.ts` | Tauri IPC bridge, CLI command invocations, response parsing |
+| `src/lib/i18n.test.ts` | Locale registration, default locale, localStorage persistence |
 | `src/lib/translations.test.ts` | Translation key completeness across all 10 locales |
 | `src/lib/race.test.ts` | CLI/GUI race condition prevention, toggle safety, rapid toggle serialization |
 | `src/lib/sync.test.ts` | CLI/GUI state synchronization, mutation triggers refresh, error store lifecycle |
-| `src/lib/debug.test.ts` | Debug logging system, log entry management, 200-entry cap (memory leak prevention), isWriteInProgress tracking |
-| `src/lib/profile-drag.test.ts` | Profile drag-to-reorder logic, performReorder, applyStoredOrder, localStorage persistence |
-| `src/lib/multi-profile.test.ts` | Single-profile policy verification, backup/restore, protected variable rejection |
-| `src/lib/change-scope-protection-profile.test.ts` | change-scope CLI invocation/args, protected-variable rejection, profile audit record + undo, profile-entry retrieval from history |
-| `src/lib/path-dedupe.test.ts` | dedupePathEntries CLI args (dry-run, user/system, default), result shape, CLI failure propagation |
----
-
-## CodeGraph
-
-The project uses [CodeGraph](https://github.com/nicholasgriffintn/codegraph) for code navigation and indexing.
-
-- Index is stored in `.codegraph/` (gitignored, regenerated per machine)
-- Initialize: `codegraph init` (scans and indexes all source files)
-- The index enables fast symbol lookup, reference finding, and dependency analysis
-- Agents should use `codegraph` for code navigation when available, but it is not required for development
-- The index is machine-local and never committed to git
+| `src/lib/debug.test.ts` | Debug logging, 200-entry cap, isWriteInProgress tracking |
+| `src/lib/profile-drag.test.ts` | Profile drag-to-reorder, performReorder, applyStoredOrder, localStorage persistence |
+| `src/lib/multi-profile.test.ts` | Single-profile policy, backup/restore, protected variable rejection |
+| `src/lib/change-scope-protection-profile.test.ts` | change-scope CLI args, protected-variable rejection, profile audit record + undo |
+| `src/lib/path-dedupe.test.ts` | dedupePathEntries CLI args (dry-run, scope), result shape, failure propagation |
+| `src/lib/review-regressions.test.ts` | Code-review invariants: EditDialog 3-way save ordering, toggle on protected, path dedupe protected isolation, change-scope ambiguous-scope rejection, profile audit fail-loud |
 
 ## Coding Standards
 
-### C#
+- **C#**: 4-space indent, 120 char max line, `using` for Registry keys, catch specific exceptions (no empty catch), explicit types on public API, `var` for locals.
+- **TypeScript/Svelte**: 2-space indent, strict mode, no implicit any, JSDoc on exports, `$:` reactive syntax, props validation.
+- **Rust**: 4-space indent, `log` crate macros for diagnostics, `#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]` to hide console in release.
+- **No emoji** in source, tests, docs, or commit messages.
+- **Font size scaling**: 6 presets (85%-160%) in Settings, applied via `document.documentElement.style.fontSize = 13 * scale + px`, CSS rem units throughout, persisted as `fontScale` in localStorage.
+- **Add CLI to PATH**: Settings dialog one-click button. Calls `cli_diagnostics` to resolve CLI path (no hardcoding), extracts dir, checks for duplicates in user PATH, adds via `path add`. Implemented as `addCliToPath()` in `api.ts`.
 
-- 4-space indentation
-- Max line length: 120 characters
-- Use `using` statements for Registry keys
-- Catch specific exceptions, never empty catch blocks
-- Explicit types on public API, `var` for locals
+## File encoding
 
-### Font Size Scaling
-
-The GUI supports a font size scale setting in the Settings dialog. Users can choose from
-6 presets: Small (85%), Normal (100%), Large (115%), Extra Large (130%), XX-Large (145%), XXX-Large (160%). The scale is
-applied by setting `document.documentElement.style.fontSize` to `13 * scale + 'px'`.
-This uses CSS rem units throughout the app, so all text scales proportionally.
-The setting persists in `localStorage` as `fontScale`.
-
-### Add CLI to PATH
-
-The GUI Settings dialog includes a one-click "Add CLI to PATH" button that:
-1. Calls `cli_diagnostics` to resolve the actual CLI executable path (no hardcoding)
-2. Extracts the directory from the resolved path
-3. Checks if the directory is already in user PATH (prevents duplicates/infinite loops)
-4. If not present, adds it via `path add` CLI command
-5. Reports success or the reason for skipping
-
-This feature is implemented in `api.ts` as `addCliToPath()` and exposed in `SettingsDialog.svelte`.
-
-### TypeScript / Svelte
-
-- 2-space indentation
-- Strict mode, no implicit any
-- All exports documented with JSDoc
-- Reactive statements use `$:` syntax
-- Components use props validation
-
-### Rust
-
-- 4-space indentation
-- Use `log` crate macros (`info!`, `warn!`, `error!`) for diagnostics
-- `#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]` to hide console in release
-
-### File encoding
-
-- All files: UTF-8 without BOM
-- Line endings: canonical policy is enforced by `.gitattributes` at the repo root
-  - Default text: LF on disk and in index
-  - Windows-native scripts (`.bat`, `.ps1`, `.cmd`): CRLF
-  - Binary assets (`.png`, `.ico`, `.icns`, `.jpg`, `.jpeg`, `.gif`, `.webp`, `.exe`, `.dll`, `.node`, `.pdb`, `.msi`, `.so`, `.dylib`): marked `binary`, never normalized
+- All files: UTF-8 without BOM.
+- Line endings: enforced by `.gitattributes` at repo root. Default text: LF on disk and in index. Windows-native scripts (`.bat`, `.ps1`, `.cmd`): CRLF. Binary assets (`png`, `ico`, `exe`, `dll`, `msi`, etc.): marked `binary`, never normalized.
 - `core.autocrlf` is `false` at the repo level. Do not re-enable it.
-- `frontend/node_modules/` is gitignored; never tracked. If tracked files appear, run `git rm -r --cached frontend/node_modules` and commit.
-- After any `.gitattributes` change, run `git add --renormalize .` and commit the line-ending-only diff.
-- `apply_patch` does byte-exact matching. If a patch fails for context that looks identical, suspect CRLF/LF mismatch on disk and re-inspect the target region before retrying. Never write a file with mixed line endings (both `\r\n` and lone `\n`).
-
----
+- `frontend/node_modules/` is gitignored; never tracked. If tracked files appear: `git rm -r --cached frontend/node_modules` and commit.
+- After any `.gitattributes` change: `git add --renormalize .` and commit the line-ending-only diff.
+- `apply_patch` does byte-exact matching. If a patch fails for context that looks identical, suspect CRLF/LF mismatch on disk and re-inspect the target region before retrying. Never write a file with mixed line endings.
 
 ## Commit Convention
 
-Use Conventional Commits:
+Conventional Commits:
 
 ```
 <type>(<scope>): <subject>
@@ -637,369 +168,61 @@ Use Conventional Commits:
 ```
 
 Types: `feat`, `fix`, `docs`, `refactor`, `test`, `perf`, `chore`
-
 Scopes: `cli`, `gui`, `backup`, `registry`, `i18n`, `docs`, `build`
-
----
-
-## Dependencies
-
-### C# (.NET)
-
-| Package | Purpose |
-|---------|---------|
-| Spectre.Console 0.49.1 | CLI table formatting |
-
-### npm
-
-| Package | Purpose |
-|---------|---------|
-| @tauri-apps/api 2.x | Tauri IPC |
-| @tauri-apps/cli 2.x | Tauri build tooling |
-| svelte 4.x | UI framework |
-| svelte-i18n 4.x | Internationalization |
-| tailwindcss 3.x | CSS framework |
-| vite 5.x | Build tool |
-| typescript 5.x | Type checking |
-| vitest 4.x | Unit test runner |
-| jsdom 25.x | DOM environment for tests |
-| @testing-library/svelte 5.x | Svelte component testing utilities |
-| @playwright/test 1.x | E2E browser testing |
-
-### Cargo (Rust)
-
-| Crate | Purpose |
-|-------|---------|
-| tauri 2.0 | Desktop framework |
-| serde / serde_json | Serialization |
-| log | Logging |
-| tauri-plugin-log | Tauri log integration |
-
----
-
-## Security
-
-- No credential storage - only manages environment variables
-- Direct Registry API via `Microsoft.Win32.Registry`, no COM
-- IPC isolation - CLI runs as a separate subprocess
-- Input length validation (32767 byte limit on variable names/values)
-- Permission separation: user scope needs no elevation, system scope requires administrator
-- `UnauthorizedAccessException` handled explicitly for system scope without elevation
-- Variable name validation: rejects empty names, names >255 chars (user scope), names containing `=`
-- Path traversal protection: backup files must have `.json` extension, writes to system directories blocked
-- Backup file size cap: 50 MB maximum to prevent DoS via large files
-- CLI command whitelist in Rust IPC layer: only known commands can spawn subprocesses (list, get, set, delete, toggle, backup, restore, diff, merge, validate, profile, path, agents, help)
-- Process isolation: CREATE_NO_WINDOW flag prevents console flicker and information leakage
-- **Critical system variable protection (config-driven)**: system-scope modifications to protected variables are blocked in SetVariable, DeleteVariable, and SetVariableWithoutNotify. The built-in ProtectedSystemVars and ProtectedPathEntries are loaded from external editable JSON files in `%LOCALAPPDATA%\EnvManager\builtin-protected-vars.json` and `builtin-protected-paths.json` respectively, created from hardcoded defaults on first run. Users/admins can edit these files to customize which built-in variables and PATH entries are protected without recompiling. The defaults include: PATHEXT, PSMODULEPATH, SystemRoot, windir, ComSpec, TEMP, TMP, USERPROFILE, SystemDrive, ProgramFiles, ProgramFiles(x86), ProgramData, HOMEDRIVE, HOMEPATH, NUMBER_OF_PROCESSORS, OS, PROCESSOR_ARCHITECTURE, PROCESSOR_IDENTIFIER, PROCESSOR_LEVEL, PROCESSOR_REVISION, ALLUSERSPROFILE, APPDATA, COMMONPROGRAMFILES, COMMONPROGRAMFILES(x86), COMPUTERNAME, LOCALAPPDATA, LOGONSERVER, OneDrive, OneDriveConsumer, PUBLIC, SESSIONNAME, USERDOMAIN, USERNAME; and for PATH: `C:\Windows\System32`, `C:\Windows`, `C:\Windows\System32\Wbem`, `C:\Windows\System32\WindowsPowerShell\v1.0\`. PATH as a variable name is NOT in the protected-vars list - it is protected per-entry via ProtectedPathEntries (built-in Windows system paths loaded from the JSON file) plus custom entries stored in `protected-paths.json`. SetPathEntries checks IsProtectedPathEntry before allowing removal of any PATH entry. These are also blocked from being added to profiles via IsProfileApplicable() and ProfileAddVar().
-
-- **Custom protected variables (user-lockable)**: Users can lock any variable via the GUI lock button or CLI `protection add-var`. Locked variables are stored in `%LOCALAPPDATA%\EnvManager\protected-vars.json`. Locked variables cannot be toggled, edited, or deleted. The `list` command annotates each variable with `isProtected` (true if protected by built-in or custom rules) and `isBuiltinProtected` (true only if protected by hardcoded built-in rules, not user locks). Built-in protected variable (system scope) cannot be unlocked; custom locks can be removed via `protection remove-var`.
-- **Path Editor lock buttons**: PATH entries can be locked/unlocked via the GUI lock button or CLI `protection add-path`/`remove-path`. Locked PATH entries are grayed out and their move/remove buttons are disabled. Built-in protected PATH entries (e.g. `C:\Windows\System32`) cannot be unlocked; custom locks can be removed.
-- **Protection page layout**: The protection page has two tabs (Protected Variables / Protected PATH Entries) and a shared scope filter (`all`/`user`/`system`, defaulted from the global `selectedScope` store). Each tab renders the **add-from-existing selector at the top**, then the built-in protected list in the middle, then the custom (user-locked) list at the bottom. Custom variables can only be added from a dropdown of existing variables (loaded via `listVariablesRaw`, filtered by the selected scope); custom PATH entries can only be added from a dropdown of existing user+system PATH entries (filtered by the selected scope). When scope is set to `user`, the built-in variable list renders a placeholder explaining built-in protection only applies to system scope.
-- **Toggle backup name collision prevention**: variables whose name ends with `_EnvManager_disabled` cannot be toggled, preventing backup key confusion
-- **Profile name validation**: rejects empty/whitespace names, names >255 chars, names with null/newline/carriage-return chars
-- **Profile variable name validation**: rejects empty names, names >255 chars, names containing `=`
-- **PathAdd directory validation**: rejects empty paths, null bytes, paths exceeding max length (for direct CLI usage)
-- **PathRename injection prevention**: validates new directory for empty values, null bytes, duplicates, max length
-- **Path total length validation**: SetPathEntries rejects PATH values exceeding 32767 chars before writing
-- **DiffBackups/MergeBackups file size validation**: both input files checked against 50 MB cap before deserialization (OOM prevention)
-- **ListEnvironment O(n) optimization**: GetValueNames() cached in a HashSet instead of called per-variable (was O(n^2))
-- **BroadcastSettingChange timeout reduced**: 500ms instead of 1000ms to prevent CLI exit delays
-- **RunToggle null-scope crash fix**: ParseScope null return now properly checked before dereference
-- **Control character rejection** in Rust IPC layer: rejects args containing control characters (prevents terminal injection)
-- **Read/write lock separation** in Rust IPC: read commands share a read lock (concurrent), write commands use an exclusive write lock
-- **Frontend write serialization**: writeChain in api.ts serializes all write operations to prevent UI-level races (double-click, rapid actions)
-
-### Agent Safety Guidelines
-
-When an AI agent uses the CLI directly:
-
-1. **Always use `--scope user`** for non-interactive workflows. System scope requires elevation and may fail silently.
-2. **Call `agents --json` first** to discover the full command contract, safety boundaries, and async support per command.
-3. **Read commands are safe to batch** (list, get, backup, diff, validate, agents, profile list/show/status, path list). They acquire a read lock and can run concurrently.
-4. **Write commands are serialized**. Do not fire multiple write commands in parallel - they will queue and execute in order, which may cause unexpected delays.
-5. **Never delete critical system variables**. The CLI blocks system-scope modifications to protected variables, but user-scope PATH deletion is allowed and could break the agent's own environment. Always backup first.
-6. **Profile names must be 1-255 chars** with no null bytes, newlines, or carriage returns. Variable names in profiles must not contain `=`.
-7. **Backup files must have `.json` extension** and cannot be in system directories. Files exceeding 50 MB are rejected.
-
----
-
-## Agent Integration
-
-### CLI Agents Command
-
-The CLI exposes an `agents` command that outputs the CLI-level AGENTS.md specification:
-- `env-manager-cli agents` - Outputs the full AGENTS.cli.md content to stdout
-- `env-manager-cli agents --path` - Outputs the file path of AGENTS.cli.md
-
-This follows the industry pattern where CLI tools expose a machine-readable specification
-file that AI agents and LLMs can read to understand the tool's API, safety boundaries,
-and integration patterns. After first invoking the CLI, agents should call `agents` to
-discover the full contract.
-
-### CLI-Level AGENTS.md
-
-`AGENTS.cli.md` is distributed alongside the CLI binary in both portable and MSI
-installations. It is bundled as a Tauri resource and resolved at runtime via
-`AppContext.BaseDirectory`. The file contains:
-- Command reference (all commands with examples)
-- Output format specification (JSON schemas)
-- Security boundaries and validation rules
-- Error handling conventions
-- Agent integration tips
-
-### GUI Agents API
-
-The frontend exposes `getCliAgentsSpec()` and `getCliAgentsPath()` in `api.ts`
-for programmatic access to the CLI specification from the GUI.
-
-## How to Add a New CLI Command
-
-1. Add a `case` in `Program.cs` `Main()` switch statement
-2. Implement the command method
-3. Update `ShowHelp()` with usage text
-4. Document the command in this file (CLI Command Specification table)
-5. Update `README.md` and `README_CN.md`
-6. Add integration test coverage
-
----
-
-## How to Modify the GUI
-
-1. Edit `.svelte` files in `frontend/src/lib/components/`
-2. Run `npm run tauri-dev` for live preview
-3. Add any new display strings to ALL translation files (see i18n section)
-4. Update this file if the component structure changes
-5. Add component tests
-
----
 
 ## Mandatory Build After Code Changes
 
-**Every commit that modifies CLI, GUI, or build code MUST produce compiled artifacts in `release/` before pushing.**
-
-Run the consolidated build after any code change:
+Every commit that modifies CLI, GUI, or build code MUST produce compiled artifacts in `release/` before pushing. See [docs/build-and-release.md](docs/build-and-release.md) for the full build procedure, prerequisites, output layout, and release steps.
 
 ```powershell
+Get-Process -Name 'env-manager*' -ErrorAction SilentlyContinue | Stop-Process -Force
 cd frontend
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build-all.ps1
 ```
 
-Verify the output:
-- `release/portable/env-manager.exe` - GUI executable
-- `release/portable/env-manager-cli.exe` - CLI backend
-- `release/msi/Env Manager_X.Y.Z_x64.msi` - MSI installer
-
-A commit that does not produce working `release/` artifacts is considered incomplete. The `release/` directory is gitignored - artifacts are for local testing only, not committed to git.
-
----
-
-## How to Release
-
-1. Update version in `env-manager.csproj`, `frontend/package.json`, `frontend/src-tauri/tauri.conf.json`, `frontend/src-tauri/Cargo.toml`
-2. Update `README.md` and `README_CN.md` if features changed
-3. Update this file if structure or commands changed
-4. Run `powershell -ExecutionPolicy Bypass -File frontend/scripts/build-all.ps1`
-5. Verify `release/portable/env-manager.exe` launches and shows variables
-6. Verify MSI installs and the app works
-7. Commit: `chore: release vX.Y.Z`
-8. Tag: `git tag vX.Y.Z`
-9. Push: `git push origin main --tags`
-
----
-
-## GUI/CLI Alignment
-
-**WARNING: When adding or changing GUI features, you MUST verify the CLI has matching support.**
-
-The GUI communicates with the CLI exclusively through `invoke('run_cli', { command, args })`. Every GUI action maps to a CLI command. If a GUI feature is added without CLI support, it will fail at runtime with "Unknown command".
-
-### Current Alignment Status (v0.5.0)
-
-| GUI Feature | CLI Command | API Function | Aligned |
-|---|---|---|---|
-| List variables | `list` | `listVariables()` | Yes |
-| Get variable | `get` | `getVariable()` | Yes |
-| Set variable | `set` | `setVariable()` | Yes |
-| Delete variable | `delete` | `deleteVariable()` | Yes |
-| Toggle variable | `toggle` | `toggleVariable()` | Yes |
-| Backup | `backup` | `createBackup()` | Yes |
-| Restore | `restore` | `restoreBackup()` | Yes |
-| Profile list | `profile list` | `listProfiles()` | Yes |
-| Profile create | `profile create` | `createProfile()` | Yes |
-| Profile delete | `profile delete` | `deleteProfile()` | Yes |
-| Profile apply | `profile apply` | `applyProfile()` | Yes |
-| Profile unapply | `profile unapply` | `unapplyProfile()` | Yes |
-| Profile show | `profile show` | `showProfile()` | Yes |
-| Profile add-var | `profile add-var` | `addProfileVar()` | Yes |
-| Profile remove-var | `profile remove-var` | `removeProfileVar()` | Yes |
-| Profile edit-var | `profile edit-var` | `editProfileVar()` | Yes |
-| Profile status | `profile status` | `getProfileStatus()` | Yes |
-| Path list | `path list` | `listPathEntries()` | Yes |
-| Path add | `path add` | `addPathEntry()` | Yes |
-| Path remove | `path remove` | `removePathEntry()` | Yes |
-| Path move-up | `path move-up` | `movePathEntryUp()` | Yes |
-| Path move-down | `path move-down` | `movePathEntryDown()` | Yes |
-| Tray locale sync | `update_tray_locale` | `updateTrayLocale()` | Yes |
-| CLI agents spec | `agents` | `getCliAgentsSpec()` | Yes |
-| Add CLI to PATH | `path add` | `addCliToPath()` | Yes |
-| Profile source annotation | `list` (profileSource field) | N/A (automatic) | Yes |
-| Profile export | `profile export` | `exportProfile()` | Yes |
-| Profile import | `profile import` | `importProfile()` | Yes |
-| Profile rename | `profile rename` | `renameProfile()` | Yes |
-| Rename PATH entry | `path rename` | `renamePathEntry()` | Yes |
-| Dedupe PATH entries | `path dedupe` | `dedupePathEntries()` | Yes |
-| Rename variable | `rename` | `renameVariable()`, `EditDialog` | Yes |
-| Change variable scope | `change-scope` | `changeScope()`, `EditDialog` | Yes |
-| Profile audit history | N/A (automatic) | N/A (automatic) | Yes |
-
-### Variable Rename and Scope Change (GUI)
-
-The GUI EditDialog supports three orthogonal mutations on an existing variable:
-rename, change scope, and value edit. These combine into four paths the
-EditDialog dispatches through `changeScope`, `renameVariable`, and
-`setVariable` API calls (all serialized via the frontend `writeChain` and the
-Rust `RwLock` write lock):
-
-1. **Name changed only** -> `renameVariable(original, name, scope, overwrite)`
-   -> CLI `rename` (writes+verifies target, then deletes source; no delete-then-set race).
-2. **Scope changed only** -> `changeScope` -> CLI `change-scope` (writes to the
-   new hive, verifies, then deletes the source entry; preserves the
-   `_EnvManager_disabled` toggle backup by relocating it as well).
-3. **Scope and name both changed** -> `changeScope(original, scope, oldScope, true)`
-   followed by `renameVariable(original, name, scope, overwrite)` and an
-   optional `setVariable(name, value, scope, true)` if the value also changed.
-4. **Value only** -> `setVariable(name, value, scope, overwrite)`.
-
-The `--overwrite` flag is passed through only when the user explicitly
-confirmed the conflict modal. The EditDialog never silently clobbers an
-existing target-scope variable by injecting a synthetic `true`. If the target
-scope already holds a same-name (case-insensitive) variable, the conflict modal
-fires first and the user must confirm.
-
-**Security**: Both `rename` and `change-scope` share the same protection contract:
-- `IsProtectedVariable(oldName, scope)` is checked at entry; protected variables
-  cannot be renamed or moved out of their scope. This entry guard was added
-  after audit: previously `SetVariableWithoutNotify(newName)` could succeed
-  while `DeleteVariableWithoutNotify(oldName)` was blocked by the internal
-  protected-variable guard, leaving the variable duplicated and the registry in
-  an inconsistent state.
-- `IsProtectedVariable(newName, scope)` is checked for the target slot so a
-  rename or scope-move cannot land on top of a protected variable.
-- Variable name validation: no empty names, no `=`, max 255 chars (user scope).
-- `change-scope` refuses cross-scope name collisions unless `--overwrite` is
-  explicit, mirroring the `rename` contract.
-
-### Profile Audit History
-
-Profile-level mutations (`create`, `delete`, `rename`, `add-var`,
-`remove-var`, `edit-var`) modify `profiles.json` rather than the registry, so
-they bypass the standard snapshot diff the CLI writes for registry mutations
-in `Main()`. They are recorded explicitly via `RecordProfileAudit()` (see
-`ProfileAudit.cs`) so the user can see profile changes in `history list` and
-undo them via `history undo <id>`.
-
-- Audit entries for profile mutations carry `Scope = "profile"` so the GUI and
-  `history` command can distinguish them from registry-level entries.
-- `OldValue` / `NewValue` store a compact JSON summary of the affected profile
-  (`id`, `name`, `isEnabled`, `inherits`, `pathEntries`, `variables`) so an undo
-  restores that profile state without clobbering other profiles.
-- `TryUndoProfileAudit(entry)` in `ProfileAudit.cs` reverses create (delete the
-  profile), delete (re-create from `OldValue`), rename (restore old name),
-  add-var (remove the added variable), remove-var (re-add the removed variable),
-  and edit-var (restore the pre-edit variable). `apply`, `unapply`,
-  `set-inherits`, `add-path`, and `remove-path` are non-undoable no-ops.
-- `RunHistoryCommand` dispatches profile entries to `TryUndoProfileAudit` and
-  registry entries to the stale-value-verified undo path. The two paths never
-  overlap.
-
-### Alignment Checklist
-
-When adding a new GUI feature:
-1. Add the CLI command in `Program.cs`
-2. Add the API function in `frontend/src/lib/api.ts`
-3. Add the command to `ALLOWED_COMMANDS` in `main.rs` (current: list, get, set, rename, change-scope, delete, toggle, backup, restore, diff, merge, validate, help, profile, path, agents, history, bulk, expand, protection, update). Also add write commands to `WRITE_COMMANDS` and read commands to `READ_COMMANDS` as appropriate.
-4. Add UI in the appropriate `.svelte` component
-5. Add i18n strings to ALL translation files
-6. Update the alignment table above
-7. Add test coverage
-
-## Logging and Debugging
-
-### CLI Logging
-
-The CLI supports a `--debug` flag (passable anywhere in args) that enables verbose stderr output with timestamps. Debug log lines use the format `[debug] HH:mm:ss.fff message`. Key instrumented methods:
-
-- `Main()` - logs all args
-- `ListEnvironment()` - logs read operation
-- `GetVariable()` - logs variable name
-- `SetVariable()` - logs name and scope
-- `DeleteVariable()` - logs name and scope
-- `CreateBackup()` / `RestoreBackup()` - logs file paths
-- `ApplyProfile()` / `UnapplyProfile()` - logs profile name
-- `RunPathCommand()` - logs subcommand and args
-
-### Rust Logging
-
-The Tauri shell uses `tauri-plugin-log` at `Info` level. All `run_cli` calls log:
-- Command and args on entry
-- Exit code, stdout/stderr length, and elapsed time on completion
-- stderr content if non-empty
-- Spawn failures with error details
-
-CLI path resolution also logs which method succeeded (resource, adjacent, dev, cwd, PATH).
-
-### Frontend Diagnostics
-
-The `cli_diagnostics` Tauri command returns:
-- `resolved_cli_path` - the CLI exe path that will be used
-- `gui_exe_dir` - directory of the GUI exe
-- `cwd` - current working directory
-
-This is accessible via `getDiagnostics()` in `api.ts` and helps debug "CLI not found" errors.
-
-### Frontend Debug System
-
-The GUI has a frontend-level debug logging system:
-
-- `debugLogs` store in `stores.ts` - holds up to 200 `DebugLogEntry` objects (capped to prevent memory leaks)
-- `addDebugLog()` - adds entries with timestamp, level (info/warn/error/debug), message, and optional command name
-- `clearDebugLogs()` - empties the log store
-- `isWriteInProgress` store - `true` while a write operation is executing (set in `runWriteOperation()` in `api.ts`)
-- `runCommand()` in `api.ts` logs all CLI invocations with timing (ms) and success/error status
-- GUI buttons (nav tabs, refresh) are disabled via `disabled={$isWriteInProgress}` during write operations to prevent UI race conditions
-
-The `isWriteInProgress` store drives button-disable behavior: when a write operation starts, the store is set to `true`, and all navigation buttons and refresh buttons get `disabled` styling (`opacity-50`, `cursor-not-allowed`). When the write completes, the store returns to `false`, re-enabling buttons.
+Verify: `release/portable/env-manager.exe`, `release/portable/env-manager-cli.exe`, `release/cli-only/env-manager-cli.exe`, `release/msi/Env Manager_X.Y.Z_x64.msi` (no locale suffix). The `release/` directory is gitignored - artifacts are for local testing only, not committed to git.
 
 ## Documentation Maintenance
 
+When the project changes, update files in the same commit:
+
 | Event | Files to update |
 |-------|----------------|
-| New CLI command | AGENTS.md, README.md, README_CN.md, GUI/CLI alignment table |
-| Changed command args | AGENTS.md, README.md, README_CN.md |
-| New GUI feature | AGENTS.md, README.md, README_CN.md, all translation files, GUI/CLI alignment table |
-| New debug log point | AGENTS.md (Logging section) |
-| Dependency update | AGENTS.md |
-| Build change | AGENTS.md, README.md, README_CN.md |
+| New CLI command | AGENTS.md (quick reference), docs/cli-commands.md, README.md, README_CN.md, docs/architecture.md alignment table |
+| Changed command args | AGENTS.md, docs/cli-commands.md, README.md, README_CN.md |
+| New GUI feature | AGENTS.md, docs/architecture.md alignment table, README.md, README_CN.md, all 10 translation files |
+| New debug log point | docs/build-and-release.md (Logging section) |
+| Dependency update | docs/build-and-release.md, AGENTS.md if it affects build/architecture |
+| Build change | AGENTS.md, docs/build-and-release.md, README.md, README_CN.md |
 | Directory structure change | AGENTS.md |
-| CodeGraph index change | AGENTS.md (CodeGraph section) |
+| CodeGraph index change | docs/build-and-release.md (CodeGraph section) |
 | Code change (any) | Run build-all.ps1, verify release/ artifacts |
-| New test file | AGENTS.md (test inventory section) |
+| New test file | AGENTS.md (test inventory), docs if it documents new behavior |
+| Architecture/IPC/security change | docs/architecture.md, docs/backup-and-profiles.md, AGENTS.md hard boundaries |
 
-A commit that does not update AGENTS.md when the project has changed is considered incomplete.
+A commit that does not update AGENTS.md (and the relevant `docs/` file) when the project has changed is considered incomplete.
 
----
+## How to Add a New CLI Command
 
-## Performance Targets
+1. Add a `case` in `Program.cs` `Main()` switch statement.
+2. Implement the command method.
+3. Update `ShowHelp()` with usage text.
+4. Add to the command table in [docs/cli-commands.md](docs/cli-commands.md) and the quick reference in AGENTS.md.
+5. If write command: add to `WRITE_COMMANDS` in `frontend/src-tauri/src/main.rs`. If read command: add to `READ_COMMANDS`.
+6. Update `ALLOWED_COMMANDS` in `main.rs`.
+7. Update `README.md` and `README_CN.md`.
+8. Add the API function in `frontend/src/lib/api.ts` and the GUI surface in the appropriate `.svelte` component.
+9. Add i18n strings to all 10 translation files.
+10. Update the alignment table in [docs/architecture.md](docs/architecture.md).
+11. Add test coverage.
+12. Run `build-all.ps1` and verify release artifacts.
 
-| Metric | Target |
-|--------|--------|
-| CLI startup | < 200ms |
-| GUI startup | < 1s |
-| List load | < 100ms |
-| Backup size | < 1MB (typically ~10KB) |
-| CLI memory | < 50MB |
-| GUI memory | < 150MB |
+## Detailed Reference Index
 
----
-
-**Last updated**: 2026-07-18 (path dedupe)
+| Topic | File |
+|-------|------|
+| Full CLI command table, scope, debug, error handling, profiles, toggle, path editor, path resolution | [docs/cli-commands.md](docs/cli-commands.md) |
+| Architecture, IPC bridge, race condition prevention, system tray, toast, caching, auto-update, security hardening, modal dialog, rename/change-scope, profile audit history, GUI/CLI alignment table | [docs/architecture.md](docs/architecture.md) |
+| Build system, prerequisites, output layout, mandatory build rules, release steps, dependencies, CodeGraph, performance targets, logging, debugging | [docs/build-and-release.md](docs/build-and-release.md) |
+| Backup JSON format, profile JSON format, extended state and safety contracts, full security list, agent safety guidelines | [docs/backup-and-profiles.md](docs/backup-and-profiles.md) |
+| CLI-level agent guide (distributed with CLI binary) | [AGENTS.cli.md](AGENTS.cli.md) |
