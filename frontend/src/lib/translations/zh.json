@@ -203,5 +203,10 @@
   "protection.protectedCannotEdit": "无法编辑锁定的变量: {name}",
   "protection.protectedCannotChangeScope": "无法更改锁定变量的作用域",
   "protection.lockedCannotEdit": "已锁定: 无法编辑",
-  "protection.lockedCannotDelete": "已锁定: 无法删除"
+  "protection.lockedCannotDelete": "已锁定: 无法删除",
+  "path.dedupe": "移除重复项",
+  "path.dedupeDryRun": "预览重复移除",
+  "messages.pathDedupeNone": "未发现重复的 PATH 条目",
+  "messages.pathDedupeDryRun": "预演:将移除 {count} 个重复条目",
+  "messages.pathDedupeResult": "已移除 {count} 个重复 PATH 条目"
 }

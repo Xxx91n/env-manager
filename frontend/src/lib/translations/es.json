@@ -203,5 +203,10 @@
   "protection.protectedCannotEdit": "No se puede editar la variable bloqueada: {name}",
   "protection.protectedCannotChangeScope": "No se puede cambiar el ámbito de una variable bloqueada",
   "protection.lockedCannotEdit": "Bloqueado: no se puede editar",
-  "protection.lockedCannotDelete": "Bloqueado: no se puede eliminar"
+  "protection.lockedCannotDelete": "Bloqueado: no se puede eliminar",
+  "path.dedupe": "Eliminar duplicados",
+  "path.dedupeDryRun": "Vista previa de eliminación de duplicados",
+  "messages.pathDedupeNone": "No se encontraron entradas PATH duplicadas",
+  "messages.pathDedupeDryRun": "Simulación: se eliminarían {count} entradas duplicadas",
+  "messages.pathDedupeResult": "Se eliminaron {count} entradas PATH duplicadas"
 }

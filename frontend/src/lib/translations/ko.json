@@ -203,5 +203,10 @@
   "protection.protectedCannotEdit": "잠긴 변수를 편집할 수 없습니다: {name}",
   "protection.protectedCannotChangeScope": "잠긴 변수의 범위를 변경할 수 없습니다",
   "protection.lockedCannotEdit": "잠김: 편집 불가",
-  "protection.lockedCannotDelete": "잠김: 삭제 불가"
+  "protection.lockedCannotDelete": "잠김: 삭제 불가",
+  "path.dedupe": "중복 제거",
+  "path.dedupeDryRun": "중복 제거 미리보기",
+  "messages.pathDedupeNone": "중복 PATH 항목이 없습니다",
+  "messages.pathDedupeDryRun": "미리보기: 중복 항목 {count}개 제거 예정",
+  "messages.pathDedupeResult": "중복 PATH 항목 {count}개 제거됨"
 }

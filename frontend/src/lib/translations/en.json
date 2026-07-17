@@ -203,5 +203,10 @@
   "protection.protectedCannotEdit": "Cannot edit locked variable: {name}",
   "protection.protectedCannotChangeScope": "Cannot change scope of a locked variable",
   "protection.lockedCannotEdit": "Locked: cannot edit",
-  "protection.lockedCannotDelete": "Locked: cannot delete"
+  "protection.lockedCannotDelete": "Locked: cannot delete",
+  "path.dedupe": "Remove Duplicates",
+  "path.dedupeDryRun": "Preview Duplicate Removal",
+  "messages.pathDedupeNone": "No duplicate PATH entries found",
+  "messages.pathDedupeDryRun": "Dry run: would remove {count} duplicate entries",
+  "messages.pathDedupeResult": "Removed {count} duplicate PATH entries"
 }

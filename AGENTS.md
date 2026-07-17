@@ -219,6 +219,7 @@ All commands follow: `env-manager-cli <command> [arguments] [--flags]`
 | `path move-up` | `path move-up <index> [--scope]` | Move PATH entry up |
 | `path move-down` | `path move-down <index> [--scope]` | Move PATH entry down |
 | `path rename` | `path rename <old> <new> [--scope]` | Rename a PATH entry |
+| `path dedupe` | `path dedupe [--scope] [--dry-run]` | Remove duplicate PATH entries (case-insensitive, preserves first, never removes protected entries; --dry-run reports without mutating) |
 | `history list` | `history list [--limit N]` | List audit history (JSON, most recent first) |
 | `history undo` | `history undo <id> [--force]` | Undo a specific audit entry |
 | `history delete` | `history delete <id>` or `history delete --all [--scope user\|system]` | Delete a history record or clear all by scope |
@@ -319,6 +320,8 @@ orphaned registry entries from accumulating.
 
 PATH variable edited as a list of directory entries. Entries can be added, removed, and reordered. Supports both user and system scopes.
 
+Duplicate removal is available via `path dedupe` (mirrors PowerToys issue #40402 'Remove duplicates from PATH'). The CLI preserves the first occurrence of each entry (case-insensitive `OrdinalIgnoreCase` matching) and never removes protected PATH entries, so the built-in Windows system paths cannot be silently dropped by a dedupe. A `--dry-run` flag reports what would be removed without modifying the registry. The GUI PathEditor exposes this as two toolbar buttons: a dry-run preview (eyeball icon) and a destructive execute (trash icon). Both go through the routing rules above (`--dry-run` is read-locked, the real run is write-locked).
+
 ---
 
 ## IPC Bridge
@@ -343,8 +346,8 @@ and all other views update immediately after adding/removing CLI from PATH.
 
 The Rust IPC layer uses a `static CLI_RWLOCK: RwLock<()>` to implement read/write lock separation:
 
-- **Read commands** (`list`, `get`, `backup`, `diff`, `validate`, `agents`, `profile list/show/status`, `path list`) acquire a **read lock** that allows concurrent execution. Multiple read operations can run in parallel without blocking each other.
-- **Write commands** (`set`, `delete`, `toggle`, `restore`, `merge`, `profile create/delete/apply/unapply/add-var/remove-var/edit-var`, `path add/remove/move-up/move-down/rename`) acquire a **write lock** that is exclusive. Only one write can run at a time, and no read can interleave with a write.
+- **Read commands** (`list`, `get`, `backup`, `diff`, `validate`, `agents`, `profile list/show/status`, `path list`, `path dedupe --dry-run`) acquire a **read lock** that allows concurrent execution. Multiple read operations can run in parallel without blocking each other.
+- **Write commands** (`set`, `delete`, `toggle`, `restore`, `merge`, `profile create/delete/apply/unapply/add-var/remove-var/edit-var`, `path add/remove/move-up/move-down/rename/dedupe`) acquire a **write lock** that is exclusive. Only one write can run at a time, and no read can interleave with a write.
 
 This means:
 - Concurrent reads (e.g. loading variables list + loading profiles) run in parallel, improving responsiveness.
@@ -553,6 +556,7 @@ npm run test:e2e        # Playwright E2E tests
 | `src/lib/profile-drag.test.ts` | Profile drag-to-reorder logic, performReorder, applyStoredOrder, localStorage persistence |
 | `src/lib/multi-profile.test.ts` | Single-profile policy verification, backup/restore, protected variable rejection |
 | `src/lib/change-scope-protection-profile.test.ts` | change-scope CLI invocation/args, protected-variable rejection, profile audit record + undo, profile-entry retrieval from history |
+| `src/lib/path-dedupe.test.ts` | dedupePathEntries CLI args (dry-run, user/system, default), result shape, CLI failure propagation |
 ---
 
 ## CodeGraph
@@ -843,6 +847,7 @@ The GUI communicates with the CLI exclusively through `invoke('run_cli', { comma
 | Profile import | `profile import` | `importProfile()` | Yes |
 | Profile rename | `profile rename` | `renameProfile()` | Yes |
 | Rename PATH entry | `path rename` | `renamePathEntry()` | Yes |
+| Dedupe PATH entries | `path dedupe` | `dedupePathEntries()` | Yes |
 | Rename variable | `rename` | `renameVariable()`, `EditDialog` | Yes |
 | Change variable scope | `change-scope` | `changeScope()`, `EditDialog` | Yes |
 | Profile audit history | N/A (automatic) | N/A (automatic) | Yes |
@@ -997,4 +1002,4 @@ A commit that does not update AGENTS.md when the project has changed is consider
 
 ---
 
-**Last updated**: 2026-07-18
+**Last updated**: 2026-07-18 (path dedupe)

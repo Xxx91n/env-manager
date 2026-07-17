@@ -203,5 +203,10 @@
   "protection.protectedCannotEdit": "ロックされた変数は編集できません: {name}",
   "protection.protectedCannotChangeScope": "ロックされた変数のスコープは変更できません",
   "protection.lockedCannotEdit": "ロック中: 編集不可",
-  "protection.lockedCannotDelete": "ロック中: 削除不可"
+  "protection.lockedCannotDelete": "ロック中: 削除不可",
+  "path.dedupe": "重複を削除",
+  "path.dedupeDryRun": "重複削除をプレビュー",
+  "messages.pathDedupeNone": "重複する PATH エントリは見つかりませんでした",
+  "messages.pathDedupeDryRun": "ドライラン: 重複エントリ {count} 個を削除予定",
+  "messages.pathDedupeResult": "重複 PATH エントリ {count} 個を削除しました"
 }

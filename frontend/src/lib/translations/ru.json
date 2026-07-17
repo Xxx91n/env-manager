@@ -203,5 +203,10 @@
   "protection.protectedCannotEdit": "Невозможно редактировать заблокированную переменную: {name}",
   "protection.protectedCannotChangeScope": "Невозможно изменить область заблокированной переменной",
   "protection.lockedCannotEdit": "Заблокировано: редактирование недоступно",
-  "protection.lockedCannotDelete": "Заблокировано: удаление недоступно"
+  "protection.lockedCannotDelete": "Заблокировано: удаление недоступно",
+  "path.dedupe": "Удалить дубликаты",
+  "path.dedupeDryRun": "Предпросмотр удаления дубликатов",
+  "messages.pathDedupeNone": "Дублирующиеся записи PATH не найдены",
+  "messages.pathDedupeDryRun": "Пробный запуск: будет удалено {count} дубликатов",
+  "messages.pathDedupeResult": "Удалено {count} дублирующихся записей PATH"
 }

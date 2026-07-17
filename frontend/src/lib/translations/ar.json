@@ -203,5 +203,10 @@
   "protection.protectedCannotEdit": "لا يمكن تحرير المتغير المقفل: {name}",
   "protection.protectedCannotChangeScope": "لا يمكن تغيير نطاق متغير مقفل",
   "protection.lockedCannotEdit": "مقفل: لا يمكن التحرير",
-  "protection.lockedCannotDelete": "مقفل: لا يمكن الحذف"
+  "protection.lockedCannotDelete": "مقفل: لا يمكن الحذف",
+  "path.dedupe": "إزالة المكرر",
+  "path.dedupeDryRun": "معاينة إزالة المكرر",
+  "messages.pathDedupeNone": "لم يتم العثور على إدخالات PATH مكررة",
+  "messages.pathDedupeDryRun": "تجريبي: ستتم إزالة {count} إدخالاً مكرراً",
+  "messages.pathDedupeResult": "تمت إزالة {count} إدخال PATH مكرر"
 }

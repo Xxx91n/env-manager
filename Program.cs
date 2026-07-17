@@ -1442,10 +1442,81 @@ partial class Program
             "move-up" => args.Length < 3 ? ArgError("Usage: env-manager path move-up <index> [--scope user|system]") : PathMoveUp(args),
             "move-down" => args.Length < 3 ? ArgError("Usage: env-manager path move-down <index> [--scope user|system]") : PathMoveDown(args),
             "rename" => args.Length < 5 ? ArgError("Usage: env-manager path rename <old-name> <new-name> [--scope user|system]") : PathRename(args),
+            "dedupe" => PathDedupe(args),
             "help" => ShowPathHelp(),
             _ => ArgError($"Unknown path subcommand: {sub}")
         };
     }
+
+    /// <summary>
+    /// Removes duplicate PATH entries (case-insensitive), preserving the
+    /// first occurrence. Protected PATH entries are never removed even if
+    /// they appear duplicated -- the CLI treats protection as an absolute
+    /// lock that dedupe cannot bypass (mirrors PathRename/PathRemove).
+    /// Supports --dry-run to preview the removal without modifying PATH.
+    /// Output is JSON so the GUI can show a precise before/after list.
+    /// </summary>
+    static int PathDedupe(string[] args)
+    {
+        string? scope = ParseScope(args, 2, "user");
+        if (scope == null) return 1;
+        bool dryRun = args.Contains("--dry-run");
+
+        var entries = GetPathEntries(scope);
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var removed = new List<string>();
+        var kept = new List<string>();
+        foreach (var entry in entries)
+        {
+            bool isProtected = IsProtectedPathEntry(entry);
+            if (!isProtected && seen.Contains(entry))
+            {
+                removed.Add(entry);
+                continue;
+            }
+            seen.Add(entry);
+            kept.Add(entry);
+        }
+
+        if (dryRun)
+        {
+            Console.WriteLine(JsonSerializer.Serialize(new
+            {
+                scope,
+                dryRun = true,
+                removedCount = removed.Count,
+                keptCount = kept.Count,
+                removed,
+                kept
+            }, JsonOpts));
+            return 0;
+        }
+
+        if (removed.Count == 0)
+        {
+            Console.WriteLine(JsonSerializer.Serialize(new
+            {
+                scope,
+                removedCount = 0,
+                keptCount = kept.Count,
+                removed,
+                kept
+            }, JsonOpts));
+            return 0;
+        }
+
+        SetPathEntries(kept, scope);
+        Console.WriteLine(JsonSerializer.Serialize(new
+        {
+            scope,
+            removedCount = removed.Count,
+            keptCount = kept.Count,
+            removed,
+            kept
+        }, JsonOpts));
+        return 0;
+    }
+
 
 
     /// <summary>
@@ -1514,7 +1585,8 @@ partial class Program
   path remove <dir> [--scope user|system]      Remove directory from PATH
   path move-up <index> [--scope user|system]   Move PATH entry up
   path move-down <index> [--scope user|system] Move PATH entry down
-  path rename <old> <new> [--scope user|system] Rename a PATH entry");
+  path rename <old> <new> [--scope user|system] Rename a PATH entry
+  path dedupe [--scope user|system] [--dry-run]  Remove duplicate PATH entries (preserves first, respects protected)");
         return 0;
     }
 

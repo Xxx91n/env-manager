@@ -203,5 +203,10 @@
   "protection.protectedCannotEdit": "Gesperrte Variable kann nicht bearbeitet werden: {name}",
   "protection.protectedCannotChangeScope": "Geltungsbereich einer gesperrten Variable kann nicht geändert werden",
   "protection.lockedCannotEdit": "Gesperrt: Bearbeiten nicht möglich",
-  "protection.lockedCannotDelete": "Gesperrt: Löschen nicht möglich"
+  "protection.lockedCannotDelete": "Gesperrt: Löschen nicht möglich",
+  "path.dedupe": "Duplikate entfernen",
+  "path.dedupeDryRun": "Duplikatentfernung vorschauen",
+  "messages.pathDedupeNone": "Keine doppelten PATH-Einträge gefunden",
+  "messages.pathDedupeDryRun": "Probelauf: würde {count} doppelte Einträge entfernen",
+  "messages.pathDedupeResult": "{count} doppelte PATH-Einträge entfernt"
 }

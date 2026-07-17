@@ -119,6 +119,8 @@ fn is_read_only(command: &str, args: &[String]) -> bool {
         "path" => {
             match args.first().map(|s| s.as_str()) {
                 Some("list") => true,
+                // dedupe --dry-run is read-only; dedupe without --dry-run mutates PATH
+                Some("dedupe") => args.iter().any(|arg| arg == "--dry-run"),
                 _ => false, // add, remove, move-up, move-down
             }
         }

@@ -203,5 +203,10 @@
   "protection.protectedCannotEdit": "Impossible de modifier la variable verrouillée: {name}",
   "protection.protectedCannotChangeScope": "Impossible de changer la portée d'une variable verrouillée",
   "protection.lockedCannotEdit": "Verrouillé: modification impossible",
-  "protection.lockedCannotDelete": "Verrouillé: suppression impossible"
+  "protection.lockedCannotDelete": "Verrouillé: suppression impossible",
+  "path.dedupe": "Supprimer les doublons",
+  "path.dedupeDryRun": "Aperçu de la suppression des doublons",
+  "messages.pathDedupeNone": "Aucune entrée PATH en double trouvée",
+  "messages.pathDedupeDryRun": "Simulation : {count} entrées en double seraient supprimées",
+  "messages.pathDedupeResult": "{count} entrées PATH en double supprimées"
 }

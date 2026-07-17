@@ -645,6 +645,38 @@ export async function renamePathEntry(
   }
 }
 
+export interface PathDedupeResult {
+  scope: string
+  removedCount: number
+  keptCount: number
+  removed: string[]
+  kept: string[]
+  dryRun?: boolean
+}
+
+/**
+ * Removes duplicate PATH entries (case-insensitive) while preserving the
+ * first occurrence. Protected PATH entries are never removed even when
+ * duplicated -- mirrors the CLI IsProtectedPathEntry contract. Pass
+ * dryRun=true to preview removed entries without modifying PATH.
+ */
+export async function dedupePathEntries(
+  scope: 'user' | 'system' = 'user',
+  dryRun = false
+): Promise<PathDedupeResult> {
+  const args = ['dedupe', '--scope', scope]
+  if (dryRun) args.push('--dry-run')
+  try {
+    const output = dryRun
+      ? await runRead('path', args)
+      : await runWrite('path', args)
+    return JSON.parse(output) as PathDedupeResult
+  } catch (err) {
+    error.set(err instanceof Error ? err.message : 'Failed to dedupe PATH entries')
+    throw err
+  }
+}
+
 
 export async function expandVariableValue(value: string): Promise<string> {
   const output = await runRead('expand', [value])
