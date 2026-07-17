@@ -18,6 +18,8 @@ if (Test-Path $ReleaseDir) {
 }
 New-Item -ItemType Directory -Path $PortableDir -Force | Out-Null
 New-Item -ItemType Directory -Path $MsiDir -Force | Out-Null
+$CliOnlyDir = Join-Path $ReleaseDir "cli-only"
+New-Item -ItemType Directory -Path $CliOnlyDir -Force | Out-Null
 
 Write-Host "[build] Step 1: Build C# CLI" -ForegroundColor Cyan
 if (-not $SkipCli) {
@@ -98,6 +100,19 @@ if (Test-Path $WebViewLoader) {
   Copy-Item $WebViewLoader -Destination $PortableDir -Force
 }
 
+Write-Host "[build] Step 3b: Assemble CLI-only package" -ForegroundColor Cyan
+# Standalone CLI-only distribution (no GUI, just CLI binary + runtime files)
+Get-ChildItem $CliDir | Where-Object { $_.Extension -in '.exe', '.dll', '.json' } | ForEach-Object {
+  Copy-Item $_.FullName -Destination $CliOnlyDir -Force
+}
+# Copy AGENTS.cli.md alongside CLI for agent distribution
+$AgentsMd = Join-Path $ProjectRoot "AGENTS.cli.md"
+if (Test-Path $AgentsMd) {
+  Copy-Item $AgentsMd -Destination $CliOnlyDir -Force
+  Write-Host "[build] AGENTS.cli.md copied to cli-only"
+}
+Write-Host "[build] CLI-only package assembled: $CliOnlyDir" -ForegroundColor Green
+
 Write-Host "[build] Step 4: Build MSI installer" -ForegroundColor Cyan
 $WixRoot = Join-Path $env:LOCALAPPDATA "tauri\WixTools314"
 $Candle = Join-Path $WixRoot "candle.exe"
@@ -123,6 +138,8 @@ Write-Host ""
 Write-Host "[build] Done. Output:" -ForegroundColor Green
 Write-Host "  Portable: $PortableDir"
 Get-ChildItem $PortableDir | ForEach-Object { Write-Host "    $($_.Name)" }
+Write-Host "  CLI-only:  $CliOnlyDir"
+Get-ChildItem $CliOnlyDir | ForEach-Object { Write-Host "    $($_.Name)" }
 Write-Host "  MSI:      $MsiDir"
 Get-ChildItem $MsiDir | ForEach-Object { Write-Host "    $($_.Name)" }
 if (Get-ChildItem -Path $ReleaseDir -Recurse -Filter "*.msi" | Where-Object { $_.Name -match '_[a-zA-Z]{2}-[a-zA-Z]{2,3}\.msi$' }) {

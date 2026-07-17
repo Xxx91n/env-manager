@@ -191,5 +191,12 @@
   "protection.pathLocked": "PATHエントリをロックしました",
   "protection.pathUnlocked": "PATHエントリのロックを解除しました",
   "protection.unlockPathConfirm": "{name}のロックを解除しますか?解除後このPATHエントリは削除可能になります。",
-  "protection.selectPath": "ロックするPATHエントリを選択"
+  "protection.selectPath": "ロックするPATHエントリを選択",
+  "update.title": "更新確認",
+  "update.check": "今すぐ確認",
+  "update.checking": "確認中...",
+  "update.available": "新バージョン: v{version}",
+  "update.download": "ダウンロード v{version}",
+  "update.upToDate": "最新版です",
+  "update.error": "更新確認に失敗しました"
 }

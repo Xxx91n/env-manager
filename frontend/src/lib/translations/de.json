@@ -191,5 +191,12 @@
   "protection.pathLocked": "PATH-Eintrag gesperrt",
   "protection.pathUnlocked": "PATH-Eintrag entsperrt",
   "protection.unlockPathConfirm": "{name} entsperren? Dieser PATH-Eintrag wird danach entfernbar sein.",
-  "protection.selectPath": "PATH-Eintrag zum Sperren auswaehlen"
+  "protection.selectPath": "PATH-Eintrag zum Sperren auswaehlen",
+  "update.title": "Nach Updates suchen",
+  "update.check": "Jetzt pruefen",
+  "update.checking": "Pruefe...",
+  "update.available": "Update verfuegbar: v{version}",
+  "update.download": "Download v{version}",
+  "update.upToDate": "Sie verwenden die neueste Version",
+  "update.error": "Update-Pruefung fehlgeschlagen"
 }

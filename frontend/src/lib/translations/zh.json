@@ -191,5 +191,12 @@
   "protection.pathLocked": "PATH条目已锁定",
   "protection.pathUnlocked": "PATH条目已解锁",
   "protection.unlockPathConfirm": "解锁{name}?该PATH条目解锁后可被移除。",
-  "protection.selectPath": "选择要锁定的PATH条目"
+  "protection.selectPath": "选择要锁定的PATH条目",
+  "update.title": "检查更新",
+  "update.check": "立即检查",
+  "update.checking": "检查中...",
+  "update.available": "发现新版本: v{version}",
+  "update.download": "下载 v{version}",
+  "update.upToDate": "已是最新版本",
+  "update.error": "检查更新失败"
 }

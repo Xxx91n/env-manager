@@ -2,7 +2,7 @@
   import { createEventDispatcher, onMount } from 'svelte'
   import { t, locale } from 'svelte-i18n'
   import { locales, defaultLanguage } from '../i18n'
-  import { updateTrayLocale, isCliInPath, addCliToPath, removeCliFromPath } from '../api'
+  import { updateTrayLocale, isCliInPath, addCliToPath, removeCliFromPath, checkForUpdates } from '../api'
   import { get } from 'svelte/store'
   import { showToast } from '../stores'
   import { t as tStore } from 'svelte-i18n'
@@ -33,6 +33,10 @@
 
   let cliInPath = false
   let cliToggleLoading = false
+  let updateChecking = false
+  let updateAvailable: boolean | null = null
+  let latestVersion = ''
+  let releaseUrl = ''
 
   onMount(async () => {
     // Check real system PATH on mount
@@ -105,6 +109,43 @@
       // Ignore
     }
     dispatch('fontScaleChange', scale)
+  }
+
+  async function handleCheckUpdate() {
+    if (updateChecking) return
+    updateChecking = true
+    updateAvailable = null
+    try {
+      const version = '0.5.0'
+      const info = await checkForUpdates(version)
+      updateAvailable = info.isUpdateAvailable
+      latestVersion = info.latestVersion
+      releaseUrl = info.releaseUrl
+      if (info.isUpdateAvailable) {
+        showToast($t('update.available', { values: { version: info.latestVersion } }), 'success')
+      } else if (info.error) {
+        showToast($t('update.error'), 'error')
+      } else {
+        showToast($t('update.upToDate'), 'info')
+      }
+    } catch {
+      updateAvailable = false
+      showToast($t('update.error'), 'error')
+    } finally {
+      updateChecking = false
+    }
+  }
+
+  function openReleasePage() {
+    if (releaseUrl) {
+      // Use Tauri shell to open URL
+      import('@tauri-apps/plugin-dialog').then(() => {
+        // fallback: use window.open
+        window.open(releaseUrl, '_blank')
+      }).catch(() => {
+        window.open(releaseUrl, '_blank')
+      })
+    }
   }
 
   function handleClose() {
@@ -211,6 +252,38 @@
           >
             A
           </button>
+        </div>
+      </div>
+    </div>
+
+    <div class="px-5 py-3 space-y-2">
+      <div>
+        <label class="block text-xs font-medium text-gray-600 mb-1.5 dark:text-gray-400">
+          {$t('update.title')}
+        </label>
+        <div class="flex items-center gap-2">
+          <button
+            on:click={handleCheckUpdate}
+            disabled={updateChecking}
+            class="px-3 py-1.5 text-xs font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 transition disabled:opacity-50 dark:bg-blue-500 dark:hover:bg-blue-600"
+          >
+            {#if updateChecking}
+              <svg class="animate-spin h-3 w-3 inline mr-1" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.37 0 0 5.37 0 12h4z"/></svg>
+              {$t('update.checking')}
+            {:else}
+              {$t('update.check')}
+            {/if}
+          </button>
+          {#if updateAvailable === true}
+            <button
+              on:click={openReleasePage}
+              class="px-3 py-1.5 text-xs font-medium text-blue-600 hover:underline dark:text-blue-400"
+            >
+              {$t('update.download', { values: { version: latestVersion } })}
+            </button>
+          {:else if updateAvailable === false}
+            <span class="text-xs text-green-600 dark:text-green-400">{$t('update.upToDate')}</span>
+          {/if}
         </div>
       </div>
     </div>

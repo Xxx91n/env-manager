@@ -191,5 +191,12 @@
   "protection.pathLocked": "Запись PATH заблокирована",
   "protection.pathUnlocked": "Запись PATH разблокирована",
   "protection.unlockPathConfirm": "Разблокировать {name}? После этого запись PATH можно будет удалить.",
-  "protection.selectPath": "Выберите запись PATH для блокировки"
+  "protection.selectPath": "Выберите запись PATH для блокировки",
+  "update.title": "Проверить обновления",
+  "update.check": "Проверить",
+  "update.checking": "Проверка...",
+  "update.available": "Доступно: v{version}",
+  "update.download": "Скачать v{version}",
+  "update.upToDate": "Последняя версия",
+  "update.error": "Ошибка проверки обновлений"
 }

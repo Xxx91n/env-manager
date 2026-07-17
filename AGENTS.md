@@ -216,6 +216,7 @@ All commands follow: `env-manager-cli <command> [arguments] [--flags]`
 | `protection remove-path` | `protection remove-path <dir>` | Remove custom protected PATH entry |
 | `protection add-var` | `protection add-var <name>` | Lock a variable (add to custom protected vars) |
 | `protection remove-var` | `protection remove-var <name>` | Unlock a variable (remove from custom protected vars) |
+| `update check` | `update check` | Check for latest version via GitHub Releases API |
 
 ### Debug Mode
 
@@ -372,6 +373,22 @@ The GUI implements a multi-layer caching strategy for production-scale environme
 
 5. **Debug log cap** (`addDebugLog` in `stores.ts`): Debug logs are capped at 200 entries. Older entries are sliced off. This prevents the debug log array from growing unboundedly during long sessions.
 
+6. **Write-through cache invalidation** (`invalidateApiCache` in `api.ts`): After any write operation completes, `runWriteOperation` calls `invalidateApiCache()` which resets the variables cache timestamp and clears the PATH entries cache. This ensures secondary pages (ProtectionPage, etc.) always see fresh data after a mutation, without needing `force=true` on every read.
+
+7. **PATH entries cache** (`pathEntriesCache` in `api.ts`): `listPathEntries` now caches results per-scope (user/system) with the same 5-second TTL as the variables cache. ProtectionPage and PathEditor benefit from this when switching scopes, avoiding redundant CLI `path list` invocations.
+
+8. **ProtectionPage cached reads**: ProtectionPage's `refresh()` now uses `listVariablesRaw()` (cached) instead of `listVariablesRaw(true)` (force). Caches are automatically invalidated after writes, so the data is always fresh without redundant CLI calls on every page switch.
+
+### Auto-Update
+
+The application checks for updates via the GitHub Releases API.
+
+**GUI**: The Settings dialog has a "Check for Updates" button. Clicking it invokes `check_for_updates` Tauri command in `main.rs`, which uses PowerShell `Invoke-RestMethod` to query `https://api.github.com/repos/Xxx91n/env-manager/releases/latest`. The response is parsed in Rust, compared against the current version, and returned to the frontend. If a newer version exists, a download link to the release page is shown. The check is triggered manually by the user - no background polling.
+
+**CLI**: The `update check` command uses `System.Net.Http.HttpClient` to query the same GitHub Releases API. Output is JSON with `currentVersion`, `latestVersion`, `isUpdateAvailable`, and `releaseUrl`. This command is read-only and safe for concurrent execution.
+
+**Standalone CLI package**: The build system produces `release/cli-only/` containing only the CLI binary and its runtime dependencies (DLLs, JSON config, AGENTS.cli.md) - no GUI. This allows users who only need the CLI to download a smaller package. Mode detection: the CLI can detect whether a GUI exe exists in the same directory by checking for `env-manager.exe` alongside `env-manager-cli.exe`. If no GUI exe is found, it operates in standalone CLI mode.
+
 ### Security Hardening (Audit Findings)
 
 The following guards were added after a full security audit of CLI, Rust IPC, and GUI layers:
@@ -388,9 +405,13 @@ The following guards were added after a full security audit of CLI, Rust IPC, an
 
 6. **Mutex-based cross-process locking** (existing, verified): All write operations acquire `Local\EnvManager.RegistryMutation` mutex in the CLI, plus `CLI_RWLOCK` write lock in Rust, plus `writeChain` serialization in the frontend. Three layers of protection prevent concurrent mutations.
 
-### ### Internal Modal Dialog System
+### Internal Modal Dialog System
 
 The GUI uses an internal Svelte store-based modal system instead of browser `confirm()`/`alert()`. The `modal` writable store in `stores.ts` holds the current `ModalConfig`. The `ConfirmDialog.svelte` component renders globally in `App.svelte`. All confirmation dialogs (delete variable, delete profile, etc.) use `showModal()` from `stores.ts`.
+
+### CLI Path Resolution and Auto-Update
+
+The `update` command is classified as read-only in the Rust IPC layer (listed in both `ALLOWED_COMMANDS` and `READ_COMMANDS`), allowing concurrent execution with other read operations.
 
 ### CLI path resolution order:
 1. Tauri resource directory (`BaseDirectory::Resource`) - production MSI install

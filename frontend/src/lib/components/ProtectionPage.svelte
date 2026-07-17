@@ -31,9 +31,10 @@
     loading = true
     try {
       data = await listProtection()
-      // Load all available vars and path entries in parallel
+      // Load all available vars and path entries in parallel using cached data
+      // (caches are invalidated after writes, so data is always fresh post-mutation)
       const [varsResult, userPaths, systemPaths] = await Promise.all([
-        listVariablesRaw(true),
+        listVariablesRaw(),
         (async () => { try { return await listPathEntries('user') } catch { return [] } })(),
         (async () => { try { return await listPathEntries('system') } catch { return [] } })(),
       ])
@@ -69,12 +70,20 @@
     : scopeFilter === 'system'
       ? (data?.protectedVars.builtIn ?? [])
       : [] // user scope has no built-in protection
-  $: filteredBuiltinPaths = data?.protectedPaths.builtIn ?? []
+  // Built-in protected paths are system-only; hide them when filtering to user scope
+  $: filteredBuiltinPaths = scopeFilter === 'user'
+    ? []
+    : (data?.protectedPaths.builtIn ?? [])
 
   // Custom vars have no scope info from CLI, so we show them regardless
   // (custom protection applies to any scope the user locks from).
   $: filteredCustomVars = data?.protectedVars.custom ?? []
-  $: filteredCustomPaths = data?.protectedPaths.custom ?? []
+  // Custom protected paths: filter by scope by matching against loaded PATH data
+  // (custom paths stored as plain strings; we resolve their scope this way)
+  $: filteredCustomPaths = scopeFilter === 'all'
+    ? (data?.protectedPaths.custom ?? [])
+    : (data?.protectedPaths.custom ?? []).filter(cp =>
+        allPathEntries.some(pe => pe.path === cp && pe.scope === scopeFilter))
 
   async function handleAddVar() {
     const name = selectedVarName.trim()

@@ -191,5 +191,12 @@
   "protection.pathLocked": "Entree PATH verrouillee",
   "protection.pathUnlocked": "Entree PATH deverrouillee",
   "protection.unlockPathConfirm": "Deverrouiller {name}? Cette entree PATH sera supprimable ensuite.",
-  "protection.selectPath": "Selectionner une entree PATH a verrouiller"
+  "protection.selectPath": "Selectionner une entree PATH a verrouiller",
+  "update.title": "Verifier les mises a jour",
+  "update.check": "Verifier",
+  "update.checking": "Verification...",
+  "update.available": "Mise a jour: v{version}",
+  "update.download": "Telecharger v{version}",
+  "update.upToDate": "Version la plus recente",
+  "update.error": "Echec de la verification"
 }

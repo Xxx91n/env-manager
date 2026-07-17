@@ -191,5 +191,12 @@
   "protection.pathLocked": "PATH entry locked",
   "protection.pathUnlocked": "PATH entry unlocked",
   "protection.unlockPathConfirm": "Unlock {name}? This PATH entry will be removable afterwards.",
-  "protection.selectPath": "Select PATH entry to lock"
+  "protection.selectPath": "Select PATH entry to lock",
+  "update.title": "Check for Updates",
+  "update.check": "Check Now",
+  "update.checking": "Checking...",
+  "update.available": "Update available: v{version}",
+  "update.download": "Download v{version}",
+  "update.upToDate": "You are using the latest version",
+  "update.error": "Failed to check for updates"
 }

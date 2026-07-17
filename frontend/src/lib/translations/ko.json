@@ -191,5 +191,12 @@
   "protection.pathLocked": "PATH 항목이 잠겼습니다",
   "protection.pathUnlocked": "PATH 항목 잠금이 해제되었습니다",
   "protection.unlockPathConfirm": "{name}의 잠금을 해제하시겠습니까? 해제 후 이 PATH 항목을 제거할 수 있습니다.",
-  "protection.selectPath": "잠글 PATH 항목 선택"
+  "protection.selectPath": "잠글 PATH 항목 선택",
+  "update.title": "업데이트 확인",
+  "update.check": "지금 확인",
+  "update.checking": "확인 중...",
+  "update.available": "새 버전: v{version}",
+  "update.download": "다운로드 v{version}",
+  "update.upToDate": "최신 버전입니다",
+  "update.error": "업데이트 확인 실패"
 }

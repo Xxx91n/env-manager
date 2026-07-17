@@ -191,5 +191,12 @@
   "protection.pathLocked": "تم قفل إدخال PATH",
   "protection.pathUnlocked": "تم إلغاء قفل إدخال PATH",
   "protection.unlockPathConfirm": "إلغاء قفل {name}؟ سيكون إدخال PATH هذا قابلاً للحذف بعد ذلك.",
-  "protection.selectPath": "اختر إدخال PATH لقفله"
+  "protection.selectPath": "اختر إدخال PATH لقفله",
+  "update.title": "تحقق من التحديثات",
+  "update.check": "تحقق الآن",
+  "update.checking": "جارٍ التحقق...",
+  "update.available": "تحديث: v{version}",
+  "update.download": "تنزيل v{version}",
+  "update.upToDate": "أحدث إصدار",
+  "update.error": "فشل التحقق من التحديثات"
 }

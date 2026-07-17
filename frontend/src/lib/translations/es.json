@@ -191,5 +191,12 @@
   "protection.pathLocked": "Entrada PATH bloqueada",
   "protection.pathUnlocked": "Entrada PATH desbloqueada",
   "protection.unlockPathConfirm": "Desbloquear {name}? Esta entrada PATH sera eliminable despues.",
-  "protection.selectPath": "Seleccionar entrada PATH para bloquear"
+  "protection.selectPath": "Seleccionar entrada PATH para bloquear",
+  "update.title": "Buscar actualizaciones",
+  "update.check": "Buscar ahora",
+  "update.checking": "Buscando...",
+  "update.available": "Actualizacion: v{version}",
+  "update.download": "Descargar v{version}",
+  "update.upToDate": "Ultima version",
+  "update.error": "Error al buscar actualizaciones"
 }

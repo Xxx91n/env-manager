@@ -103,7 +103,10 @@ async function runWriteOperation<T>(fn: () => Promise<T>): Promise<T> {
     // Wait for the previous write to complete
     await prevChain
     // Execute the write operation
-    return await fn()
+    const result = await fn()
+    // Invalidate all caches after a successful write so secondary pages get fresh data
+    invalidateApiCache()
+    return result
   } finally {
     resolveWrite!()
     isWriteInProgress.set(false)
@@ -168,6 +171,30 @@ export async function getDiagnostics(): Promise<Diagnostics> {
   }
 }
 
+export interface UpdateInfo {
+  latestVersion: string
+  releaseUrl: string
+  isUpdateAvailable: boolean
+  error?: string
+}
+
+/**
+ * Checks for available updates by querying the GitHub Releases API via the Rust backend.
+ * Returns the latest version, release URL, and whether an update is available.
+ */
+export async function checkForUpdates(currentVersion: string): Promise<UpdateInfo> {
+  try {
+    return await invoke<UpdateInfo>('check_for_updates', { currentVersion })
+  } catch {
+    return {
+      latestVersion: '',
+      releaseUrl: '',
+      isUpdateAvailable: false,
+      error: 'Failed to check for updates',
+    }
+  }
+}
+
 /**
  * Updates the system tray menu text and tooltip to match the current GUI locale.
  */
@@ -194,6 +221,19 @@ export async function updateTrayLocale(
 const VARIABLES_CACHE_TTL_MS = 5000
 let lastVariablesRaw: EnvVariable[] = []
 let lastVariablesCacheTime = 0
+
+// PATH entries cache (same TTL strategy as variables)
+const PATH_CACHE_TTL_MS = 5000
+const pathEntriesCache: Map<string, { data: PathEntry[]; time: number }> = new Map()
+
+/**
+ * Invalidate all cached data. Called after any write operation to ensure
+ * secondary pages see fresh data on their next read.
+ */
+export function invalidateApiCache(): void {
+  lastVariablesCacheTime = 0
+  pathEntriesCache.clear()
+}
 
 /**
  * Returns the raw variable list without touching the global `variables` store,
@@ -490,10 +530,17 @@ export async function getProfileStatus(name: string): Promise<ProfileStatus | nu
 
 // --- Path API ---
 
-export async function listPathEntries(scope: 'user' | 'system' = 'user'): Promise<PathEntry[]> {
+export async function listPathEntries(scope: 'user' | 'system' = 'user', force = false): Promise<PathEntry[]> {
+  const now = Date.now()
+  const cached = pathEntriesCache.get(scope)
+  if (!force && cached && (now - cached.time) < PATH_CACHE_TTL_MS) {
+    return cached.data
+  }
   try {
     const output = await runRead('path', ['list', '--scope', scope])
-    return JSON.parse(output) as PathEntry[]
+    const data = JSON.parse(output) as PathEntry[]
+    pathEntriesCache.set(scope, { data, time: now })
+    return data
   } catch (err) {
     error.set(err instanceof Error ? err.message : 'Failed to list PATH entries')
     return []
@@ -647,7 +694,7 @@ export async function isCliInPath(): Promise<boolean> {
 
     if (!cliDir) return false
 
-    const entries = await listPathEntries('user')
+    const entries = await listPathEntries('user', true)
     return entries.some(
       (e) => e.path.toLowerCase() === cliDir.toLowerCase()
     )

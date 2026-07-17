@@ -5,7 +5,7 @@ use log::{info, warn};
 use serde::Serialize;
 use std::path::PathBuf;
 use std::process::Command;
-use std::sync::{Mutex, RwLock};
+use std::sync::RwLock;
 use tauri::{
     menu::{Menu, MenuItem},
     tray::TrayIconBuilder,
@@ -55,6 +55,7 @@ const ALLOWED_COMMANDS: &[&str] = &[
     "expand",
     "help",
     "protection",
+    "update",
 ];
 
 /// Read-only commands that can run concurrently with each other.
@@ -68,6 +69,7 @@ const READ_COMMANDS: &[&str] = &[
     "agents",
     "expand",
     "help",
+    "update",
 ];
 
 /// Write commands that mutate the registry. These must hold the write lock
@@ -420,6 +422,83 @@ fn restore_window(app: &tauri::AppHandle) {
     }
 }
 
+
+/// Checks for available updates by querying the GitHub Releases API.
+/// Returns the latest release tag name, release URL, and whether an update is available.
+#[tauri::command]
+fn check_for_updates(current_version: String) -> serde_json::Value {
+    // Use PowerShell to fetch the release info (available on all Windows machines)
+    let output = Command::new("powershell")
+        .args([
+            "-NoProfile", "-Command",
+            "Invoke-RestMethod -Uri 'https://api.github.com/repos/Xxx91n/env-manager/releases/latest' -Headers @{'User-Agent'='env-manager'} | ConvertTo-Json -Depth 3",
+        ])
+        .output();
+
+    match output {
+        Ok(out) if out.status.success() => {
+            let stdout = String::from_utf8_lossy(&out.stdout);
+            match serde_json::from_str::<serde_json::Value>(&stdout) {
+                Ok(release) => {
+                    let tag = release.get("tag_name")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("")
+                        .trim_start_matches('v')
+                        .to_string();
+                    let html_url = release.get("html_url")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("")
+                        .to_string();
+                    let is_update = !tag.is_empty()
+                        && tag != current_version
+                        && version_is_newer(&tag, &current_version);
+
+                    serde_json::json!({
+                        "latestVersion": tag,
+                        "releaseUrl": html_url,
+                        "isUpdateAvailable": is_update,
+                    })
+                }
+                Err(_) => serde_json::json!({
+                    "latestVersion": "",
+                    "releaseUrl": "",
+                    "isUpdateAvailable": false,
+                    "error": "Failed to parse release info",
+                }),
+            }
+        }
+        _ => serde_json::json!({
+            "latestVersion": "",
+            "releaseUrl": "",
+            "isUpdateAvailable": false,
+            "error": "Failed to check for updates",
+        }),
+    }
+}
+
+/// Compares two semantic version strings (e.g. "0.5.0" vs "0.4.1").
+/// Returns true if `remote` is newer than `local`.
+fn version_is_newer(remote: &str, local: &str) -> bool {
+    let parse = |s: &str| -> Vec<u32> {
+        s.split('.')
+            .filter_map(|p| p.trim().parse::<u32>().ok())
+            .collect()
+    };
+    let r = parse(remote);
+    let l = parse(local);
+    for i in 0..r.len().max(l.len()) {
+        let rv = r.get(i).copied().unwrap_or(0);
+        let lv = l.get(i).copied().unwrap_or(0);
+        if rv > lv {
+            return true;
+        }
+        if rv < lv {
+            return false;
+        }
+    }
+    false
+}
+
 fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
@@ -503,7 +582,7 @@ fn main() {
                 _ => {}
             }
         })
-        .invoke_handler(tauri::generate_handler![run_cli, cli_diagnostics, update_tray_locale])
+        .invoke_handler(tauri::generate_handler![run_cli, cli_diagnostics, update_tray_locale, check_for_updates])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
