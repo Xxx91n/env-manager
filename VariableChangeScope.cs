@@ -29,11 +29,20 @@ partial class Program
         if (string.IsNullOrEmpty(name))
             return ArgError("Error: Variable name cannot be empty");
 
-        // Auto-detect source scope by scanning both hives when --scope omitted
+        // Auto-detect source scope by scanning both hives when --scope omitted.
+        // When the variable exists in BOTH scopes (common Windows state for
+        // PATH, TEMP, TMP), the CLI REFUSES to silently pick one -- that would
+        // risk destructively relocating the wrong hive (e.g. moving user PATH
+        // when the user meant the system one). Require an explicit --scope.
+        // Reviewed by code-reviewer lane (MEDIUM finding).
         if (oldScope == null)
         {
-            if (GetVariableValue(name, "user") != null) oldScope = "user";
-            else if (GetVariableValue(name, "system") != null) oldScope = "system";
+            bool inUser = GetVariableValue(name, "user") != null;
+            bool inSystem = GetVariableValue(name, "system") != null;
+            if (inUser && inSystem)
+                return ArgError("Error: " + name + " exists in both user and system scope; specify --scope user|system");
+            if (inUser) oldScope = "user";
+            else if (inSystem) oldScope = "system";
             else return ArgError("Error: Variable " + name + " not found in any scope");
         }
 

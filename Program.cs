@@ -1474,7 +1474,14 @@ partial class Program
                 removed.Add(entry);
                 continue;
             }
-            seen.Add(entry);
+            // Only non-protected entries populate the dedupe set. This keeps
+            // the HashSet as a precise "have we already kept a NON-PROTECTED
+            // entry like this?" index, so a future maintainer extending dedupe
+            // cannot accidentally drop a protected duplicate by reusing seen
+            // without re-checking isProtected. Defense-in-depth: SetPathEntries
+            // also independently rejects removing protected entries, so even
+            // drift on this side is caught downstream. (code-reviewer MEDIUM)
+            if (!isProtected) seen.Add(entry);
             kept.Add(entry);
         }
 

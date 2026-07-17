@@ -252,7 +252,7 @@ partial class Program
            Console.WriteLine(JsonSerializer.Serialize(new { deleted = entry.Id }, JsonOpts));
            return 0;
        }
-       return ArgError("Usage: env-manager history list [--limit N] | history undo <id> [--force] | history delete <id> | history delete --all [--scope user|system]");
+       return ArgError("Usage: env-manager history list [--limit N] | history undo <id> [--force]\nNote: profile-scoped audit entries are undone via profile-state revert; --force has no effect. | history delete <id> | history delete --all [--scope user|system]");
     }
 
     static int RunExpand(string value)

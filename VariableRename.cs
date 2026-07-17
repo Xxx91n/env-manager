@@ -15,9 +15,9 @@ partial class Program
         // protected-variable guard, leaving the variable duplicated and the
         // registry in an inconsistent state.
         if (IsProtectedVariable(oldName, scope))
-            return ArgError("Error: Cannot rename protected variable " + oldName);
+            return ArgError("Error: Cannot rename protected variable (source protected): " + oldName);
         if (IsProtectedVariable(newName, scope))
-            return ArgError("Error: Cannot overwrite protected variable " + newName);
+            return ArgError("Error: Cannot rename into a protected slot: " + newName + " is a protected variable");
 
         ValidateVariableInput(newName, "", scope);
         string? oldValue = GetVariableValue(oldName, scope);

@@ -72,10 +72,20 @@
     saving = true
     try {
       if (variable && scopeChanged && nameChanged) {
-        // Rare 3-way mutation: scope change + name change. Use change-scope
-        // then set the new value under the new name in the new scope.
-        await changeScope(originalName, scope as 'user' | 'system', variable.scope as 'user' | 'system', true)
-        await renameVariable(originalName, name, scope as 'user' | 'system', overwrite)
+        // 3-way mutation: scope + name + (optional) value. Order matters for
+        // partial-failure safety. Rename FIRST in the original scope so a
+        // failure here leaves the variable untouched (no cross-scope damage).
+        // Then changeScope moves the already-renamed variable to the new scope,
+        // passing the user-confirmed overwrite flag (NEVER a hardcoded true) so
+        // a conflict-modal Cancel is honored. A failure on this step leaves the
+        // variable renamed in the original scope -- a safe, recoverable state
+        // (the user can re-open EditDialog and retry the scope move).
+        // value-only edit, if needed, runs last by falling into the value-change
+        // path below. This ordering was reviewed by the code-reviewer and
+        // architect lanes and resolves the silent-clobber + non-rollback
+        // findings (HIGH severity) reported against the previous order.
+        await renameVariable(originalName, name, variable.scope as 'user' | 'system', overwrite)
+        await changeScope(name, scope as 'user' | 'system', variable.scope as 'user' | 'system', overwrite)
         if (value !== variable.value) {
           await setVariable(name, value, scope as 'user' | 'system', true)
         }
