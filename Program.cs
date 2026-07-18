@@ -943,6 +943,12 @@ partial class Program
 
     static int ProfileEditSecret(string profileName, string oldVarName, string newVarName, string newVarValue)
     {
+        // v0.7: reject rename into a protected system variable name (same invariant as add-secret / AGENTS.md hard boundary).
+        if (string.IsNullOrWhiteSpace(newVarName) || newVarName.Length > 255 || newVarName.Contains('=') || newVarName.Contains('\x00') || newVarName.Contains('\n') || newVarName.Contains('\r') || ProtectedSystemVars.Contains(newVarName))
+        {
+            Console.Error.WriteLine("Error: Invalid or protected variable name");
+            return 1;
+        }
         var profiles = LoadProfiles();
         var profile = FindProfile(profiles, profileName);
         if (profile == null) { Console.Error.WriteLine($"Error: Profile '{profileName}' not found"); return 1; }

@@ -39,6 +39,12 @@ partial class Program
             {
                 if (string.IsNullOrWhiteSpace(variable.Name) || variable.Name.Length >= 255 ||
                     variable.Name.Contains('=') || ProtectedSystemVars.Contains(variable.Name)) return false;
+                // v0.7: secrets are DPAPI-CurrentUser ciphertext. Applying them to the
+                // user registry would write ciphertext garbage, violating the 'plaintext
+                // never persisted to the registry' hard boundary. Secrets are meaningful
+                // only for Launch profiles (env_clear + inject + decrypt-in-process).
+                if (profile.SecretVariables.Any(sv => sv.Equals(variable.Name, StringComparison.OrdinalIgnoreCase)))
+                    return false;
             }
             foreach (string path in ResolveProfilePaths(profile)) ValidatePathFragment(path);
             return true;
