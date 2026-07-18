@@ -108,11 +108,11 @@ Profile-level mutations (`create`, `delete`, `rename`, `add-var`, `remove-var`, 
 - `RunHistoryCommand` dispatches profile entries to `TryUndoProfileAudit` and registry entries to the stale-value-verified undo path. The two paths never overlap.
 
 
-## v0.6.0 Launch Profile Architecture
+## v0.7.0 Launch Profile + DPAPI Secrets Architecture
 
 Per-app launch profiles extend the profile system without modifying existing Global profile behavior. A Launch profile is stored in `profiles.json` alongside Global profiles but is **never** written to the registry.
 
-**Data model**: `ProfileData` gains `profileType` (`"global" | "launch"`, default `"global"`), `targetExecutable`, `launchArguments`, `workingDirectory`, and `secretVariables` (schema-only - DPAPI decryption is reserved for v0.7).
+**Data model**: `ProfileData` gains `profileType` (`"global" | "launch"`, default `"global"`), `targetExecutable`, `launchArguments`, `workingDirectory`, and `secretVariables` (DPAPI-encrypted secrets, decrypted at spawn time by `profile launch` and `profile reveal-secret`).
 
 **Validation**: `ValidateProfiles` splits the uniqueness set by type (Global names unique within Global, Launch names unique within Launch, cross-type collisions allowed). `ValidateLaunchTarget` refuses targets inside `\Windows\System32` and rejects non-executable extensions.
 
@@ -120,13 +120,13 @@ Per-app launch profiles extend the profile system without modifying existing Glo
 
 **Race condition prevention**: `profile launch` is classified as read-only in Rust `is_read_only` (it does not mutate the registry or profiles.json). `profile set-launch` is classified as write (it mutates profiles.json) and acquires the `CLI_RWLOCK` write lock. The existing three-layer mutex (CLI `Local\EnvManager.RegistryMutation` + Rust `CLI_RWLOCK` + frontend `writeChain`) continues to protect all registry mutations.
 
-**Backward compatibility**: existing `profiles.json` without `profileType` defaults to `"global"` and behaves identically to v0.5.0.
+**Backward compatibility**: existing `profiles.json` without `profileType` defaults to `"global"` and behaves identically to v0.5.0 (forward-compatible).
 
 ## GUI/CLI Alignment
 
 **WARNING: When adding or changing GUI features, you MUST verify the CLI has matching support.** The GUI communicates with the CLI exclusively through `invoke('run_cli', { command, args })`. Every GUI action maps to a CLI command. If a GUI feature is added without CLI support, it will fail at runtime with "Unknown command".
 
-### Current Alignment Status (v0.6.0)
+### Current Alignment Status (v0.7.0)
 
 | GUI Feature | CLI Command | API Function | Aligned |
 |---|---|---|---|
@@ -164,17 +164,17 @@ Per-app launch profiles extend the profile system without modifying existing Glo
 | Rename variable | `rename` | `renameVariable()`, `EditDialog` | Yes |
 | Change variable scope | `change-scope` | `changeScope()`, `EditDialog` | Yes |
 | Profile audit history | N/A (automatic) | N/A (automatic) | Yes |
-| v0.6.0 PATH health check | `path health [--fix] [--dry-run]` | `pathHealth()` | Yes (CLI/API); GUI badges pending |
-| v0.6.0 Profile set-launch | `profile set-launch` | `profileSetLaunch()` | Yes (CLI/API); GUI type badge pending |
-| v0.6.0 Profile launch (isolated env spawn) | `profile launch` | `profileLaunch()` | Yes (CLI/API); GUI launch button pending |
-| v0.6.0 Variable conflict confirmation modal | `set --overwrite` strictly enforced | (reuse) EditDialog Save + conflictConfirm | CLI: enforced via --overwrite; GUI modal pending |
+| v0.7.0 PATH health check | `path health [--fix] [--dry-run]` | `pathHealth()` + Health Check / Remove Dead buttons | Yes (CLI/API/GUI) |
+| v0.7.0 Profile set-launch | `profile set-launch` | `profileSetLaunch()` + type badge + Create bar type selector | Yes (CLI/API/GUI) |
+| v0.7.0 Profile launch (isolated env spawn) | `profile launch` | `profileLaunch()` + Launch button + browse target | Yes (CLI/API/GUI) |
+| v0.7.0 Variable conflict confirmation modal | `set --overwrite` strictly enforced | (reuse) EditDialog Save + conflictConfirm | Yes (CLI/GUI) |
 
 ### Alignment Checklist
 
 When adding a new GUI feature:
 1. Add the CLI command in `Program.cs`
 2. Add the API function in `frontend/src/lib/api.ts`
-3. Add the command to `ALLOWED_COMMANDS` in `main.rs` (current: list, get, set, rename, change-scope, delete, toggle, backup, restore, diff, merge, validate, help, profile, path, agents, history, bulk, expand, protection, update - v0.6.0 subcommands profile set-launch/launch and path health are subcommand-routed through 'profile'/'path' top-level entries already in ALLOWED_COMMANDS). Also add write commands to `WRITE_COMMANDS` and read commands to `READ_COMMANDS` as appropriate.
+3. Add the command to `ALLOWED_COMMANDS` in `main.rs` (current: list, get, set, rename, change-scope, delete, toggle, backup, restore, diff, merge, validate, help, profile, path, agents, history, bulk, expand, protection, update - v0.6.0 subcommands profile set-launch/launch/health and path health are subcommand-routed through 'profile'/'path' top-level entries already in ALLOWED_COMMANDS). Also add write commands to `WRITE_COMMANDS` and read commands to `READ_COMMANDS` as appropriate.
 4. Add UI in the appropriate `.svelte` component
 5. Add i18n strings to ALL translation files
 6. Update the alignment table above
@@ -197,3 +197,18 @@ This follows the industry pattern where CLI tools expose a machine-readable spec
 ### GUI Agents API
 
 The frontend exposes `getCliAgentsSpec()` and `getCliAgentsPath()` in `api.ts` for programmatic access to the CLI specification from the GUI.
+
+
+## v0.7.0 DPAPI Secrets Runtime
+
+**Encryption**: `DpapiHelper.EncryptSecret/DecryptSecret` in `EnvFeatures.cs` uses `crypt32.dll` P/Invoke `CryptProtectData`/`CryptUnprotectData` with `CryptProtectUiForbidden=0x01` and no entropy, producing CurrentUser-scope ciphertext equivalent to `System.Security.Cryptography.ProtectedData.Protect(CurrentUser)`. No NuGet dependency; MSVC and MinGW toolchains compatible. Ciphertext stored as base64 in `profiles.json` `variables[].Value`; variable name also appears in the profile `secretVariables` array as a marker.
+
+**Decryption paths**:
+1. `profile launch <name>` - decrypts in the launcher process memory before injecting into the child env block. If decryption fails the launch is refused (`return 1`) so ciphertext garbage is never silently injected.
+2. `profile reveal-secret <name> <var>` - the ONLY stdout-plaintext path. DPAPI-bound to the current user; another user or machine cannot decrypt.
+
+**Plaintext lifecycle**: plaintext bytes `byte[]` are zeroed after use in the launcher. Plaintext is NEVER written to `profiles.json`, the registry, the audit log, or any Rust/frontend store.
+
+**Audit records**: NAME only plus `<redacted>`/`<encrypted>` markers - never the plaintext or ciphertext value. This preserves the existing "logs never record environment values" hard boundary.
+
+**GUI integration**: the Svelte `ProfilePage` masks secret variable values as a placeholder; the API layer exposes `profileAddSecret`/`profileEditSecret`/`profileRemoveSecret`/`profileRevealSecret` wrappers. Secret entry is gated behind Launch type and unapplied state. DPAPI decryption for GUI display is NOT implemented - the backend `profile reveal-secret` is the only plaintext surface.

@@ -25,6 +25,11 @@
     setProfileInheritance,
     addProfilePath,
     removeProfilePath,
+    pickExecutableFile,
+    profileSetLaunch,
+    profileLaunch,
+    profileAddSecret,
+    profileRemoveSecret,
   } from '../api'
   import type { ProfileData, EnvVariable } from '../api'
 
@@ -39,6 +44,13 @@
   let cloneSource = ''
   let allVars: EnvVariable[] = []
   let newPathEntry = ''
+  let newProfileType: 'global' | 'launch' = 'global'
+  let newProfileTarget = ''
+  let newProfileArgs = ''
+  let newProfileCwd = ''
+  let showAddSecretPanel = false
+  let newSecretName = ''
+  let newSecretValue = ''
   // Drag state as plain component-level variables for Svelte reactivity
   let dragIndex: number | null = null
   let dragOverIndex: number | null = null
@@ -98,14 +110,87 @@
   async function handleCreate() {
     const name = newProfileName.trim()
     if (!name) return
+    if (newProfileType === 'launch' && !newProfileTarget.trim()) {
+      showMessage($t('messages.profileTargetRequired'), 'error')
+      return
+    }
     actionLoading = true
     try {
       await createProfile(name)
+      if (newProfileType === 'launch') {
+        await profileSetLaunch(name, {
+          target: newProfileTarget.trim(),
+          args: newProfileArgs || undefined,
+          cwd: newProfileCwd || undefined,
+          type: 'launch',
+        })
+      }
       newProfileName = ''
+      newProfileTarget = ''
+      newProfileArgs = ''
+      newProfileCwd = ''
       await refreshProfiles()
       showMessage($t('messages.profileCreated'), 'success')
     } catch (err) {
       showMessage(localizeError(err instanceof Error ? err.message : String(err)), 'error')
+    } finally {
+      actionLoading = false
+    }
+  }
+
+  async function handleBrowseTarget() {
+    try {
+      const picked = await pickExecutableFile($t('profiles.selectExecutable'))
+      if (picked) newProfileTarget = picked
+    } catch (err) {
+      showMessage(err instanceof Error ? err.message : String(err), 'error')
+    }
+  }
+
+  async function handleLaunchProfile(profile: ProfileData) {
+    if (profile.profileType !== 'launch' || !profile.targetExecutable) {
+      showMessage($t('messages.profileNotLaunch'), 'error')
+      return
+    }
+    actionLoading = true
+    try {
+      await profileLaunch(profile.name)
+      showMessage($t('messages.profileLaunched'), 'success')
+    } catch (err) {
+      showMessage(err instanceof Error ? err.message : String(err), 'error')
+    } finally {
+      actionLoading = false
+    }
+  }
+
+  async function handleAddSecret() {
+    if (!selectedProfile) return
+    const name = newSecretName.trim()
+    if (!name || !newSecretValue) return
+    actionLoading = true
+    try {
+      await profileAddSecret(selectedProfile.name, name, newSecretValue)
+      newSecretName = ''
+      newSecretValue = ''
+      showAddSecretPanel = false
+      await refreshProfiles()
+      showMessage($t('messages.secretAdded'), 'success')
+    } catch (err) {
+      showMessage(err instanceof Error ? err.message : String(err), 'error')
+    } finally {
+      actionLoading = false
+    }
+  }
+
+  async function handleRemoveSecret(varName: string) {
+    if (!selectedProfile) return
+    actionLoading = true
+    try {
+      await profileRemoveSecret(selectedProfile.name, varName)
+      await refreshProfiles()
+      showMessage($t('messages.secretRemoved'), 'success')
+    } catch (err) {
+      showMessage(err instanceof Error ? err.message : String(err), 'error')
     } finally {
       actionLoading = false
     }
@@ -322,14 +407,15 @@
 
 <div class="space-y-3">
   <!-- Create profile bar -->
-  <div class="flex gap-2">
-    <input
-      type="text"
-      placeholder={$t('profiles.createPrompt')}
-      bind:value={newProfileName}
-      on:keydown={(e) => { if (e.key === 'Enter') handleCreate() }}
-      class="flex-1 px-3 py-1.5 text-xs border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-800 dark:border-gray-600 dark:text-gray-100"
-    />
+  <div class="space-y-2">
+    <div class="flex gap-2">
+      <input
+        type="text"
+        placeholder={$t('profiles.createPrompt')}
+        bind:value={newProfileName}
+        on:keydown={(e) => { if (e.key === 'Enter') handleCreate() }}
+        class="flex-1 px-3 py-1.5 text-xs border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-800 dark:border-gray-600 dark:text-gray-100"
+      />
     <button
       on:click={handleCreate}
       disabled={actionLoading || !newProfileName.trim()}
@@ -352,6 +438,43 @@
       </svg>
       {$t('profiles.import')}
     </button>
+    </div>
+    <!-- Profile type selector + launch-specific fields -->
+    <div class="flex items-center gap-2 flex-wrap">
+      <label class="text-xs font-medium text-gray-600 dark:text-gray-400">
+        <input type="radio" bind:group={newProfileType} value="global" class="mr-1" /> {$t('profiles.typeGlobal')}
+      </label>
+      <label class="text-xs font-medium text-gray-600 dark:text-gray-400">
+        <input type="radio" bind:group={newProfileType} value="launch" class="mr-1" /> {$t('profiles.typeLaunch')}
+      </label>
+      {#if newProfileType === 'launch'}
+        <input
+          type="text"
+          placeholder={$t('profiles.targetExecutable')}
+          bind:value={newProfileTarget}
+          class="flex-1 min-w-[200px] px-2 py-1 text-xs border border-gray-300 rounded-md font-mono dark:bg-gray-800 dark:border-gray-600 dark:text-gray-100"
+        />
+        <button
+          on:click={handleBrowseTarget}
+          class="px-2 py-1 text-xs text-blue-600 bg-blue-50 rounded-md hover:bg-blue-100 dark:bg-blue-900/20 dark:text-blue-300"
+          title={$t('profiles.browse')}
+        >
+          {$t('profiles.browse')}
+        </button>
+        <input
+          type="text"
+          placeholder={$t('profiles.launchArgs')}
+          bind:value={newProfileArgs}
+          class="flex-1 min-w-[160px] px-2 py-1 text-xs border border-gray-300 rounded-md font-mono dark:bg-gray-800 dark:border-gray-600 dark:text-gray-100"
+        />
+        <input
+          type="text"
+          placeholder={$t('profiles.workingDir')}
+          bind:value={newProfileCwd}
+          class="flex-1 min-w-[160px] px-2 py-1 text-xs border border-gray-300 rounded-md font-mono dark:bg-gray-800 dark:border-gray-600 dark:text-gray-100"
+        />
+      {/if}
+    </div>
   </div>
 
   {#if loading}
@@ -394,6 +517,15 @@
               class="flex items-center gap-3 flex-1 text-left"
             >
               <span class="text-xs font-medium text-gray-900 dark:text-gray-100">{profile.name}</span>
+              {#if profile.profileType === 'launch'}
+                <span class="inline-flex px-1.5 py-0.5 rounded text-[10px] font-medium bg-purple-50 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300" title={profile.targetExecutable || ''}>
+                  {$t('profiles.typeLaunch')}
+                </span>
+              {:else}
+                <span class="inline-flex px-1.5 py-0.5 rounded text-[10px] font-medium bg-blue-50 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300">
+                  {$t('profiles.typeGlobal')}
+                </span>
+              {/if}
               <span class="text-[10px] text-gray-400 dark:text-gray-500">{profile.variables.length} {$t('profiles.variables')}</span>
               {#if profile.isEnabled}
                 <span class="inline-flex px-1.5 py-0.5 rounded text-[10px] font-medium bg-green-50 text-green-700 dark:bg-green-900/40 dark:text-green-300">
@@ -415,6 +547,21 @@
                 <span class="inline-block h-3 w-3 transform rounded-full bg-white shadow transition {profile.isEnabled ? 'translate-x-3.5' : 'translate-x-0.5'}"></span>
               </button>
 
+              {#if profile.profileType === 'launch' && profile.targetExecutable}
+                <!-- Launch button (Launch profiles only) -->
+                <button
+                  on:click={() => handleLaunchProfile(profile)}
+                  disabled={actionLoading}
+                  class="p-1 text-green-600 hover:bg-green-50 rounded transition dark:text-green-400 dark:hover:bg-green-900/30"
+                  title={$t('profiles.launch')}
+                  aria-label={$t('profiles.launch')}
+                >
+                  <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                </button>
+              {/if}
               <!-- Export button -->
               <button
                 on:click={() => handleExport(profile)}
@@ -492,9 +639,20 @@
                   {#each profile.variables as pv (pv.name)}
                     <div class="flex items-center gap-2 px-2 py-1 rounded bg-gray-50 dark:bg-gray-700/50">
                       <span class="text-[10px] font-mono text-gray-700 dark:text-gray-300 flex-1 truncate">{pv.name}</span>
-                      <span class="text-[10px] font-mono text-gray-400 dark:text-gray-500 flex-1 truncate">{pv.value}</span>
+                      <span class="text-[10px] font-mono text-gray-400 dark:text-gray-500 flex-1 truncate">
+                        {#if selectedProfile?.secretVariables?.includes(pv.name)}
+                          {'<encrypted>'}
+                        {:else}
+                          {pv.value}
+                        {/if}
+                      </span>
+                      {#if selectedProfile?.secretVariables?.includes(pv.name)}
+                        <svg class="w-3 h-3 text-amber-500" fill="currentColor" viewBox="0 0 24 24" title={$t('messages.secretVariable')}>
+                          <path d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                        </svg>
+                      {/if}
                       <button
-                        on:click={() => handleRemoveVar(pv.name)}
+                        on:click={() => selectedProfile?.secretVariables?.includes(pv.name) ? handleRemoveSecret(pv.name) : handleRemoveVar(pv.name)}
                         disabled={actionLoading}
                         class="p-0.5 text-gray-400 hover:text-red-600 rounded transition dark:hover:text-red-400"
                         title={$t('buttons.delete')}
@@ -569,6 +727,51 @@
                     </button>
                   </div>
                 </div>
+              {/if}
+
+              {#if profile.profileType === 'launch' && !profile.isEnabled}
+                {#if !showAddSecretPanel}
+                  <button
+                    on:click={() => (showAddSecretPanel = true)}
+                    class="flex items-center gap-1 text-[10px] font-medium text-amber-600 hover:text-amber-700 dark:text-amber-400 mt-2"
+                  >
+                    <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2.5">
+                      <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4" />
+                    </svg>
+                    {$t('profiles.addSecret')}
+                  </button>
+                {:else}
+                  <div class="space-y-1.5 pt-2 border-t border-gray-100 dark:border-gray-700">
+                    <input
+                      type="text"
+                      placeholder={$t('labels.name')}
+                      bind:value={newSecretName}
+                      class="w-full px-2 py-1 text-[10px] border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-amber-500 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100"
+                    />
+                    <input
+                      type="password"
+                      placeholder={$t('profiles.secretValue')}
+                      bind:value={newSecretValue}
+                      class="w-full px-2 py-1 text-[10px] border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-amber-500 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100"
+                    />
+                    <div class="flex gap-1">
+                      <button
+                        on:click={handleAddSecret}
+                        disabled={actionLoading || !newSecretName.trim() || !newSecretValue}
+                        class="flex-1 px-2 py-1 text-[10px] font-medium text-white bg-amber-600 rounded hover:bg-amber-700 transition disabled:opacity-50 dark:bg-amber-500 dark:hover:bg-amber-600"
+                      >
+                        {$t('profiles.addSecret')}
+                      </button>
+                      <button
+                        on:click={() => { showAddSecretPanel = false; newSecretName = ''; newSecretValue = '' }}
+                        class="px-2 py-1 text-[10px] text-gray-600 border border-gray-300 rounded hover:bg-gray-50 transition dark:text-gray-300 dark:border-gray-600 dark:hover:bg-gray-700"
+                      >
+                        {$t('buttons.cancel')}
+                      </button>
+                    </div>
+                    <p class="text-[9px] text-gray-400 dark:text-gray-500">{$t('profiles.secretHint')}</p>
+                  </div>
+                {/if}
               {/if}
             </div>
           {/if}

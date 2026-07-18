@@ -37,6 +37,11 @@ export interface ProfileData {
   inherits: string[]
   pathEntries: string[]
   variables: ProfileVariable[]
+  profileType?: 'global' | 'launch'
+  targetExecutable?: string
+  launchArguments?: string
+  workingDirectory?: string
+  secretVariables?: string[]
 }
 
 export interface PathEntry {
@@ -860,6 +865,19 @@ export async function pickOpenFile(title: string, defaultPath?: string): Promise
   return typeof selected === 'string' ? selected : null
 }
 
+export async function pickExecutableFile(title: string, defaultPath?: string): Promise<string | null> {
+  const selected = await openDialog({
+    title,
+    defaultPath,
+    filters: [
+      { name: 'Executable', extensions: ['exe', 'bat', 'cmd', 'ps1'] },
+    ],
+    multiple: false,
+  })
+  if (selected === null) return null
+  return typeof selected === 'string' ? selected : null
+}
+
 /**
  * Opens a native Windows file save dialog for selecting an export destination.
  */
@@ -1002,4 +1020,44 @@ export async function pathHealth(scope: 'user' | 'system' = 'user', fix: boolean
   const fn = fix ? runWrite : runRead
   const output = await fn('path', args)
   return JSON.parse(output) as PathHealthResult
+}
+
+
+// --- v0.7 DPAPI-encrypted secret variable API (launch profiles) ---
+
+/**
+ * Adds a DPAPI-encrypted secret variable to a launch profile. The plaintext value is
+ * passed to the CLI, the CLI encrypts it with CryptProtectData (CurrentUser scope) and
+ * stores the base64 ciphertext in profiles.json. Plaintext lives only transiently in
+ * CLI process memory.
+ * CLI: `profile add-secret <profile> <name> <value>`
+ */
+export async function profileAddSecret(profileName: string, varName: string, varValue: string): Promise<string> {
+  return await runWrite('profile', ['add-secret', profileName, varName, varValue])
+}
+
+/**
+ * Edits (rename + re-encrypt) an existing secret variable in a launch profile.
+ * CLI: `profile edit-secret <profile> <old-name> <new-name> <new-value>`
+ */
+export async function profileEditSecret(profileName: string, oldName: string, newName: string, newValue: string): Promise<string> {
+  return await runWrite('profile', ['edit-secret', profileName, oldName, newName, newValue])
+}
+
+/**
+ * Removes a secret variable from a profile (both the variable entry AND the SecretVariables membership).
+ * CLI: `profile remove-secret <profile> <name>`
+ */
+export async function profileRemoveSecret(profileName: string, varName: string): Promise<string> {
+  return await runWrite('profile', ['remove-secret', profileName, varName])
+}
+
+/**
+ * Reveals one secret's plaintext to stdout. DPAPI CurrentUser scope means this only succeeds
+ * when invoked by the same user account that encrypted it. Use sparingly; prefer `profileLaunch`
+ * which decrypts into the child process env block in-process.
+ * CLI: `profile reveal-secret <profile> <name>`
+ */
+export async function profileRevealSecret(profileName: string, varName: string): Promise<string> {
+  return await runRead('profile', ['reveal-secret', profileName, varName])
 }

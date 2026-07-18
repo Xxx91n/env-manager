@@ -2,7 +2,7 @@
   import { createEventDispatcher, onMount } from 'svelte'
   import { t, locale } from 'svelte-i18n'
   import { locales, defaultLanguage } from '../i18n'
-  import { updateTrayLocale, isCliInPath, addCliToPath, removeCliFromPath, checkForUpdates } from '../api'
+  import { updateTrayLocale, isCliInPath, addCliToPath, removeCliFromPath, checkForUpdates, bulkImport, bulkExport, pickOpenFile, pickSaveFile } from '../api'
   import { get } from 'svelte/store'
   import { showToast } from '../stores'
   import { t as tStore } from 'svelte-i18n'
@@ -37,6 +37,8 @@
   let updateAvailable: boolean | null = null
   let latestVersion = ''
   let releaseUrl = ''
+  let bulkScope: 'user' | 'system' = 'user'
+  let bulkLoading = false
 
   onMount(async () => {
     // Check real system PATH on mount
@@ -145,6 +147,37 @@
       }).catch(() => {
         window.open(releaseUrl, '_blank')
       })
+    }
+  }
+
+  async function handleBulkImport() {
+    if (bulkLoading) return
+    bulkLoading = true
+    try {
+      const file = await pickOpenFile($t('settings.bulkImportPrompt'))
+      if (!file) return
+      await bulkImport(file, bulkScope, false, false)
+      showToast($t('settings.bulkImported'), 'success')
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : String(err), 'error')
+    } finally {
+      bulkLoading = false
+    }
+  }
+
+  async function handleBulkExport() {
+    if (bulkLoading) return
+    bulkLoading = true
+    try {
+      let defaultPath = 'env_export.json'
+      const file = await pickSaveFile($t('settings.bulkExportPrompt'), defaultPath)
+      if (!file) return
+      await bulkExport(file, bulkScope)
+      showToast($t('settings.bulkExported'), 'success')
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : String(err), 'error')
+    } finally {
+      bulkLoading = false
     }
   }
 
@@ -285,6 +318,38 @@
             <span class="text-xs text-green-600 dark:text-green-400">{$t('update.upToDate')}</span>
           {/if}
         </div>
+      </div>
+    </div>
+
+    <div class="px-5 py-3 space-y-2 border-t border-gray-200 dark:border-gray-700">
+      <div>
+        <label class="block text-xs font-medium text-gray-600 mb-1.5 dark:text-gray-400">
+          {$t('settings.bulkTitle')}
+        </label>
+        <div class="flex items-center gap-2 flex-wrap">
+          <select
+            bind:value={bulkScope}
+            class="px-2 py-1 text-xs border border-gray-300 rounded-md dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100"
+          >
+            <option value="user">{$t('scope.user')}</option>
+            <option value="system">{$t('scope.system')}</option>
+          </select>
+          <button
+            on:click={handleBulkImport}
+            disabled={bulkLoading}
+            class="px-3 py-1 text-xs font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 transition disabled:opacity-50 dark:text-gray-200 dark:bg-gray-800 dark:border-gray-600 dark:hover:bg-gray-700"
+          >
+            {$t('settings.bulkImport')}
+          </button>
+          <button
+            on:click={handleBulkExport}
+            disabled={bulkLoading}
+            class="px-3 py-1 text-xs font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 transition disabled:opacity-50 dark:text-gray-200 dark:bg-gray-800 dark:border-gray-600 dark:hover:bg-gray-700"
+          >
+            {$t('settings.bulkExport')}
+          </button>
+        </div>
+        <p class="mt-1 text-[10px] text-gray-400 dark:text-gray-500">{$t('settings.bulkHint')}</p>
       </div>
     </div>
 

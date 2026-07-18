@@ -14,6 +14,8 @@
 - PATH 编辑器：支持添加、删除、排序、重复项和失效目录检测
 - **v0.6.0 启动器配置文件**：以隔离环境块（`env_clear` + 注入）启动目标可执行文件 —— 永不写注册表、永不广播 `WM_SETTINGCHANGE`。配置文件类型 `global`（现有行为）和 `launch` 使用互不冲突的独立命名空间（跨类型允许同名）。
 - **v0.6.0 PATH 健康检测**：`path health [--fix] [--dry-run]` 一次性检测重复 AND 失效（不存在的）PATH 条目；`--fix` 仅删非保护项，受保护项永远保留。
+- **v0.7.0 DPAPI 密钥**：`profile add-secret`/`edit-secret`/`remove-secret`/`reveal-secret` —— 为配置文件中的变量值加密（Windows DPAPI 当前用户）。明文仅驻存在进程内存；`profile launch` 启动时解子进程注入；`reveal-secret` 是唯一输出明文到 stdout 的路径。审计仅记录名，绝不记录值。
+- **v0.7.0 GUI**：PATH 健康徽章（healthy/dead/duplicate/duplicate+dead）+ 一键移除失效项；Launch 配置文件类型徽章 + 启动按钮 + 创建栏类型选择 + 原生文件选择器；变量搜索高亮 + `%VAR%` 展开预览；设置中的 `.env`/CSV 批量导入导出（原生文件选择器）。
 - 用户和系统作用域支持
 - JSON 备份与恢复、差异对比、合并、变更历史和安全撤销
 - 支持 `.env`、CSV、JSON 批量导入导出及冲突预览
@@ -314,4 +316,4 @@ Apache-2.0 - 可自由用于个人和商业项目。详见 [LICENSE](LICENSE)。
 
 ---
 
-**版本**：0.6.0 | **许可**：Apache-2.0 | **状态**：积极开发中
+**版本**：0.7.0 | **许可**：Apache-2.0 | **状态**：积极开发中

@@ -52,7 +52,7 @@ Profiles are stored at `%LOCALAPPDATA%\EnvManager\profiles.json`:
 
 The GUI Profile page supports pointer-event-based drag-and-drop to reorder profiles (uses `pointerdown`/`pointerenter`/`pointerup` instead of HTML5 DnD, which WebView2/Tauri intercepts at the OS level causing a forbidden cursor). The order is persisted in `localStorage` as `envManager_profileOrder` and applied via `applyStoredOrder()` after `listProfiles()`. This is GUI-only sorting - no CLI calls, no profile data modification. Each profile card has a drag handle with a grab cursor.
 
-### v0.6.0 Launch Profile Schema
+### v0.7.0 Launch Profile + Secrets Schema
 
 Profile JSON gains these optional fields (see `ProfileData` in `Program.cs`):
 
@@ -60,7 +60,7 @@ Profile JSON gains these optional fields (see `ProfileData` in `Program.cs`):
 - `targetExecutable` (launch only): absolute or relative path to an executable. `ValidateLaunchTarget` rejects non-existent, non-executable, or System32 paths.
 - `launchArguments` (launch only): optional static args appended to the spawned command.
 - `workingDirectory` (launch only): optional cwd override.
-- `secretVariables`: list of variable names whose values are DPAPI-encrypted on disk. **Runtime decryption is reserved for v0.7**; in v0.6.0 this field is schema-only and any value is stored as plaintext.
+- `secretVariables`: list of variable names whose values are DPAPI-encrypted on disk (CurrentUser scope). v0.7.0 implements full DPAPI runtime: `profile add-secret`/`edit-secret` store base64(`CryptProtectData`) ciphertext in `variables[].Value`; `profile launch` decrypts in the launcher process; `profile reveal-secret` is the only plaintext-to-stdout path. Plaintext is never persisted to disk or logs.
 
 **Safety invariants specific to Launch profiles**:
 

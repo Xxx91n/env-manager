@@ -150,3 +150,13 @@ state. CLI-only usage must manually verify state after mutations.
 - Profiles with overlapping variables must be unapplied in reverse application order. Unsafe order is rejected.
 - Profile inheritance must remain acyclic. Active profiles cannot change inheritance or PATH fragments.
 - Logs intentionally omit argument values. Do not add environment values to logs because they may contain credentials.
+
+## v0.7.0 Secrets (DPAPI)
+
+`profile add-secret <name> <var> <value>` encrypts with DPAPI CurrentUser.
+`profile edit-secret <name> <old> <new> <value>` renames + re-encrypts.
+`profile remove-secret <name> <var>` removes (also from `secretVariables`).
+`profile reveal-secret <name> <var>` prints plaintext to stdout (only same user can decrypt).
+`profile show <name> --reveal` shows decrypted values; without `--reveal` secrets are masked as `<encrypted>`.
+
+**Agent safety**: secrets are DPAPI-bound to the user account. Do NOT pipe `reveal-secret` output into logs or commits. For workflows that only need to spawn a target, prefer `profile launch` (decrypts in-process, never touches stdout). All secret mutations require the profile be unapplied.

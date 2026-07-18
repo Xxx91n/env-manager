@@ -14,6 +14,9 @@ Modern, lightweight Windows environment variable manager with CLI and GUI dual-m
 - PATH editor with duplicate and missing-directory diagnostics
 - **v0.6.0 Launch profiles**: spawn a target executable with an isolated env block (`env_clear` + inject) - never writes the registry, never broadcasts `WM_SETTINGCHANGE`. Profile types `global` (existing behavior) and `launch` use independent name namespaces (cross-type name collision allowed).
 - **v0.6.0 PATH health**: `path health [--fix] [--dry-run]` detects duplicates AND dead (non-existent) PATH entries in one command; `--fix` safely removes non-protected entries; protected entries always preserved.
+- **v0.7.0 DPAPI secrets**: `profile add-secret`/`edit-secret`/`remove-secret`/`reveal-secret` - per-profile variable values encrypted with Windows DPAPI CurrentUser. Plaintext lives only in transient process memory; `profile launch` decrypts at spawn time; `reveal-secret` is the only stdout-plaintext path. Audit records NAME only.
+- **v0.7.0 GUI**: PATH health badges (healthy/dead/duplicate/duplicate+dead) + Remove Dead bulk action; Launch profile type badge + Launch button + Create bar type selector + native file picker; variable search highlight + `%VAR%` expansion preview; `.env`/CSV bulk import/export in Settings (native file picker).
+- **v0.7.0 PATH health GUI**: one-click health check shows per-row color-coded status; `--fix` remove-dead is gated behind a confirmation modal (protected entries never removed).
 - User and System scope support
 - JSON backup/restore with diff/merge, audited history and guarded undo
 - Bulk `.env`, CSV, and JSON import/export with dry-run conflict previews
@@ -315,4 +318,4 @@ Open source project. For issues, feature requests, or pull requests, visit the [
 
 ---
 
-**Version**: 0.6.0 | **License**: Apache-2.0 | **Status**: Active Development
+**Version**: 0.7.0 | **License**: Apache-2.0 | **Status**: Active Development

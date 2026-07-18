@@ -40,9 +40,13 @@ All commands follow: `env-manager-cli <command> [arguments] [--flags]`
 | `path move-down` | `path move-down <index> [--scope]` | Move PATH entry down |
 | `path rename` | `path rename <old> <new> [--scope]` | Rename a PATH entry |
 | `path dedupe` | `path dedupe [--scope] [--dry-run]` | Remove duplicate PATH entries (case-insensitive, preserves first, never removes protected entries; --dry-run reports without mutating) |
-| `path health` | `path health [--scope] [--fix] [--dry-run]` | v0.6.0. Detect duplicates and dead (non-existent) PATH entries; --fix removes non-protected duplicates+dead (always preserves protected entries) |
-| `profile set-launch` | `profile set-launch <name> --target <exe> [--args <args>] [--cwd <dir>] [--type global\|launch]` | v0.6.0. Configure a Launch profile's target executable / args / cwd, or convert a profile between Global and Launch types. Never writes the registry. |
-| `profile launch` | `profile launch <name> [-- <extra-args ...>]` | v0.6.0. Spawn the Launch profile's targetExecutable with an isolated env block (env_clear + inject). Never writes the registry or broadcasts WM_SETTINGCHANGE. |
+| `path health` | `path health [--scope] [--fix] [--dry-run]` | v0.7.0. Detect duplicates and dead (non-existent) PATH entries; --fix removes non-protected duplicates+dead (always preserves protected entries) |
+| `profile set-launch` | `profile set-launch <name> --target <exe> [--args <args>] [--cwd <dir>] [--type global\|launch]` | v0.7.0. Configure a Launch profile's target executable / args / cwd, or convert a profile between Global and Launch types. Never writes the registry. |
+| `profile launch` | `profile launch <name> [-- <extra-args ...>]` | v0.7.0. Spawn the Launch profile's targetExecutable with an isolated env block (env_clear + inject). Never writes the registry or broadcasts WM_SETTINGCHANGE. |
+| `profile add-secret` | `profile add-secret <name> <var> <value>` | v0.7.0. Encrypt `value` with DPAPI CurrentUser and store ciphertext in the profile. Requires the profile to be unapplied. Audit records NAME only. |
+| `profile edit-secret` | `profile edit-secret <name> <oldvar> <newvar> <value>` | v0.7.0. Rename and re-encrypt a secret. Audit records old/new NAME only. |
+| `profile remove-secret` | `profile remove-secret <name> <var>` | v0.7.0. Remove a secret variable from the profile (also dropped from `secretVariables`). |
+| `profile reveal-secret` | `profile reveal-secret <name> <var>` | v0.7.0. Print one secret's plaintext to stdout. Only the same user account can decrypt (DPAPI CurrentUser). Use sparingly. |
 | `history list` | `history list [--limit N]` | List audit history (JSON, most recent first) |
 | `history undo` | `history undo <id> [--force]` | Undo a specific audit entry |
 | `history delete` | `history delete <id>` or `history delete --all [--scope user\|system]` | Delete a history record or clear all by scope |
@@ -92,8 +96,8 @@ Profiles are sets of preconfigured variables applied/unapplied as a group. When 
 - Profile storage: `%LOCALAPPDATA%\EnvManager\profiles.json`
 - Profile variables override user variables when applied
 - **v0.6.0 Profile types**: `profileType: "global" | "launch"`. Global profiles apply to the user registry (current behavior). Launch profiles are launcher templates that are NEVER written to the registry: `profile launch <name>` spawns `targetExecutable` with an isolated environment block (`env_clear` + inject profile vars + PATH entries), and never broadcasts `WM_SETTINGCHANGE`. Global and Launch profile name spaces are independent: a Global and a Launch profile MAY share a name. `ValidateLaunchTarget` rejects targets inside `\\Windows\\System32` and non-executable extensions.
-- v0.6.0 new profile subcommands: `profile set-launch <name> --target <exe> [--args <args>] [--cwd <dir>] [--type global|launch]` and `profile launch <name> [-- <extra-args ...>]`
-- v0.6.0 schema fields: `profileType`, `targetExecutable`, `launchArguments`, `workingDirectory`, `secretVariables` (DPAPI encryption is schema-only in v0.6.0; runtime decryption is reserved for v0.7)
+- v0.6.0/v0.7.0 new profile subcommands: `profile set-launch <name> --target <exe> [--args <args>] [--cwd <dir>] [--type global|launch]` and `profile launch <name> [-- <extra-args ...>]`
+- v0.6.0/v0.7.0 schema fields: `profileType`, `targetExecutable`, `launchArguments`, `workingDirectory`, `secretVariables` (DPAPI encryption is fully implemented in v0.7.0; `profile launch` and `profile reveal-secret` decrypt at runtime)
 - `profile status` checks `IsCorrectlyApplied()` (mirrors PowerToys)
 - `IsProfileApplicable()` rejects invalid variable names (>255 chars, contains `=`) and profiles containing protected system variables
 - `ApplyProfile()` skips any protected system variables in the profile variable list
@@ -120,7 +124,7 @@ PATH variable edited as a list of directory entries. Entries can be added, remov
 
 Duplicate removal via `path dedupe` (mirrors PowerToys issue #40402). The CLI preserves the first occurrence (case-insensitive `OrdinalIgnoreCase` matching) and never removes protected PATH entries. `--dry-run` reports what would be removed without mutating. The GUI PathEditor exposes this as two toolbar buttons: dry-run preview (eyeball icon) and destructive execute (trash icon).
 
-**v0.6.0 PATH health** (`path health [--scope] [--fix] [--dry-run]`): detects duplicates AND dead (non-existent) PATH entries. Protected entries are NEVER reported as duplicates (defense-in-depth: HashSet isolation) and `--fix` NEVER removes a protected entry even if it appears dead. `--fix` writes a cleaned PATH preserving order; `--dry-run` reports what would change. Without `--fix` the command is pure read. The GUI Path Editor renders a status badge per row (`healthy` / `duplicate` / `dead` / `duplicate+dead`) and a "Remove dead" bulk action.
+**v0.7.0 PATH health** (`path health [--scope] [--fix] [--dry-run]`): detects duplicates AND dead (non-existent) PATH entries. Protected entries are NEVER reported as duplicates (defense-in-depth: HashSet isolation) and `--fix` NEVER removes a protected entry even if it appears dead. `--fix` writes a cleaned PATH preserving order; `--dry-run` reports what would change. Without `--fix` the command is pure read. The GUI Path Editor renders a status badge per row (`healthy` / `duplicate` / `dead` / `duplicate+dead`) and a "Remove dead" bulk action.
 
 ## CLI Path Resolution Order
 

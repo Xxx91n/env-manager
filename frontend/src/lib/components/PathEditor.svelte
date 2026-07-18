@@ -13,8 +13,10 @@
     addProtectedPath,
     removeProtectedPath,
     dedupePathEntries,
+    pathHealth,
   } from '../api'
   import type { PathEntry } from '../api'
+  import type { PathHealthEntry } from '../api'
 
   let entries: PathEntry[] = []
   let scope: 'user' | 'system' = 'user'
@@ -26,6 +28,9 @@
   let editingIndex: number | null = null
   let editValue: string = ''
   let editError: string = ''
+  let healthMap: Map<string, PathHealthEntry> = new Map()
+  let healthLoading = false
+  let healthSummary: { healthy: number; dead: number; duplicate: number } | null = null
 
   onMount(async () => {
     await refresh()
@@ -39,6 +44,8 @@
 
   async function refresh() {
     loading = true
+    healthMap = new Map()
+    healthSummary = null
     try {
       entries = await listPathEntries(scope)
     } catch (err) {
@@ -110,6 +117,62 @@
     } finally {
       actionLoading = false
     }
+  }
+
+  async function handleHealthCheck(dryRun = false) {
+    if (healthLoading) return
+    healthLoading = true
+    try {
+      const result = await pathHealth(scope, false, dryRun)
+      healthMap = new Map(result.results.map((r) => [r.entry, r]))
+      healthSummary = {
+        healthy: result.healthyCount,
+        dead: result.deadCount,
+        duplicate: result.duplicateCount,
+      }
+      if (dryRun) {
+        const { showToast } = await import('../stores')
+        showToast($t('messages.pathHealthPreview', { values: { dead: result.deadCount, dup: result.duplicateCount } }), 'info')
+      }
+    } catch (err) {
+      showMessage(err instanceof Error ? err.message : String(err), 'error')
+    } finally {
+      healthLoading = false
+    }
+  }
+
+  function handleRemoveDeadConfirm() {
+    if (actionLoading || healthLoading) return
+    const deadCount = healthSummary?.dead ?? 0
+    if (deadCount === 0) {
+      showToast($t('messages.pathNoDead'), 'info')
+      return
+    }
+    showModal({
+      title: $t('path.removeDead'),
+      message: $t('path.confirmRemoveDead', { values: { count: deadCount } }),
+      confirmLabel: $t('buttons.confirm'),
+      cancelLabel: $t('buttons.cancel'),
+      variant: 'danger',
+      onConfirm: async () => {
+        actionLoading = true
+        try {
+          const result = await pathHealth(scope, true, false)
+          healthMap = new Map(result.results.map((r) => [r.entry, r]))
+          healthSummary = {
+            healthy: result.healthyCount,
+            dead: result.deadCount,
+            duplicate: result.duplicateCount,
+          }
+          await refresh()
+          showToast($t('messages.pathDeadRemoved', { values: { count: deadCount } }), 'success')
+        } catch (err) {
+          showToast(err instanceof Error ? err.message : String(err), 'error')
+        } finally {
+          actionLoading = false
+        }
+      },
+    })
   }
 
   async function handleDedupe(dryRun = false) {
@@ -333,6 +396,28 @@
       </svg>
       {$t('path.dedupe')}
     </button>
+    <button
+      on:click={() => handleHealthCheck(true)}
+      disabled={actionLoading || healthLoading || entries.length === 0}
+      title={$t('path.healthCheck')}
+      class="flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-blue-700 bg-blue-50 rounded-md hover:bg-blue-100 transition disabled:opacity-50 dark:bg-blue-900/20 dark:text-blue-300 dark:hover:bg-blue-900/40"
+    >
+      <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+      </svg>
+      {$t('path.healthCheck')}
+    </button>
+    <button
+      on:click={handleRemoveDeadConfirm}
+      disabled={actionLoading || healthLoading || !healthSummary || healthSummary.dead === 0}
+      title={$t('path.removeDead')}
+      class="flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-red-700 bg-red-50 rounded-md hover:bg-red-100 transition disabled:opacity-30 disabled:cursor-not-allowed dark:bg-red-900/20 dark:text-red-300 dark:hover:bg-red-900/40"
+    >
+      <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+      </svg>
+      {$t('path.removeDead')}{#if healthSummary && healthSummary.dead > 0} ({healthSummary.dead}){/if}
+    </button>
   </div>
 
   {#if loading}
@@ -404,10 +489,26 @@
                   >
                     {entry.path}
                   </div>
-                  <div class="mt-0.5 flex items-center gap-2 text-[9px]">
-                    {#if entry.isDuplicate}<span class="text-amber-700 dark:text-amber-400">{$t('path.duplicate')}</span>{/if}
-                    {#if !entry.exists}<span class="text-red-700 dark:text-red-400">{$t('path.missing')}</span>{/if}
-                    {#if entry.expandedPath !== entry.path}<span class="font-mono text-gray-400 truncate" title={entry.expandedPath}>{entry.expandedPath}</span>{/if}
+                  <div class="mt-0.5 flex items-center gap-1 flex-wrap text-[9px]">
+                    {#if !entry.exists}
+                      <span class="inline-flex items-center px-1.5 py-0.5 rounded bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300" title={$t('path.missing')}->{$t('path.dead')}</span>
+                    {/if}
+                    {#if entry.isDuplicate}
+                      <span class="inline-flex items-center px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300">{$t('path.duplicate')}</span>
+                    {/if}
+                    {#if healthMap.has(entry.path)}
+                      {@const h = healthMap.get(entry.path)}
+                      {#if h.isDead && h.isDuplicate}
+                        <span class="inline-flex items-center px-1.5 py-0.5 rounded bg-red-200 text-red-800 dark:bg-red-900/60 dark:text-red-200">{$t('path.dead')}+{$t('path.duplicate')}</span>
+                      {:else if h.isDead && !h.isDuplicate}
+                        <span class="inline-flex items-center px-1.5 py-0.5 rounded bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300">{$t('path.dead')}</span>
+                      {:else if !h.isDead && h.isDuplicate}
+                        <span class="inline-flex items-center px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300">{$t('path.duplicate')}</span>
+                      {:else}
+                        <span class="inline-flex items-center px-1.5 py-0.5 rounded bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300">{$t('path.healthy')}</span>
+                      {/if}
+                    {/if}
+                    {#if entry.expandedPath !== entry.path}<span class="font-mono text-gray-400 truncate max-w-xs" title={entry.expandedPath}>{entry.expandedPath}</span>{/if}
                   </div>
                 {/if}
               </td>

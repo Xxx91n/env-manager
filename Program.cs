@@ -40,7 +40,7 @@ class ProfileData
     [JsonPropertyName("variables")] public List<ProfileVariable> Variables { get; set; } = new();
 
     // Launch profile type: "global" (default, applies to user registry) or "launch" (launcher template, never writes registry).
-    // v0.6.0 introduces per-app launch profiles to avoid polluting the global user environment.
+    // v0.7.0 introduces per-app launch profiles and DPAPI-encrypted secrets to avoid polluting the global user environment.
     [JsonPropertyName("profileType")] public string ProfileType { get; set; } = "global";
     [JsonPropertyName("targetExecutable")] public string? TargetExecutable { get; set; }
     [JsonPropertyName("launchArguments")] public string? LaunchArguments { get; set; }
@@ -742,7 +742,7 @@ partial class Program
             "delete" => args.Length < 3 ? ArgError("Usage: env-manager profile delete <name>") : ProfileDelete(args[2]),
             "apply" => args.Length < 3 ? ArgError("Usage: env-manager profile apply <name>") : ProfileApply(args[2]),
             "unapply" => args.Length < 3 ? ArgError("Usage: env-manager profile unapply <name>") : ProfileUnapply(args[2]),
-            "show" => args.Length < 3 ? ArgError("Usage: env-manager profile show <name>") : ProfileShow(args[2]),
+            "show" => args.Length < 3 ? ArgError("Usage: env-manager profile show <name> [--reveal]") : ProfileShow(args[2], args.Any(a => a.Equals("--reveal", StringComparison.OrdinalIgnoreCase))),
             "preview" => args.Length < 3 ? ArgError("Usage: env-manager profile preview <name>") : ProfilePreview(args[2]),
             "set-inherits" => args.Length < 3 ? ArgError("Usage: env-manager profile set-inherits <name> [parent ...]") : ProfileSetInherits(args),
             "add-path" => args.Length < 4 ? ArgError("Usage: env-manager profile add-path <name> <directory>") : ProfileAddPath(args[2], args[3]),
@@ -758,6 +758,11 @@ partial class Program
             // without writing anything to the registry. Spawn a child process with env_clear + inject.
             "set-launch" => ProfileSetLaunch(args),
             "launch" => args.Length < 3 ? ArgError("Usage: env-manager profile launch <name> [-- <extra-args ...>]") : ProfileLaunch(args),
+            // v0.7.0 DPAO secrets subcommands.
+            "add-secret" => args.Length < 5 ? ArgError("Usage: env-manager profile add-secret <profile> <name> <value>") : ProfileAddSecret(args[2], args[3], args[4]),
+            "edit-secret" => args.Length < 6 ? ArgError("Usage: env-manager profile edit-secret <profile> <old> <new> <value>") : ProfileEditSecret(args[2], args[3], args[4], args[5]),
+            "remove-secret" => args.Length < 4 ? ArgError("Usage: env-manager profile remove-secret <profile> <name>") : ProfileRemoveSecret(args[2], args[3]),
+            "reveal-secret" => args.Length < 4 ? ArgError("Usage: env-manager profile reveal-secret <profile> <name>") : ProfileRevealSecret(args[2], args[3]),
             "help" => ShowProfileHelp(),
             _ => ArgError($"Unknown profile subcommand: {sub}")
         };
@@ -904,6 +909,113 @@ partial class Program
         RecordProfileAudit("profile edit-var", profileName, JsonSerializer.Serialize(preEditVar, JsonOpts), JsonSerializer.Serialize(postEditVar, JsonOpts));
         Console.WriteLine($"Edited variable '{oldVarName}' -> '{newVarName}' in profile '{profileName}'");
         return 0;
+    }
+
+    // v0.7 DPAPI-encrypted secret variables for launch profiles.
+    // Plaintext lives only in transient CLI process memory; the profiles.json stores
+    // base64(DPAPI-Protect(CurrentUser, plaintext)). AGENTS.md hard boundary: audit
+    // records the variable NAME only, never its plaintext or ciphertext value.
+    static int ProfileAddSecret(string profileName, string varName, string varValue)
+    {
+        if (string.IsNullOrWhiteSpace(varName) || varName.Length > 255 || varName.Contains('=') || ProtectedSystemVars.Contains(varName))
+        {
+            Console.Error.WriteLine("Error: Invalid variable name");
+            return 1;
+        }
+        var profiles = LoadProfiles();
+        var profile = FindProfile(profiles, profileName);
+        if (profile == null) { Console.Error.WriteLine($"Error: Profile '{profileName}' not found"); return 1; }
+        if (profile.IsEnabled) return ArgError("Error: Unapply the profile before changing its variables");
+
+        profile.Variables.RemoveAll(v => v.Name.Equals(varName, StringComparison.OrdinalIgnoreCase));
+        string encrypted = DpapiHelper.EncryptSecret(varValue);
+        profile.Variables.Add(new ProfileVariable { Name = varName, Value = encrypted });
+        if (!profile.SecretVariables.Any(s => s.Equals(varName, StringComparison.OrdinalIgnoreCase)))
+            profile.SecretVariables.Add(varName);
+        SaveProfiles(profiles);
+
+        RecordProfileAudit("profile add-secret", profileName,
+            JsonSerializer.Serialize(new { name = varName, value = "<redacted>" }),
+            JsonSerializer.Serialize(new { name = varName, value = "<encrypted>" }));
+        Console.WriteLine($"Added secret variable '{varName}' (DPAPI-CurrentUser) to profile '{profileName}'");
+        return 0;
+    }
+
+    static int ProfileEditSecret(string profileName, string oldVarName, string newVarName, string newVarValue)
+    {
+        var profiles = LoadProfiles();
+        var profile = FindProfile(profiles, profileName);
+        if (profile == null) { Console.Error.WriteLine($"Error: Profile '{profileName}' not found"); return 1; }
+        if (profile.IsEnabled) return ArgError("Error: Unapply the profile before changing its variables");
+
+        var v = profile.Variables.FirstOrDefault(x => x.Name.Equals(oldVarName, StringComparison.OrdinalIgnoreCase));
+        if (v == null) { Console.Error.WriteLine($"Error: Secret variable '{oldVarName}' not found in profile '{profileName}'"); return 1; }
+
+        bool wasMarkedSecret = profile.SecretVariables.Any(s => s.Equals(oldVarName, StringComparison.OrdinalIgnoreCase));
+        string encryptedNew = DpapiHelper.EncryptSecret(newVarValue);
+        v.Name = newVarName;
+        v.Value = encryptedNew;
+
+        if (!newVarName.Equals(oldVarName, StringComparison.OrdinalIgnoreCase))
+        {
+            profile.SecretVariables.RemoveAll(s => s.Equals(oldVarName, StringComparison.OrdinalIgnoreCase));
+            if (wasMarkedSecret && !profile.SecretVariables.Any(s => s.Equals(newVarName, StringComparison.OrdinalIgnoreCase)))
+                profile.SecretVariables.Add(newVarName);
+        }
+        SaveProfiles(profiles);
+
+        RecordProfileAudit("profile edit-secret", profileName,
+            JsonSerializer.Serialize(new { name = oldVarName, value = "<redacted>" }),
+            JsonSerializer.Serialize(new { name = newVarName, value = "<encrypted>" }));
+        Console.WriteLine($"Edited secret '{oldVarName}' -> '{newVarName}' in profile '{profileName}'");
+        return 0;
+    }
+
+    static int ProfileRemoveSecret(string profileName, string varName)
+    {
+        var profiles = LoadProfiles();
+        var profile = FindProfile(profiles, profileName);
+        if (profile == null) { Console.Error.WriteLine($"Error: Profile '{profileName}' not found"); return 1; }
+        if (profile.IsEnabled) return ArgError("Error: Unapply the profile before changing its variables");
+
+        var v = profile.Variables.FirstOrDefault(x => x.Name.Equals(varName, StringComparison.OrdinalIgnoreCase));
+        if (v == null) { Console.Error.WriteLine($"Error: Variable '{varName}' not found in profile '{profileName}'"); return 1; }
+
+        profile.Variables.Remove(v);
+        profile.SecretVariables.RemoveAll(s => s.Equals(varName, StringComparison.OrdinalIgnoreCase));
+        SaveProfiles(profiles);
+
+        RecordProfileAudit("profile remove-secret", profileName, JsonSerializer.Serialize(new { name = varName }), null);
+        Console.WriteLine($"Removed secret variable '{varName}' from profile '{profileName}'");
+        return 0;
+    }
+
+    // Reveal one secret's plaintext to stdout. Only succeeds for the same user account
+    // that encrypted it (DPAPI CurrentUser). `profile launch` decrypts in-process; this
+    // command exists only for the rare case where the agent actually needs the raw value
+    // (e.g. piping into a credential helper). Use sparingly to limit plaintext exposure.
+    static int ProfileRevealSecret(string profileName, string varName)
+    {
+        var profiles = LoadProfiles();
+        var profile = FindProfile(profiles, profileName);
+        if (profile == null) { Console.Error.WriteLine($"Error: Profile '{profileName}' not found"); return 1; }
+        var v = profile.Variables.FirstOrDefault(x => x.Name.Equals(varName, StringComparison.OrdinalIgnoreCase));
+        if (v == null) { Console.Error.WriteLine($"Error: Variable '{varName}' not found in profile '{profileName}'"); return 1; }
+        if (!profile.SecretVariables.Any(s => s.Equals(varName, StringComparison.OrdinalIgnoreCase)))
+        {
+            Console.Error.WriteLine($"Error: Variable '{varName}' is not a secret in profile '{profileName}'");
+            return 1;
+        }
+        try
+        {
+            Console.Out.Write(DpapiHelper.DecryptSecret(v.Value));
+            return 0;
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"Error: Failed to decrypt secret '{varName}': {ex.Message}");
+            return 1;
+        }
     }
 
     static int ProfileStatus(string name)
@@ -1220,9 +1332,26 @@ partial class Program
         foreach (var v in effectiveVars)
         {
             if (v.Name.Equals("PATH", StringComparison.OrdinalIgnoreCase)) continue;
-            // We do NOT decrypt DPAPI-encrypted secrets yet (introduced schema-only in v0.6.0).
-            // When encryption ships in v0.7, decrypt here using ProtectedData.Unprotect(CurrentUser).
-            psi.EnvironmentVariables[v.Name] = v.Value ?? string.Empty;
+            // v0.7: If this variable is in the profile's SecretVariables list, the stored
+            // value is a base64-encoded DPAPI ciphertext (CurrentUser scope). Decrypt here so
+            // the child process receives plaintext in its env block. Plaintext lives only in
+            // this launcher process memory; never written to disk, the registry, or logs.
+            string valueToInject = v.Value ?? string.Empty;
+            if (profile.SecretVariables.Contains(v.Name, StringComparer.OrdinalIgnoreCase))
+            {
+                try
+                {
+                    valueToInject = DpapiHelper.DecryptSecret(valueToInject);
+                }
+                catch (Exception)
+                {
+                    // Decryption failed: refuse to inject. Silent injection of garbage or
+                    // ciphertext would be worse than failing the whole launch loudly.
+                    Console.Error.WriteLine($"Error: Failed to decrypt secret '{v.Name}' for profile '{name}'");
+                    return 1;
+                }
+            }
+            psi.EnvironmentVariables[v.Name] = valueToInject;
         }
         foreach (string a in extraArgs) psi.ArgumentList.Add(a);
         if (!string.IsNullOrWhiteSpace(profile.LaunchArguments))
@@ -1263,7 +1392,12 @@ partial class Program
   profile import <file>                          Import profile from JSON file
   profile rename <old> <new>                     Rename a profile
   profile set-launch <name> --target <exe> [--args <args>] [--cwd <dir>] [--type global|launch]
-  profile launch <name> [-- <extra-args ...>]    Spawn target with isolated env from profile (no registry write)");
+  profile launch <name> [-- <extra-args ...>]    Spawn target with isolated env from profile (no registry write)
+  profile add-secret <profile> <name> <val>     Encrypt a value with DPAPI-CurrentUser; stored as ciphertext in profile json
+  profile edit-secret <profile> <old> <new> <val>  Rename/re-encrypt a secret; plaintext lives only in memory
+  profile remove-secret <profile> <name>          Remove a secret variable from a profile
+  profile reveal-secret <profile> <name>          Print one secret's plaintext to stdout (DPAPI-bound to current user only)
+  profile show <name> [--reveal]                  Show profile details (secret values masked unless --reveal; --reveal still only outputs decrypted value for the current user)");
         return 0;
     }
 
@@ -1308,6 +1442,7 @@ partial class Program
             Variables = new List<ProfileVariable>()
         };
         var createdSummary = ProfileSummary(profile);
+        profiles.Add(profile);
         SaveProfiles(profiles);
         RecordProfileAudit("profile create", name, null, createdSummary);
         Console.WriteLine($"Created profile: {name}");
@@ -1337,7 +1472,7 @@ partial class Program
         return 0;
     }
 
-    static int ProfileShow(string name)
+    static int ProfileShow(string name, bool revealSecrets = false)
     {
         var profiles = LoadProfiles();
         var profile = FindProfile(profiles, name);
@@ -1346,8 +1481,48 @@ partial class Program
             Console.Error.WriteLine($"Error: Profile '{name}' not found");
             return 1;
         }
-        Console.WriteLine(JsonSerializer.Serialize(profile, JsonOptsIndented));
+        // v0.7: secret variable values are DPAPI-encrypted ciphertext on disk. By default
+        // we emit "<encrypted>" in place of their values via stdout, so that an agent
+        // calling 'profile show' for structural inspection never inadvertently receives or
+        // records plaintext. Use 'profile show <name> --reveal' to surface decrypted values
+        // (DPAPI-bound to the current user; decryption fails on any other user account).
+        var masked = new ProfileData
+        {
+            Id = profile.Id,
+            Name = profile.Name,
+            IsEnabled = profile.IsEnabled,
+            AppliedAt = profile.AppliedAt,
+            Inherits = profile.Inherits,
+            PathEntries = profile.PathEntries,
+            ProfileType = profile.ProfileType,
+            TargetExecutable = profile.TargetExecutable,
+            LaunchArguments = profile.LaunchArguments,
+            WorkingDirectory = profile.WorkingDirectory,
+            SecretVariables = profile.SecretVariables,
+        };
+        foreach (var v in profile.Variables)
+        {
+            if (profile.SecretVariables.Contains(v.Name, StringComparer.OrdinalIgnoreCase))
+            {
+                masked.Variables.Add(new ProfileVariable
+                {
+                    Name = v.Name,
+                    Value = revealSecrets ? TryDecryptSafe(v.Value) : "<encrypted>",
+                });
+            }
+            else
+            {
+                masked.Variables.Add(new ProfileVariable { Name = v.Name, Value = v.Value });
+            }
+        }
+        Console.WriteLine(JsonSerializer.Serialize(masked, JsonOptsIndented));
         return 0;
+    }
+
+    static string TryDecryptSafe(string ciphertext)
+    {
+        try { return DpapiHelper.DecryptSecret(ciphertext); }
+        catch { return "<decryption-failed>"; }
     }
 
     static int ProfileApply(string name)

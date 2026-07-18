@@ -270,12 +270,17 @@
                 </span>
               </td>
               <td
-                class="px-3 py-2 text-xs text-gray-600 font-mono dark:text-gray-300 max-w-xs truncate cursor-pointer hover:text-blue-600 dark:hover:text-blue-400 transition select-none"
+                class="px-3 py-2 text-xs text-gray-600 font-mono dark:text-gray-300 max-w-md truncate cursor-pointer hover:text-blue-600 dark:hover:text-blue-400 transition select-none"
                 title={previewTitle(variable)}
                 on:mouseenter={() => scheduleExpandedPreview(variable)}
                 on:click={() => copyToClipboard(variable.value)}
               >
-                {variable.value}
+                {#each highlightParts(variable.value, $debouncedSearch) as part}<span class={part.match ? 'bg-yellow-200 text-gray-900 dark:bg-yellow-500/60 dark:text-white' : ''}>{part.text}</span>{/each}
+                {#if expandedValues[variable.scope + ':' + variable.name] && expandedValues[variable.scope + ':' + variable.name] !== variable.value}
+                  <div class="mt-0.5 text-[9px] text-gray-400 truncate" title={expandedValues[variable.scope + ':' + variable.name]}>
+                    -> {expandedValues[variable.scope + ':' + variable.name]}
+                  </div>
+                {/if}
               </td>
               <td class="px-3 py-2 text-right text-xs">
                 <button
