@@ -174,7 +174,7 @@ Per-app launch profiles extend the profile system without modifying existing Glo
 When adding a new GUI feature:
 1. Add the CLI command in `Program.cs`
 2. Add the API function in `frontend/src/lib/api.ts`
-3. Add the command to `ALLOWED_COMMANDS` in `main.rs` (current: list, get, set, rename, change-scope, delete, toggle, backup, restore, diff, merge, validate, help, profile, path, agents, history, bulk, expand, protection, update - v0.6.0 subcommands profile set-launch/launch/health and path health are subcommand-routed through 'profile'/'path' top-level entries already in ALLOWED_COMMANDS). Also add write commands to `WRITE_COMMANDS` and read commands to `READ_COMMANDS` as appropriate.
+3. Add the command to `ALLOWED_COMMANDS` in `main.rs` (current: list, get, set, rename, change-scope, delete, toggle, backup, restore, diff, merge, validate, help, profile, path, agents, history, bulk, expand, protection, update - v0.6.0 subcommands profile set-launch/launch/health/secrets and path health are subcommand-routed through 'profile'/'path' top-level entries already in ALLOWED_COMMANDS). Also add write commands to `WRITE_COMMANDS` and read commands to `READ_COMMANDS` as appropriate. v0.7.0 secrets subcommands (add-secret/edit-secret/remove-secret/reveal-secret) are READ-or-WRITE classified by the CLI internal switch (add/edit/remove-secret = write, reveal-secret = read).
 4. Add UI in the appropriate `.svelte` component
 5. Add i18n strings to ALL translation files
 6. Update the alignment table above
