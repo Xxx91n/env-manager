@@ -20,8 +20,8 @@ This document is the single source of truth for the Env Manager project. All dev
 ## Project Overview
 
 - **Name**: Env Manager
-- **Version**: 0.5.0
-- **License**: MIT
+- **Version**: 0.6.0
+- **License**: Apache-2.0
 - **Repository**: https://github.com/Xxx91n/env-manager
 - **Languages**: C# (.NET 10), TypeScript, Svelte 4, Rust
 - **Goal**: A modern, lightweight Windows environment variable manager with CLI and GUI dual-mode support, inspired by Microsoft PowerToys environment variable editor but standalone and agent-friendly.
@@ -56,9 +56,9 @@ env-manager/
 
 Full table, scope, debug, error handling, profiles, toggle, path editor, path resolution: see [docs/cli-commands.md](docs/cli-commands.md).
 
-Read-only (concurrent-safe, read-locked): `list`, `get`, `backup`, `diff`, `validate`, `agents`, `profile list/show/status`, `path list`, `path dedupe --dry-run`, `history list`, `bulk export`, `expand`, `protection list`, `update check`.
+Read-only (concurrent-safe, read-locked): `list`, `get`, `backup`, `diff`, `validate`, `agents`, `profile list/show/status, launch`, `path list, path health (no --fix)`, `path dedupe --dry-run`, `history list`, `bulk export`, `expand`, `protection list`, `update check`.
 
-Write (serialized, write-locked): `set`, `rename`, `change-scope`, `delete`, `toggle`, `restore`, `merge`, `profile create/delete/apply/unapply/add-var/remove-var/edit-var/rename`, `path add/remove/move-up/move-down/rename/dedupe`, `history undo/delete`, `bulk import`, `protection add-path/remove-path/add-var/remove-var`.
+Write (serialized, write-locked): `set`, `rename`, `change-scope`, `delete`, `toggle`, `restore`, `merge`, `profile create/delete/apply/unapply/add-var/remove-var/edit-var/rename, set-launch`, `path add/remove/move-up/move-down/rename/dedupe, path health --fix`, `history undo/delete`, `bulk import`, `protection add-path/remove-path/add-var/remove-var`.
 
 All commands: `env-manager-cli <command> [arguments] [--flags]`. `--debug`/`-d` anywhere enables verbose stderr. `--scope user|system` (default user). Exit 0/1.
 
@@ -72,6 +72,7 @@ These invariants must never be violated by any code change:
 - **Variable rename/scope-change contract**: `rename` writes+verifies target before deleting source. `change-scope` writes new scope, verifies, deletes source, relocates `_EnvManager_disabled` backup. Both reject protected `oldName`/`newName`/source-scope/target-scope at entry point. Never delete-then-set for renames.
 - **GUI EditDialog 3-way save ordering**: `rename(old scope)` -> `changeScope(overwrite flag, never hardcoded true)` -> `setVariable(value, overwrite flag)`. The `--overwrite` flag flows only from explicit user confirmation of the conflict modal, never an injected synthetic `true`.
 - **Profile audit**: `TryUndoProfileAudit` uses allow-list of known subcommands plus Id-based conflict detection; unknown `profile <x>` subcommands emit error and `return false` (never silently succeed); try/catch fallback returns false so `--force` contract works.
+- **v0.6.0 Launch profiles**: a Launch profile is NEVER written to the registry, NEVER broadcasts `WM_SETTINGCHANGE`. `profile launch` spawns the target with `env_clear` + inject, classified as read in Rust `is_read_only`. `profile set-launch` is a write (mutates profiles.json, holds `CLI_RWLOCK` write lock). `ValidateLaunchTarget` rejects `\Windows\System32` targets and non-executable extensions. Global and Launch profile name namespaces are independent (cross-type name collision allowed). Variable values NEVER appear in logs (hard boundary preserved) - this is why DPAPI in v0.7 will decrypt only at spawn time, never persist decrypted in profiles.json.
 - **`RunChangeScope` ambiguous-scope rejection**: when a variable exists in both user and system scope, the caller must specify `--scope` explicitly; auto-detection is rejected (no silent pick of user).
 - **`path dedupe` HashSet isolation**: the dedupe `seen` HashSet only records non-protected entries, so protected entries are never treated as duplicates of themselves or each other.
 - **Backup file validation**: `.json` extension required; writes to `\Windows`, `\Program Files`, `\Program Files (x86)` blocked; 50 MB cap.
@@ -138,6 +139,7 @@ Test file inventory:
 | `src/lib/change-scope-protection-profile.test.ts` | change-scope CLI args, protected-variable rejection, profile audit record + undo |
 | `src/lib/path-dedupe.test.ts` | dedupePathEntries CLI args (dry-run, scope), result shape, failure propagation |
 | `src/lib/review-regressions.test.ts` | Code-review invariants: EditDialog 3-way save ordering, toggle on protected, path dedupe protected isolation, change-scope ambiguous-scope rejection, profile audit fail-loud |
+| `src/lib/v0.6-launch-health.test.ts` | v0.6.0 profileSetLaunch/profileLaunch/pathHealth API arg construction, fix/dry-run routing, read vs write classification |
 
 ## Coding Standards
 

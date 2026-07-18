@@ -924,3 +924,82 @@ export async function addProtectedVar(name: string): Promise<void> {
 export async function removeProtectedVar(name: string): Promise<void> {
   await runWrite('protection', ['remove-var', name])
 }
+
+// --- v0.6.0 Launch profile + PATH health API ---
+
+/**
+ * Configures a Launch profile: sets the target executable / args / cwd, and optionally
+ * converts the profile type between 'global' and 'launch'.
+ * CLI: `profile set-launch <name> --target <exe> [--args <args>] [--cwd <dir>] [--type global|launch]`
+ */
+export interface ProfileLaunchConfig {
+  target?: string
+  args?: string
+  cwd?: string
+  type?: 'global' | 'launch'
+}
+
+export async function profileSetLaunch(profileName: string, config: ProfileLaunchConfig): Promise<string> {
+  const args = ['set-launch', profileName]
+  if (config.target !== undefined) { args.push('--target', config.target) }
+  if (config.args !== undefined) { args.push('--args', config.args) }
+  if (config.cwd !== undefined) { args.push('--cwd', config.cwd) }
+  if (config.type !== undefined) { args.push('--type', config.type) }
+  return await runWrite('profile', args)
+}
+
+/**
+ * Spawns the launch profile's target executable with an isolated environment block
+ * (env_clear + inject). The child process receives ONLY the profile's variables + PATH entries.
+ * Never writes the registry or broadcasts WM_SETTINGCHANGE. Logs nothing about values.
+ * CLI: `profile launch <name> [-- <extra-args ...>]`
+ * `extraArgs` is optional and passed to the spawned process as additional command-line arguments.
+ */
+export async function profileLaunch(profileName: string, extraArgs: string[] = []): Promise<string> {
+  const args = ['launch', profileName]
+  if (extraArgs.length > 0) {
+    args.push('--')
+    args.push(...extraArgs)
+  }
+  return await runRead('profile', args)
+}
+
+export interface PathHealthEntry {
+  entry: string
+  status: 'healthy' | 'dead' | 'duplicate' | 'duplicate+dead'
+  isProtected: boolean
+  isDead: boolean
+  isDuplicate: boolean
+  fullPath: string
+}
+
+export interface PathHealthResult {
+  scope: string
+  dryRun: boolean
+  totalEntries: number
+  healthyCount: number
+  duplicateCount: number
+  deadCount: number
+  wouldFix: boolean
+  results: PathHealthEntry[]
+}
+
+/**
+ * Detects PATH entries that are duplicates OR point to a directory that does not exist
+ * (dead path). Protected entries are NEVER marked as duplicates (defense-in-depth: HashSet
+ * isolation keeps protected entries out of the duplicate comparison set).
+ *
+ * By default (no flags), this is a pure read - returns the health report.
+ * Pass `fix: true` to remove non-protected duplicates and dead entries in one write.
+ * Pass `dryRun: true` to see what --fix would do without mutating the registry PATH.
+ *
+ * CLI: `path health [--scope user|system] [--fix] [--dry-run]`
+ */
+export async function pathHealth(scope: 'user' | 'system' = 'user', fix: boolean = false, dryRun: boolean = false): Promise<PathHealthResult> {
+  const args = ['health', '--scope', scope]
+  if (fix) args.push('--fix')
+  if (dryRun) args.push('--dry-run')
+  const fn = fix ? runWrite : runRead
+  const output = await fn('path', args)
+  return JSON.parse(output) as PathHealthResult
+}

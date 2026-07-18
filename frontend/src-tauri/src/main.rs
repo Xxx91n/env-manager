@@ -112,13 +112,17 @@ fn is_read_only(command: &str, args: &[String]) -> bool {
     match command {
         "profile" => {
             match args.first().map(|s| s.as_str()) {
-                Some("list") | Some("show") | Some("status") | Some("preview") | Some("export") => true,
-                _ => false, // create, delete, apply, unapply, add-var, remove-var, edit-var
+                Some("list") | Some("show") | Some("status") | Some("preview") | Some("export") | Some("launch") => true,
+                _ => false, // create, delete, apply, unapply, add-var, remove-var, edit-var, set-launch, rename
             }
         }
         "path" => {
             match args.first().map(|s| s.as_str()) {
                 Some("list") => true,
+                Some("health") => {
+                    // path health is read-only UNLESS --fix is passed (--fix mutates the registry PATH).
+                    !args.iter().any(|a| a == "--fix")
+                }
                 // dedupe --dry-run is read-only; dedupe without --dry-run mutates PATH
                 Some("dedupe") => args.iter().any(|arg| arg == "--dry-run"),
                 _ => false, // add, remove, move-up, move-down

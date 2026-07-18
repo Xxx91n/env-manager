@@ -52,14 +52,42 @@ partial class Program
 
     static void ValidateProfiles(List<ProfileData> profiles)
     {
-        var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        // v0.6.0: Global and Launch profiles share separate namespaces. Two Global profiles
+        // cannot share a name; two Launch profiles cannot share a name; a Global and a Launch
+        // profile MAY share a name because their effects do not collide (Global writes the
+        // registry, Launch only spawns a child process with an isolated environment block).
+        var globalNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var launchNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var profile in profiles)
         {
-            if (string.IsNullOrWhiteSpace(profile.Name) || !names.Add(profile.Name))
-                throw new InvalidDataException("Profile names must be non-empty and unique");
+            if (string.IsNullOrWhiteSpace(profile.Name))
+                throw new InvalidDataException("Profile names must be non-empty");
+
+            bool isLaunch = profile.ProfileType.Equals("launch", StringComparison.OrdinalIgnoreCase);
+            var setName = isLaunch ? launchNames : globalNames;
+            if (!setName.Add(profile.Name))
+                throw new InvalidDataException($"Profile names must be unique within the same profile type (duplicate: {profile.Name})");
+
+            if (isLaunch)
+            {
+                if (string.IsNullOrWhiteSpace(profile.TargetExecutable))
+                    throw new InvalidDataException($"Launch profile '{profile.Name}' must specify targetExecutable");
+                ValidateLaunchTarget(profile.TargetExecutable);
+            }
+            else
+            {
+                // Global profile: cannot reference a target executable (reserved for Launch type).
+                if (!string.IsNullOrWhiteSpace(profile.TargetExecutable))
+                    throw new InvalidDataException($"Global profile '{profile.Name}' must not set targetExecutable");
+            }
+
+            // Per-profile variable uniqueness within the profile itself.
+            var varNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             foreach (var variable in profile.Variables)
             {
                 ValidateVariableInput(variable.Name, variable.Value, "user");
+                if (!varNames.Add(variable.Name))
+                    throw new InvalidDataException($"Variable names must be unique within profile '{profile.Name}' (duplicate: {variable.Name})");
                 if (ProtectedSystemVars.Contains(variable.Name)) throw new InvalidDataException("Protected variables cannot be stored in profiles");
             }
             foreach (string path in profile.PathEntries) ValidatePathFragment(path);

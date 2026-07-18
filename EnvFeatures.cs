@@ -419,6 +419,38 @@ partial class Program
 
     static string NormalizePathEntry(string path) => Environment.ExpandEnvironmentVariables(path).Trim().TrimEnd('\\', '/');
 
+    /// <summary>
+    /// Removes the Windows \\?\ verbatim prefix that `Path.GetFullPath` can append.
+    /// We always expose normalized paths to the user, the registry, profiles, and PATH entries
+    /// to avoid leaking the prefix (regression: previously GUI "Add CLI to PATH" produced
+    /// \\?\D:\... in user PATH which broke child invocations).
+    /// </summary>
+    static string StripVerbatimPrefix(string? path)
+    {
+        if (string.IsNullOrEmpty(path)) return path ?? string.Empty;
+        if (path.StartsWith(@"\\?\UNC\", StringComparison.OrdinalIgnoreCase)) return @"\\" + path.Substring(8);
+        if (path.StartsWith(@"\\?\", StringComparison.OrdinalIgnoreCase)) return path.Substring(4);
+        return path;
+    }
+
+    /// <summary>
+    /// Validates that a Launch profile target executable exists, has a known executable
+    /// extension, and is NOT inside \\Windows\\System32 (hard refusal: system32 hijacking).
+    /// </summary>
+    static void ValidateLaunchTarget(string target)
+    {
+        if (string.IsNullOrWhiteSpace(target)) throw new InvalidDataException("Launch target is empty");
+        string cwd = Environment.CurrentDirectory;
+        string full = Path.IsPathRooted(target) ? target : Path.GetFullPath(Path.Combine(cwd, target));
+        string ext = Path.GetExtension(full).ToLowerInvariant();
+        if (ext is not (".exe" or ".bat" or ".cmd" or ".ps1"))
+            throw new InvalidDataException($"Launch target must be an .exe/.bat/.cmd/.ps1 file (got: {ext})");
+        if (!File.Exists(full)) throw new InvalidDataException($"Launch target does not exist: {full}");
+        string lower = full.ToLowerInvariant();
+        if (lower.StartsWith(@"c:\\windows\\system32\\"))
+            throw new InvalidDataException("Launch targets inside \\Windows\\System32 are rejected to prevent system32 hijacking");
+    }
+
     static List<ProfileVariable> ResolveProfileVariables(ProfileData profile, List<ProfileData>? profiles = null)
     {
         profiles ??= LoadProfiles();

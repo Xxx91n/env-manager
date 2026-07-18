@@ -38,6 +38,15 @@ class ProfileData
     [JsonPropertyName("inherits")] public List<string> Inherits { get; set; } = new();
     [JsonPropertyName("pathEntries")] public List<string> PathEntries { get; set; } = new();
     [JsonPropertyName("variables")] public List<ProfileVariable> Variables { get; set; } = new();
+
+    // Launch profile type: "global" (default, applies to user registry) or "launch" (launcher template, never writes registry).
+    // v0.6.0 introduces per-app launch profiles to avoid polluting the global user environment.
+    [JsonPropertyName("profileType")] public string ProfileType { get; set; } = "global";
+    [JsonPropertyName("targetExecutable")] public string? TargetExecutable { get; set; }
+    [JsonPropertyName("launchArguments")] public string? LaunchArguments { get; set; }
+    [JsonPropertyName("workingDirectory")] public string? WorkingDirectory { get; set; }
+    // Secret variable names in a launch profile are DPAPI-encrypted on disk; plaintext lives only in process memory.
+    [JsonPropertyName("secretVariables")] public List<string> SecretVariables { get; set; } = new();
 }
 
 partial class Program
@@ -745,6 +754,10 @@ partial class Program
             "export" => ProfileExport(args),
             "import" => ProfileImport(args),
             "rename" => args.Length < 4 ? ArgError("Usage: env-manager profile rename <old> <new>") : ProfileRename(args[2], args[3]),
+            // v0.6.0 Launch profile commands. Configure target executable + isolation settings
+            // without writing anything to the registry. Spawn a child process with env_clear + inject.
+            "set-launch" => ProfileSetLaunch(args),
+            "launch" => args.Length < 3 ? ArgError("Usage: env-manager profile launch <name> [-- <extra-args ...>]") : ProfileLaunch(args),
             "help" => ShowProfileHelp(),
             _ => ArgError($"Unknown profile subcommand: {sub}")
         };
@@ -1061,6 +1074,178 @@ partial class Program
         return 0;
     }
 
+        // v0.6.0: Launch profile support --------------------------------------------------
+    // Configure (or reset) a Launch profile's target executable / args / cwd without
+    // writing anything to the registry. The profile's variables remain the trusted source;
+    // when `profile launch` runs we spawn the target with env_clear + inject.
+    static int ProfileSetLaunch(string[] args)
+    {
+        // Usage: profile set-launch <name> --target <exe> [--args <args>] [--cwd <dir>] [--type global|launch]
+        // If [--type launch] is passed on an existing Global profile, we convert it (apply status must be false).
+        // If [--target """] clears target (only valid when [--type global]) the profile is converted back.
+        if (args.Length < 3)
+        {
+            Console.Error.WriteLine("Usage: env-manager profile set-launch <name> --target <exe> [--args <args>] [--cwd <dir>] [--type global|launch]");
+            return 1;
+        }
+        string name = args[2];
+        string? target = null, launchArgs = null, cwd = null, newType = null;
+        for (int i = 3; i < args.Length; i++)
+        {
+            string a = args[i];
+            switch (a)
+            {
+                case "--target": if (++i >= args.Length) goto Missing; target = args[i]; break;
+                case "--args": if (++i >= args.Length) goto Missing; launchArgs = args[i]; break;
+                case "--cwd": if (++i >= args.Length) goto Missing; cwd = args[i]; break;
+                case "--type": if (++i >= args.Length) goto Missing; newType = args[i]; break;
+                default: Console.Error.WriteLine($"Unknown flag: {a}"); return 1;
+            }
+        }
+        Missing:
+        if (target is null && newType is null)
+        {
+            Console.Error.WriteLine("Error: at least --target or --type must be specified");
+            return 1;
+        }
+        if (newType is not null && !newType.Equals("global", StringComparison.OrdinalIgnoreCase) && !newType.Equals("launch", StringComparison.OrdinalIgnoreCase))
+        {
+            Console.Error.WriteLine("Error: --type must be 'global' or 'launch'");
+            return 1;
+        }
+
+        var profiles = LoadProfiles();
+        var profile = FindProfile(profiles, name);
+        if (profile == null)
+        {
+            Console.Error.WriteLine($"Error: Profile '{name}' not found");
+            return 1;
+        }
+
+        bool wasEnabled = profile.IsEnabled;
+        if (wasEnabled)
+        {
+            Console.Error.WriteLine($"Error: Cannot modify a launch configuration while profile '{name}' is applied. Unapply it first.");
+            return 1;
+        }
+
+        if (newType is not null)
+        {
+            profile.ProfileType = newType.ToLowerInvariant();
+            if (profile.ProfileType == "global") profile.TargetExecutable = null;
+        }
+        if (profile.ProfileType.Equals("launch", StringComparison.OrdinalIgnoreCase))
+        {
+            if (target is not null) profile.TargetExecutable = StripVerbatimPrefix(target);
+            if (launchArgs is not null) profile.LaunchArguments = launchArgs;
+            if (cwd is not null) profile.WorkingDirectory = StripVerbatimPrefix(cwd);
+            if (string.IsNullOrWhiteSpace(profile.TargetExecutable))
+            {
+                Console.Error.WriteLine("Error: Launch profile requires --target <exe>");
+                return 1;
+            }
+        }
+        else
+        {
+            // Global profile: --target is forbidden.
+            if (target is not null)
+            {
+                Console.Error.WriteLine("Error: --target is only valid on Launch profiles");
+                return 1;
+            }
+        }
+        try
+        {
+            SaveProfiles(profiles);
+        }
+        catch (InvalidDataException ex)
+        {
+            Console.Error.WriteLine("Error: " + ex.Message);
+            return 1;
+        }
+        Console.WriteLine($"Updated launch configuration for profile '{name}' (type={profile.ProfileType})");
+        return 0;
+    }
+
+    /// <summary>
+    /// Spawn the Launch profile's target executable with an isolated environment block.
+    /// Critical safety properties:
+    /// - Calls `Command(env_clear)` then `env(k,v)` for each profile variable + PATH entries.
+    /// - NEVER calls `SetVariableWithoutNotify`, NEVER writes the registry, NEVER broadcasts WM_SETTINGCHANGE.
+    /// - Secret names (in profile.SecretVariables) are read but their values are NOT echoed to stdout/stderr.
+    /// - Logs only command names and arg counts (existing hard boundary: no env values in logs).
+    /// </summary>
+    static int ProfileLaunch(string[] args)
+    {
+        string name = args[2];
+        // Collect any trailing args after "--" and pass to the child as additional app args.
+        List<string> extraArgs = new();
+        int dashIndex = Array.IndexOf(args, "--");
+        if (dashIndex >= 0) extraArgs = args.Skip(dashIndex + 1).ToList();
+
+        var profiles = LoadProfiles();
+        var profile = FindProfile(profiles, name);
+        if (profile == null) { Console.Error.WriteLine($"Error: Profile '{name}' not found"); return 1; }
+        if (!profile.ProfileType.Equals("launch", StringComparison.OrdinalIgnoreCase))
+        {
+            Console.Error.WriteLine($"Error: Profile '{name}' is a Global profile; only Launch profiles support `profile launch`");
+            return 1;
+        }
+        if (string.IsNullOrWhiteSpace(profile.TargetExecutable))
+        {
+            Console.Error.WriteLine($"Error: Profile '{name}' has no targetExecutable. Use 'profile set-launch {name} --target <exe>' first.");
+            return 1;
+        }
+
+        string exe = profile.TargetExecutable!;
+        string cwd = profile.WorkingDirectory ?? Path.GetDirectoryName(exe)!;
+        var effectiveVars = GetEffectiveProfileVariables(profile);
+        var pathEntries = ResolveProfilePaths(profile);
+
+        var psi = new System.Diagnostics.ProcessStartInfo
+        {
+            FileName = exe,
+            UseShellExecute = false,
+            CreateNoWindow = false,
+            WorkingDirectory = cwd,
+        };
+        // Critical: do NOT inherit the parent's environment. The whole point of a Launch profile
+        // is per-app isolation. Start from an empty env block, then inject only profile vars.
+        psi.EnvironmentVariables.Clear();
+        // Inject PATH first so subsequent variables that reference %PATH% resolve cleanly.
+        var currentPath = pathEntries.Count > 0
+            ? string.Join(';', pathEntries)
+            : string.Empty;
+        if (!string.IsNullOrEmpty(currentPath)) psi.EnvironmentVariables["PATH"] = currentPath;
+        foreach (var v in effectiveVars)
+        {
+            if (v.Name.Equals("PATH", StringComparison.OrdinalIgnoreCase)) continue;
+            // We do NOT decrypt DPAPI-encrypted secrets yet (introduced schema-only in v0.6.0).
+            // When encryption ships in v0.7, decrypt here using ProtectedData.Unprotect(CurrentUser).
+            psi.EnvironmentVariables[v.Name] = v.Value ?? string.Empty;
+        }
+        foreach (string a in extraArgs) psi.ArgumentList.Add(a);
+        if (!string.IsNullOrWhiteSpace(profile.LaunchArguments))
+        {
+            // Append the profile-defined static args after the user-supplied extras are already listed.
+            // Order: user-supplied first, then profile default args. (Avoid surprising cross-shell parse.)
+            psi.ArgumentList.Add(profile.LaunchArguments);
+        }
+
+        try
+        {
+            var proc = System.Diagnostics.Process.Start(psi);
+            if (proc is null) { Console.Error.WriteLine("Error: Failed to start child process"); return 1; }
+            Console.WriteLine($"Launched '{exe}' (PID={proc.Id}) with isolated environment from profile '{name}'. {(extraArgs.Count > 0 ? "Extra args: " + extraArgs.Count : "")}");
+            return 0;
+        }
+        catch (System.ComponentModel.Win32Exception ex)
+        {
+            Console.Error.WriteLine($"Error: Failed to launch '{exe}': {ex.Message}");
+            return 1;
+        }
+    }
+
     static int ShowProfileHelp()
     {
         Console.WriteLine(@"Profile commands:
@@ -1076,7 +1261,9 @@ partial class Program
   profile status <name>                         Check profile application status
   profile export <name> --output <file>          Export profile to JSON file
   profile import <file>                          Import profile from JSON file
-  profile rename <old> <new>                     Rename a profile");
+  profile rename <old> <new>                     Rename a profile
+  profile set-launch <name> --target <exe> [--args <args>] [--cwd <dir>] [--type global|launch]
+  profile launch <name> [-- <extra-args ...>]    Spawn target with isolated env from profile (no registry write)");
         return 0;
     }
 
@@ -1443,6 +1630,7 @@ partial class Program
             "move-down" => args.Length < 3 ? ArgError("Usage: env-manager path move-down <index> [--scope user|system]") : PathMoveDown(args),
             "rename" => args.Length < 5 ? ArgError("Usage: env-manager path rename <old-name> <new-name> [--scope user|system]") : PathRename(args),
             "dedupe" => PathDedupe(args),
+            "health" => PathHealth(args),
             "help" => ShowPathHelp(),
             _ => ArgError($"Unknown path subcommand: {sub}")
         };
@@ -1456,6 +1644,110 @@ partial class Program
     /// Supports --dry-run to preview the removal without modifying PATH.
     /// Output is JSON so the GUI can show a precise before/after list.
     /// </summary>
+
+    /// <summary>
+    /// PATH health check: detect duplicates AND dead (non-existent) entries.
+    /// Protected entries are NEVER reported as duplicates (defense-in-depth: HashSet isolation),
+    /// and --fix NEVER removes a protected entry, even if it appears dead.
+    /// Output: JSON array of entries with status, deadCount, duplicateCount, healthyCount.
+    /// --fix: write a cleaned PATH, preserving order, removing ONLY non-protected duplicates and
+    ///       non-protected dead entries. Protected entries are always preserved.
+    /// </summary>
+    static int PathHealth(string[] args)
+    {
+        string? scope = ParseScope(args, 2, "user");
+        if (scope == null) return 1;
+        bool fix = args.Contains("--fix");
+        bool dryRun = args.Contains("--dry-run");
+
+        var entries = GetPathEntries(scope);
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var results = new List<object>();
+        var keptClean = new List<string>();
+        int deadCount = 0, dupCount = 0, healthyCount = 0;
+        foreach (var entry in entries)
+        {
+            bool isProtected = IsProtectedPathEntry(entry);
+            bool isDup = false;
+            if (!isProtected)
+            {
+                isDup = !seen.Add(NormalizePathEntry(entry));
+            }
+            bool isDead = false;
+            string expandedPath = Environment.ExpandEnvironmentVariables(entry);
+            string fullPath = StripVerbatimPrefix(Path.IsPathRooted(expandedPath) ? expandedPath : Path.GetFullPath(Path.Combine(Environment.CurrentDirectory, expandedPath)));
+            try { isDead = !Directory.Exists(fullPath); }
+            catch { isDead = true; }
+
+            string status = isDup || isDead
+                ? (isDup && isDead ? "duplicate+dead" : isDup ? "duplicate" : "dead")
+                : "healthy";
+            if (isDup) dupCount++;
+            if (isDead) deadCount++;
+            if (status == "healthy") healthyCount++;
+
+            bool keep = (!isDead || isProtected) && !isDup;
+            if (keep) keptClean.Add(entry);
+
+            results.Add(new
+            {
+                entry,
+                status,
+                isProtected,
+                isDead,
+                isDuplicate = isDup,
+                fullPath
+            });
+        }
+
+        if (!fix || dryRun)
+        {
+            Console.WriteLine(JsonSerializer.Serialize(new
+            {
+                scope,
+                dryRun = dryRun || !fix,
+                totalEntries = entries.Count,
+                healthyCount,
+                duplicateCount = dupCount,
+                deadCount,
+                wouldFix = fix && !dryRun,
+                results
+            }, JsonOpts));
+            return 0;
+        }
+
+        if (keptClean.Count == entries.Count)
+        {
+            Console.WriteLine(JsonSerializer.Serialize(new
+            {
+                scope,
+                dryRun = false,
+                totalEntries = entries.Count,
+                healthyCount,
+                duplicateCount = dupCount,
+                deadCount,
+                wouldFix = false,
+                results
+            }, JsonOpts));
+            return 0;
+        }
+
+        SetPathEntries(keptClean, scope);
+        RecordSnapshotDiff("path health --fix", CaptureEnvironmentSnapshot(), CaptureEnvironmentSnapshot());
+        Console.WriteLine(JsonSerializer.Serialize(new
+        {
+            scope,
+            dryRun = false,
+            totalEntries = entries.Count,
+            cleanedEntries = keptClean.Count,
+            removedDuplicate = dupCount,
+            removedDead = deadCount,
+            healthyCount,
+            results
+        }, JsonOpts));
+        return 0;
+    }
+
     static int PathDedupe(string[] args)
     {
         string? scope = ParseScope(args, 2, "user");
@@ -1593,7 +1885,8 @@ partial class Program
   path move-up <index> [--scope user|system]   Move PATH entry up
   path move-down <index> [--scope user|system] Move PATH entry down
   path rename <old> <new> [--scope user|system] Rename a PATH entry
-  path dedupe [--scope user|system] [--dry-run]  Remove duplicate PATH entries (preserves first, respects protected)");
+  path dedupe [--scope user|system] [--dry-run]  Remove duplicate PATH entries (preserves first, respects protected)
+  path health [--scope user|system] [--fix] [--dry-run]  Detect + optionally remove duplicates and dead (non-existent) PATH entries");
         return 0;
     }
 

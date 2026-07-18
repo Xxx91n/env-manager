@@ -107,11 +107,26 @@ Profile-level mutations (`create`, `delete`, `rename`, `add-var`, `remove-var`, 
 - `TryUndoProfileAudit(entry)` in `ProfileAudit.cs` reverses create (delete), delete (re-create from `OldValue`), rename (restore old name), add-var (remove the added variable), remove-var (re-add the removed variable), and edit-var (restore the pre-edit variable). `apply`, `unapply`, `set-inherits`, `add-path`, and `remove-path` are non-undoable no-ops; unknown `profile <x>` subcommands emit an error and `return false` rather than silently reporting success.
 - `RunHistoryCommand` dispatches profile entries to `TryUndoProfileAudit` and registry entries to the stale-value-verified undo path. The two paths never overlap.
 
+
+## v0.6.0 Launch Profile Architecture
+
+Per-app launch profiles extend the profile system without modifying existing Global profile behavior. A Launch profile is stored in `profiles.json` alongside Global profiles but is **never** written to the registry.
+
+**Data model**: `ProfileData` gains `profileType` (`"global" | "launch"`, default `"global"`), `targetExecutable`, `launchArguments`, `workingDirectory`, and `secretVariables` (schema-only - DPAPI decryption is reserved for v0.7).
+
+**Validation**: `ValidateProfiles` splits the uniqueness set by type (Global names unique within Global, Launch names unique within Launch, cross-type collisions allowed). `ValidateLaunchTarget` refuses targets inside `\Windows\System32` and rejects non-executable extensions.
+
+**Runtime (`profile launch`)**: spawns the target with `ProcessStartInfo { UseShellExecute=false, EnvironmentVariables.Clear(), env(\"K\",\"v\") }` for each profile variable and PATH entries. The child process receives ONLY the profile's environment and never inherits the parent's. `WM_SETTINGCHANGE` is NOT broadcast. Logs record only command names and arg counts - never variable values (preserves the "no env values in logs" hard boundary from AGENTS.md).
+
+**Race condition prevention**: `profile launch` is classified as read-only in Rust `is_read_only` (it does not mutate the registry or profiles.json). `profile set-launch` is classified as write (it mutates profiles.json) and acquires the `CLI_RWLOCK` write lock. The existing three-layer mutex (CLI `Local\EnvManager.RegistryMutation` + Rust `CLI_RWLOCK` + frontend `writeChain`) continues to protect all registry mutations.
+
+**Backward compatibility**: existing `profiles.json` without `profileType` defaults to `"global"` and behaves identically to v0.5.0.
+
 ## GUI/CLI Alignment
 
 **WARNING: When adding or changing GUI features, you MUST verify the CLI has matching support.** The GUI communicates with the CLI exclusively through `invoke('run_cli', { command, args })`. Every GUI action maps to a CLI command. If a GUI feature is added without CLI support, it will fail at runtime with "Unknown command".
 
-### Current Alignment Status (v0.5.0)
+### Current Alignment Status (v0.6.0)
 
 | GUI Feature | CLI Command | API Function | Aligned |
 |---|---|---|---|
@@ -149,13 +164,17 @@ Profile-level mutations (`create`, `delete`, `rename`, `add-var`, `remove-var`, 
 | Rename variable | `rename` | `renameVariable()`, `EditDialog` | Yes |
 | Change variable scope | `change-scope` | `changeScope()`, `EditDialog` | Yes |
 | Profile audit history | N/A (automatic) | N/A (automatic) | Yes |
+| v0.6.0 PATH health check | `path health [--fix] [--dry-run]` | `pathHealth()` | Yes (CLI/API); GUI badges pending |
+| v0.6.0 Profile set-launch | `profile set-launch` | `profileSetLaunch()` | Yes (CLI/API); GUI type badge pending |
+| v0.6.0 Profile launch (isolated env spawn) | `profile launch` | `profileLaunch()` | Yes (CLI/API); GUI launch button pending |
+| v0.6.0 Variable conflict confirmation modal | `set --overwrite` strictly enforced | (reuse) EditDialog Save + conflictConfirm | CLI: enforced via --overwrite; GUI modal pending |
 
 ### Alignment Checklist
 
 When adding a new GUI feature:
 1. Add the CLI command in `Program.cs`
 2. Add the API function in `frontend/src/lib/api.ts`
-3. Add the command to `ALLOWED_COMMANDS` in `main.rs` (current: list, get, set, rename, change-scope, delete, toggle, backup, restore, diff, merge, validate, help, profile, path, agents, history, bulk, expand, protection, update). Also add write commands to `WRITE_COMMANDS` and read commands to `READ_COMMANDS` as appropriate.
+3. Add the command to `ALLOWED_COMMANDS` in `main.rs` (current: list, get, set, rename, change-scope, delete, toggle, backup, restore, diff, merge, validate, help, profile, path, agents, history, bulk, expand, protection, update - v0.6.0 subcommands profile set-launch/launch and path health are subcommand-routed through 'profile'/'path' top-level entries already in ALLOWED_COMMANDS). Also add write commands to `WRITE_COMMANDS` and read commands to `READ_COMMANDS` as appropriate.
 4. Add UI in the appropriate `.svelte` component
 5. Add i18n strings to ALL translation files
 6. Update the alignment table above

@@ -52,6 +52,24 @@ Profiles are stored at `%LOCALAPPDATA%\EnvManager\profiles.json`:
 
 The GUI Profile page supports pointer-event-based drag-and-drop to reorder profiles (uses `pointerdown`/`pointerenter`/`pointerup` instead of HTML5 DnD, which WebView2/Tauri intercepts at the OS level causing a forbidden cursor). The order is persisted in `localStorage` as `envManager_profileOrder` and applied via `applyStoredOrder()` after `listProfiles()`. This is GUI-only sorting - no CLI calls, no profile data modification. Each profile card has a drag handle with a grab cursor.
 
+### v0.6.0 Launch Profile Schema
+
+Profile JSON gains these optional fields (see `ProfileData` in `Program.cs`):
+
+- `profileType`: `"global"` (default, current apply-to-user-registry behavior) or `"launch"` (launcher template).
+- `targetExecutable` (launch only): absolute or relative path to an executable. `ValidateLaunchTarget` rejects non-existent, non-executable, or System32 paths.
+- `launchArguments` (launch only): optional static args appended to the spawned command.
+- `workingDirectory` (launch only): optional cwd override.
+- `secretVariables`: list of variable names whose values are DPAPI-encrypted on disk. **Runtime decryption is reserved for v0.7**; in v0.6.0 this field is schema-only and any value is stored as plaintext.
+
+**Safety invariants specific to Launch profiles**:
+
+- A Launch profile is NEVER written to the user registry. `profile launch <name>` calls `ProcessStartInfo.EnvironmentVariables.Clear()` then `env(k,v)` per profile variable.
+- A Launch profile NEVER triggers `WM_SETTINGCHANGE`. New variables are visible ONLY to the spawned child process.
+- A Launch profile MAY share a name with a Global profile. Cross-type name collisions are explicit because the two kinds never overlap in effect (Global writes the registry, Launch spawns a child).
+- Logs continue to record only command names and arg counts. Variable values (encrypted or not) NEVER appear in CLI/Rust logs.
+- `profile set-launch` mutates `profiles.json` and is classified as a **write** command (holds the CLI `Local\EnvManager.RegistryMutation` mutex + Rust `CLI_RWLOCK` write lock). `profile launch` is classified as **read-only** (spawns a child; does not touch the registry or profiles.json).
+
 ### Extended State and Safety Contracts
 
 - `set` refuses to overwrite a different existing value unless `--overwrite` is explicit. GUI confirmation supplies this flag.
