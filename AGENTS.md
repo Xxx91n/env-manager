@@ -80,6 +80,7 @@ These invariants must never be violated by any code change:
 - **Backup file validation**: `.json` extension required; writes to `\Windows`, `\Program Files`, `\Program Files (x86)` blocked; 50 MB cap.
 - **Rust IPC input validation**: command whitelist, max 64 args, max 32,767 chars per arg, null bytes and control characters rejected.
 - **Audit history**: `%LOCALAPPDATA%\EnvManager\audit.json`, capped at 2,000 entries. Undo refuses stale changes unless `--force` explicit. Profile entries carry `Scope = "profile"` and route to `TryUndoProfileAudit`.
+- **Live test harness (hard boundary after incident)**: any local CLI smoke test against the REAL registry MUST be run via `scripts/test-with-restore.ps1`. That harness backs up BOTH `HKCU\Environment` and `HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\Environment` before each run, and restores BOTH on any verification drift or test failure. Never run raw `env-manager-cli set ... --scope system` against the real registry for testing without this wrapper. The HKLM backup is best-effort (admin may be required); if the export fails the harness warns but continues, and on restore it warns "skipping system-hive restore" if no HKLM backup exists. Both `.reg` and `.json` snapshot files are cleaned up on a clean run, retained when `-KeepBackup` is passed, and ALWAYS retained on failure for forensics. Backups live in `.test-backups/` (gitignored).
 - **Logs never record environment values** - CLI/Rust log command names and argument counts only. Values may contain credentials.
 
 ### Agent Safety Guidelines

@@ -89,6 +89,7 @@ Before building, stop any running instances: `Get-Process -Name 'env-manager*' -
 ### Live CLI smoke test with registry backup/restore
 
 When validating the published CLI binary, run the registry-safe live test harness **before** making any release commit:
+> The harness backs up BOTH `HKCU\Environment` and `HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\Environment` (best-effort; admin may be required for HKLM). On verification drift or test failure it restores BOTH hives and broadcasts `WM_SETTINGCHANGE`. Backups are cleaned up on a clean run, retained with `-KeepBackup`, and always kept on failure for forensics in `.test-backups/`. Never run raw `env-manager-cli set ... --scope system` against the real registry without this wrapper - this is now a project hard boundary (see AGENTS.md).
 
 ```powershell
 # After build-all.ps1 has produced release/cli-only/env-manager-cli.exe:

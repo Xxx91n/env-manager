@@ -13,6 +13,9 @@ if (-not (Test-Path $BackupDir)) { New-Item -ItemType Directory -Path $BackupDir
 $Stamp = (Get-Date -Format "yyyyMMdd-HHmmss")
 $UserRegBackup = Join-Path $BackupDir "user-env-$Stamp.reg"
 $UserJsonBackup = Join-Path $BackupDir "user-env-$Stamp.json"
+$SystemRegBackup = Join-Path $BackupDir "system-env-$Stamp.reg"
+$SystemJsonBackup = Join-Path $BackupDir "system-env-$Stamp.json"
+$SystemEnvKey = "HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\Environment"
 $TestPrefix = "EM_TEST_"
 
 function Invoke-Cli([string[]]$CliArgs) {
@@ -42,6 +45,30 @@ function Backup-UserRegistry {
   }
   $snap | ConvertTo-Json -Depth 5 | Set-Content -Path $UserJsonBackup -Encoding UTF8
   Write-Host "[test-with-restore] Backup OK: $UserRegBackup"
+
+  # BHLM: also back up HKLM Environment so system PATH can be restored if a test clobbers it.
+  Write-Host "[test-with-restore] Backing up $SystemEnvKey ..." -ForegroundColor Cyan
+  $sysExport = reg export $SystemEnvKey $SystemRegBackup /y 2>&1
+  if ($LASTEXITCODE -ne 0) {
+    Write-Warning "reg export HKLM Environment failed (may need admin): $sysExport"
+  } else {
+    $sysSnap = @{}
+    try {
+      $sysKey = [Microsoft.Win32.Registry]::LocalMachine.OpenSubKey("SYSTEM\CurrentControlSet\Control\Session Manager\Environment", $false)
+      if ($null -ne $sysKey) {
+        foreach ($name in $sysKey.GetValueNames()) {
+          if ($name -like "$TestPrefix*") {
+            $sysSnap[$name] = @{ Value = $sysKey.GetValue($name, "", [Microsoft.Win32.RegistryValueOptions]::DoNotExpandEnvironmentNames); Kind = $sysKey.GetValueKind($name).ToString() }
+          }
+        }
+        $sysKey.Close()
+      }
+    } catch {
+      Write-Warning "Failed to read HKLM Environment for snapshot: $($_.Exception.Message)"
+    }
+    $sysSnap | ConvertTo-Json -Depth 5 | Set-Content -Path $SystemJsonBackup -Encoding UTF8
+    Write-Host "[test-with-restore] HKLM Backup OK: $SystemRegBackup"
+  }
 }
 
 function Compare-UserRegistry {
@@ -86,6 +113,16 @@ function Restore-UserRegistry {
   $regImport = reg import $UserRegBackup 2>&1
   if ($LASTEXITCODE -ne 0) {
     Write-Error "reg import failed: $regImport"
+  }
+
+  if (Test-Path $SystemRegBackup) {
+    Write-Warning "[test-with-restore] Restoring $SystemEnvKey from backup ..."
+    $sysImport = reg import $SystemRegBackup 2>&1
+    if ($LASTEXITCODE -ne 0) {
+      Write-Warning "reg import HKLM failed (may need admin): $sysImport"
+    }
+  } else {
+    Write-Warning "[test-with-restore] No HKLM backup present; skipping system-hive restore."
   }
   $sig = '[DllImport("user32.dll", SetLastError = true, CharSet = CharSet.Auto)] public static extern IntPtr SendMessageTimeout(IntPtr hWnd, uint Msg, UIntPtr wParam, string lParam, uint fuFlags, uint uTimeout, out UIntPtr lpdwResult);'
   $null = Add-Type -MemberDefinition $sig -Name "Win32SendMessage" -Namespace "EnvManager.Test" -ErrorAction SilentlyContinue
@@ -212,6 +249,8 @@ if ($allPass) {
   if (-not $KeepBackup) {
     Remove-Item $UserRegBackup -Force -ErrorAction SilentlyContinue
     Remove-Item $UserJsonBackup -Force -ErrorAction SilentlyContinue
+    Remove-Item $SystemRegBackup -Force -ErrorAction SilentlyContinue
+    Remove-Item $SystemJsonBackup -Force -ErrorAction SilentlyContinue
     Write-Host "[test-with-restore] Backups deleted (clean run)."
   } else {
     Write-Host "[test-with-restore] Backups retained (-KeepBackup)."
