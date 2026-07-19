@@ -13,7 +13,10 @@
   // Derived: filter history by selected scope
   $: filteredHistory = scope === 'all' ? allHistory : allHistory.filter(e => e.scope === scope)
 
-  onMount(refresh)
+  onMount(() => {
+    loadColWidths()
+    refresh()
+  })
 
   async function refresh() {
     loading = true
@@ -130,8 +133,82 @@
       },
     })
   }
+
+  // Column resize: drag the column header border to change width. Persisted to
+  // localStorage so the user's preference survives across sessions.
+  let colWidths: Record<string, number> = {}
+  const COL_STORAGE_KEY = 'history-col-widths'
+  const COL_DEFAULTS: Record<string, number> = { time: 144, action: 120, scope: 96, name: 144, change: 240, ops: 96 }
+
+  function loadColWidths() {
+    try {
+      const stored = JSON.parse(localStorage.getItem(COL_STORAGE_KEY) || '{}')
+      colWidths = { ...COL_DEFAULTS, ...stored }
+    } catch {
+      colWidths = { ...COL_DEFAULTS }
+    }
+    applyColWidths()
+  }
+
+  function applyColWidths() {
+    const root = document.querySelector('.history-table-root') as HTMLElement | null
+    if (!root) return
+    for (const [k, v] of Object.entries(colWidths)) {
+      root.style.setProperty(`--col-${k}`, `${v}px`)
+    }
+  }
+
+  let resizing: { col: string; startX: number; startW: number } | null = null
+
+  function startResize(e: MouseEvent) {
+    const th = e.currentTarget as HTMLElement
+    const col = th.dataset.col
+    if (!col) return
+    resizing = { col, startX: e.clientX, startW: colWidths[col] ?? COL_DEFAULTS[col] ?? 120 }
+    document.body.classList.add('select-none', 'cursor-col-resize')
+    window.addEventListener('mousemove', onResizeMove)
+    window.addEventListener('mouseup', endResize)
+    e.preventDefault()
+  }
+
+  function onResizeMove(e: MouseEvent) {
+    if (!resizing) return
+    const dx = e.clientX - resizing.startX
+    const newW = Math.max(60, Math.min(800, resizing.startW + dx))
+    colWidths[resizing.col] = newW
+    const root = document.querySelector('.history-table-root') as HTMLElement | null
+    if (root) root.style.setProperty(`--col-${resizing.col}`, `${newW}px`)
+  }
+
+  function endResize() {
+    if (resizing) {
+      try { localStorage.setItem(COL_STORAGE_KEY, JSON.stringify(colWidths)) } catch {}
+    }
+    resizing = null
+    document.body.classList.remove('select-none', 'cursor-col-resize')
+    window.removeEventListener('mousemove', onResizeMove)
+    window.removeEventListener('mouseup', endResize)
+  }
 </script>
 
+<style>
+  .history-table-root { max-height: 70vh; }
+  .history-table-root th.resize { position: relative; }
+  .history-table-root th.resize::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    right: 0;
+    width: 4px;
+    height: 100%;
+    cursor: col-resize;
+    background: transparent;
+    transition: background 0.15s;
+  }
+  .history-table-root th.resize:hover::after {
+    background: rgba(59, 130, 246, 0.4);
+  }
+</style>
 <div class="space-y-3">
   <div class="flex items-center gap-2">
     <select bind:value={scope} on:change={refresh} class="px-2.5 py-1.5 text-xs border border-gray-300 rounded-md bg-white dark:bg-gray-800 dark:border-gray-600 dark:text-gray-100">
@@ -148,28 +225,36 @@
     <button on:click={refresh} class="ml-auto px-3 py-1.5 text-xs text-gray-600 hover:bg-gray-100 rounded-md dark:text-gray-300 dark:hover:bg-gray-700">{$t('buttons.refresh')}</button>
   </div>
 
-  <div class="bg-white border border-gray-200 rounded-md overflow-hidden dark:bg-gray-800 dark:border-gray-700">
+  <div class="history-table-root bg-white border border-gray-200 rounded-md overflow-auto dark:bg-gray-800 dark:border-gray-700">
     {#if loading}
       <div class="p-8 text-center text-xs text-gray-400">{$t('messages.loading')}</div>
     {:else if filteredHistory.length === 0}
       <div class="p-8 text-center text-xs text-gray-400">{$t('history.empty')}</div>
     {:else}
       <table class="w-full table-fixed">
+        <colgroup>
+          <col style="width: var(--col-time, 144px);">
+          <col style="width: var(--col-action, 120px);">
+          <col style="width: var(--col-scope, 96px);">
+          <col style="width: var(--col-name, 144px);">
+          <col style="width: var(--col-change, 240px);">
+          <col style="width: var(--col-ops, 96px);">
+        </colgroup>
         <thead class="bg-gray-50 border-b border-gray-200 dark:bg-gray-750 dark:border-gray-700">
           <tr>
-            <th class="w-36 px-3 py-2 text-left text-[10px] text-gray-500">{$t('history.time')}</th>
-            <th class="w-20 px-3 py-2 text-left text-[10px] text-gray-500">{$t('history.action')}</th>
-            <th class="w-16 px-3 py-2 text-left text-[10px] text-gray-500">{$t('scope.scope')}</th>
-            <th class="w-36 px-3 py-2 text-left text-[10px] text-gray-500">{$t('table.name')}</th>
-            <th class="px-3 py-2 text-left text-[10px] text-gray-500">{$t('history.change')}</th>
-            <th class="w-24 px-3 py-2"></th>
+            <th data-col="time" on:mousedown={startResize} class="resize px-3 py-2 text-left text-[10px] text-gray-500 select-none cursor-col-resize">{$t('history.time')}</th>
+            <th data-col="action" on:mousedown={startResize} class="resize px-3 py-2 text-left text-[10px] text-gray-500 select-none cursor-col-resize">{$t('history.action')}</th>
+            <th data-col="scope" on:mousedown={startResize} class="resize px-3 py-2 text-left text-[10px] text-gray-500 select-none cursor-col-resize">{$t('scope.scope')}</th>
+            <th data-col="name" on:mousedown={startResize} class="resize px-3 py-2 text-left text-[10px] text-gray-500 select-none cursor-col-resize">{$t('table.name')}</th>
+            <th data-col="change" on:mousedown={startResize} class="resize px-3 py-2 text-left text-[10px] text-gray-500 select-none cursor-col-resize">{$t('history.change')}</th>
+            <th class="px-3 py-2"></th>
           </tr>
         </thead>
         <tbody class="divide-y divide-gray-100 dark:divide-gray-700">
           {#each filteredHistory as entry (entry.id)}
             <tr class="hover:bg-gray-50 dark:hover:bg-gray-750">
               <td class="px-3 py-2 text-[10px] text-gray-500">{new Date(entry.timestamp).toLocaleString()}</td>
-              <td class="px-3 py-2 text-[10px] font-mono truncate" title={entry.command}>{entry.scope === 'profile' ? entry.command : entry.command.split(' ')[0]}</td>
+              <td class="px-3 py-2 text-[10px] font-mono break-all whitespace-normal" title={entry.command}>{entry.scope === 'profile' ? entry.command : entry.command.split(' ')[0]}</td>
               <td class="px-3 py-2 text-[10px]">
                 {#if entry.scope === 'profile'}
                   <span class="px-1.5 py-0.5 rounded text-[9px] font-medium bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300">{$t('scope.profile')}</span>

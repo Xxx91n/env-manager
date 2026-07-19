@@ -86,6 +86,19 @@ A commit that does not produce working `release/` artifacts is considered incomp
 
 Before building, stop any running instances: `Get-Process -Name 'env-manager*' -ErrorAction SilentlyContinue | Stop-Process -Force`.
 
+### Live CLI smoke test with registry backup/restore
+
+When validating the published CLI binary, run the registry-safe live test harness **before** making any release commit:
+
+```powershell
+# After build-all.ps1 has produced release/cli-only/env-manager-cli.exe:
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/test-with-restore.ps1
+```
+
+The harness implements the two-pronged gate described in AGENTS.md: it backs up `HKCU\Environment` to a `.reg` file before tests, runs a smoke suite restricted to `EM_TEST_`-prefixed user variables + ephemeral profiles, then verifies registry drift is zero (a leftover `EM_TEST_` key or a value change on a pre-existing key triggers restore). On green-all and zero drift, the backup auto-deletes. On any failure, it restores via `reg import` and broadcasts `WM_SETTINGCHANGE`, keeps the backup in `.test-backups/` for forensics, and exits non-zero.
+
+`.test-backups/` is gitignored.
+
 ## How to Release
 
 1. Update version in `env-manager.csproj`, `frontend/package.json`, `frontend/src-tauri/tauri.conf.json`, `frontend/src-tauri/Cargo.toml`

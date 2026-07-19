@@ -336,6 +336,16 @@ partial class Program
     {
         string? scope = ParseScope(args, 3, "user");
         if (scope == null) return 1;
+
+        // SAFETY (hard boundary): reject protected-system-variable writes BEFORE
+        // any value comparison -- otherwise the "already exists" overwrite
+        // prompt can leak past the protection guard for non-interactive flows.
+        if (IsProtectedVariable(args[1], scope))
+        {
+            Console.Error.WriteLine($"Error: Cannot modify protected system variable '{args[1]}'");
+            return 1;
+        }
+
         string? existing = GetVariableValue(args[1], scope);
         if (existing != null && existing != args[2] && !args.Contains("--overwrite"))
             return ArgError("Error: Variable already exists with a different value; use --overwrite");
@@ -347,10 +357,18 @@ partial class Program
     {
         string? scope = ParseScope(args, 2, "user");
         if (scope == null) return 1;
+
+        // SAFETY (hard boundary): reject protected-system-variable deletes BEFORE
+        // delegating to DeleteVariable, so non-interactive callers see a clear
+        // non-zero exit and a "protected" error message rather than silent success.
+        if (IsProtectedVariable(args[1], scope))
+        {
+            Console.Error.WriteLine($"Error: Cannot delete protected system variable '{args[1]}'");
+            return 1;
+        }
         DeleteVariable(args[1], scope);
         return 0;
     }
-
     static int RunBackup(string[] args)
     {
         string outputPath = "env_backup_" + DateTime.Now.ToString("yyyyMMdd_HHmmss") + ".json";

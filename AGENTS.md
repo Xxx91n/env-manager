@@ -123,6 +123,7 @@ Mandatory rules:
 3. **i18n key completeness**: `src/lib/translations.test.ts` validates every `en.json` key exists in all 9 non-English files with non-empty values.
 4. **Build verification after code changes**: run `powershell -NoProfile -ExecutionPolicy Bypass -File frontend/scripts/build-all.ps1` and verify `release/portable/env-manager.exe` launches. Do not commit code that breaks the build. See [docs/build-and-release.md](docs/build-and-release.md).
 5. **No emoji in tests** - same no-emoji rule as the rest of the project.
+6. **Live CLI test harness (two-pronged gate)**: when validating the published CLI in `release/cli-only/`, run `powershell -NoProfile -ExecutionPolicy Bypass -File scripts/test-with-restore.ps1`. This script backs up `HKCU\Environment` to a `.reg` file before tests, runs a smoke suite that touches only `EM_TEST_`-prefixed user variables and profiles, then verifies registry drift is zero (leftover `EM_TEST_` keys or modified pre-existing keys trigger restore). On any failure (test fails OR registry drift detected), it restores from the backup, broadcasts `WM_SETTINGCHANGE`, and exits non-zero while keeping the backup for forensics. On a clean run the backup is auto-deleted. Never run live CLI smoke tests against the real registry without this script (it is the only guard that prevents test-time mutation of the host machine).
 
 Test file inventory:
 
@@ -143,6 +144,9 @@ Test file inventory:
 | `src/lib/review-regressions.test.ts` | Code-review invariants: EditDialog 3-way save ordering, toggle on protected, path dedupe protected isolation, change-scope ambiguous-scope rejection, profile audit fail-loud |
 | `src/lib/v0.6-launch-health.test.ts` | v0.6.0 profileSetLaunch/profileLaunch/pathHealth API arg construction, fix/dry-run routing, read vs write classification |
 | `src/lib/v0.7-secrets.test.ts` | v0.7 profileAddSecret/EditSecret/RemoveSecret/RevealSecret CLI args (path, write classification), secretVariables type surface, design invariants |
+| `src/lib/path-badge-exclusivity.test.ts` | PathEditor badge exclusivity after health check (single duplicate badge regression, all boolean combinations) |
+| `src/lib/history-col-resize.test.ts` | HistoryPage column resize persistence, defaults, corrupt-storage fallback, clamp range |
+| `scripts/test-with-restore.ps1` | Live CLI smoke harness: backup `HKCU\Environment` -> set/rename/profile/secrets tests -> verify registry drift -> conditional restore. Touch-only-EM_TEST_-keys invariant. |
 
 ## Coding Standards
 

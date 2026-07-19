@@ -489,13 +489,7 @@
                   >
                     {entry.path}
                   </div>
-                  <div class="mt-0.5 flex items-center gap-1 flex-wrap text-[9px]">
-                    {#if !entry.exists}
-                      <span class="inline-flex items-center px-1.5 py-0.5 rounded bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300" title={$t('path.missing')}->{$t('path.dead')}</span>
-                    {/if}
-                    {#if entry.isDuplicate}
-                      <span class="inline-flex items-center px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300">{$t('path.duplicate')}</span>
-                    {/if}
+                <div class="mt-0.5 flex items-center gap-1 flex-wrap text-[9px]">
                     {#if healthMap.has(entry.path)}
                       {@const h = healthMap.get(entry.path)}
                       {#if h.isDead && h.isDuplicate}
@@ -506,6 +500,13 @@
                         <span class="inline-flex items-center px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300">{$t('path.duplicate')}</span>
                       {:else}
                         <span class="inline-flex items-center px-1.5 py-0.5 rounded bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300">{$t('path.healthy')}</span>
+                      {/if}
+                    {:else}
+                      {#if !entry.exists}
+                        <span class="inline-flex items-center px-1.5 py-0.5 rounded bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300" title={$t('path.missing')}>{$t('path.dead')}</span>
+                      {/if}
+                      {#if entry.isDuplicate}
+                        <span class="inline-flex items-center px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300">{$t('path.duplicate')}</span>
                       {/if}
                     {/if}
                     {#if entry.expandedPath !== entry.path}<span class="font-mono text-gray-400 truncate max-w-xs" title={entry.expandedPath}>{entry.expandedPath}</span>{/if}
