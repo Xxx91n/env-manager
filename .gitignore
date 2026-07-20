@@ -55,6 +55,7 @@ frontend/src-tauri/.cargo/config.toml
 # === Temporary / cache ===
 .codex-tmp/
 .test-backups/
+.env_bak/
 
 .cache/
 .temp/

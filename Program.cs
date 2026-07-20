@@ -198,6 +198,22 @@ partial class Program
 
     static int Main(string[] args)
     {
+        // v0.7.1 fix: recover from the classic Windows "trailing backslash + quote"
+        // tokenizer hazard, where values like "C:\Program Files\PowerShell\7\"
+        // merge with following --scope/--overwrite flags. Main(args) follows
+        // CommandLineToArgvW, treating an odd backslash count before a quote as
+        // an escaped literal quote. We re-tokenize Environment.CommandLine with
+        // a lenient rule (quote is always a terminator, backslashes are literal)
+        // so trailing-backslash PATH values survive.
+        if (LenientArgs.WasArgsCorruptedByTrailingBackslashQuote(args))
+        {
+            string[] recovered = LenientArgs.Tokenize();
+            if (recovered != null && recovered.Length >= args.Length)
+            {
+                args = recovered;
+            }
+        }
+
         if (args.Length == 0)
         {
             ShowHelp();

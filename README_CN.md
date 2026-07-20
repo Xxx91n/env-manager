@@ -310,6 +310,11 @@ Apache-2.0 - 可自由用于个人和商业项目。详见 [LICENSE](LICENSE)。
 
 ---
 
+### v0.7.1
+
+- 修复 Windows argv 解析器的一个隐患:以反斜杠结尾的带引号 PATH 值(例如 `"C:\Program Files\PowerShell\7\"`)会把后面的 `--scope` 参数吞进值里。CLI 现在会在启动时检测该特征并惰性重新分词,GUI/Tauri 路径传入的干净 argv 不会被改动。
+- 新增会话级主机环境快照脚本 `scripts/snapshot-host-env.ps1`,在本地开发前把用户和系统环境变量配置单元以及 Env Manager 内部配置导出到 `.env_bak/` 作为取证安全网。
+
 ## 贡献
 
 开源项目。如有问题、功能需求或拉取请求，请前往 [GitHub 仓库](https://github.com/Xxx91n/env-manager)。

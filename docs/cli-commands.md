@@ -133,3 +133,23 @@ Duplicate removal via `path dedupe` (mirrors PowerToys issue #40402). The CLI pr
 3. Dev mode relative paths - `../../../../bin/Release/net10.0/`
 4. Current working directory
 5. PATH fallback (`where env-manager-cli.exe`)
+
+## Passing values with spaces or trailing backslashes
+
+When invoking the CLI from a shell (cmd / PowerShell), a quoted value that ends with a trailing backslash triggers a known .NET argv tokenizer hazard: the backslash escapes the closing quote, so the quote and any following arguments (e.g. `--scope user`) get folded INTO the value. Example:
+
+```powershell
+# BROKEN in cmd / PowerShell: value becomes 'C:\Program Files\PowerShell\7\" --scope user'
+env-manager-cli path add "C:\Program Files\PowerShell\7\" --scope user
+```
+
+The CLI now detects and recovers this case at startup via `LenientArgs.WasArgsCorruptedByTrailingBackslashQuote` + `LenientArgs.Tokenize` (see `ArgTokenizer.cs`). Detection is signature-based: re-tokenization only triggers when an arg element contains both a literal quote and an embedded flag literal like ` --scope `, ` --overwrite`, ` --index `. Clean argv from any caller (including the Tauri/Rust `Command::arg()` path used by the GUI) is never mutated.
+
+For maximum safety, use the `--` separator before the value, which forces the parser to treat everything after `--` as positional:
+
+```powershell
+# Safe in any shell:
+env-manager-cli path add -- "C:\Program Files\PowerShell\7\" --scope user
+```
+
+Note: the GUI never hits this hazard. It builds an `args[]` array in TypeScript and sends it via Tauri IPC; the Rust backend spawns the CLI with `Command::arg()`, so each arg is an independent element and no shell tokenization happens.

@@ -238,7 +238,33 @@ Run-Test "secrets never in registry" {
   $null = Invoke-Cli @("profile", "delete", "EM_TEST_SEC")
 }
 
+Run-Test "trailing-backslash + quote recovery (issue: quoting bug)" {
+  # Reproduces the classic Windows tokenizer hazard:
+  #   cli path add "C:\Program Files\PowerShell\7\" --scope user
+  # Before fix, CommandLineToArgvW merged the trailing \" with the following
+  # --scope flag, producing a single arg element containing the flag literal.
+  # We invoke with & $CliPath @args (argv-array semantics; stdout suppressed).
+  # The CLI was rebuilt for v0.7.1 with LenientArgs.Tokenize() + recovery detector.
+  foreach ($scenario in @("user")) {
+    $value = 'C:\Program Files\PowerShell\7\'
+    & $CliPath @("path", "add", $value, "--scope", $scenario) 2>&1 | Out-Null
+    $exit = $LASTEXITCODE
+    if ($exit -ne 0) { throw "path add trailing-backslash exit=$exit" }
+    $listOut = & $CliPath path list --scope $scenario 2>&1 | Out-String
+    $listLines = $listOut -split "\r?\n" | Where-Object { $_ -like "*PowerShell*7*" }
+    if ($listLines.Count -eq 0) { throw "PowerShell 7 entry was not inserted into PATH" }
+    $bugEntry = $listLines | Where-Object { $_ -like "*--scope*" }
+    if ($bugEntry -and $bugEntry.Count -gt 0) {
+      throw "BUG: PATH entry contains the swallowed --scope token: $($bugEntry -join '|')"
+    }
+    & $CliPath @("path", "remove", $value, "--scope", $scenario) 2>&1 | Out-Null
+    $clnExit = $LASTEXITCODE
+    if ($clnExit -ne 0) { throw "cleanup path remove failed exit=$clnExit" }
+  }
+}
+
 Write-Host ""
+
 Write-Host "[test-with-restore] Verifying registry integrity ..." -ForegroundColor Cyan
 $verify = Compare-UserRegistry -JsonSnapshotPath $UserJsonBackup
 

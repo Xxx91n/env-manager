@@ -199,3 +199,15 @@ The GUI has a frontend-level debug logging system:
 - GUI buttons (nav tabs, refresh) are disabled via `disabled={$isWriteInProgress}` during write operations to prevent UI race conditions
 
 The `isWriteInProgress` store drives button-disable behavior: when a write operation starts, the store is set to `true`, and all navigation buttons and refresh buttons get `disabled` styling (`opacity-50`, `cursor-not-allowed`). When the write completes, the store returns to `false`, re-enabling buttons.
+
+## Per-Session Host Environment Snapshot
+
+Before any local development session that touches the CLI or build, run:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/snapshot-host-env.ps1
+```
+
+This exports both `HKCU\Environment` and `HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\Environment` to `<repo-root>/.env_bak/` with a UTC timestamp, and copies Env Manager's internal config files from `%LOCALAPPDATA%\EnvManager\` (profiles.json, audit.json, protected-vars.json, protected-paths.json, builtin-protected-vars.json, builtin-protected-paths.json) into `.env_bak/internal-configs/`. The `.env_bak/` directory is gitignored and is a forensic safety net: it is NOT auto-cleaned. Keep at most the last few snapshots manually.
+
+The live CLI smoke test harness `scripts/test-with-restore.ps1` does per-run backups with auto-restore-on-drift. This snapshot script is the per-session complement: run it once before you start work, so if any change mutates the host registry or internal configs, you have a rollback artifact.

@@ -78,9 +78,11 @@ These invariants must never be violated by any code change:
 - **`RunChangeScope` ambiguous-scope rejection**: when a variable exists in both user and system scope, the caller must specify `--scope` explicitly; auto-detection is rejected (no silent pick of user).
 - **`path dedupe` HashSet isolation**: the dedupe `seen` HashSet only records non-protected entries, so protected entries are never treated as duplicates of themselves or each other.
 - **Backup file validation**: `.json` extension required; writes to `\Windows`, `\Program Files`, `\Program Files (x86)` blocked; 50 MB cap.
+- **Trailing-backslash + quote argv recovery**: .NET argv tokenizer folds a quoted value ending with `\` together with following args. `LenientArgs.WasArgsCorruptedByTrailingBackslashQuote` detects this (signature: an arg element containing both a quote and an embedded flag literal like ` --scope `, ` --overwrite`, ` --index `); only then `LenientArgs.Tokenize` re-scans `Environment.CommandLine` (quote always terminator, backslashes literal, `--` honored). Clean argv from the Tauri/Rust `Command::arg()` path is never re-tokenized. See `ArgTokenizer.cs`.
 - **Rust IPC input validation**: command whitelist, max 64 args, max 32,767 chars per arg, null bytes and control characters rejected.
 - **Audit history**: `%LOCALAPPDATA%\EnvManager\audit.json`, capped at 2,000 entries. Undo refuses stale changes unless `--force` explicit. Profile entries carry `Scope = "profile"` and route to `TryUndoProfileAudit`.
 - **Live test harness (hard boundary after incident)**: any local CLI smoke test against the REAL registry MUST be run via `scripts/test-with-restore.ps1`. That harness backs up BOTH `HKCU\Environment` and `HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\Environment` before each run, and restores BOTH on any verification drift or test failure. Never run raw `env-manager-cli set ... --scope system` against the real registry for testing without this wrapper. The HKLM backup is best-effort (admin may be required); if the export fails the harness warns but continues, and on restore it warns "skipping system-hive restore" if no HKLM backup exists. Both `.reg` and `.json` snapshot files are cleaned up on a clean run, retained when `-KeepBackup` is passed, and ALWAYS retained on failure for forensics. Backups live in `.test-backups/` (gitignored).
+- **Per-session host snapshot (hard boundary after incident)**: before any local dev session that touches the CLI or build, run `powershell -NoProfile -ExecutionPolicy Bypass -File scripts/snapshot-host-env.ps1` once. It exports `HKCU\Environment` and `HKLM\...\Environment` to `.env_bak/<UTC-timestamp>/` and copies Env Manager's internal configs from `%LOCALAPPDATA%\EnvManager\` (profiles.json, audit.json, protected-vars.json, protected-paths.json, builtin-protected-vars.json, builtin-protected-paths.json) into `.env_bak/<UTC-timestamp>/internal-configs/`. `.env_bak/` is gitignored and NOT auto-cleaned. This is the per-session forensic complement to `test-with-restore.ps1` (which does per-run backup+restore). The prior incident (test harness only backed up HKCU, so a RunSet regression clobbered the user system PATH) motivated both guards.
 - **Logs never record environment values** - CLI/Rust log command names and argument counts only. Values may contain credentials.
 
 ### Agent Safety Guidelines
@@ -143,11 +145,13 @@ Test file inventory:
 | `src/lib/change-scope-protection-profile.test.ts` | change-scope CLI args, protected-variable rejection, profile audit record + undo |
 | `src/lib/path-dedupe.test.ts` | dedupePathEntries CLI args (dry-run, scope), result shape, failure propagation |
 | `src/lib/review-regressions.test.ts` | Code-review invariants: EditDialog 3-way save ordering, toggle on protected, path dedupe protected isolation, change-scope ambiguous-scope rejection, profile audit fail-loud |
+| `src/lib/quoting.test.ts` | GUI argv safety: trailing-backslash/quote values stay independent array elements (no merging with --scope/--index/--overwrite) |
 | `src/lib/v0.6-launch-health.test.ts` | v0.6.0 profileSetLaunch/profileLaunch/pathHealth API arg construction, fix/dry-run routing, read vs write classification |
 | `src/lib/v0.7-secrets.test.ts` | v0.7 profileAddSecret/EditSecret/RemoveSecret/RevealSecret CLI args (path, write classification), secretVariables type surface, design invariants |
 | `src/lib/path-badge-exclusivity.test.ts` | PathEditor badge exclusivity after health check (single duplicate badge regression, all boolean combinations) |
 | `src/lib/history-col-resize.test.ts` | HistoryPage column resize persistence, defaults, corrupt-storage fallback, clamp range |
 | `scripts/test-with-restore.ps1` | Live CLI smoke harness: backup `HKCU\Environment` -> set/rename/profile/secrets tests -> verify registry drift -> conditional restore. Touch-only-EM_TEST_-keys invariant. |
+| `scripts/snapshot-host-env.ps1` | Per-session forensic snapshot: export HKCU+HKLM Environment hives + copy EnvManager internal configs to `.env_bak/<timestamp>/` (not auto-cleaned) |
 
 ## Coding Standards
 
