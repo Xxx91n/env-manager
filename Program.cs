@@ -208,10 +208,16 @@ partial class Program
         if (LenientArgs.WasArgsCorruptedByTrailingBackslashQuote(args))
         {
             string[] recovered = LenientArgs.Tokenize();
-            if (recovered != null && recovered.Length >= args.Length)
+            if (recovered.Length == 0)
             {
-                args = recovered;
+                Console.Error.WriteLine("Error: Command-line recovery failed");
+                return 1;
             }
+
+            // The runtime argv is already known to be corrupted. Prefer the
+            // deterministic recovery even when it has fewer elements: the
+            // malformed runtime split can introduce spurious empty fragments.
+            args = recovered;
         }
 
         if (args.Length == 0)
@@ -365,8 +371,7 @@ partial class Program
         string? existing = GetVariableValue(args[1], scope);
         if (existing != null && existing != args[2] && !args.Contains("--overwrite"))
             return ArgError("Error: Variable already exists with a different value; use --overwrite");
-        SetVariable(args[1], args[2], scope);
-        return 0;
+        return SetVariable(args[1], args[2], scope) ? 0 : 1;
     }
 
     static int RunDelete(string[] args)
@@ -548,7 +553,7 @@ partial class Program
         }
         catch (Exception e)
         {
-            DebugLog("ListEnvironment: profile annotation failed: " + e.Message);
+            DebugLog("ListEnvironment: profile annotation failed: " + e.GetType().Name);
         }
 
         // Annotate variables with protection status (built-in and custom)
@@ -562,7 +567,7 @@ partial class Program
         }
         catch (Exception e)
         {
-            DebugLog("ListEnvironment: protection annotation failed: " + e.Message);
+            DebugLog("ListEnvironment: protection annotation failed: " + e.GetType().Name);
         }
 
         var ordered = items.OrderBy(x => x.Name).ThenBy(x => x.Scope).ToList();
@@ -572,7 +577,7 @@ partial class Program
 
     static int GetVariable(string name)
     {
-        DebugLog("GetVariable: " + name);
+        DebugLog("GetVariable");
         using (var key = Registry.CurrentUser.OpenSubKey(UserEnvPath))
         {
             if (key != null)
@@ -618,13 +623,13 @@ partial class Program
         return 1;
     }
 
-    static void SetVariable(string name, string? value, string scope)
+    static bool SetVariable(string name, string? value, string scope)
     {
-        DebugLog("SetVariable: " + name + " scope=" + scope);
+        DebugLog("SetVariable scope=" + scope);
         if (string.IsNullOrEmpty(name))
         {
             Console.Error.WriteLine("Error: Variable name cannot be empty");
-            return;
+            return false;
         }
 
         // PowerToys: user env var names limited to 255 chars in registry
@@ -632,29 +637,28 @@ partial class Program
         if (name.Length > maxNameLength)
         {
             Console.Error.WriteLine($"Error: Variable name exceeds {maxNameLength} characters");
-            return;
+            return false;
         }
 
         // Reject names containing '=' (invalid in Windows environment)
         if (name.Contains('='))
         {
             Console.Error.WriteLine("Error: Variable name cannot contain '='");
-            return;
+            return false;
         }
 
         // Protect critical system variables from being overwritten
         if (IsProtectedVariable(name, scope))
         {
             Console.Error.WriteLine($"Error: Cannot modify protected system variable '{name}'");
-            return;
+            return false;
         }
 
         value ??= "";
-
         if (value.Length > MaxLength)
         {
             Console.Error.WriteLine("Error: Value exceeds maximum length");
-            return;
+            return false;
         }
 
         var (hive, path) = GetScopeTarget(scope);
@@ -663,35 +667,95 @@ partial class Program
             if (key == null)
             {
                 Console.Error.WriteLine($"Error: Cannot open registry key for scope '{scope}'");
-                return;
+                return false;
             }
 
-            // Preserve ExpandString kind for variables like PATH.
-            // PowerToys: if value contains %, use ExpandString (same as Windows default editor)
-            RegistryValueKind kind = RegistryValueKind.String;
+            bool existed = key.GetValueNames().Any(n => n.Equals(name, StringComparison.OrdinalIgnoreCase));
+            object? originalValue = existed
+                ? key.GetValue(name, null, RegistryValueOptions.DoNotExpandEnvironmentNames)
+                : null;
+            RegistryValueKind originalKind = RegistryValueKind.String;
+            if (existed)
+            {
+                try
+                {
+                    originalKind = key.GetValueKind(name);
+                }
+                catch (IOException)
+                {
+                    existed = false;
+                    originalValue = null;
+                }
+            }
+
+            RegistryValueKind writeKind = originalKind;
+            if (!existed || value.Contains('%'))
+            {
+                writeKind = value.Contains('%') ? RegistryValueKind.ExpandString : RegistryValueKind.String;
+            }
+
+            bool RestoreOriginal()
+            {
+                try
+                {
+                    if (existed)
+                    {
+                        key.SetValue(name, originalValue!, originalKind);
+                    }
+                    else
+                    {
+                        key.DeleteValue(name, false);
+                    }
+
+                    bool restoredExists = key.GetValueNames().Any(n => n.Equals(name, StringComparison.OrdinalIgnoreCase));
+                    if (restoredExists != existed) return false;
+                    if (!existed) return true;
+
+                    object? restoredValue = key.GetValue(name, null, RegistryValueOptions.DoNotExpandEnvironmentNames);
+                    return Equals(restoredValue, originalValue) && key.GetValueKind(name) == originalKind;
+                }
+                catch (Exception restoreError)
+                {
+                    DebugLog("SetVariable rollback failure=" + restoreError.GetType().Name);
+                    return false;
+                }
+            }
+
             try
             {
-                kind = key.GetValueKind(name);
+                key.SetValue(name, value, writeKind);
+                object? persisted = key.GetValue(name, null, RegistryValueOptions.DoNotExpandEnvironmentNames);
+                bool verified = persisted is string persistedString &&
+                    string.Equals(persistedString, value, StringComparison.Ordinal) &&
+                    key.GetValueKind(name) == writeKind;
+                if (verified)
+                {
+                    BroadcastSettingChange();
+                    return true;
+                }
             }
-            catch (IOException)
+            catch (Exception writeError)
             {
-                // Variable doesn't exist yet; default to String is correct.
+                DebugLog("SetVariable write failure=" + writeError.GetType().Name);
             }
 
-            if (value.Contains('%'))
+            bool rolledBack = RestoreOriginal();
+            if (rolledBack)
             {
-                kind = RegistryValueKind.ExpandString;
+                BroadcastSettingChange();
+                Console.Error.WriteLine("Error: Variable write could not be verified; original value restored");
             }
-
-            key.SetValue(name, value, kind);
+            else
+            {
+                Console.Error.WriteLine("Error: Variable write could not be verified and automatic rollback failed; restore from a backup before retrying");
+            }
+            return false;
         }
-
-        BroadcastSettingChange();
     }
 
     static void DeleteVariable(string name, string scope)
     {
-        DebugLog("DeleteVariable: " + name + " scope=" + scope);
+        DebugLog("DeleteVariable scope=" + scope);
         if (string.IsNullOrEmpty(name))
         {
             Console.Error.WriteLine("Error: Invalid variable name");
@@ -816,7 +880,7 @@ partial class Program
         string name = args[1];
         string? scope = ParseScope(args, 2, "user");
         if (scope == null) return 1;
-        DebugLog($"Toggle: {name} scope={scope}");
+        DebugLog($"Toggle scope={scope}");
 
         if (string.IsNullOrEmpty(name))
         {
@@ -1828,7 +1892,7 @@ partial class Program
 
     static int RunPathCommand(string[] args)
     {
-        DebugLog("PathCommand: " + string.Join(" ", args.Skip(1)));
+        DebugLog($"PathCommand: subcommand={args.ElementAtOrDefault(1) ?? "none"}; argumentCount={Math.Max(0, args.Length - 2)}");
         if (args.Length < 2)
         {
             ShowPathHelp();
@@ -1947,8 +2011,7 @@ partial class Program
             return 0;
         }
 
-        SetPathEntries(keptClean, scope);
-        RecordSnapshotDiff("path health --fix", CaptureEnvironmentSnapshot(), CaptureEnvironmentSnapshot());
+        if (!SetPathEntries(keptClean, scope)) return 1;
         Console.WriteLine(JsonSerializer.Serialize(new
         {
             scope,
@@ -2019,7 +2082,7 @@ partial class Program
             return 0;
         }
 
-        SetPathEntries(kept, scope);
+        if (!SetPathEntries(kept, scope)) return 1;
         Console.WriteLine(JsonSerializer.Serialize(new
         {
             scope,
@@ -2086,7 +2149,7 @@ partial class Program
         }
 
         entries[index] = newDir;
-        SetPathEntries(entries, scope);
+        if (!SetPathEntries(entries, scope)) return 1;
         Console.WriteLine($"Renamed PATH entry from '{oldDir}' to '{newDir}' ({scope})");
         return 0;
     }
@@ -2120,32 +2183,33 @@ partial class Program
     /// <summary>
     /// Writes PATH entries back to the registry for a given scope.
     /// </summary>
-    static void SetPathEntries(List<string> entries, string scope)
-   {
-       string joined = string.Join(";", entries);
-       if (joined.Length > MaxLength)
-       {
-           Console.Error.WriteLine($"Error: PATH value exceeds maximum length of {MaxLength} characters (current: {joined.Length})");
-           return;
-       }
+    static bool SetPathEntries(List<string> entries, string scope)
+    {
+        string joined = string.Join(";", entries);
+        if (joined.Length > MaxLength)
+        {
+            Console.Error.WriteLine($"Error: PATH value exceeds maximum length of {MaxLength} characters (current: {joined.Length})");
+            return false;
+        }
 
-       // Validate: don't allow removing protected PATH entries.
-       // Compare current entries vs new entries to find what's being removed.
-       var currentEntries = GetPathEntries(scope);
-       var removed = currentEntries.Where(e => !entries.Any(x => NormalizePathEntry(x).Equals(NormalizePathEntry(e), StringComparison.OrdinalIgnoreCase))).ToList();
-       foreach (var r in removed)
-       {
-           if (IsProtectedPathEntry(r))
-           {
-               Console.Error.WriteLine($"Error: Cannot remove protected PATH entry: {r}");
-               return;
-           }
-       }
+        // Validate: don't allow removing protected PATH entries.
+        // Compare current entries vs new entries to find what's being removed.
+        var currentEntries = GetPathEntries(scope);
+        var removed = currentEntries.Where(e => !entries.Any(x => NormalizePathEntry(x).Equals(NormalizePathEntry(e), StringComparison.OrdinalIgnoreCase))).ToList();
+        foreach (var r in removed)
+        {
+            if (IsProtectedPathEntry(r))
+            {
+                Console.Error.WriteLine($"Error: Cannot remove protected PATH entry: {r}");
+                return false;
+            }
+        }
 
-       // Write PATH via SetVariable (no longer bypassing the guard).
-       // PATH itself is not in ProtectedSystemVars anymore, so SetVariable allows it.
-       SetVariable("PATH", joined, scope);
-   }
+        // PATH is intentionally editable. SetVariable verifies the exact raw
+        // registry value and restores the previous value if verification fails.
+        // PATH callers therefore never report success after an unverified write.
+        return SetVariable("PATH", joined, scope);
+    }
 
     static int PathList(string[] args)
     {
@@ -2221,7 +2285,7 @@ partial class Program
             entries.Add(dir);
         }
 
-        SetPathEntries(entries, scope);
+        if (!SetPathEntries(entries, scope)) return 1;
         Console.WriteLine($"Added '{dir}' to PATH ({scope}) at index {insertIndex ?? entries.Count - 1}");
         return 0;
     }
@@ -2241,7 +2305,7 @@ partial class Program
             return 0;
         }
 
-        SetPathEntries(entries, scope);
+        if (!SetPathEntries(entries, scope)) return 1;
         Console.WriteLine($"Removed '{dir}' from PATH ({scope})");
         return 0;
     }
@@ -2264,7 +2328,7 @@ partial class Program
         }
 
         (entries[index - 1], entries[index]) = (entries[index], entries[index - 1]);
-        SetPathEntries(entries, scope);
+        if (!SetPathEntries(entries, scope)) return 1;
         Console.WriteLine($"Moved PATH entry at index {index} up");
         return 0;
     }
@@ -2287,14 +2351,14 @@ partial class Program
         }
 
         (entries[index], entries[index + 1]) = (entries[index + 1], entries[index]);
-        SetPathEntries(entries, scope);
+        if (!SetPathEntries(entries, scope)) return 1;
         Console.WriteLine($"Moved PATH entry at index {index} down");
         return 0;
     }
 
     static void CreateBackup(string outputPath)
     {
-        DebugLog("CreateBackup: " + outputPath);
+        DebugLog("CreateBackup");
         var backup = new BackupData
         {
             Timestamp = DateTime.UtcNow.ToString("O"),
@@ -2344,7 +2408,7 @@ partial class Program
 
     static void RestoreBackup(string inputPath, string? scope)
     {
-        DebugLog("RestoreBackup: " + inputPath);
+        DebugLog("RestoreBackup");
         string fullPath = ValidateFilePath(inputPath, mustExist: true);
 
         var backup = JsonSerializer.Deserialize<BackupData>(File.ReadAllText(fullPath), JsonOpts);
@@ -2372,8 +2436,14 @@ partial class Program
                     skipped++;
                     continue;
                 }
-                SetVariable(v.Name, v.Value, v.Scope);
-                restored++;
+                if (SetVariable(v.Name, v.Value, v.Scope))
+                {
+                    restored++;
+                }
+                else
+                {
+                    skipped++;
+                }
             }
         }
         Console.WriteLine($"Restored {restored} variables" + (skipped > 0 ? $", skipped {skipped}" : ""));

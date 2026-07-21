@@ -89,14 +89,14 @@ Before building, stop any running instances: `Get-Process -Name 'env-manager*' -
 ### Live CLI smoke test with registry backup/restore
 
 When validating the published CLI binary, run the registry-safe live test harness **before** making any release commit:
-> The harness backs up BOTH `HKCU\Environment` and `HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\Environment` (best-effort; admin may be required for HKLM). On verification drift or test failure it restores BOTH hives and broadcasts `WM_SETTINGCHANGE`. Backups are cleaned up on a clean run, retained with `-KeepBackup`, and always kept on failure for forensics in `.test-backups/`. Never run raw `env-manager-cli set ... --scope system` against the real registry without this wrapper - this is now a project hard boundary (see AGENTS.md).
+> The harness captures exact registry state (all value names, unexpanded values, and registry value kinds) for HKCU plus any accessible HKLM system hive, and snapshots test-owned Env Manager internal configuration. On a test failure or any detected drift it reconciles the exact pre-test state, including removal of values introduced during testing, then verifies both registry hives and internal configuration before broadcasting `WM_SETTINGCHANGE`. Backups are cleaned up on a clean run, retained with `-KeepBackup`, and always kept on failure for forensics in `.test-backups/`. Never run raw `env-manager-cli set ... --scope system` against the real registry without this wrapper - this is a project hard boundary (see AGENTS.md).
 
 ```powershell
 # After build-all.ps1 has produced release/cli-only/env-manager-cli.exe:
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts/test-with-restore.ps1
 ```
 
-The harness implements the two-pronged gate described in AGENTS.md: it backs up `HKCU\Environment` to a `.reg` file before tests, runs a smoke suite restricted to `EM_TEST_`-prefixed user variables + ephemeral profiles, then verifies registry drift is zero (a leftover `EM_TEST_` key or a value change on a pre-existing key triggers restore). On green-all and zero drift, the backup auto-deletes. On any failure, it restores via `reg import` and broadcasts `WM_SETTINGCHANGE`, keeps the backup in `.test-backups/` for forensics, and exits non-zero.
+The harness uses an exact transaction: it snapshots all HKCU values plus accessible HKLM values and test-owned internal configuration, runs only isolated `EM_TEST_` variables and timestamped profiles, then restores internal configuration and compares the exact snapshots. A failure or drift triggers value-by-value reconciliation, including deletion of newly introduced registry values, followed by rollback verification and `WM_SETTINGCHANGE`. Green runs remove temporary backups unless `-KeepBackup` is set; failed runs retain them for forensics and exit non-zero.
 
 `.test-backups/` is gitignored.
 
@@ -170,11 +170,11 @@ The project uses [CodeGraph](https://github.com/nicholasgriffintn/codegraph) for
 
 ### Rust Logging
 
-The Tauri shell uses `tauri-plugin-log` at `Info` level. All `run_cli` calls log:
-- Command and args on entry
+The Tauri shell uses `tauri-plugin-log` at `Info` level. All `run_cli` calls log metadata only:
+- Command and argument count on entry
 - Exit code, stdout/stderr length, and elapsed time on completion
-- stderr content if non-empty
-- Spawn failures with error details
+- stderr presence and length if non-empty
+- Spawn failure category only; command output is never persisted
 
 CLI path resolution also logs which method succeeded (resource, adjacent, dev, cwd, PATH).
 
@@ -195,7 +195,7 @@ The GUI has a frontend-level debug logging system:
 - `addDebugLog()` - adds entries with timestamp, level (info/warn/error/debug), message, and optional command name
 - `clearDebugLogs()` - empties the log store
 - `isWriteInProgress` store - `true` while a write operation is executing (set in `runWriteOperation()` in `api.ts`)
-- `runCommand()` in `api.ts` logs all CLI invocations with timing (ms) and success/error status
+- `runCommand()` in `api.ts` logs command, timing, and status only; raw CLI errors are returned to the active UI but excluded from persisted debug logs
 - GUI buttons (nav tabs, refresh) are disabled via `disabled={$isWriteInProgress}` during write operations to prevent UI race conditions
 
 The `isWriteInProgress` store drives button-disable behavior: when a write operation starts, the store is set to `true`, and all navigation buttons and refresh buttons get `disabled` styling (`opacity-50`, `cursor-not-allowed`). When the write completes, the store returns to `false`, re-enabling buttons.
@@ -210,4 +210,4 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts/snapshot-host-env.ps
 
 This exports both `HKCU\Environment` and `HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\Environment` to `<repo-root>/.env_bak/` with a UTC timestamp, and copies Env Manager's internal config files from `%LOCALAPPDATA%\EnvManager\` (profiles.json, audit.json, protected-vars.json, protected-paths.json, builtin-protected-vars.json, builtin-protected-paths.json) into `.env_bak/internal-configs/`. The `.env_bak/` directory is gitignored and is a forensic safety net: it is NOT auto-cleaned. Keep at most the last few snapshots manually.
 
-The live CLI smoke test harness `scripts/test-with-restore.ps1` does per-run backups with auto-restore-on-drift. This snapshot script is the per-session complement: run it once before you start work, so if any change mutates the host registry or internal configs, you have a rollback artifact.
+The live CLI smoke test harness `scripts/test-with-restore.ps1` snapshots every value name, unexpanded value, and registry value kind in HKCU plus accessible HKLM, byte-snapshots the test-owned Env Manager internal configuration, verifies exact post-test equality, and transactionally reconciles both hives on any failure or drift. It restores internal configuration after the suite and exercises the raw trailing-backslash PATH command-line regression. This snapshot script is the per-session complement: run it once before you start work, so if any change mutates the host registry or internal configs, you have a rollback artifact.

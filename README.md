@@ -315,7 +315,8 @@ Apache-2.0 - Use freely for personal and commercial projects. See [LICENSE](LICE
 ### v0.7.1
 
 - Fixed a Windows argv tokenizer hazard where a quoted PATH value ending with a trailing backslash (e.g. `"C:\Program Files\PowerShell\7\"`) swallowed the following `--scope` argument. The CLI now detects this signature and re-tokenizes lazily; clean argv from the GUI/Tauri path is never touched.
-- Added a per-session host environment snapshot script (`scripts/snapshot-host-env.ps1`) that exports both user and system environment hives plus Env Manager internal configs to `.env_bak/` as a forensic safety net before local development.
+- Added a per-session host environment snapshot script (`scripts/snapshot-host-env.ps1`) and upgraded the live smoke harness to exact registry/configuration snapshots with verified rollback; this prevents test artifacts from silently altering existing variables.
+- Redacted CLI output from Rust/frontend diagnostic logs, replaced the startup error DOM sink with a safe generic state, made registry writes verify-and-rollback before success is printed, and pinned GitHub Actions to immutable commit SHAs.
 
 ## Contributing
 
@@ -323,4 +324,4 @@ Open source project. For issues, feature requests, or pull requests, visit the [
 
 ---
 
-**Version**: 0.7.0 | **License**: Apache-2.0 | **Status**: Active Development
+**Version**: 0.7.1 | **License**: Apache-2.0 | **Status**: Active Development

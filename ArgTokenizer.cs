@@ -26,8 +26,6 @@ namespace EnvManager;
 /// as terminator but the backslashes remain literal in the current token.
 /// This matches user intent for PATH values that end with a directory separator.
 ///
-/// The tokenizer also supports a "--" separator: everything after the first
-/// standalone "--" token is treated as positional, never as a flag.
 /// </summary>
 static partial class LenientArgs
 {
@@ -44,7 +42,6 @@ static partial class LenientArgs
         var tokens = new List<string>();
         var current = new StringBuilder();
         bool inQuotes = false;
-        bool afterSeparator = false;
         bool hasContent = false;  // has current token accumulated any content?
 
         int i = SkipProgramPath(raw);
@@ -56,7 +53,7 @@ static partial class LenientArgs
             // White space outside quotes ends the current token.
             if (!inQuotes && c == ' ')
             {
-                if (hasContent || isAfterSeparatorBoundaryStart())
+                if (hasContent)
                 {
                     // flush current token boundary
                     FlushToken();
@@ -76,25 +73,6 @@ static partial class LenientArgs
                 hasContent = true; // empty-quoted-string still counts as a token
                 i++;
                 continue;
-            }
-
-            // "--" separator: only recognized at a token boundary (current is
-            // empty and not in quotes), and only if followed by whitespace or
-            // end-of-line. After it, all remaining tokens are positional.
-            if (!inQuotes && !afterSeparator && c == '-' &&
-                raw.Length > i + 1 && raw[i + 1] == '-' &&
-                !hasContent)
-            {
-                int j = i + 2;
-                if (j >= raw.Length || raw[j] == ' ')
-                {
-                    afterSeparator = true;
-                    hasContent = false;
-                    i = j;
-                    // skip whitespace after --
-                    while (i < raw.Length && raw[i] == ' ') i++;
-                    continue;
-                }
             }
 
             // Backslash run handling. Outside quotes backslashes are literal.
@@ -125,17 +103,8 @@ static partial class LenientArgs
         return tokens.ToArray();
 
         // Local helpers
-        bool isAfterSeparatorBoundaryStart()
-        {
-            // After a "--" separator, an empty-content token boundary should
-            // NOT flush a phantom empty token. We suppress it here.
-            return !afterSeparator;
-        }
-
         void FlushToken()
         {
-            // Under "--" separator, we keep counting positions even if empty,
-            // but we only push if hasContent.
             if (hasContent)
             {
                 tokens.Add(current.ToString());
@@ -158,9 +127,9 @@ static partial class LenientArgs
     {
         if (args == null || args.Length == 0) return false;
 
-        // Lightweight scan: any element with both a literal '"' and one of the
-        // suspicious flag markers (bordered by start|space so we don't hit
-        // legitimate PATH values that happen to include these substrings).
+        // Lightweight scan: any element with both a literal quote and an
+        // embedded option or separator marker. A standalone -- remains a token
+        // so profile launch extra arguments retain their documented contract.
         for (int i = 0; i < args.Length; i++)
         {
             string a = args[i];
@@ -173,23 +142,10 @@ static partial class LenientArgs
 
     private static bool ContainsEmbeddedFlag(string s)
     {
-        // Detect embedded standalone flag tokens like ' --scope user',
-        // ' --overwrite', ' --index N', ' --output file', ' --debug', ' -d'.
-        // We require a leading space (or start of string) before the flag to
-        // avoid matching legitimate path portions that happen to include these
-        // substrings.
-        foreach (var flag in new[]
-        {
-            " --scope ", " --overwrite", " --index ", " --output ",
-            " --debug", " -d"
-        })
-        {
-            if (s.Contains(flag)) return true;
-        }
-        // Also: trailing flag with no value (end of string, e.g. "value --debug")
-        if (s.EndsWith(" --debug") || s.EndsWith(" -d") ||
-            s.EndsWith(" --overwrite")) return true;
-        return false;
+        // Any space-prefixed long option or standalone separator after the
+        // escaped quote is evidence of the Windows argv merge. The outer caller
+        // already requires a literal quote, keeping this recovery narrow.
+        return s.Contains(" --", StringComparison.Ordinal) || s.Contains(" -d", StringComparison.Ordinal);
     }
 
     /// <summary>

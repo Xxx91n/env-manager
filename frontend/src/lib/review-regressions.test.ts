@@ -117,4 +117,55 @@ describe('review-finder regressions', () => {
     const src = fs.readFileSync(path.join(here, '..', '..', '..', 'VariableChangeScope.cs'), 'utf-8')
     expect(src).toContain('exists in both user and system scope; specify --scope')
   })
+
+  it('PATH writes delegate to transactional SetVariable and do not claim success after an unverifiable registry write', async () => {
+    const fs = await import('node:fs')
+    const path = await import('node:path/win32')
+    const here = path.dirname(import.meta.url.replace('file:///', ''))
+    const src = fs.readFileSync(path.join(here, '..', '..', '..', 'Program.cs'), 'utf-8')
+    expect(src).toContain('static bool SetVariable')
+    expect(src).toContain('original value restored')
+    expect(src).toContain('return SetVariable("PATH", joined, scope);')
+  })
+
+  it('trailing-backslash recovery preserves the launch-profile separator contract', async () => {
+    const fs = await import('node:fs')
+    const path = await import('node:path/win32')
+    const here = path.dirname(import.meta.url.replace('file:///', ''))
+    const tokenizer = fs.readFileSync(path.join(here, '..', '..', '..', 'ArgTokenizer.cs'), 'utf-8')
+    const program = fs.readFileSync(path.join(here, '..', '..', '..', 'Program.cs'), 'utf-8')
+    expect(tokenizer).toContain('s.Contains(" --", StringComparison.Ordinal)')
+    expect(program).toContain('args = recovered;')
+    expect(program).toContain('int dashIndex = Array.IndexOf(args, "--");')
+  })
+
+  it('live harness re-verifies internal configuration after a rollback attempt', async () => {
+    const fs = await import('node:fs')
+    const path = await import('node:path/win32')
+    const here = path.dirname(import.meta.url.replace('file:///', ''))
+    const script = fs.readFileSync(path.join(here, '..', '..', '..', 'scripts', 'test-with-restore.ps1'), 'utf-8')
+    expect(script).toContain('$backupCompleted = $false')
+    expect(script).toContain('$internalRestored = Compare-InternalConfigSnapshot')
+    expect(script).toContain('$restoreErrors = @(Restore-AllSnapshots)')
+  })
+
+  it('global startup fallback does not render raw error text or stacks into the WebView', async () => {
+    const fs = await import('node:fs')
+    const path = await import('node:path/win32')
+    const here = path.dirname(import.meta.url.replace('file:///', ''))
+    const src = fs.readFileSync(path.join(here, '..', 'main.ts'), 'utf-8')
+    expect(src).toContain('errorType')
+    expect(src).toContain('Check the application log for diagnostic details.')
+    expect(src).not.toContain('error.textContent = msg')
+  })
+
+  it('Rust update checks use CREATE_NO_WINDOW so settings actions do not flash a terminal', async () => {
+    const fs = await import('node:fs')
+    const path = await import('node:path/win32')
+    const here = path.dirname(import.meta.url.replace('file:///', ''))
+    const src = fs.readFileSync(path.join(here, '..', '..', 'src-tauri', 'src', 'main.rs'), 'utf-8')
+    const updateBlock = src.match(/fn check_for_updates[\s\S]*?fn version_is_newer/)
+    expect(updateBlock).toBeTruthy()
+    expect(updateBlock![0]).toContain('command.creation_flags(CREATE_NO_WINDOW)')
+  })
 })

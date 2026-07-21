@@ -129,7 +129,7 @@ async function runCommand(cmd: string, args: string[] = []): Promise<string> {
 
     const elapsed = Date.now() - startTime
     if (!result.success) {
-      addDebugLog({ level: 'error', message: `CLI error (${elapsed}ms): ${result.error}`, command: cmd })
+      addDebugLog({ level: 'error', message: `CLI error (${elapsed}ms); details withheld from debug log`, command: cmd })
       throw new Error(result.error || 'Unknown CLI error')
     }
 
@@ -138,7 +138,7 @@ async function runCommand(cmd: string, args: string[] = []): Promise<string> {
   } catch (err) {
     const elapsed = Date.now() - startTime
     const msg = err instanceof Error ? err.message : String(err)
-    addDebugLog({ level: 'error', message: `CLI exception (${elapsed}ms): ${msg}`, command: cmd })
+    addDebugLog({ level: 'error', message: `CLI exception (${elapsed}ms); details withheld from debug log`, command: cmd })
     throw new Error(msg)
   }
 }

@@ -143,13 +143,12 @@ When invoking the CLI from a shell (cmd / PowerShell), a quoted value that ends 
 env-manager-cli path add "C:\Program Files\PowerShell\7\" --scope user
 ```
 
-The CLI now detects and recovers this case at startup via `LenientArgs.WasArgsCorruptedByTrailingBackslashQuote` + `LenientArgs.Tokenize` (see `ArgTokenizer.cs`). Detection is signature-based: re-tokenization only triggers when an arg element contains both a literal quote and an embedded flag literal like ` --scope `, ` --overwrite`, ` --index `. Clean argv from any caller (including the Tauri/Rust `Command::arg()` path used by the GUI) is never mutated.
+The CLI now detects and recovers this case at startup via `LenientArgs.WasArgsCorruptedByTrailingBackslashQuote` + `LenientArgs.Tokenize` (see `ArgTokenizer.cs`). Detection is signature-based: re-tokenization only triggers when an arg element contains both a literal quote and an embedded long-option or separator marker such as ` --scope `, ` --overwrite`, ` --index `, or standalone ` -- `. Recovery replaces the known-corrupted argv even when the token count changes. Clean argv from any caller (including the Tauri/Rust `Command::arg()` path used by the GUI) is never mutated.
 
-For maximum safety, use the `--` separator before the value, which forces the parser to treat everything after `--` as positional:
+Use the normal command form below. The standalone `--` separator remains reserved for `profile launch <name> -- <extra-args ...>` and is preserved by recovery.
 
 ```powershell
-# Safe in any shell:
-env-manager-cli path add -- "C:\Program Files\PowerShell\7\" --scope user
+env-manager-cli path add "C:\Program Files\PowerShell\7\" --scope user
 ```
 
 Note: the GUI never hits this hazard. It builds an `args[]` array in TypeScript and sends it via Tauri IPC; the Rust backend spawns the CLI with `Command::arg()`, so each arg is an independent element and no shell tokenization happens.

@@ -332,11 +332,11 @@ fn run_cli(app: tauri::AppHandle, command: String, args: Vec<String>) -> CliResp
     };
 
     let output_result = if read_only {
-        info!("[run_cli] acquiring READ lock for {} {:?}", command, args.first());
+        info!("[run_cli] acquiring READ lock for command={}, subcommand_present={}", command, args.first().is_some());
         let _guard = CLI_RWLOCK.read().unwrap_or_else(|e| e.into_inner());
         exec_with_lock()
     } else {
-        info!("[run_cli] acquiring WRITE lock for {} {:?}", command, args.first());
+        info!("[run_cli] acquiring WRITE lock for command={}, subcommand_present={}", command, args.first().is_some());
         let _guard = CLI_RWLOCK.write().unwrap_or_else(|e| e.into_inner());
         exec_with_lock()
     };
@@ -356,7 +356,7 @@ fn run_cli(app: tauri::AppHandle, command: String, args: Vec<String>) -> CliResp
             );
 
             if !stderr.is_empty() {
-                info!("[run_cli] stderr: {}", stderr.trim());
+                info!("[run_cli] stderr_present=true, stderr_len={}", stderr.len());
             }
 
             if output.status.success() {
@@ -436,12 +436,16 @@ fn restore_window(app: &tauri::AppHandle) {
 #[tauri::command]
 fn check_for_updates(current_version: String) -> serde_json::Value {
     // Use PowerShell to fetch the release info (available on all Windows machines)
-    let output = Command::new("powershell")
-        .args([
-            "-NoProfile", "-Command",
-            "Invoke-RestMethod -Uri 'https://api.github.com/repos/Xxx91n/env-manager/releases/latest' -Headers @{'User-Agent'='env-manager'} | ConvertTo-Json -Depth 3",
-        ])
-        .output();
+    let mut command = Command::new("powershell");
+    command.args([
+        "-NoProfile", "-Command",
+        "Invoke-RestMethod -Uri 'https://api.github.com/repos/Xxx91n/env-manager/releases/latest' -Headers @{'User-Agent'='env-manager'} | ConvertTo-Json -Depth 3",
+    ]);
+    #[cfg(windows)]
+    {
+        command.creation_flags(CREATE_NO_WINDOW);
+    }
+    let output = command.output();
 
     match output {
         Ok(out) if out.status.success() => {

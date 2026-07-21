@@ -1,5 +1,6 @@
-# Env Manager - Live CLI test harness with registry backup / verify / restore.
-# Implements the industry-standard "two-pronged gate" pattern.
+# Env Manager - live CLI smoke harness with exact registry rollback.
+# Every real-registry mutation is transactional: snapshot all values, verify exact
+# equality, and reconcile both accessible environment hives on failure.
 param(
   [string]$CliPath = (Join-Path $PSScriptRoot "..\release\cli-only\env-manager-cli.exe"),
   [switch]$KeepBackup
@@ -15,152 +16,317 @@ $UserRegBackup = Join-Path $BackupDir "user-env-$Stamp.reg"
 $UserJsonBackup = Join-Path $BackupDir "user-env-$Stamp.json"
 $SystemRegBackup = Join-Path $BackupDir "system-env-$Stamp.reg"
 $SystemJsonBackup = Join-Path $BackupDir "system-env-$Stamp.json"
+$UserEnvSubKey = "Environment"
+$SystemEnvSubKey = "SYSTEM\CurrentControlSet\Control\Session Manager\Environment"
 $SystemEnvKey = "HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\Environment"
 $TestPrefix = "EM_TEST_"
+$InternalConfigNames = @(
+  "profiles.json",
+  "audit.json",
+  "protected-vars.json",
+  "protected-paths.json",
+  "builtin-protected-vars.json",
+  "builtin-protected-paths.json"
+)
+$InternalConfigDir = Join-Path $BackupDir "internal-configs-$Stamp"
+$InternalConfigSnapshot = Join-Path $InternalConfigDir "snapshot.json"
+$SystemSnapshotAvailable = $false
 
-function Invoke-Cli([string[]]$CliArgs) {
-  & $CliPath @CliArgs
-  return $LASTEXITCODE
+function ConvertTo-PlainHashtable($Value) {
+  if ($null -eq $Value) { return $null }
+  if ($Value -is [System.Collections.IDictionary]) {
+    $map = @{}
+    foreach ($key in $Value.Keys) { $map[[string]$key] = ConvertTo-PlainHashtable $Value[$key] }
+    return $map
+  }
+  if ($Value -is [System.Management.Automation.PSCustomObject]) {
+    $map = @{}
+    foreach ($property in $Value.PSObject.Properties) { $map[$property.Name] = ConvertTo-PlainHashtable $property.Value }
+    return $map
+  }
+  if ($Value -is [System.Collections.IEnumerable] -and -not ($Value -is [string])) {
+    return @($Value | ForEach-Object { ConvertTo-PlainHashtable $_ })
+  }
+  return $Value
 }
 
-function Backup-UserRegistry {
-  Write-Host "[test-with-restore] Backing up HKCU\Environment ..." -ForegroundColor Cyan
-  $regExport = reg export "HKCU\Environment" $UserRegBackup /y 2>&1
-  if ($LASTEXITCODE -ne 0) {
-    throw "reg export HKCU\Environment failed: $regExport"
-  }
-  $snap = @{}
-  try {
-    $key = [Microsoft.Win32.Registry]::CurrentUser.OpenSubKey("Environment", $true)
-    if ($null -ne $key) {
-      foreach ($name in $key.GetValueNames()) {
-        if ($name -like "$TestPrefix*") {
-          $snap[$name] = @{ Value = $key.GetValue($name, "", [Microsoft.Win32.RegistryValueOptions]::DoNotExpandEnvironmentNames); Kind = $key.GetValueKind($name).ToString() }
-        }
-      }
-      $key.Close()
-    }
-  } catch {
-    Write-Warning "Failed to read HKCU\Environment for snapshot: $($_.Exception.Message)"
-  }
-  $snap | ConvertTo-Json -Depth 5 | Set-Content -Path $UserJsonBackup -Encoding UTF8
-  Write-Host "[test-with-restore] Backup OK: $UserRegBackup"
+function Read-JsonHashtable([string]$Path) {
+  return ConvertTo-PlainHashtable (Get-Content -Raw -Path $Path | ConvertFrom-Json)
+}
 
-  # BHLM: also back up HKLM Environment so system PATH can be restored if a test clobbers it.
-  Write-Host "[test-with-restore] Backing up $SystemEnvKey ..." -ForegroundColor Cyan
-  $sysExport = reg export $SystemEnvKey $SystemRegBackup /y 2>&1
-  if ($LASTEXITCODE -ne 0) {
-    Write-Warning "reg export HKLM Environment failed (may need admin): $sysExport"
-  } else {
-    $sysSnap = @{}
-    try {
-      $sysKey = [Microsoft.Win32.Registry]::LocalMachine.OpenSubKey("SYSTEM\CurrentControlSet\Control\Session Manager\Environment", $false)
-      if ($null -ne $sysKey) {
-        foreach ($name in $sysKey.GetValueNames()) {
-          if ($name -like "$TestPrefix*") {
-            $sysSnap[$name] = @{ Value = $sysKey.GetValue($name, "", [Microsoft.Win32.RegistryValueOptions]::DoNotExpandEnvironmentNames); Kind = $sysKey.GetValueKind($name).ToString() }
-          }
-        }
-        $sysKey.Close()
-      }
-    } catch {
-      Write-Warning "Failed to read HKLM Environment for snapshot: $($_.Exception.Message)"
+function Get-InternalConfigSnapshot {
+  $configDir = Join-Path $env:LOCALAPPDATA "EnvManager"
+  $files = @{}
+  foreach ($name in $InternalConfigNames) {
+    $source = Join-Path $configDir $name
+    if (Test-Path -LiteralPath $source -PathType Leaf) {
+      $files[$name] = @{ Exists = $true; Content = [Convert]::ToBase64String([IO.File]::ReadAllBytes($source)) }
+    } else {
+      $files[$name] = @{ Exists = $false; Content = $null }
     }
-    $sysSnap | ConvertTo-Json -Depth 5 | Set-Content -Path $SystemJsonBackup -Encoding UTF8
-    Write-Host "[test-with-restore] HKLM Backup OK: $SystemRegBackup"
+  }
+  return @{ Files = $files }
+}
+
+function Write-Utf8NoBom([string]$Path, [string]$Content) {
+  [IO.File]::WriteAllText($Path, $Content, (New-Object Text.UTF8Encoding($false)))
+}
+
+function Save-InternalConfigSnapshot {
+  New-Item -ItemType Directory -Path $InternalConfigDir -Force | Out-Null
+  Write-Utf8NoBom $InternalConfigSnapshot ((Get-InternalConfigSnapshot | ConvertTo-Json -Depth 5))
+}
+
+function Restore-InternalConfigSnapshot {
+  if (-not (Test-Path -LiteralPath $InternalConfigSnapshot)) { throw "Internal configuration snapshot missing" }
+  $snapshot = Read-JsonHashtable $InternalConfigSnapshot
+  $configDir = Join-Path $env:LOCALAPPDATA "EnvManager"
+  New-Item -ItemType Directory -Path $configDir -Force | Out-Null
+  foreach ($name in $InternalConfigNames) {
+    $target = Join-Path $configDir $name
+    $entry = $snapshot.Files[$name]
+    if ($entry.Exists) {
+      [IO.File]::WriteAllBytes($target, [Convert]::FromBase64String([string]$entry.Content))
+    } elseif (Test-Path -LiteralPath $target) {
+      Remove-Item -LiteralPath $target -Force
+    }
   }
 }
 
-function Compare-UserRegistry {
-  param([string]$JsonSnapshotPath)
-  if (-not (Test-Path $JsonSnapshotPath)) { return @{ Match = $false; Diff = "snapshot missing" } }
-  $before = Get-Content $JsonSnapshotPath -Raw | ConvertFrom-Json
-  $after = @{}
-  try {
-    $key = [Microsoft.Win32.Registry]::CurrentUser.OpenSubKey("Environment", $false)
-    if ($null -ne $key) {
-      foreach ($name in $key.GetValueNames()) {
-        if ($name -like "$TestPrefix*") {
-          $after[$name] = @{ Value = $key.GetValue($name, "", [Microsoft.Win32.RegistryValueOptions]::DoNotExpandEnvironmentNames); Kind = $key.GetValueKind($name).ToString() }
-        }
-      }
-      $key.Close()
-    }
-  } catch {
-    return @{ Match = $false; Diff = "read failed: $($_.Exception.Message)" }
-  }
-  $beforeKeys = @()
-  foreach ($p in $before.PSObject.Properties) { $beforeKeys += $p.Name }
-  $afterKeys = @()
-  foreach ($k in $after.Keys) { $afterKeys += $k }
-  $leftover = $afterKeys | Where-Object { $_ -notin $beforeKeys }
-  if ($leftover.Count -gt 0) {
-    return @{ Match = $false; Diff = "leftover EM_TEST_ keys: $($leftover -join ', ')" }
-  }
-  foreach ($k in $beforeKeys) {
-    $b = $before.$k
-    $a = $after[$k]
-    if ($null -eq $a) { continue }
-    if ($a.Value -ne $b.Value -or $a.Kind -ne $b.Kind) {
-      return @{ Match = $false; Diff = "modified key $k" }
+function Compare-InternalConfigSnapshot {
+  if (-not (Test-Path -LiteralPath $InternalConfigSnapshot)) { return @{ Match = $false; Diff = "internal configuration snapshot missing" } }
+  $expected = Read-JsonHashtable $InternalConfigSnapshot
+  $actual = Get-InternalConfigSnapshot
+  foreach ($name in $InternalConfigNames) {
+    $left = $expected.Files[$name]
+    $right = $actual.Files[$name]
+    if ($left.Exists -ne $right.Exists -or [string]$left.Content -cne [string]$right.Content) {
+      return @{ Match = $false; Diff = "internal configuration changed: $name" }
     }
   }
   return @{ Match = $true; Diff = "" }
 }
 
-function Restore-UserRegistry {
-  Write-Warning "[test-with-restore] Restoring HKCU\Environment from backup ..."
-  $regImport = reg import $UserRegBackup 2>&1
-  if ($LASTEXITCODE -ne 0) {
-    Write-Error "reg import failed: $regImport"
-  }
-
-  if (Test-Path $SystemRegBackup) {
-    Write-Warning "[test-with-restore] Restoring $SystemEnvKey from backup ..."
-    $sysImport = reg import $SystemRegBackup 2>&1
-    if ($LASTEXITCODE -ne 0) {
-      Write-Warning "reg import HKLM failed (may need admin): $sysImport"
-    }
-  } else {
-    Write-Warning "[test-with-restore] No HKLM backup present; skipping system-hive restore."
-  }
-  $sig = '[DllImport("user32.dll", SetLastError = true, CharSet = CharSet.Auto)] public static extern IntPtr SendMessageTimeout(IntPtr hWnd, uint Msg, UIntPtr wParam, string lParam, uint fuFlags, uint uTimeout, out UIntPtr lpdwResult);'
-  $null = Add-Type -MemberDefinition $sig -Name "Win32SendMessage" -Namespace "EnvManager.Test" -ErrorAction SilentlyContinue
-  $HWND_BROADCAST = [IntPtr]0xffff
-  $WM_SETTINGCHANGE = 0x1A
-  $result = [UIntPtr]::Zero
-  $null = [EnvManager.Test.Win32SendMessage]::SendMessageTimeout($HWND_BROADCAST, $WM_SETTINGCHANGE, [UIntPtr]::Zero, "Environment", 2, 5000, [ref]$result)
-  Write-Host "[test-with-restore] Restore complete." -ForegroundColor Yellow
+function Convert-RegistryValueToSnapshotValue($Value) {
+  if ($Value -is [string[]]) { return @{ Type = "stringArray"; Value = @($Value) } }
+  if ($Value -is [byte[]]) { return @{ Type = "byteArray"; Value = [Convert]::ToBase64String($Value) } }
+  return @{ Type = "scalar"; Value = $Value }
 }
 
-function Cleanup-TestKeys {
+function Convert-SnapshotValueToRegistryValue($SnapshotValue) {
+  switch ($SnapshotValue.Type) {
+    "stringArray" { return [string[]]@($SnapshotValue.Value) }
+    "byteArray" { return [Convert]::FromBase64String([string]$SnapshotValue.Value) }
+    default { return $SnapshotValue.Value }
+  }
+}
+
+function Get-RegistrySnapshot([Microsoft.Win32.RegistryHive]$Hive, [string]$SubKey) {
+  $base = [Microsoft.Win32.RegistryKey]::OpenBaseKey($Hive, [Microsoft.Win32.RegistryView]::Default)
   try {
-    $key = [Microsoft.Win32.Registry]::CurrentUser.OpenSubKey("Environment", $true)
-    if ($null -ne $key) {
-      $toDelete = @()
+    $key = $base.OpenSubKey($SubKey, $false)
+    if ($null -eq $key) { throw "Registry key not found: $Hive\$SubKey" }
+    try {
+      $values = @{}
       foreach ($name in $key.GetValueNames()) {
-        if ($name -like "$TestPrefix*") { $toDelete += $name }
+        $raw = $key.GetValue($name, $null, [Microsoft.Win32.RegistryValueOptions]::DoNotExpandEnvironmentNames)
+        $values[$name] = @{
+          Kind = $key.GetValueKind($name).ToString()
+          Data = Convert-RegistryValueToSnapshotValue $raw
+        }
       }
-      foreach ($name in $toDelete) {
-        try { $key.DeleteValue($name, $false) } catch { }
-      }
-      $key.Close()
+      return @{ Values = $values }
+    } finally {
+      $key.Dispose()
     }
-  } catch { }
+  } finally {
+    $base.Dispose()
+  }
 }
 
-if (-not (Test-Path $CliPath)) {
-  throw "CLI not found at $CliPath. Build first: powershell -File frontend\scripts\build-all.ps1"
+function Save-Snapshot([hashtable]$Snapshot, [string]$Path) {
+  Write-Utf8NoBom $Path ($Snapshot | ConvertTo-Json -Depth 8)
 }
 
-Write-Host "[test-with-restore] CLI: $CliPath" -ForegroundColor Cyan
-Write-Host "[test-with-restore] Test prefix: $TestPrefix" -ForegroundColor Cyan
+function Read-Snapshot([string]$Path) {
+  $raw = Read-JsonHashtable $Path
+  if ($null -eq $raw -or $null -eq $raw.Values) { throw "Invalid snapshot: $Path" }
+  return $raw
+}
 
-Cleanup-TestKeys
-Backup-UserRegistry
+function Get-SnapshotKeys([hashtable]$Snapshot) {
+  return @($Snapshot.Values.Keys | Sort-Object)
+}
 
-$failures = @()
-$testCount = 0
+function Test-SnapshotValueEqual($Expected, $Actual) {
+  if ($Expected.Kind -ne $Actual.Kind -or $Expected.Data.Type -ne $Actual.Data.Type) { return $false }
+  if ($Expected.Data.Type -eq "stringArray") {
+    $expectedItems = @($Expected.Data.Value)
+    $actualItems = @($Actual.Data.Value)
+    if ($expectedItems.Count -ne $actualItems.Count) { return $false }
+    for ($i = 0; $i -lt $expectedItems.Count; $i++) {
+      if ([string]$expectedItems[$i] -cne [string]$actualItems[$i]) { return $false }
+    }
+    return $true
+  }
+  return [string]$Expected.Data.Value -ceq [string]$Actual.Data.Value
+}
+
+function Compare-RegistrySnapshot([Microsoft.Win32.RegistryHive]$Hive, [string]$SubKey, [string]$SnapshotPath) {
+  if (-not (Test-Path $SnapshotPath)) { return @{ Match = $false; Diff = "snapshot missing" } }
+  try {
+    $before = Read-Snapshot $SnapshotPath
+    $after = Get-RegistrySnapshot $Hive $SubKey
+  } catch {
+    return @{ Match = $false; Diff = "snapshot read failed: $($_.Exception.GetType().Name)" }
+  }
+
+  $beforeKeys = Get-SnapshotKeys $before
+  $afterKeys = Get-SnapshotKeys $after
+  $added = @($afterKeys | Where-Object { $_ -notin $beforeKeys })
+  $removed = @($beforeKeys | Where-Object { $_ -notin $afterKeys })
+  $changed = @()
+  foreach ($name in $beforeKeys) {
+    if ($name -in $afterKeys -and -not (Test-SnapshotValueEqual $before.Values[$name] $after.Values[$name])) {
+      $changed += $name
+    }
+  }
+
+  if ($added.Count -eq 0 -and $removed.Count -eq 0 -and $changed.Count -eq 0) {
+    return @{ Match = $true; Diff = "" }
+  }
+
+  $parts = @()
+  if ($added.Count -gt 0) { $parts += "added=$($added -join ',')" }
+  if ($removed.Count -gt 0) { $parts += "removed=$($removed -join ',')" }
+  if ($changed.Count -gt 0) { $parts += "changed=$($changed -join ',')" }
+  return @{ Match = $false; Diff = ($parts -join '; ') }
+}
+
+function Convert-RegistryKind([string]$Kind) {
+  return [Microsoft.Win32.RegistryValueKind]::$Kind
+}
+
+function Restore-RegistrySnapshot([Microsoft.Win32.RegistryHive]$Hive, [string]$SubKey, [string]$SnapshotPath) {
+  $snapshot = Read-Snapshot $SnapshotPath
+  $base = [Microsoft.Win32.RegistryKey]::OpenBaseKey($Hive, [Microsoft.Win32.RegistryView]::Default)
+  try {
+    $key = $base.CreateSubKey($SubKey, $true)
+    try {
+      foreach ($name in @($key.GetValueNames())) {
+        if (-not $snapshot.Values.ContainsKey($name)) {
+          $key.DeleteValue($name, $false)
+        }
+      }
+      foreach ($name in $snapshot.Values.Keys) {
+        $entry = $snapshot.Values[$name]
+        $key.SetValue($name, (Convert-SnapshotValueToRegistryValue $entry.Data), (Convert-RegistryKind $entry.Kind))
+      }
+    } finally {
+      $key.Dispose()
+    }
+  } finally {
+    $base.Dispose()
+  }
+}
+
+function Broadcast-EnvironmentChange {
+  $typeName = "EnvManagerTest.NativeMethods"
+  if ($null -eq ($typeName -as [type])) {
+    Add-Type -TypeDefinition @'
+using System;
+using System.Runtime.InteropServices;
+namespace EnvManagerTest {
+  public static class NativeMethods {
+    [DllImport("user32.dll", CharSet = CharSet.Auto, SetLastError = true)]
+    public static extern IntPtr SendMessageTimeout(IntPtr hWnd, uint msg, UIntPtr wParam, string lParam, uint flags, uint timeout, out UIntPtr result);
+  }
+}
+'@
+  }
+  $result = [UIntPtr]::Zero
+  $null = [EnvManagerTest.NativeMethods]::SendMessageTimeout([IntPtr]0xffff, 0x1A, [UIntPtr]::Zero, "Environment", 2, 5000, [ref]$result)
+}
+
+function Invoke-Cli([string[]]$CliArgs) {
+  # Discard CLI text so callers receive exactly one value: the native exit code.
+  # This avoids PowerShell treating normal success output as a failed comparison.
+  & $CliPath @CliArgs 2>$null | Out-Null
+  return [int]$LASTEXITCODE
+}
+
+function Invoke-CliExit([string[]]$CliArgs) {
+  $stdout = [IO.Path]::GetTempFileName()
+  $stderr = [IO.Path]::GetTempFileName()
+  try {
+    $process = Start-Process -FilePath $CliPath -ArgumentList $CliArgs -Wait -PassThru -NoNewWindow -RedirectStandardOutput $stdout -RedirectStandardError $stderr
+    return [int]$process.ExitCode
+  } finally {
+    Remove-Item -LiteralPath $stdout, $stderr -Force -ErrorAction SilentlyContinue
+  }
+}
+
+function Backup-Registry {
+  Write-Host "[test-with-restore] Capturing exact HKCU\Environment snapshot ..." -ForegroundColor Cyan
+  Save-Snapshot (Get-RegistrySnapshot ([Microsoft.Win32.RegistryHive]::CurrentUser) $UserEnvSubKey) $UserJsonBackup
+  $userExport = reg export "HKCU\Environment" $UserRegBackup /y 2>&1
+  if ($LASTEXITCODE -ne 0) {
+    Write-Warning "HKCU .reg export failed; the exact JSON snapshot remains the rollback source."
+  }
+
+  Write-Host "[test-with-restore] Capturing exact $SystemEnvKey snapshot ..." -ForegroundColor Cyan
+  try {
+    Save-Snapshot (Get-RegistrySnapshot ([Microsoft.Win32.RegistryHive]::LocalMachine) $SystemEnvSubKey) $SystemJsonBackup
+    $script:SystemSnapshotAvailable = $true
+    $systemExport = reg export $SystemEnvKey $SystemRegBackup /y 2>&1
+    if ($LASTEXITCODE -ne 0) {
+      Write-Warning "HKLM .reg export failed; the exact JSON snapshot remains the rollback source."
+    }
+  } catch {
+    Write-Warning "HKLM snapshot unavailable; system hive will not be tested or mutated: $($_.Exception.GetType().Name)"
+  }
+
+  Save-InternalConfigSnapshot
+}
+
+function Restore-AllSnapshots {
+  $errors = @()
+  try {
+    Write-Warning "[test-with-restore] Reconciling HKCU\Environment to its pre-test snapshot ..."
+    Restore-RegistrySnapshot ([Microsoft.Win32.RegistryHive]::CurrentUser) $UserEnvSubKey $UserJsonBackup
+  } catch {
+    $errors += "HKCU rollback failed: $($_.Exception.GetType().Name)"
+  }
+
+  if ($SystemSnapshotAvailable) {
+    try {
+      Write-Warning "[test-with-restore] Reconciling $SystemEnvKey to its pre-test snapshot ..."
+      Restore-RegistrySnapshot ([Microsoft.Win32.RegistryHive]::LocalMachine) $SystemEnvSubKey $SystemJsonBackup
+    } catch {
+      $errors += "HKLM rollback failed: $($_.Exception.GetType().Name)"
+    }
+  }
+
+  try {
+    Write-Warning "[test-with-restore] Restoring Env Manager internal configuration ..."
+    Restore-InternalConfigSnapshot
+  } catch {
+    $errors += "internal configuration rollback failed: $($_.Exception.GetType().Name)"
+  }
+
+  try {
+    Broadcast-EnvironmentChange
+  } catch {
+    $errors += "environment broadcast failed: $($_.Exception.GetType().Name)"
+  }
+
+  return $errors
+}
+
+function Remove-Backups {
+  Remove-Item $UserRegBackup, $UserJsonBackup, $SystemRegBackup, $SystemJsonBackup -Force -ErrorAction SilentlyContinue
+  Remove-Item $InternalConfigDir -Recurse -Force -ErrorAction SilentlyContinue
+}
 
 function Run-Test([string]$Name, [scriptblock]$Body) {
   $script:testCount++
@@ -174,124 +340,159 @@ function Run-Test([string]$Name, [scriptblock]$Body) {
   }
 }
 
-Run-Test "set+get+delete round-trip" {
-  $exit1 = Invoke-Cli @("set", "EM_TEST_FOO", "bar123", "--scope", "user")
-  if ($exit1 -ne 0) { throw "set failed (exit $exit1)" }
-  $getOut = & $CliPath get EM_TEST_FOO 2>&1
-  if ($LASTEXITCODE -ne 0) { throw "get failed (exit $LASTEXITCODE): $getOut" }
-  if ($getOut -notmatch "bar123") { throw "value mismatch: $getOut" }
-  $exit2 = Invoke-Cli @("delete", "EM_TEST_FOO", "--scope", "user")
-  if ($exit2 -ne 0) { throw "delete failed (exit $exit2)" }
-}
-
-Run-Test "rename contract" {
-  $null = Invoke-Cli @("set", "EM_TEST_SRC", "v1", "--scope", "user")
-  $null = Invoke-Cli @("rename", "EM_TEST_SRC", "EM_TEST_DST", "--scope", "user")
-  if ($LASTEXITCODE -ne 0) { throw "rename failed" }
-  $dst = & $CliPath get EM_TEST_DST 2>&1
-  if ($LASTEXITCODE -ne 0 -or $dst -notmatch "v1") { throw "rename value mismatch: $dst" }
-  $null = Invoke-Cli @("delete", "EM_TEST_DST", "--scope", "user")
-}
-
-Run-Test "protected variable rejection" {
-  # PATHEXT is a built-in protected system variable - must never be modified at system scope.
-  # Use Start-Process to capture stdout+stderr cleanly without PowerShell redirection noise.
-  $info = Start-Process -FilePath $CliPath -ArgumentList @("set", "PATHEXT", ".x", "--scope", "system") -Wait -PassThru -NoNewWindow -RedirectStandardOutput "$env:TEMP\em_test_stdout.txt" -RedirectStandardError "$env:TEMP\em_test_stderr.txt"
-  $so = Get-Content "$env:TEMP\em_test_stdout.txt" -Raw -ErrorAction SilentlyContinue
-  $se = Get-Content "$env:TEMP\em_test_stderr.txt" -Raw -ErrorAction SilentlyContinue
-  Remove-Item "$env:TEMP\em_test_stdout.txt", "$env:TEMP\em_test_stderr.txt" -ErrorAction SilentlyContinue
-  $combined = "$so$se"
-  if ($info.ExitCode -eq 0 -and -not ($combined -match "protected")) {
-    throw "set PATHEXT on system scope must be rejected (non-zero exit or 'protected' output); got exit=$($info.ExitCode) out=$combined"
-  }
-  if (-not ($combined -match "protected")) {
-    throw "set PATHEXT output was unexpected; got exit=$($info.ExitCode) out=$combined"
-  }
-  # toggle of a built-in protected name (e.g., SystemRoot) must also be rejected, even at user scope.
-  $info2 = Start-Process -FilePath $CliPath -ArgumentList @("toggle", "SystemRoot", "--scope", "user") -Wait -PassThru -NoNewWindow -RedirectStandardOutput "$env:TEMP\em_test_stdout.txt" -RedirectStandardError "$env:TEMP\em_test_stderr.txt"
-  $so2 = Get-Content "$env:TEMP\em_test_stdout.txt" -Raw -ErrorAction SilentlyContinue
-  $se2 = Get-Content "$env:TEMP\em_test_stderr.txt" -Raw -ErrorAction SilentlyContinue
-  Remove-Item "$env:TEMP\em_test_stdout.txt", "$env:TEMP\em_test_stderr.txt" -ErrorAction SilentlyContinue
-  $combined2 = "$so2$se2"
-  if ($info2.ExitCode -eq 0 -and -not ($combined2 -match "protected")) {
-    throw "toggle SystemRoot should be rejected; got exit=$($info2.ExitCode) out=$combined2"
-  }
-}
-
-Run-Test "profile no-registry-mutation" {
-  $null = Invoke-Cli @("profile", "create", "EM_TEST_PROFILE")
-  $null = Invoke-Cli @("profile", "add-var", "EM_TEST_PROFILE", "EM_TEST_PVAR", "pval")
-  $null = Invoke-Cli @("profile", "delete", "EM_TEST_PROFILE")
-}
-
-Run-Test "secrets never in registry" {
-  $null = Invoke-Cli @("profile", "create", "EM_TEST_SEC")
-  $null = Invoke-Cli @("profile", "add-secret", "EM_TEST_SEC", "S", "topsecret")
-  $applyExit = Invoke-Cli @("profile", "apply", "EM_TEST_SEC")
-  if ($applyExit -eq 0) { throw "profile apply on a secrets-bearing profile should be rejected" }
-  $regVal = $null
+function Test-RawTrailingBackslashInvocation {
+  $value = 'C:\Program Files\PowerShell\7\'
+  $key = [Microsoft.Win32.Registry]::CurrentUser.OpenSubKey($UserEnvSubKey, $false)
   try {
-    $key = [Microsoft.Win32.Registry]::CurrentUser.OpenSubKey("Environment", $false)
-    if ($key) { $regVal = $key.GetValue("S", $null); $key.Close() }
-  } catch { }
-  if ($null -ne $regVal) { throw "secret value leaked to HKCU\Environment" }
-  $null = Invoke-Cli @("profile", "delete", "EM_TEST_SEC")
+    $beforePath = if ($key) { [string]$key.GetValue("PATH", "", [Microsoft.Win32.RegistryValueOptions]::DoNotExpandEnvironmentNames) } else { "" }
+  } finally {
+    if ($key) { $key.Dispose() }
+  }
+  $beforeMatchCount = @($beforePath.Split(';', [StringSplitOptions]::RemoveEmptyEntries) | Where-Object { $_ -ceq $value }).Count
+
+  # Invoke through cmd.exe to preserve the raw command-line form that caused the bug.
+  # The outer PowerShell process never reparses the target CLI argument list.
+  $escapedCli = '"' + $CliPath.Replace('"', '""') + '"'
+  $raw = $escapedCli + ' path add "C:\Program Files\PowerShell\7\" --scope user'
+  cmd.exe /d /s /c $raw | Out-Null
+  if ($LASTEXITCODE -ne 0) { throw "raw trailing-backslash path add failed (exit $LASTEXITCODE)" }
+
+  $listJson = & $CliPath path list --scope user 2>&1 | Out-String
+  if ($LASTEXITCODE -ne 0) { throw "path list failed (exit $LASTEXITCODE)" }
+  $entries = $listJson | ConvertFrom-Json
+  $matches = @($entries | Where-Object { $_.path -ceq $value })
+  $expectedMatchCount = [Math]::Max(1, $beforeMatchCount)
+  if ($matches.Count -ne $expectedMatchCount) { throw "unexpected raw trailing-backslash PATH entry count" }
+  if (@($entries | Where-Object { $_.path -match '--scope' }).Count -ne 0) {
+    throw "PATH contains a swallowed --scope token"
+  }
+
+  $currentPath = ($entries | ForEach-Object path) -join ';'
+  if ($beforePath -notmatch [regex]::Escape($value)) {
+    $removeRaw = $escapedCli + ' path remove "C:\Program Files\PowerShell\7\" --scope user'
+    cmd.exe /d /s /c $removeRaw | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw "raw trailing-backslash cleanup failed (exit $LASTEXITCODE)" }
+  }
+
+  $afterKey = [Microsoft.Win32.Registry]::CurrentUser.OpenSubKey($UserEnvSubKey, $false)
+  try {
+    $afterPath = if ($afterKey) { [string]$afterKey.GetValue("PATH", "", [Microsoft.Win32.RegistryValueOptions]::DoNotExpandEnvironmentNames) } else { "" }
+  } finally {
+    if ($afterKey) { $afterKey.Dispose() }
+  }
+  if ($afterPath -cne $beforePath) { throw "trailing-backslash test did not restore the original user PATH" }
 }
 
-Run-Test "trailing-backslash + quote recovery (issue: quoting bug)" {
-  # Reproduces the classic Windows tokenizer hazard:
-  #   cli path add "C:\Program Files\PowerShell\7\" --scope user
-  # Before fix, CommandLineToArgvW merged the trailing \" with the following
-  # --scope flag, producing a single arg element containing the flag literal.
-  # We invoke with & $CliPath @args (argv-array semantics; stdout suppressed).
-  # The CLI was rebuilt for v0.7.1 with LenientArgs.Tokenize() + recovery detector.
-  foreach ($scenario in @("user")) {
-    $value = 'C:\Program Files\PowerShell\7\'
-    & $CliPath @("path", "add", $value, "--scope", $scenario) 2>&1 | Out-Null
-    $exit = $LASTEXITCODE
-    if ($exit -ne 0) { throw "path add trailing-backslash exit=$exit" }
-    $listOut = & $CliPath path list --scope $scenario 2>&1 | Out-String
-    $listLines = $listOut -split "\r?\n" | Where-Object { $_ -like "*PowerShell*7*" }
-    if ($listLines.Count -eq 0) { throw "PowerShell 7 entry was not inserted into PATH" }
-    $bugEntry = $listLines | Where-Object { $_ -like "*--scope*" }
-    if ($bugEntry -and $bugEntry.Count -gt 0) {
-      throw "BUG: PATH entry contains the swallowed --scope token: $($bugEntry -join '|')"
+if (-not (Test-Path $CliPath)) {
+  throw "CLI not found at $CliPath. Build first: powershell -NoProfile -ExecutionPolicy Bypass -File frontend\scripts\build-all.ps1"
+}
+
+if (Get-Process -Name "env-manager" -ErrorAction SilentlyContinue) {
+  throw "Env Manager GUI is running. Close it before a live registry test so internal configuration cannot change concurrently."
+}
+
+Write-Host "[test-with-restore] CLI: $CliPath" -ForegroundColor Cyan
+Write-Host "[test-with-restore] Test prefix: $TestPrefix" -ForegroundColor Cyan
+
+$failures = @()
+$testCount = 0
+$backupCompleted = $false
+$allPass = $false
+
+try {
+  # Register the finally handler before taking snapshots. Once this completes,
+  # every subsequent test mutation has registry and internal-config rollback.
+  Backup-Registry
+  $backupCompleted = $true
+
+  Run-Test "set+get+delete round-trip" {
+    if ((Invoke-Cli @("set", "EM_TEST_FOO", "bar123", "--scope", "user")) -ne 0) { throw "set failed" }
+    $getOut = & $CliPath get EM_TEST_FOO 2>&1 | Out-String
+    if ($LASTEXITCODE -ne 0 -or $getOut -notmatch "bar123") { throw "get mismatch" }
+    if ((Invoke-Cli @("delete", "EM_TEST_FOO", "--scope", "user")) -ne 0) { throw "delete failed" }
+  }
+
+  Run-Test "rename contract" {
+    $sourceName = "EM_TEST_SRC_$Stamp"
+    $targetName = "EM_TEST_DST_$Stamp"
+    if ((Invoke-Cli @("set", $sourceName, "v1", "--scope", "user")) -ne 0) { throw "seed failed" }
+    if ((Invoke-Cli @("rename", $sourceName, $targetName, "--scope", "user")) -ne 0) { throw "rename failed" }
+    $dst = & $CliPath get $targetName 2>&1 | Out-String
+    if ($LASTEXITCODE -ne 0 -or $dst -notmatch "v1") { throw "rename value mismatch" }
+    if ((Invoke-Cli @("delete", $targetName, "--scope", "user")) -ne 0) { throw "cleanup failed" }
+  }
+
+  Run-Test "protected variable rejection" {
+    if ((Invoke-CliExit @("set", "PATHEXT", ".x", "--scope", "system")) -eq 0) { throw "system protected variable was not rejected" }
+    if ((Invoke-CliExit @("toggle", "SystemRoot", "--scope", "user")) -eq 0) { throw "protected toggle was not rejected" }
+  }
+
+  $profileName = "EM_TEST_PROFILE_$Stamp"
+  $secretProfileName = "EM_TEST_SEC_$Stamp"
+
+  Run-Test "profile no-registry-mutation" {
+    if ((Invoke-Cli @("profile", "create", $profileName)) -ne 0) { throw "profile create failed" }
+    if ((Invoke-Cli @("profile", "add-var", $profileName, "EM_TEST_PVAR", "pval")) -ne 0) { throw "profile add-var failed" }
+    if ((Invoke-Cli @("profile", "delete", $profileName)) -ne 0) { throw "profile delete failed" }
+  }
+
+  Run-Test "secrets never in registry" {
+    if ((Invoke-Cli @("profile", "create", $secretProfileName)) -ne 0) { throw "profile create failed" }
+    if ((Invoke-Cli @("profile", "add-secret", $secretProfileName, "S", "topsecret")) -ne 0) { throw "add-secret failed" }
+    $applyExit = Invoke-CliExit @("profile", "apply", $secretProfileName)
+    if ($applyExit -eq 0) { throw "secrets-bearing profile apply must be rejected" }
+    $key = [Microsoft.Win32.Registry]::CurrentUser.OpenSubKey($UserEnvSubKey, $false)
+    try {
+      if ($key -and $null -ne $key.GetValue("S", $null)) { throw "secret value leaked to HKCU" }
+    } finally {
+      if ($key) { $key.Dispose() }
     }
-    & $CliPath @("path", "remove", $value, "--scope", $scenario) 2>&1 | Out-Null
-    $clnExit = $LASTEXITCODE
-    if ($clnExit -ne 0) { throw "cleanup path remove failed exit=$clnExit" }
+    if ((Invoke-Cli @("profile", "delete", $secretProfileName)) -ne 0) { throw "profile delete failed" }
   }
-}
 
-Write-Host ""
+  Run-Test "trailing-backslash + quote recovery" { Test-RawTrailingBackslashInvocation }
+} catch {
+  $failures += @{ Name = "harness"; Error = $_.Exception.Message }
+} finally {
+  if (-not $backupCompleted) {
+    Write-Warning "[test-with-restore] Snapshot setup failed before any test mutation; retained partial backups for forensics: $BackupDir"
+    exit 1
+  }
 
-Write-Host "[test-with-restore] Verifying registry integrity ..." -ForegroundColor Cyan
-$verify = Compare-UserRegistry -JsonSnapshotPath $UserJsonBackup
+  try {
+    Restore-InternalConfigSnapshot
+    $internalVerify = Compare-InternalConfigSnapshot
+  } catch {
+    $internalVerify = @{ Match = $false; Diff = "internal configuration restore failed: $($_.Exception.GetType().Name)" }
+  }
 
-$allPass = ($failures.Count -eq 0) -and $verify.Match
+  $userVerify = Compare-RegistrySnapshot ([Microsoft.Win32.RegistryHive]::CurrentUser) $UserEnvSubKey $UserJsonBackup
+  $systemVerify = if ($SystemSnapshotAvailable) { Compare-RegistrySnapshot ([Microsoft.Win32.RegistryHive]::LocalMachine) $SystemEnvSubKey $SystemJsonBackup } else { @{ Match = $true; Diff = "not tested (no accessible snapshot)" } }
+  $allPass = ($failures.Count -eq 0) -and $internalVerify.Match -and $userVerify.Match -and $systemVerify.Match
 
-if ($allPass) {
-  Write-Host "[test-with-restore] ALL TESTS PASS + registry intact." -ForegroundColor Green
-  if (-not $KeepBackup) {
-    Remove-Item $UserRegBackup -Force -ErrorAction SilentlyContinue
-    Remove-Item $UserJsonBackup -Force -ErrorAction SilentlyContinue
-    Remove-Item $SystemRegBackup -Force -ErrorAction SilentlyContinue
-    Remove-Item $SystemJsonBackup -Force -ErrorAction SilentlyContinue
-    Write-Host "[test-with-restore] Backups deleted (clean run)."
+  if (-not $allPass) {
+    Write-Warning "[test-with-restore] Failure or drift detected; restoring snapshots."
+    if (-not $internalVerify.Match) { Write-Warning "[test-with-restore] Internal configuration drift: $($internalVerify.Diff)" }
+    if (-not $userVerify.Match) { Write-Warning "[test-with-restore] HKCU drift: $($userVerify.Diff)" }
+    if (-not $systemVerify.Match) { Write-Warning "[test-with-restore] HKLM drift: $($systemVerify.Diff)" }
+    $restoreErrors = @(Restore-AllSnapshots)
+    $internalRestored = Compare-InternalConfigSnapshot
+    $userRestored = Compare-RegistrySnapshot ([Microsoft.Win32.RegistryHive]::CurrentUser) $UserEnvSubKey $UserJsonBackup
+    $systemRestored = if ($SystemSnapshotAvailable) { Compare-RegistrySnapshot ([Microsoft.Win32.RegistryHive]::LocalMachine) $SystemEnvSubKey $SystemJsonBackup } else { @{ Match = $true; Diff = "not tested (no accessible snapshot)" } }
+    if ($restoreErrors.Count -gt 0 -or -not $internalRestored.Match -or -not $userRestored.Match -or -not $systemRestored.Match) {
+      foreach ($restoreError in $restoreErrors) { Write-Warning "[test-with-restore] $restoreError" }
+      if (-not $internalRestored.Match) { Write-Warning "[test-with-restore] Internal config rollback verification failed: $($internalRestored.Diff)" }
+      if (-not $userRestored.Match) { Write-Warning "[test-with-restore] HKCU rollback verification failed: $($userRestored.Diff)" }
+      if (-not $systemRestored.Match) { Write-Warning "[test-with-restore] HKLM rollback verification failed: $($systemRestored.Diff)" }
+    }
+  }
+
+  if ($allPass) {
+    Write-Host "[test-with-restore] ALL TESTS PASS + exact registry and internal-config snapshots match." -ForegroundColor Green
+    if (-not $KeepBackup) { Remove-Backups; Write-Host "[test-with-restore] Backups deleted (clean run)." } else { Write-Host "[test-with-restore] Backups retained (-KeepBackup)." }
   } else {
-    Write-Host "[test-with-restore] Backups retained (-KeepBackup)."
+    Write-Host "[test-with-restore] Backups kept for forensics: $BackupDir"
+    foreach ($failure in $failures) { Write-Warning "[test-with-restore] $($failure.Name): $($failure.Error)" }
+    exit 1
   }
-  exit 0
-} else {
-  Write-Warning "[test-with-restore] FAILED. Restoring registry before exit."
-  if (-not $verify.Match) {
-    Write-Warning "[test-with-restore] Registry drift detected: $($verify.Diff)"
-  }
-  if ($failures.Count -gt 0) {
-    Write-Warning "[test-with-restore] Test failures: $($failures.Count)"
-    foreach ($f in $failures) { Write-Warning "  - $($f.Name): $($f.Error)" }
-  }
-  Restore-UserRegistry
-  Write-Host "[test-with-restore] Backups kept for forensics: $BackupDir"
-  exit 1
 }
