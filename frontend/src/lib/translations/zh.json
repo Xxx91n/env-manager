@@ -241,5 +241,6 @@
   "messages.secretVariable": "密钥变量(隐藏)",
   "profiles.addSecret": "添加密钥",
   "profiles.secretValue": "密钥值",
-  "profiles.secretHint": "使用 DPAPI(当前用户)加密,仅当前用户可解密;启动时在子进程内解密。"
+  "profiles.secretHint": "使用 DPAPI(当前用户)加密,仅当前用户可解密;启动时在子进程内解密。",
+  "protection.lockedCannotToggle": "已锁定：无法启用或关闭"
 }

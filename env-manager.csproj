@@ -12,4 +12,8 @@
     <Version>0.7.1</Version>
   </PropertyGroup>
 
+  <ItemGroup>
+    <EmbeddedResource Include="protection.defaults.json" LogicalName="EnvManager.protection.defaults.json" />
+  </ItemGroup>
+
 </Project>

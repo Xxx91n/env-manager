@@ -241,5 +241,6 @@
   "messages.secretVariable": "متغير سري (مقنّع)",
   "profiles.addSecret": "إضافة سر",
   "profiles.secretValue": "قيمة السر",
-  "profiles.secretHint": "مشفّر بـ DPAPI (المستخدم الحالي). يمكن فقط لهذا المستخدم فك التشفير. التشغيل يفك التشفير داخل العملية."
+  "profiles.secretHint": "مشفّر بـ DPAPI (المستخدم الحالي). يمكن فقط لهذا المستخدم فك التشفير. التشغيل يفك التشفير داخل العملية.",
+  "protection.lockedCannotToggle": "مقفل: لا يمكن التمكين أو التعطيل"
 }

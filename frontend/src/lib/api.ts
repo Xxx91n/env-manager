@@ -92,29 +92,28 @@ function stripVerbatimPrefix(path: string): string {
 // races (e.g., double-click triggering two set operations before the first
 // completes). Read operations are not serialized.
 let writeChain: Promise<void> = Promise.resolve()
+let pendingWriteCount = 0
 
 /**
- * Executes a write operation in a serialized chain.
- * Each write operation waits for the previous one to complete before starting.
- * Read operations are NOT serialized (they use the Rust read lock).
+ * Executes a write operation in a serialized chain. The busy state is reference-counted
+ * so the UI remains locked until every queued mutation completes.
  */
 async function runWriteOperation<T>(fn: () => Promise<T>): Promise<T> {
+  pendingWriteCount += 1
   isWriteInProgress.set(true)
   const prevChain = writeChain
-  let resolveWrite: () => void
-  writeChain = new Promise<void>((resolve) => { resolveWrite = resolve! })
+  let resolveWrite!: () => void
+  writeChain = new Promise<void>((resolve) => { resolveWrite = resolve })
 
   try {
-    // Wait for the previous write to complete
     await prevChain
-    // Execute the write operation
     const result = await fn()
-    // Invalidate all caches after a successful write so secondary pages get fresh data
     invalidateApiCache()
     return result
   } finally {
-    resolveWrite!()
-    isWriteInProgress.set(false)
+    resolveWrite()
+    pendingWriteCount -= 1
+    isWriteInProgress.set(pendingWriteCount > 0)
   }
 }
 
@@ -224,12 +223,18 @@ export async function updateTrayLocale(
 // TTL-based: cached data expires after 5 seconds so secondary pages see fresh
 // data without hammering the CLI on every page switch.
 const VARIABLES_CACHE_TTL_MS = 5000
+const MAX_CACHE_ENTRIES = 4
 let lastVariablesRaw: EnvVariable[] = []
 let lastVariablesCacheTime = 0
+let variablesReadInFlight: { generation: number; promise: Promise<EnvVariable[]> } | null = null
+let variablesRequestEpoch = 0
+let dataGeneration = 0
 
-// PATH entries cache (same TTL strategy as variables)
+// PATH entries cache uses bounded single-flight reads. A generation prevents an
+// old in-flight read from repopulating cache after a successful mutation.
 const PATH_CACHE_TTL_MS = 5000
-const pathEntriesCache: Map<string, { data: PathEntry[]; time: number }> = new Map()
+const pathEntriesCache: Map<string, { data: PathEntry[]; time: number; generation: number }> = new Map()
+const pathReadsInFlight = new Map<string, { generation: number; promise: Promise<PathEntry[]> }>()
 
 /**
  * Invalidate all cached data. Called after any write operation to ensure
@@ -237,6 +242,8 @@ const pathEntriesCache: Map<string, { data: PathEntry[]; time: number }> = new M
  */
 export function invalidateApiCache(): void {
   lastVariablesCacheTime = 0
+  dataGeneration += 1
+  variablesRequestEpoch += 1
   pathEntriesCache.clear()
 }
 
@@ -248,34 +255,50 @@ export function invalidateApiCache(): void {
  */
 export async function listVariablesRaw(force = false): Promise<EnvVariable[]> {
   const now = Date.now()
+  const generation = dataGeneration
   const cacheFresh = !force
     && lastVariablesRaw.length > 0
     && (now - lastVariablesCacheTime) < VARIABLES_CACHE_TTL_MS
   if (cacheFresh) return lastVariablesRaw
-  try {
-    const output = await runRead('list')
-    lastVariablesRaw = JSON.parse(output) as EnvVariable[]
-    lastVariablesCacheTime = now
-    return lastVariablesRaw
-  } catch {
-    return []
-  }
+  if (variablesReadInFlight?.generation === generation) return variablesReadInFlight.promise
+
+  const requestEpoch = ++variablesRequestEpoch
+  const promise = runRead('list')
+    .then((output) => JSON.parse(output) as EnvVariable[])
+    .then((parsed) => {
+      if (generation === dataGeneration && requestEpoch === variablesRequestEpoch) {
+        lastVariablesRaw = parsed
+        lastVariablesCacheTime = Date.now()
+      }
+      return parsed
+    })
+    .finally(() => {
+      if (variablesReadInFlight?.promise === promise) variablesReadInFlight = null
+    })
+
+  variablesReadInFlight = { generation, promise }
+  return promise
 }
 
 export async function listVariables(): Promise<void> {
   loading.set(true)
   error.set(null)
+  const requestEpoch = ++variablesRequestEpoch
 
   try {
     const output = await runRead('list')
     const parsed: EnvVariable[] = JSON.parse(output)
+    if (requestEpoch !== variablesRequestEpoch) return
     variables.set(parsed)
     lastVariablesRaw = parsed
+    lastVariablesCacheTime = Date.now()
   } catch (err) {
-    const msg = err instanceof Error ? err.message : 'Failed to list variables'
-    error.set(msg)
+    if (requestEpoch === variablesRequestEpoch) {
+      const msg = err instanceof Error ? err.message : 'Failed to list variables'
+      error.set(msg)
+    }
   } finally {
-    loading.set(false)
+    if (requestEpoch === variablesRequestEpoch) loading.set(false)
   }
 }
 
@@ -421,9 +444,21 @@ export async function listProfiles(): Promise<ProfileData[]> {
   }
 }
 
-export async function createProfile(name: string): Promise<string> {
+export interface ProfileCreateOptions {
+  type?: 'global' | 'launch'
+  target?: string
+  args?: string
+  cwd?: string
+}
+
+export async function createProfile(name: string, options: ProfileCreateOptions = {}): Promise<string> {
   try {
-    return await runWrite('profile', ['create', name])
+    const args = ['create', name]
+    if (options.type) args.push('--type', options.type)
+    if (options.target !== undefined) args.push('--target', options.target)
+    if (options.args !== undefined) args.push('--args', options.args)
+    if (options.cwd !== undefined) args.push('--cwd', options.cwd)
+    return await runWrite('profile', args)
   } catch (err) {
     error.set(err instanceof Error ? err.message : 'Failed to create profile')
     throw err
@@ -565,19 +600,37 @@ export async function getProfileStatus(name: string): Promise<ProfileStatus | nu
 
 export async function listPathEntries(scope: 'user' | 'system' = 'user', force = false): Promise<PathEntry[]> {
   const now = Date.now()
+  const generation = dataGeneration
   const cached = pathEntriesCache.get(scope)
-  if (!force && cached && (now - cached.time) < PATH_CACHE_TTL_MS) {
+  if (!force && cached && cached.generation === generation && (now - cached.time) < PATH_CACHE_TTL_MS) {
     return cached.data
   }
-  try {
-    const output = await runRead('path', ['list', '--scope', scope])
-    const data = JSON.parse(output) as PathEntry[]
-    pathEntriesCache.set(scope, { data, time: now })
-    return data
-  } catch (err) {
-    error.set(err instanceof Error ? err.message : 'Failed to list PATH entries')
-    return []
-  }
+  const inFlight = pathReadsInFlight.get(scope)
+  if (inFlight?.generation === generation) return inFlight.promise
+
+  const promise = runRead('path', ['list', '--scope', scope])
+    .then((output) => {
+      const data = JSON.parse(output) as PathEntry[]
+      if (generation === dataGeneration) {
+        pathEntriesCache.set(scope, { data, time: Date.now(), generation })
+        while (pathEntriesCache.size > MAX_CACHE_ENTRIES) {
+          const oldest = pathEntriesCache.keys().next().value
+          if (oldest === undefined) break
+          pathEntriesCache.delete(oldest)
+        }
+      }
+      return data
+    })
+    .catch((err) => {
+      error.set(err instanceof Error ? err.message : 'Failed to list PATH entries')
+      return []
+    })
+    .finally(() => {
+      if (pathReadsInFlight.get(scope)?.promise === promise) pathReadsInFlight.delete(scope)
+    })
+
+  pathReadsInFlight.set(scope, { generation, promise })
+  return promise
 }
 
 export async function addPathEntry(

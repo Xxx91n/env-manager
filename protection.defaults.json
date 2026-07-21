@@ -1,0 +1,43 @@
+{
+  "variables": [
+    "PATHEXT",
+    "PSMODULEPATH",
+    "SystemRoot",
+    "windir",
+    "ComSpec",
+    "TEMP",
+    "TMP",
+    "USERPROFILE",
+    "SystemDrive",
+    "ProgramFiles",
+    "ProgramFiles(x86)",
+    "ProgramData",
+    "HOMEDRIVE",
+    "HOMEPATH",
+    "NUMBER_OF_PROCESSORS",
+    "OS",
+    "PROCESSOR_ARCHITECTURE",
+    "PROCESSOR_IDENTIFIER",
+    "PROCESSOR_LEVEL",
+    "PROCESSOR_REVISION",
+    "ALLUSERSPROFILE",
+    "APPDATA",
+    "COMMONPROGRAMFILES",
+    "COMMONPROGRAMFILES(x86)",
+    "COMPUTERNAME",
+    "LOCALAPPDATA",
+    "LOGONSERVER",
+    "OneDrive",
+    "OneDriveConsumer",
+    "PUBLIC",
+    "SESSIONNAME",
+    "USERDOMAIN",
+    "USERNAME"
+  ],
+  "paths": [
+    "C:\\Windows\\System32",
+    "C:\\Windows",
+    "C:\\Windows\\System32\\Wbem",
+    "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\"
+  ]
+}

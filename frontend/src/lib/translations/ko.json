@@ -241,5 +241,6 @@
   "messages.secretVariable": "비밀 변수(마스킹됨)",
   "profiles.addSecret": "비밀 추가",
   "profiles.secretValue": "비밀 값",
-  "profiles.secretHint": "DPAPI(현재 사용자)로 암호화되어 이 사용자만 복호화할 수 있습니다. 실행 시 프로세스 내에서 복호화됩니다."
+  "profiles.secretHint": "DPAPI(현재 사용자)로 암호화되어 이 사용자만 복호화할 수 있습니다. 실행 시 프로세스 내에서 복호화됩니다.",
+  "protection.lockedCannotToggle": "잠김: 켜거나 끌 수 없습니다"
 }

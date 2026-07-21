@@ -49,12 +49,12 @@ All transient feedback messages (copy confirmation, action success/errors) use a
 The GUI implements a multi-layer caching strategy for production-scale environments with thousands of environment variables:
 
 1. **Debounced search** (`debouncedSearch` store in `stores.ts`): Search input debounced by 150ms before triggering filter recompute. Prevents re-running `filteredVariables` on every keystroke.
-2. **TTL-based `listVariablesRaw` cache** (`api.ts`): Secondary surfaces fetch variables via `listVariablesRaw()` which caches results for 5 seconds. Pass `force=true` to bypass (used after mutations).
+2. **Generation-safe `listVariablesRaw` cache** (`api.ts`): Secondary surfaces share one in-flight read per data generation and cache results for 5 seconds. A successful write advances the generation, so an older IPC response cannot overwrite the variable store or refill cache after a mutation.
 3. **Derived `filteredVariables` store** (`stores.ts`): Memoizes scope+search filter; only recomputes when `$variables`, `$selectedScope`, or `$debouncedSearch` change.
 4. **LRU-capped `expandedValues`** (`Variables.svelte`): `%VAR%` expansion preview cache capped at 500 entries; oldest entry evicted in FIFO order.
 5. **Debug log cap** (`addDebugLog` in `stores.ts`): Debug logs capped at 200 entries; older entries sliced off.
-6. **Write-through cache invalidation** (`invalidateApiCache` in `api.ts`): After any write operation completes, `runWriteOperation` calls `invalidateApiCache()` which resets the variables cache timestamp and clears the PATH entries cache.
-7. **PATH entries cache** (`pathEntriesCache` in `api.ts`): `listPathEntries` caches results per-scope (user/system) with the same 5-second TTL.
+6. **Write-through generation invalidation** (`invalidateApiCache` in `api.ts`): After any successful write, the data generation advances. Existing reads are not cancelled, but stale completions are rejected from caches; the write-busy state remains active until the serialized queue drains.
+7. **PATH entries cache** (`pathEntriesCache` in `api.ts`): `listPathEntries` caches user/system results with the same 5-second TTL and generation-aware single-flight guards, preventing post-write stale entries.
 8. **ProtectionPage cached reads**: ProtectionPage's `refresh()` uses `listVariablesRaw()` (cached); caches are automatically invalidated after writes.
 
 ## Auto-Update
@@ -115,7 +115,7 @@ Per-app launch profiles extend the profile system without modifying existing Glo
 
 **Data model**: `ProfileData` gains `profileType` (`"global" | "launch"`, default `"global"`), `targetExecutable`, `launchArguments`, `workingDirectory`, and `secretVariables` (DPAPI-encrypted secrets, decrypted at spawn time by `profile launch` and `profile reveal-secret`).
 
-**Validation**: `ValidateProfiles` splits the uniqueness set by type (Global names unique within Global, Launch names unique within Launch, cross-type collisions allowed). `ValidateLaunchTarget` refuses targets inside `\Windows\System32` and rejects non-executable extensions.
+**Validation**: `ValidateProfiles` uses one case-insensitive name set across Global and Launch profiles because CLI profile commands are name-addressed. `ValidateLaunchTarget` refuses targets inside `\Windows\System32` and rejects non-executable extensions.
 
 **Runtime (`profile launch`)**: spawns the target with `ProcessStartInfo { UseShellExecute=false, EnvironmentVariables.Clear(), env(\"K\",\"v\") }` for each profile variable and PATH entries. The child process receives ONLY the profile's environment and never inherits the parent's. `WM_SETTINGCHANGE` is NOT broadcast. Logs record only command names and arg counts - never variable values (preserves the "no env values in logs" hard boundary from AGENTS.md).
 
@@ -213,3 +213,8 @@ The frontend exposes `getCliAgentsSpec()` and `getCliAgentsPath()` in `api.ts` f
 **Audit records**: NAME only plus `<redacted>`/`<encrypted>` markers - never the plaintext or ciphertext value. This preserves the existing "logs never record environment values" hard boundary.
 
 **GUI integration**: the Svelte `ProfilePage` masks secret variable values as a placeholder; the API layer exposes `profileAddSecret`/`profileEditSecret`/`profileRemoveSecret`/`profileRevealSecret` wrappers. Secret entry is gated behind Launch type and unapplied state. DPAPI decryption for GUI display is NOT implemented - the backend `profile reveal-secret` is the only plaintext surface.
+
+
+## Secret Capability Roadmap
+
+The current DPAPI CurrentUser implementation is the local default. Future secret providers must keep the CLI/native layer as the only encryption and persistence boundary; GUI and Rust IPC must never persist plaintext. Any provider extension needs a versioned envelope, explicit provider identity, redacted audit entries, rotation/export rules, and a refusal path when decryption fails. `CRYPTPROTECT_LOCAL_MACHINE` is not an acceptable default. Windows Credential Manager may be used only for small credential references; it is not a replacement for the encrypted profile store.

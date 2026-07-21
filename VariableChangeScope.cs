@@ -18,6 +18,8 @@ partial class Program
 
         string name = args[1];
         string newScope = args[2].ToLowerInvariant();
+        if (IsInternalToggleBackupName(name))
+            return ArgError("Error: Internal disabled-variable backup names cannot change scope");
         if (newScope != "user" && newScope != "system")
             return ArgError("Error: new scope must be user or system");
 

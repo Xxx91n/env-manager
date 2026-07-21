@@ -427,6 +427,33 @@ try {
     if ((Invoke-CliExit @("toggle", "SystemRoot", "--scope", "user")) -eq 0) { throw "protected toggle was not rejected" }
   }
 
+  Run-Test "toggle exact value and kind recovery" {
+    $toggleName = "EM_TEST_TOGGLE_$Stamp"
+    $backupName = "${toggleName}_EnvManager_disabled"
+    $expectedValue = "%USERPROFILE%\EnvManager-toggle-smoke"
+    $key = [Microsoft.Win32.Registry]::CurrentUser.OpenSubKey($UserEnvSubKey, $true)
+    if (-not $key) { throw "cannot open HKCU environment key" }
+    try {
+      $key.SetValue($toggleName, $expectedValue, [Microsoft.Win32.RegistryValueKind]::ExpandString)
+      if ((Invoke-Cli @("toggle", $toggleName, "--scope", "user")) -ne 0) { throw "disable failed" }
+      if ($null -ne $key.GetValue($toggleName, $null, [Microsoft.Win32.RegistryValueOptions]::DoNotExpandEnvironmentNames)) { throw "original value still exists after disable" }
+      $backupValue = $key.GetValue($backupName, $null, [Microsoft.Win32.RegistryValueOptions]::DoNotExpandEnvironmentNames)
+      if ([string]$backupValue -cne $expectedValue -or $key.GetValueKind($backupName) -ne [Microsoft.Win32.RegistryValueKind]::ExpandString) { throw "disabled backup lost the raw value or registry value kind" }
+
+      $items = (& $CliPath list 2>$null | Out-String | ConvertFrom-Json)
+      $disabledItem = @($items | Where-Object { $_.name -ceq $toggleName -and $_.scope -ceq "user" })
+      if ($disabledItem.Count -ne 1 -or -not $disabledItem[0].isDisabled) { throw "list did not project the disabled variable exactly once" }
+
+      if ((Invoke-Cli @("toggle", $toggleName, "--scope", "user")) -ne 0) { throw "enable failed" }
+      $restoredValue = $key.GetValue($toggleName, $null, [Microsoft.Win32.RegistryValueOptions]::DoNotExpandEnvironmentNames)
+      if ([string]$restoredValue -cne $expectedValue -or $key.GetValueKind($toggleName) -ne [Microsoft.Win32.RegistryValueKind]::ExpandString) { throw "restored value or registry value kind differs from the original" }
+      if ($null -ne $key.GetValue($backupName, $null, [Microsoft.Win32.RegistryValueOptions]::DoNotExpandEnvironmentNames)) { throw "disabled backup remains after successful restore" }
+    } finally {
+      $key.Dispose()
+    }
+    if ((Invoke-Cli @("delete", $toggleName, "--scope", "user")) -ne 0) { throw "toggle smoke cleanup failed" }
+  }
+
   $profileName = "EM_TEST_PROFILE_$Stamp"
   $secretProfileName = "EM_TEST_SEC_$Stamp"
 

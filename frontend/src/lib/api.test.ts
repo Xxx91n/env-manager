@@ -14,6 +14,8 @@ import {
   removePathEntry,
   movePathEntryUp,
   movePathEntryDown,
+  listVariablesRaw,
+  invalidateApiCache,
 } from './api'
 import { isCliInPath, removeCliFromPath } from './api'
 import { variables, error } from './stores'
@@ -149,6 +151,22 @@ describe('api module', () => {
       expect(mockInvoke).toHaveBeenCalledWith('run_cli', {
         command: 'profile',
         args: ['create', 'myprofile'],
+      })
+    })
+
+    it('createProfile forwards launch options in one command', async () => {
+      mockInvoke.mockResolvedValue({ success: true, data: 'ok', error: null })
+
+      await createProfile('tool-run', {
+        type: 'launch',
+        target: 'C:\\Tools\\tool.exe',
+        args: '--safe',
+        cwd: 'C:\\Tools',
+      })
+
+      expect(mockInvoke).toHaveBeenCalledWith('run_cli', {
+        command: 'profile',
+        args: ['create', 'tool-run', '--type', 'launch', '--target', 'C:\\Tools\\tool.exe', '--args', '--safe', '--cwd', 'C:\\Tools'],
       })
     })
 
@@ -307,6 +325,30 @@ describe('api module', () => {
 
       const result = await removeCliFromPath()
       expect(result.removed).toBe(true)
+    })
+  })
+
+  describe('read cache generation safety', () => {
+    it('coalesces concurrent raw variable reads into one CLI invocation', async () => {
+      mockInvoke.mockResolvedValue({ success: true, data: JSON.stringify([{ name: 'ONE', value: '1', scope: 'user' }]), error: null })
+      const results = await Promise.all([listVariablesRaw(true), listVariablesRaw(true), listVariablesRaw(true)])
+      expect(results[0]).toEqual(results[1])
+      expect(results[1]).toEqual(results[2])
+      expect(mockInvoke).toHaveBeenCalledTimes(1)
+    })
+
+    it('does not allow a stale PATH read to repopulate cache after invalidation', async () => {
+      let resolveFirst: ((value: unknown) => void) | undefined
+      mockInvoke.mockImplementation(() => new Promise((resolve) => { resolveFirst = resolve }))
+      const first = listPathEntries('user', true)
+      invalidateApiCache()
+      mockInvoke.mockResolvedValue({ success: true, data: JSON.stringify([{ index: 0, path: 'C:\\Fresh' }]), error: null })
+      const fresh = await listPathEntries('user', true)
+      resolveFirst?.({ success: true, data: JSON.stringify([{ index: 0, path: 'C:\\Stale' }]), error: null })
+      await first
+      const cached = await listPathEntries('user')
+      expect(fresh[0].path).toBe('C:\\Fresh')
+      expect(cached[0].path).toBe('C:\\Fresh')
     })
   })
 })

@@ -518,7 +518,8 @@
                   <!-- Lock button -->
                   <button
                     on:click={() => handlePathLockToggle(entry.path, !!entry.isProtected, !!entry.isBuiltinProtected)}
-                    class="inline-flex p-1 {entry.isProtected ? 'text-amber-500' : 'text-gray-400 hover:text-amber-500 hover:bg-amber-50'} rounded transition dark:hover:bg-amber-900/30"
+                    disabled={!!entry.isBuiltinProtected}
+                    class="inline-flex p-1 {entry.isProtected ? 'text-amber-500' : 'text-gray-400 hover:text-amber-500 hover:bg-amber-50'} rounded transition disabled:opacity-30 disabled:cursor-not-allowed dark:hover:bg-amber-900/30"
                     title={entry.isProtected ? (entry.isBuiltinProtected ? $t('protection.lockedBuiltin') : $t('protection.unlockPath')) : $t('protection.lockPath')}
                     aria-label={entry.isProtected ? $t('protection.unlockPath') : $t('protection.lockPath')}
                   >

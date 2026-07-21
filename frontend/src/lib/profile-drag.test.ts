@@ -131,4 +131,21 @@ describe('Pointer-event drag state machine', () => {
     const result = applyStoredOrder(freshList)
     expect(result.map((p) => p.name)).toEqual(['A', 'B'])
   })
+
+  it('handles stale and duplicate stored names without dropping profiles', () => {
+    saveProfileOrder(['C', 'C', 'MISSING', 'A'])
+    const freshList = makeList(['A', 'B', 'C', 'D'])
+    const result = applyStoredOrder(freshList)
+    expect(result.map((profile) => profile.name)).toEqual(['C', 'A', 'B', 'D'])
+    expect(new Set(result.map((profile) => profile.name)).size).toBe(freshList.length)
+  })
+
+  it('restores a large persisted order without dropping profiles', () => {
+    const names = Array.from({ length: 1500 }, (_, index) => 'P' + index)
+    saveProfileOrder([...names].reverse())
+    const result = applyStoredOrder(makeList(names))
+    expect(result).toHaveLength(names.length)
+    expect(result[0].name).toBe('P1499')
+    expect(result.at(-1)?.name).toBe('P0')
+  })
 })

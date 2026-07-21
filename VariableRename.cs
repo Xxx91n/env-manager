@@ -8,6 +8,8 @@ partial class Program
         string newName = args[2];
         string? scope = ParseScope(args, 3, "user");
         if (scope == null) return 1;
+        if (IsInternalToggleBackupName(oldName) || IsInternalToggleBackupName(newName))
+            return ArgError("Error: Internal disabled-variable backup names cannot be renamed");
 
         // Refuse to rename a protected variable. Without this entry guard,
         // SetVariableWithoutNotify(newName) could succeed while

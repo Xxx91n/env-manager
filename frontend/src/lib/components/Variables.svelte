@@ -63,6 +63,7 @@
   }
 
   function handleDelete(name: string, scope: string) {
+    if ($variables.some((variable) => variable.name === name && variable.scope === scope && variable.isProtected)) return
     showModal({
       title: $t('dialogs.deleteConfirm'),
       message: $t('messages.deleteConfirmText', { values: { name } }),
@@ -80,6 +81,9 @@
   }
 
   async function handleToggle(name: string, scope: string) {
+    const current = $variables.find(v => v.name === name && v.scope === scope)
+    if (!current || current.isProtected || current.isBuiltinProtected) return
+
     const key = name + ':' + scope
     // Disable the toggle button while in-flight
     togglingKeys = { ...togglingKeys, [key]: true }
@@ -136,6 +140,7 @@
   }
 
   function handleEdit(v) {
+    if (v?.isProtected) return
     editingVar = v
     showEditDialog = true
   }
@@ -231,11 +236,11 @@
               <td class="px-3 py-2">
                 <button
                   on:click={() => handleToggle(variable.name, variable.scope)}
-                  disabled={togglingKeys[variable.name + ':' + variable.scope] === true}
-                  class="relative inline-flex h-4 w-7 items-center rounded-full transition disabled:opacity-50 {variable.isDisabled ? 'bg-gray-300 dark:bg-gray-600' : 'bg-blue-600 dark:bg-blue-500'}"
+                  disabled={$isWriteInProgress || togglingKeys[variable.name + ':' + variable.scope] === true || !!variable.isProtected || !!variable.isBuiltinProtected}
+                  class="relative inline-flex h-4 w-7 items-center rounded-full transition disabled:opacity-30 disabled:cursor-not-allowed {variable.isDisabled ? 'bg-gray-300 dark:bg-gray-600' : 'bg-blue-600 dark:bg-blue-500'}"
                   role="switch"
                   aria-checked={!variable.isDisabled}
-                  title={variable.isDisabled ? $t('messages.clickToEnable') : $t('messages.clickToDisable')}
+                  title={variable.isProtected ? $t('protection.lockedCannotToggle') : variable.isDisabled ? $t('messages.clickToEnable') : $t('messages.clickToDisable')}
                 >
                   <span
                     class="inline-block h-3 w-3 transform rounded-full bg-white shadow transition {variable.isDisabled ? 'translate-x-0.5' : 'translate-x-3.5'}"
@@ -285,7 +290,8 @@
               <td class="px-3 py-2 text-right text-xs">
                 <button
                   on:click={() => handleLockToggle(variable.name, !!variable.isProtected, !!variable.isBuiltinProtected)}
-                  class="inline-flex p-1 {variable.isProtected ? 'text-amber-500' : 'text-gray-400 hover:text-amber-500 hover:bg-amber-50'} rounded transition dark:hover:bg-amber-900/30"
+                  disabled={!!variable.isBuiltinProtected}
+                  class="inline-flex p-1 {variable.isProtected ? 'text-amber-500' : 'text-gray-400 hover:text-amber-500 hover:bg-amber-50'} rounded transition disabled:opacity-30 disabled:cursor-not-allowed dark:hover:bg-amber-900/30"
                   title={variable.isProtected ? (variable.isBuiltinProtected ? $t('protection.lockedBuiltin') : $t('protection.unlockVar')) : $t('protection.lockVar')}
                   aria-label={variable.isProtected ? $t('protection.unlockVar') : $t('protection.lockVar')}
                 >

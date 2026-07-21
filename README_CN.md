@@ -12,7 +12,7 @@
 - 18 个命令，完全掌控环境变量管理
 - 支持多配置同时启用、配置继承、冲突预览、PATH 片段和安全的逆序恢复
 - PATH 编辑器：支持添加、删除、排序、重复项和失效目录检测
-- **v0.6.0 启动器配置文件**：以隔离环境块（`env_clear` + 注入）启动目标可执行文件 —— 永不写注册表、永不广播 `WM_SETTINGCHANGE`。配置文件类型 `global`（现有行为）和 `launch` 使用互不冲突的独立命名空间（跨类型允许同名）。
+- **启动型配置文件**：GUI 与 CLI 都可在一次事务中直接创建 Global 或 Launch 配置。Launch 以隔离环境块（`env_clear` + 注入）启动指定程序，永不写注册表、永不广播 `WM_SETTINGCHANGE`。所有配置文件名称全局唯一，避免按名称调用 CLI 时产生歧义。
 - **v0.6.0 PATH 健康检测**：`path health [--fix] [--dry-run]` 一次性检测重复 AND 失效（不存在的）PATH 条目；`--fix` 仅删非保护项，受保护项永远保留。
 - **v0.7.0 DPAPI 密钥**：`profile add-secret`/`edit-secret`/`remove-secret`/`reveal-secret` —— 为配置文件中的变量值加密（Windows DPAPI 当前用户）。明文仅驻存在进程内存；`profile launch` 启动时解子进程注入；`reveal-secret` 是唯一输出明文到 stdout 的路径。审计仅记录名，绝不记录值。
 - **v0.7.0 GUI**：PATH 健康徽章（healthy/dead/duplicate/duplicate+dead）+ 一键移除失效项；Launch 配置文件类型徽章 + 启动按钮 + 创建栏类型选择 + 原生文件选择器；变量搜索高亮 + `%VAR%` 展开预览；设置中的 `.env`/CSV 批量导入导出（原生文件选择器）。
@@ -75,6 +75,8 @@ env-manager-cli.exe validate backup.json
 # 配置文件管理
 env-manager-cli.exe profile list
 env-manager-cli.exe profile create dev-profile
+# 为单个程序创建隔离环境配置
+env-manager-cli.exe profile create tool-run --type launch --target "C:\Tools\tool.exe"
 env-manager-cli.exe profile add-var dev-profile JAVA_HOME "D:\jdk17"
 env-manager-cli.exe profile apply dev-profile
 env-manager-cli.exe profile unapply dev-profile
@@ -153,7 +155,7 @@ powershell -ExecutionPolicy Bypass -File scripts/build-all.ps1
 | `profile set-inherits` | `profile set-inherits <name> [parent ...]` | 设置无环配置继承 |
 | `profile add-path` | `profile add-path <name> <dir>` | 向配置添加 PATH 片段 |
 | `profile list` | `profile list` | 列出所有配置文件 |
-| `profile create` | `profile create <name>` | 创建新配置文件 |
+| `profile create` | `profile create <name> [--type global|launch] [--target <exe>]` | 原子创建全局或隔离启动配置文件 |
 | `profile apply` | `profile apply <name>` | 应用配置文件（备份现有变量） |
 | `profile unapply` | `profile unapply <name>` | 取消应用（恢复原始变量） |
 | `profile add-var` | `profile add-var <profile> <name> <val>` | 向配置文件添加变量 |
@@ -323,3 +325,8 @@ Apache-2.0 - 可自由用于个人和商业项目。详见 [LICENSE](LICENSE)。
 ---
 
 **版本**：0.7.1 | **许可**：Apache-2.0 | **状态**：积极开发中
+
+
+### 安全与性能
+
+受保护变量和 PATH 条目会在 GUI 中直接灰化，CLI 仍以同一规则做最终拒绝。关闭变量会保留原始注册表值类型，并且只有在精确校验恢复成功后才删除备份。GUI 使用有界的 5 秒缓存、代际失效和 single-flight IPC 读取，减少大规模环境变量场景中的重复进程，同时防止旧读取结果覆盖新状态。

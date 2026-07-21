@@ -21,7 +21,7 @@ All commands follow: `env-manager-cli <command> [arguments] [--flags]`
 | `help` | `help` | Show help text |
 | `agents` | `agents [--path\|--json\|--summary]` | Output CLI AGENTS.md spec |
 | `profile list` | `profile list` | List all profiles (JSON) |
-| `profile create` | `profile create <name>` | Create a new empty profile |
+| `profile create` | `profile create <name> [--type global|launch] [--target <exe>] [--args <args>] [--cwd <dir>]` | Atomically create a Global or isolated Launch profile |
 | `profile delete` | `profile delete <name>` | Delete a profile |
 | `profile show` | `profile show <name>` | Show profile details (JSON) |
 | `profile apply` | `profile apply <name>` | Apply a profile (backs up existing user vars) |
@@ -95,7 +95,7 @@ Profiles are sets of preconfigured variables applied/unapplied as a group. When 
 - Profile inheritance can be changed while a profile is active: the CLI automatically unapplies, updates inheritance, and re-applies with the new resolved variable set
 - Profile storage: `%LOCALAPPDATA%\EnvManager\profiles.json`
 - Profile variables override user variables when applied
-- **v0.6.0 Profile types**: `profileType: "global" | "launch"`. Global profiles apply to the user registry (current behavior). Launch profiles are launcher templates that are NEVER written to the registry: `profile launch <name>` spawns `targetExecutable` with an isolated environment block (`env_clear` + inject profile vars + PATH entries), and never broadcasts `WM_SETTINGCHANGE`. Global and Launch profile name spaces are independent: a Global and a Launch profile MAY share a name. `ValidateLaunchTarget` rejects targets inside `\\Windows\\System32` and non-executable extensions.
+- **v0.6.0 Profile types**: `profileType: "global" | "launch"`. Global profiles apply to the user registry (current behavior). Launch profiles are launcher templates that are NEVER written to the registry: `profile launch <name>` spawns `targetExecutable` with an isolated environment block (`env_clear` + inject profile vars + PATH entries), and never broadcasts `WM_SETTINGCHANGE`. Profile names are globally unique across Global and Launch types because every CLI profile command is name-addressed. `ValidateLaunchTarget` rejects targets inside `\\Windows\\System32` and non-executable extensions.
 - v0.6.0/v0.7.0 new profile subcommands: `profile set-launch <name> --target <exe> [--args <args>] [--cwd <dir>] [--type global|launch]` and `profile launch <name> [-- <extra-args ...>]`
 - v0.6.0/v0.7.0 schema fields: `profileType`, `targetExecutable`, `launchArguments`, `workingDirectory`, `secretVariables` (DPAPI encryption is fully implemented in v0.7.0; `profile launch` and `profile reveal-secret` decrypt at runtime)
 - `profile status` checks `IsCorrectlyApplied()` (mirrors PowerToys)

@@ -1,5 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { writable } from 'svelte/store'
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
+
+const repoRoot = join(process.cwd(), '..')
 
 // These tests pin the invariants flagged by the independent code-reviewer and
 // architect review lanes (see commit message for the review report). They
@@ -167,5 +171,40 @@ describe('review-finder regressions', () => {
     const updateBlock = src.match(/fn check_for_updates[\s\S]*?fn version_is_newer/)
     expect(updateBlock).toBeTruthy()
     expect(updateBlock![0]).toContain('command.creation_flags(CREATE_NO_WINDOW)')
+  })
+
+  it('preserves RegistryValueKind and verifies exact values during toggle recovery', () => {
+    const program = readFileSync(join(repoRoot, 'Program.cs'), 'utf8')
+    expect(program).toContain('RegistryValueKind backupKind = key.GetValueKind(backupName)')
+    expect(program).toContain('Equals(restoredValue, backupValue) && key.GetValueKind(name) == backupKind')
+    expect(program).toContain('Toggle recovery conflict')
+  })
+
+  it('does not expose internal toggle backup names through get', () => {
+    const program = readFileSync(join(repoRoot, 'Program.cs'), 'utf8')
+    expect(program).toContain('Internal disabled-variable backup names are not addressable')
+    expect(program).toContain('IsInternalToggleBackupName')
+    expect(program).toContain('value == null && backupValue != null')
+  })
+
+  it('projects disabled backup records from both registry scopes through one helper', () => {
+    const program = readFileSync(join(repoRoot, 'Program.cs'), 'utf8')
+    expect(program).toContain('AppendEnvironmentItems(userKey, "user", items)')
+    expect(program).toContain('AppendEnvironmentItems(systemKey, "system", items)')
+    expect(program).toContain('Scope = scope')
+  })
+
+  it('embeds protection defaults with the exact runtime logical name', () => {
+    const project = readFileSync(join(repoRoot, 'env-manager.csproj'), 'utf8')
+    expect(project).toContain('LogicalName="EnvManager.protection.defaults.json"')
+  })
+
+  it('creates launch profiles in one CLI transaction', () => {
+    const program = readFileSync(join(repoRoot, 'Program.cs'), 'utf8')
+    const profilePage = readFileSync(join(repoRoot, 'frontend/src/lib/components/ProfilePage.svelte'), 'utf8')
+    expect(program).toContain('static int ProfileCreate(string[] args)')
+    expect(program).toContain('Launch profile requires --target <exe>')
+    expect(profilePage).toContain('await createProfile(name, {')
+    expect(profilePage).not.toContain('await profileSetLaunch(name')
   })
 })

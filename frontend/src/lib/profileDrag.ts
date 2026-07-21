@@ -21,17 +21,25 @@ export function saveProfileOrder(names: string[]): void {
 
 export function applyStoredOrder<T extends { name: string }>(list: T[]): T[] {
   const order = loadProfileOrder()
-  if (order.length === 0) return list
+  if (order.length === 0 || list.length < 2) return list
+
+  const byName = new Map(list.map((profile) => [profile.name, profile]))
+  const orderedNames = new Set<string>()
   const ordered: T[] = []
-  const remaining: T[] = []
+
   for (const name of order) {
-    const found = list.find((p) => p.name === name)
-    if (found) ordered.push(found)
+    const profile = byName.get(name)
+    if (profile && !orderedNames.has(name)) {
+      ordered.push(profile)
+      orderedNames.add(name)
+    }
   }
-  for (const p of list) {
-    if (!order.includes(p.name)) remaining.push(p)
+
+  for (const profile of list) {
+    if (!orderedNames.has(profile.name)) ordered.push(profile)
   }
-  return [...ordered, ...remaining]
+
+  return ordered
 }
 
 export interface DragState {

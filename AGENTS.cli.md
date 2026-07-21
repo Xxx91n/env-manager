@@ -48,7 +48,7 @@ All commands: `env-manager-cli <command> [args] [--scope user|system] [--debug]`
 
 ### Profile Subcommands
 
-`profile list | create <name> | delete <name> | show <name> | apply <name> | unapply <name> | add-var <profile> <name> <val> | remove-var <profile> <name> | edit-var <profile> <old> <new> <val> | status <name>`
+`profile list | create <name> [--type global|launch] [--target <exe>] [--args <args>] [--cwd <dir>] | delete <name> | show <name> | apply <name> | unapply <name> | add-var <profile> <name> <val> | remove-var <profile> <name> | edit-var <profile> <old> <new> <val> | status <name>`
 
 ### Path Subcommands
 
@@ -83,11 +83,9 @@ All commands: `env-manager-cli <command> [args] [--scope user|system] [--debug]`
 
 ## Variable Toggle
 
-Disabling a variable backs up its value to `<name>_EnvManager_disabled` in the
-registry and deletes the original. Re-enabling restores from the backup.
+Disabling a variable backs up its raw value and original registry value kind to `<name>_EnvManager_disabled` in the same scope, then deletes the original. `list` and `get <name>` show the original name with `isDisabled=true` when only that backup exists; the internal backup name itself is never addressable. Re-enabling restores and verifies the exact value plus kind before deleting the backup.
 
-Safety: the toggle operation verifies backup write success before deleting the
-original variable. If the backup write fails, the original is preserved.
+Safety: if both original and backup exist, toggle refuses the recovery conflict without changing either value. Protected variables must be unlocked before enable or disable.
 
 ## Profiles
 

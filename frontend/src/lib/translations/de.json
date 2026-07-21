@@ -241,5 +241,6 @@
   "messages.secretVariable": "Geheimvariable (maskiert)",
   "profiles.addSecret": "Geheimnis hinzufuegen",
   "profiles.secretValue": "Geheimwert",
-  "profiles.secretHint": "Mit DPAPI (aktueller Benutzer) verschluesselt. Nur dieser Benutzer kann entschluesseln. Start entschluesselt prozessintern."
+  "profiles.secretHint": "Mit DPAPI (aktueller Benutzer) verschluesselt. Nur dieser Benutzer kann entschluesseln. Start entschluesselt prozessintern.",
+  "protection.lockedCannotToggle": "Gesperrt: Kann nicht aktiviert or deaktiviert werden"
 }

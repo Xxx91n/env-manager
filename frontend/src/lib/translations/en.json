@@ -241,5 +241,6 @@
   "messages.secretVariable": "Secret variable (masked)",
   "profiles.addSecret": "Add Secret",
   "profiles.secretValue": "Secret value",
-  "profiles.secretHint": "Encrypted with DPAPI (CurrentUser). Only this user can decrypt. Launch decrypts in-process."
+  "profiles.secretHint": "Encrypted with DPAPI (CurrentUser). Only this user can decrypt. Launch decrypts in-process.",
+  "protection.lockedCannotToggle": "Locked: cannot enable or disable"
 }

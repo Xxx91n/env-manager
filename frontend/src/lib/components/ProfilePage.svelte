@@ -1,12 +1,9 @@
 <script lang="ts">
   import { onMount } from 'svelte'
-  import {
-    loadProfileOrder as loadStoredOrder, saveProfileOrder as saveStoredOrder,
-    applyStoredOrder as applyStored,
-  } from '../profileDrag'
+  import { saveProfileOrder as saveStoredOrder, applyStoredOrder as applyStored } from '../profileDrag'
   
   import { t } from 'svelte-i18n'
-  import { profiles, variables, showModal, refreshTrigger } from '../stores'
+  import { profiles, showModal, refreshTrigger } from '../stores'
   import { showToast } from '../stores'
   import {
     listProfiles,
@@ -16,7 +13,7 @@
     unapplyProfile,
     addProfileVar,
     removeProfileVar,
-    listVariables,
+    listVariablesRaw,
     exportProfile,
     importProfile,
     renameProfile,
@@ -26,7 +23,6 @@
     addProfilePath,
     removeProfilePath,
     pickExecutableFile,
-    profileSetLaunch,
     profileLaunch,
     profileAddSecret,
     profileRemoveSecret,
@@ -51,19 +47,20 @@
   let showAddSecretPanel = false
   let newSecretName = ''
   let newSecretValue = ''
-  // Drag state as plain component-level variables for Svelte reactivity
+  // Pointer drag state remains local. Registry/profile persistence is never
+  // touched by a GUI-only ordering change.
   let dragIndex: number | null = null
   let dragOverIndex: number | null = null
   let isDragging = false
+  let pointerId: number | null = null
+  let pointerX = 0
   let pointerY = 0
   let startY = 0
+  let dragFrame: number | null = null
   $: deltaY = isDragging ? pointerY - startY : 0
 
-  // loadProfileOrder/saveProfileOrder/applyStoredOrder imported from ../profileDrag
-  // as loadStoredOrder/saveStoredOrder/applyStored respectively.
-
-  onMount(async () => {
-    await refreshProfiles()
+  onMount(() => {
+    void refreshProfiles()
   })
 
   // Watch refreshTrigger from App.svelte: refresh profiles when header
@@ -72,21 +69,26 @@
     refreshProfiles()
   }
 
+  let profileRefreshEpoch = 0
+
   async function refreshProfiles() {
+    const requestEpoch = ++profileRefreshEpoch
     loading = true
     try {
-      profileList = applyStored(await listProfiles())
+      const [nextProfiles, nextVariables] = await Promise.all([listProfiles(), listVariablesRaw()])
+      if (requestEpoch !== profileRefreshEpoch) return
+
+      profileList = applyStored(nextProfiles)
       profiles.set(profileList)
-      await listVariables()
-      allVars = $variables
+      allVars = nextVariables
       if (selectedProfile) {
-        const updated = profileList.find((p) => p.name === (selectedProfile as ProfileData).name)
+        const updated = profileList.find((profile) => profile.name === selectedProfile?.name)
         selectedProfile = updated || null
       }
     } catch {
-      // error handled in store
+      // API helpers publish the relevant error state.
     } finally {
-      loading = false
+      if (requestEpoch === profileRefreshEpoch) loading = false
     }
   }
 
@@ -116,15 +118,12 @@
     }
     actionLoading = true
     try {
-      await createProfile(name)
-      if (newProfileType === 'launch') {
-        await profileSetLaunch(name, {
-          target: newProfileTarget.trim(),
-          args: newProfileArgs || undefined,
-          cwd: newProfileCwd || undefined,
-          type: 'launch',
-        })
-      }
+      await createProfile(name, {
+        type: newProfileType,
+        target: newProfileType === 'launch' ? newProfileTarget.trim() : undefined,
+        args: newProfileType === 'launch' ? newProfileArgs || undefined : undefined,
+        cwd: newProfileType === 'launch' ? newProfileCwd || undefined : undefined,
+      })
       newProfileName = ''
       newProfileTarget = ''
       newProfileArgs = ''
@@ -321,41 +320,81 @@
     }
   }
 
+  function updateDragTarget(clientX: number, clientY: number): void {
+    if (!isDragging) return
+    const target = document.elementFromPoint(clientX, clientY)?.closest<HTMLElement>('[data-profile-index]')
+    const rawIndex = target?.dataset.profileIndex
+    if (rawIndex === undefined) return
+    const nextIndex = Number(rawIndex)
+    if (Number.isInteger(nextIndex)) dragOverIndex = nextIndex
+  }
+
+  function handlePointerMove(event: PointerEvent): void {
+    if (!isDragging || event.pointerId !== pointerId) return
+    pointerX = event.clientX
+    pointerY = event.clientY
+    if (dragFrame !== null) return
+    dragFrame = requestAnimationFrame(() => {
+      dragFrame = null
+      updateDragTarget(pointerX, pointerY)
+    })
+  }
+
   function beginPointerDrag(event: PointerEvent, index: number): void {
     if (event.button !== 0) return
     event.preventDefault()
+    const handle = event.currentTarget as HTMLElement
+    handle.setPointerCapture(event.pointerId)
     dragIndex = index
     dragOverIndex = index
     isDragging = true
+    pointerId = event.pointerId
+    pointerX = event.clientX
     pointerY = event.clientY
     startY = event.clientY
   }
 
-  function enterPointerTarget(index: number): void {
-    if (isDragging) dragOverIndex = index
-  }
-
-  function finishPointerDrag(index: number): void {
+  function finishPointerDrag(event?: PointerEvent): void {
+    if (event && pointerId !== null && event.pointerId !== pointerId) return
     if (!isDragging || dragIndex === null) {
       cancelPointerDrag()
       return
     }
-    const targetIndex = dragOverIndex ?? index
+
+    if (dragFrame !== null) {
+      cancelAnimationFrame(dragFrame)
+      dragFrame = null
+    }
+    if (event) {
+      pointerX = event.clientX
+      pointerY = event.clientY
+    }
+    updateDragTarget(pointerX, pointerY)
+    const targetIndex = dragOverIndex ?? dragIndex
     if (dragIndex !== targetIndex) {
       const item = profileList[dragIndex]
-      const newList = [...profileList]
-      newList.splice(dragIndex, 1)
-      newList.splice(targetIndex, 0, item)
-      profileList = newList
-      saveStoredOrder(profileList.map((p) => p.name))
+      if (item) {
+        const newList = [...profileList]
+        newList.splice(dragIndex, 1)
+        newList.splice(targetIndex, 0, item)
+        profileList = newList
+        profiles.set(newList)
+        saveStoredOrder(newList.map((profile) => profile.name))
+      }
     }
     cancelPointerDrag()
   }
 
   function cancelPointerDrag(): void {
+    if (dragFrame !== null) {
+      cancelAnimationFrame(dragFrame)
+      dragFrame = null
+    }
     dragIndex = null
     dragOverIndex = null
     isDragging = false
+    pointerId = null
+    pointerX = 0
     pointerY = 0
     startY = 0
   }
@@ -403,43 +442,18 @@
   }
 </script>
 
-<svelte:window on:pointermove={(e) => { if (isDragging) pointerY = e.clientY }} on:pointerup={cancelPointerDrag} on:pointercancel={cancelPointerDrag} />
+<svelte:window
+  on:pointermove={handlePointerMove}
+  on:pointerup={finishPointerDrag}
+  on:pointercancel={cancelPointerDrag}
+  on:lostpointercapture={cancelPointerDrag}
+/>
 
 <div class="space-y-3">
   <!-- Create profile bar -->
   <div class="space-y-2">
-    <div class="flex gap-2">
-      <input
-        type="text"
-        placeholder={$t('profiles.createPrompt')}
-        bind:value={newProfileName}
-        on:keydown={(e) => { if (e.key === 'Enter') handleCreate() }}
-        class="flex-1 px-3 py-1.5 text-xs border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-800 dark:border-gray-600 dark:text-gray-100"
-      />
-    <button
-      on:click={handleCreate}
-      disabled={actionLoading || !newProfileName.trim()}
-      class="flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 transition disabled:opacity-50 dark:bg-blue-500 dark:hover:bg-blue-600"
-    >
-      <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2.5">
-        <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4" />
-      </svg>
-      {$t('dialogs.createProfile')}
-    </button>
-
-    <button
-      on:click={handleImport}
-      disabled={actionLoading}
-      class="flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 transition disabled:opacity-50 dark:text-gray-200 dark:bg-gray-800 dark:border-gray-600 dark:hover:bg-gray-700"
-      title={$t('profiles.import')}
-    >
-      <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
-        <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
-      </svg>
-      {$t('profiles.import')}
-    </button>
-    </div>
-    <!-- Profile type selector + launch-specific fields -->
+    <!-- Choose scope of effect before naming the profile. Global writes the user registry;
+         Launch applies only to the selected child process. -->
     <div class="flex items-center gap-2 flex-wrap">
       <label class="text-xs font-medium text-gray-600 dark:text-gray-400">
         <input type="radio" bind:group={newProfileType} value="global" class="mr-1" /> {$t('profiles.typeGlobal')}
@@ -475,6 +489,36 @@
         />
       {/if}
     </div>
+    <div class="flex gap-2">
+      <input
+        type="text"
+        placeholder={$t('profiles.createPrompt')}
+        bind:value={newProfileName}
+        on:keydown={(event) => { if (event.key === 'Enter') handleCreate() }}
+        class="flex-1 px-3 py-1.5 text-xs border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-800 dark:border-gray-600 dark:text-gray-100"
+      />
+      <button
+        on:click={handleCreate}
+        disabled={actionLoading || !newProfileName.trim()}
+        class="flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 transition disabled:opacity-50 dark:bg-blue-500 dark:hover:bg-blue-600"
+      >
+        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2.5">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4" />
+        </svg>
+        {$t('dialogs.createProfile')}
+      </button>
+      <button
+        on:click={handleImport}
+        disabled={actionLoading}
+        class="flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 transition disabled:opacity-50 dark:text-gray-200 dark:bg-gray-800 dark:border-gray-600 dark:hover:bg-gray-700"
+        title={$t('profiles.import')}
+      >
+        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+        </svg>
+        {$t('profiles.import')}
+      </button>
+    </div>
   </div>
 
   {#if loading}
@@ -494,16 +538,14 @@
           style={isDragging && dragIndex === i ? `transform: translateY(${deltaY}px); cursor: grabbing;` : ''}
           role="listitem"
           data-profile-name={profile.name}
-          on:pointerenter={() => enterPointerTarget(i)}
-          on:pointerup={() => finishPointerDrag(i)}
+          data-profile-index={i}
         >
           <!-- Profile row with toggle -->
           <div class="flex items-center justify-between px-4 py-2.5">
-            <div
+            <button
+              type="button"
               class="profile-drag-handle flex items-center gap-1 cursor-grab active:cursor-grabbing touch-none text-gray-300 hover:text-gray-500 dark:text-gray-600"
               title={$t('profiles.dragToSort')}
-              role="button"
-              tabindex="0"
               aria-label={$t('profiles.dragToSort')}
               data-testid={`profile-drag-handle-${i}`}
               on:pointerdown={(event) => beginPointerDrag(event, i)}
@@ -511,7 +553,7 @@
               <svg class="w-3 h-3 pointer-events-none" draggable="false" fill="currentColor" viewBox="0 0 20 20">
                 <path d="M7 4a1 1 0 11-2 0 1 1 0 012 0zM9 4a1 1 0 11-2 0 1 1 0 012 0zM11 4a1 1 0 11-2 0 1 1 0 012 0zM13 4a1 1 0 11-2 0 1 1 0 012 0zM7 8a1 1 0 11-2 0 1 1 0 012 0zM9 8a1 1 0 11-2 0 1 1 0 012 0zM11 8a1 1 0 11-2 0 1 1 0 012 0zM13 8a1 1 0 11-2 0 1 1 0 012 0zM7 12a1 1 0 11-2 0 1 1 0 012 0zM9 12a1 1 0 11-2 0 1 1 0 012 0zM11 12a1 1 0 11-2 0 1 1 0 012 0zM13 12a1 1 0 11-2 0 1 1 0 012 0zM7 16a1 1 0 11-2 0 1 1 0 012 0zM9 16a1 1 0 11-2 0 1 1 0 012 0zM11 16a1 1 0 11-2 0 1 1 0 012 0zM13 16a1 1 0 11-2 0 1 1 0 012 0z" />
               </svg>
-            </div>
+            </button>
             <button
               on:click={() => selectProfile(profile)}
               class="flex items-center gap-3 flex-1 text-left"

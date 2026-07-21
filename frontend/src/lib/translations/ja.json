@@ -241,5 +241,6 @@
   "messages.secretVariable": "シークレット変数(マスク済み)",
   "profiles.addSecret": "シークレット追加",
   "profiles.secretValue": "シークレット値",
-  "profiles.secretHint": "DPAPI(現在のユーザー)で暗号化されます。このユーザーのみ復号可能。起動時にプロセス内で復号されます。"
+  "profiles.secretHint": "DPAPI(現在のユーザー)で暗号化されます。このユーザーのみ復号可能。起動時にプロセス内で復号されます。",
+  "protection.lockedCannotToggle": "ロック済み: 有効化または無効化できません"
 }

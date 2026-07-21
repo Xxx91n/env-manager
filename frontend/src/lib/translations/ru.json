@@ -241,5 +241,6 @@
   "messages.secretVariable": "Sekretnaya peremennaya (maskirovana)",
   "profiles.addSecret": "Dobavit sekret",
   "profiles.secretValue": "Znacheniye sekreta",
-  "profiles.secretHint": "Zashifrovano DPAPI (tekushchiy polzovatel). Tolko etot polzovatel mozet rasshifrovat. Zapusk rasshifrovyet vnutri protsessa."
+  "profiles.secretHint": "Zashifrovano DPAPI (tekushchiy polzovatel). Tolko etot polzovatel mozet rasshifrovat. Zapusk rasshifrovyet vnutri protsessa.",
+  "protection.lockedCannotToggle": "Заблокировано: нельзя включить или отключить"
 }

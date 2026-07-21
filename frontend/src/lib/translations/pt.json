@@ -241,5 +241,6 @@
   "messages.secretVariable": "Variavel secreta (mascarada)",
   "profiles.addSecret": "Adicionar segredo",
   "profiles.secretValue": "Valor do segredo",
-  "profiles.secretHint": "Criptografado com DPAPI (usuario atual). Apenas este usuario pode descriptografar. O lancamento descriptografa dentro do processo."
+  "profiles.secretHint": "Criptografado com DPAPI (usuario atual). Apenas este usuario pode descriptografar. O lancamento descriptografa dentro do processo.",
+  "protection.lockedCannotToggle": "Bloqueado: nao pode ser ativado ou desativado"
 }

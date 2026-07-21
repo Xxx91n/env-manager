@@ -58,8 +58,8 @@ partial class Program
 
     // Built-in protected system variables and PATH entries are loaded from external
     // JSON config files in %LOCALAPPDATA%\EnvManager (see EnvFeatures.cs).
-    // They start from hardcoded defaults on first run and can be edited without
-    // recompiling. The HashSet wrapping is for O(1) case-insensitive lookups.
+    // They are seeded from embedded protection.defaults.json on first run and can
+    // be edited without recompiling. The HashSet wrapping is for O(1) case-insensitive lookups.
     static HashSet<string> ProtectedSystemVars => new(
         LoadBuiltinProtectedVars(),
         StringComparer.OrdinalIgnoreCase);
@@ -362,6 +362,11 @@ partial class Program
         // SAFETY (hard boundary): reject protected-system-variable writes BEFORE
         // any value comparison -- otherwise the "already exists" overwrite
         // prompt can leak past the protection guard for non-interactive flows.
+        if (IsInternalToggleBackupName(args[1]))
+        {
+            Console.Error.WriteLine("Error: Internal disabled-variable backup names are not writable");
+            return 1;
+        }
         if (IsProtectedVariable(args[1], scope))
         {
             Console.Error.WriteLine($"Error: Cannot modify protected system variable '{args[1]}'");
@@ -382,6 +387,11 @@ partial class Program
         // SAFETY (hard boundary): reject protected-system-variable deletes BEFORE
         // delegating to DeleteVariable, so non-interactive callers see a clear
         // non-zero exit and a "protected" error message rather than silent success.
+        if (IsInternalToggleBackupName(args[1]))
+        {
+            Console.Error.WriteLine("Error: Internal disabled-variable backup names are not deletable");
+            return 1;
+        }
         if (IsProtectedVariable(args[1], scope))
         {
             Console.Error.WriteLine($"Error: Cannot delete protected system variable '{args[1]}'");
@@ -453,110 +463,103 @@ partial class Program
         return (Registry.CurrentUser, UserEnvPath);
     }
 
+    static void AppendEnvironmentItems(RegistryKey key, string scope, List<EnvVariable> items)
+    {
+        var allNames = key.GetValueNames();
+        var nameSet = new HashSet<string>(allNames, StringComparer.OrdinalIgnoreCase);
+        var processedNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (string name in allNames)
+        {
+            // PowerToys keeps separate internal backup values; Env Manager only
+            // projects its own disabled backup when the original key is absent.
+            if (name.Contains("_PowerToys_", StringComparison.OrdinalIgnoreCase))
+                continue;
+
+            if (name.EndsWith("_EnvManager_disabled", StringComparison.OrdinalIgnoreCase))
+            {
+                string originalName = name[..^"_EnvManager_disabled".Length];
+                if (!nameSet.Contains(originalName) && processedNames.Add(originalName))
+                {
+                    items.Add(new EnvVariable
+                    {
+                        Name = originalName,
+                        Value = key.GetValue(name)?.ToString() ?? "",
+                        Scope = scope,
+                        IsDisabled = true
+                    });
+                }
+                continue;
+            }
+
+            if (processedNames.Add(name))
+            {
+                items.Add(new EnvVariable
+                {
+                    Name = name,
+                    Value = key.GetValue(name)?.ToString() ?? "",
+                    Scope = scope,
+                    IsDisabled = false
+                });
+            }
+        }
+    }
+
     static int ListEnvironment()
     {
         DebugLog("ListEnvironment: reading user + system variables");
         var items = new List<EnvVariable>();
 
-        using (var key = Registry.CurrentUser.OpenSubKey(UserEnvPath))
+        using (var userKey = Registry.CurrentUser.OpenSubKey(UserEnvPath))
         {
-            if (key != null)
-            {
-                // Cache value names to avoid O(n^2) calls to GetValueNames()
-                var allNames = key.GetValueNames();
-                var nameSet = new HashSet<string>(allNames, StringComparer.OrdinalIgnoreCase);
-                var processedNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-
-                foreach (var name in allNames)
-                {
-                    // Skip PowerToys internal backup variables (from PowerToys environment manager)
-                    if (name.Contains("_PowerToys_"))
-                        continue;
-
-                    // Skip toggle backup variables - they represent disabled variables
-                    // and will be shown as the disabled variable below
-                    if (name.EndsWith("_EnvManager_disabled"))
-                    {
-                        // Extract original variable name from backup name
-                        string originalName = name.Substring(0, name.Length - "_EnvManager_disabled".Length);
-                        if (!processedNames.Contains(originalName))
-                        {
-                            processedNames.Add(originalName);
-                            // The original variable was deleted when disabled, so show the backup
-                            // value with isDisabled=true
-                            items.Add(new EnvVariable
-                            {
-                                Name = originalName,
-                                Value = key.GetValue(name)?.ToString() ?? "",
-                                Scope = "user",
-                                IsDisabled = true
-                            });
-                        }
-                        continue;
-                    }
-
-                    // Normal active variable
-                    if (!processedNames.Contains(name))
-                    {
-                        processedNames.Add(name);
-                        items.Add(new EnvVariable
-                        {
-                            Name = name,
-                            Value = key.GetValue(name)?.ToString() ?? "",
-                            Scope = "user",
-                            IsDisabled = false
-                        });
-                    }
-                }
-            }
+            if (userKey != null)
+                AppendEnvironmentItems(userKey, "user", items);
         }
 
         try
         {
-            using (var key = Registry.LocalMachine.OpenSubKey(SystemEnvPath))
+            using (var systemKey = Registry.LocalMachine.OpenSubKey(SystemEnvPath))
             {
-                if (key != null)
-                {
-                    foreach (var name in key.GetValueNames())
-                    {
-                        items.Add(new EnvVariable
-                        {
-                            Name = name,
-                            Value = key.GetValue(name)?.ToString() ?? "",
-                            Scope = "system"
-                        });
-                    }
-                }
+                if (systemKey != null)
+                    AppendEnvironmentItems(systemKey, "system", items);
             }
         }
         catch (UnauthorizedAccessException) { }
 
-        // Annotate variables with their profile source (if any applied profile contains them)
+        // Precompute profile values once. The previous item -> profile -> effective
+        // variable loop recalculated profile state for every environment variable.
         try
         {
-            var profiles = LoadProfiles();
-            var appliedProfiles = profiles.Where(p => p.IsEnabled)
-                .OrderByDescending(p => p.AppliedAt ?? 0).ToList();
+            var profileCandidates = new Dictionary<string, List<(string Source, string Value)>>(StringComparer.OrdinalIgnoreCase);
+            foreach (var profile in LoadProfiles().Where(profile => profile.IsEnabled)
+                         .OrderByDescending(profile => profile.AppliedAt ?? 0))
+            {
+                foreach (var variable in GetEffectiveProfileVariables(profile))
+                {
+                    if (!profileCandidates.TryGetValue(variable.Name, out var candidates))
+                    {
+                        candidates = new List<(string Source, string Value)>();
+                        profileCandidates[variable.Name] = candidates;
+                    }
+                    candidates.Add((profile.Name, variable.Value));
+                }
+            }
+
             foreach (var item in items)
             {
-                foreach (var profile in appliedProfiles)
+                if (profileCandidates.TryGetValue(item.Name, out var candidates))
                 {
-                    var pv = GetEffectiveProfileVariables(profile).FirstOrDefault(v =>
-                        v.Name.Equals(item.Name, StringComparison.OrdinalIgnoreCase));
-                    if (pv != null && item.Value == pv.Value)
-                    {
-                        item.ProfileSource = profile.Name;
-                        break;
-                    }
+                    var source = candidates.FirstOrDefault(candidate => candidate.Value == item.Value);
+                    if (!string.IsNullOrEmpty(source.Source))
+                        item.ProfileSource = source.Source;
                 }
             }
         }
-        catch (Exception e)
+        catch (Exception error)
         {
-            DebugLog("ListEnvironment: profile annotation failed: " + e.GetType().Name);
+            DebugLog("ListEnvironment: profile annotation failed: " + error.GetType().Name);
         }
 
-        // Annotate variables with protection status (built-in and custom)
         try
         {
             foreach (var item in items)
@@ -565,12 +568,12 @@ partial class Program
                 item.IsBuiltinProtected = IsBuiltinProtectedVar(item.Name) && item.Scope == "system";
             }
         }
-        catch (Exception e)
+        catch (Exception error)
         {
-            DebugLog("ListEnvironment: protection annotation failed: " + e.GetType().Name);
+            DebugLog("ListEnvironment: protection annotation failed: " + error.GetType().Name);
         }
 
-        var ordered = items.OrderBy(x => x.Name).ThenBy(x => x.Scope).ToList();
+        var ordered = items.OrderBy(item => item.Name).ThenBy(item => item.Scope).ToList();
         Console.WriteLine(JsonSerializer.Serialize(ordered, JsonOpts));
         return 0;
     }
@@ -578,6 +581,11 @@ partial class Program
     static int GetVariable(string name)
     {
         DebugLog("GetVariable");
+        if (IsInternalToggleBackupName(name))
+        {
+            Console.Error.WriteLine("Error: Internal disabled-variable backup names are not addressable");
+            return 1;
+        }
         using (var key = Registry.CurrentUser.OpenSubKey(UserEnvPath))
         {
             if (key != null)
@@ -629,6 +637,11 @@ partial class Program
         if (string.IsNullOrEmpty(name))
         {
             Console.Error.WriteLine("Error: Variable name cannot be empty");
+            return false;
+        }
+        if (IsInternalToggleBackupName(name))
+        {
+            Console.Error.WriteLine("Error: Internal disabled-variable backup names are not writable");
             return false;
         }
 
@@ -836,7 +849,7 @@ partial class Program
         return sub switch
         {
             "list" => ProfileList(),
-            "create" => args.Length < 3 ? ArgError("Usage: env-manager profile create <name>") : ProfileCreate(args[2]),
+            "create" => ProfileCreate(args),
             "delete" => args.Length < 3 ? ArgError("Usage: env-manager profile delete <name>") : ProfileDelete(args[2]),
             "apply" => args.Length < 3 ? ArgError("Usage: env-manager profile apply <name>") : ProfileApply(args[2]),
             "unapply" => args.Length < 3 ? ArgError("Usage: env-manager profile unapply <name>") : ProfileUnapply(args[2]),
@@ -875,6 +888,11 @@ partial class Program
         return varName + "_EnvManager_disabled";
     }
 
+    static bool IsInternalToggleBackupName(string name)
+    {
+        return name.EndsWith("_EnvManager_disabled", StringComparison.OrdinalIgnoreCase);
+    }
+
     static int RunToggle(string[] args)
     {
         string name = args[1];
@@ -887,73 +905,94 @@ partial class Program
             Console.Error.WriteLine("Error: Variable name cannot be empty");
             return 1;
         }
-
-        // Refuse to toggle protected variables. Toggling would create a backup
-        // key then delete the original; if the delete is blocked by the
-        // protection guard inside DeleteVariableWithoutNotify, the backup
-        // would exist alongside an undeleted original, leaving inconsistent state.
-        if (IsProtectedVariable(name, scope ?? "user"))
+        if (IsInternalToggleBackupName(name))
+        {
+            Console.Error.WriteLine("Error: Cannot toggle a variable whose name ends with '_EnvManager_disabled'");
+            return 1;
+        }
+        if (IsProtectedVariable(name, scope))
         {
             Console.Error.WriteLine($"Error: Cannot toggle protected variable '{name}'");
             return 1;
         }
 
         string backupName = GetToggleBackupName(name);
-
-        // Prevent name collision: if the variable itself is a backup key, refuse to toggle
-        if (name.EndsWith("_EnvManager_disabled"))
+        var (hive, registryPath) = GetScopeTarget(scope);
+        using var key = hive?.OpenSubKey(registryPath, true);
+        if (key == null)
         {
-            Console.Error.WriteLine("Error: Cannot toggle a variable whose name ends with '_EnvManager_disabled'");
+            Console.Error.WriteLine($"Error: Cannot open registry key for scope '{scope}'");
             return 1;
         }
 
-        var currentValue = GetVariableValue(name, scope!);
-        var backupValue = GetVariableValue(backupName, scope!);
-
-        if (backupValue != null)
+        bool originalExists = key.GetValueNames().Any(valueName => valueName.Equals(name, StringComparison.OrdinalIgnoreCase));
+        bool backupExists = key.GetValueNames().Any(valueName => valueName.Equals(backupName, StringComparison.OrdinalIgnoreCase));
+        if (originalExists && backupExists)
         {
-            // Re-enable: restore original value from backup, then delete backup.
-            // Write-first order ensures data is not lost if delete fails.
-            SetVariableWithoutNotify(name, backupValue, scope!);
-            // Verify the restore succeeded before removing backup
-            var restoredCheck = GetVariableValue(name, scope!);
-            if (restoredCheck != null)
+            Console.Error.WriteLine($"Error: Toggle recovery conflict for '{name}'. Both the variable and its disabled backup exist; no values were changed.");
+            return 1;
+        }
+        if (!originalExists && !backupExists)
+        {
+            Console.Error.WriteLine($"Error: Variable '{name}' not found");
+            return 1;
+        }
+
+        try
+        {
+            if (backupExists)
             {
-                DeleteVariableWithoutNotify(backupName, scope!);
+                object backupValue = key.GetValue(backupName, null, RegistryValueOptions.DoNotExpandEnvironmentNames)
+                    ?? throw new InvalidDataException("Disabled backup has no value");
+                RegistryValueKind backupKind = key.GetValueKind(backupName);
+                key.SetValue(name, backupValue, backupKind);
+                object? restoredValue = key.GetValue(name, null, RegistryValueOptions.DoNotExpandEnvironmentNames);
+                bool restored = Equals(restoredValue, backupValue) && key.GetValueKind(name) == backupKind;
+                if (!restored)
+                {
+                    key.DeleteValue(name, false);
+                    Console.Error.WriteLine($"Error: Failed to restore '{name}' exactly; disabled backup was preserved");
+                    return 1;
+                }
+                key.DeleteValue(backupName, false);
+                if (key.GetValueNames().Any(valueName => valueName.Equals(backupName, StringComparison.OrdinalIgnoreCase)))
+                {
+                    Console.Error.WriteLine($"Error: Restored '{name}', but could not remove its disabled backup");
+                    return 1;
+                }
                 BroadcastSettingChange();
                 Console.WriteLine(JsonSerializer.Serialize(new { name, scope, isDisabled = false }, JsonOpts));
+                return 0;
             }
-            else
+
+            object originalValue = key.GetValue(name, null, RegistryValueOptions.DoNotExpandEnvironmentNames)
+                ?? throw new InvalidDataException("Variable has no value");
+            RegistryValueKind originalKind = key.GetValueKind(name);
+            key.SetValue(backupName, originalValue, originalKind);
+            object? persistedBackup = key.GetValue(backupName, null, RegistryValueOptions.DoNotExpandEnvironmentNames);
+            bool backupVerified = Equals(persistedBackup, originalValue) && key.GetValueKind(backupName) == originalKind;
+            if (!backupVerified)
             {
-                Console.Error.WriteLine($"Error: Failed to restore variable {name}, backup preserved");
+                key.DeleteValue(backupName, false);
+                Console.Error.WriteLine($"Error: Failed to preserve '{name}' exactly; variable was not disabled");
                 return 1;
             }
-        }
-        else if (currentValue != null)
-        {
-            // Disable: write backup first, then delete original.
-            // Write-first order ensures data is not lost if delete fails.
-            SetVariableWithoutNotify(backupName, currentValue, scope!);
-            // Verify backup was written before removing original
-            var backupCheck = GetVariableValue(backupName, scope!);
-            if (backupCheck != null)
+            key.DeleteValue(name, false);
+            if (key.GetValueNames().Any(valueName => valueName.Equals(name, StringComparison.OrdinalIgnoreCase)))
             {
-                DeleteVariableWithoutNotify(name, scope!);
-                BroadcastSettingChange();
-                Console.WriteLine(JsonSerializer.Serialize(new { name, scope, isDisabled = true }, JsonOpts));
-            }
-            else
-            {
-                Console.Error.WriteLine($"Error: Failed to create backup for {name}, variable not modified");
+                Console.Error.WriteLine($"Error: Failed to disable '{name}'; its backup was preserved for recovery");
                 return 1;
             }
+            BroadcastSettingChange();
+            Console.WriteLine(JsonSerializer.Serialize(new { name, scope, isDisabled = true }, JsonOpts));
+            return 0;
         }
-        else
+        catch (Exception error) when (error is UnauthorizedAccessException or IOException or InvalidDataException)
         {
-            Console.Error.WriteLine($"Error: Variable {name} not found in {scope} scope");
+            DebugLog("Toggle failure=" + error.GetType().Name);
+            Console.Error.WriteLine($"Error: Could not toggle '{name}'; no destructive recovery was attempted");
             return 1;
         }
-        return 0;
     }
 
     static int ProfileEditVar(string profileName, string oldVarName, string newVarName, string newVarValue)
@@ -1483,7 +1522,8 @@ partial class Program
     {
         Console.WriteLine(@"Profile commands:
   profile list                        List all profiles (JSON)
-  profile create <name>               Create a new empty profile
+  profile create <name> [--type global|launch] [--target <exe>]
+                                                    Create a Global or Launch profile atomically
   profile delete <name>               Delete a profile
   profile show <name>                 Show profile details (JSON)
   profile apply <name>                Apply a profile (backs up existing user vars)
@@ -1507,8 +1547,11 @@ partial class Program
 
     static ProfileData? FindProfile(List<ProfileData> profiles, string name)
     {
-        return profiles.FirstOrDefault(p =>
-            p.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
+        var matches = profiles.Where(profile =>
+            profile.Name.Equals(name, StringComparison.OrdinalIgnoreCase)).Take(2).ToList();
+        if (matches.Count > 1)
+            throw new InvalidDataException($"Ambiguous profile name '{name}'. Rename one profile before using name-only commands.");
+        return matches.FirstOrDefault();
     }
 
     static int ProfileList()
@@ -1518,9 +1561,28 @@ partial class Program
         return 0;
     }
 
-    static int ProfileCreate(string name)
+    static int ProfileCreate(string[] args)
     {
-        // Validate profile name (injection prevention)
+        if (args.Length < 3)
+            return ArgError("Usage: env-manager profile create <name> [--type global|launch] [--target <exe>] [--args <args>] [--cwd <dir>]");
+
+        string name = args[2];
+        string profileType = "global";
+        string? target = null;
+        string? launchArgs = null;
+        string? workingDirectory = null;
+        for (int i = 3; i < args.Length; i++)
+        {
+            switch (args[i])
+            {
+                case "--type": if (++i >= args.Length) return ArgError("Missing value for --type"); profileType = args[i]; break;
+                case "--target": if (++i >= args.Length) return ArgError("Missing value for --target"); target = args[i]; break;
+                case "--args": if (++i >= args.Length) return ArgError("Missing value for --args"); launchArgs = args[i]; break;
+                case "--cwd": if (++i >= args.Length) return ArgError("Missing value for --cwd"); workingDirectory = args[i]; break;
+                default: return ArgError($"Unknown flag: {args[i]}");
+            }
+        }
+
         if (string.IsNullOrWhiteSpace(name) || name.Length > 255)
         {
             Console.Error.WriteLine("Error: Profile name must be 1-255 characters");
@@ -1531,6 +1593,23 @@ partial class Program
             Console.Error.WriteLine("Error: Profile name contains invalid characters");
             return 1;
         }
+        if (!profileType.Equals("global", StringComparison.OrdinalIgnoreCase) && !profileType.Equals("launch", StringComparison.OrdinalIgnoreCase))
+        {
+            Console.Error.WriteLine("Error: --type must be 'global' or 'launch'");
+            return 1;
+        }
+        bool isLaunch = profileType.Equals("launch", StringComparison.OrdinalIgnoreCase);
+        if (isLaunch && string.IsNullOrWhiteSpace(target))
+        {
+            Console.Error.WriteLine("Error: Launch profile requires --target <exe>");
+            return 1;
+        }
+        if (!isLaunch && (target != null || launchArgs != null || workingDirectory != null))
+        {
+            Console.Error.WriteLine("Error: --target, --args, and --cwd are only valid for Launch profiles");
+            return 1;
+        }
+
         var profiles = LoadProfiles();
         if (FindProfile(profiles, name) != null)
         {
@@ -1543,13 +1622,23 @@ partial class Program
             Id = Guid.NewGuid().ToString(),
             Name = name,
             IsEnabled = false,
-            Variables = new List<ProfileVariable>()
+            Variables = new List<ProfileVariable>(),
+            ProfileType = isLaunch ? "launch" : "global",
+            TargetExecutable = isLaunch ? StripVerbatimPrefix(target) : null,
+            LaunchArguments = isLaunch ? launchArgs : null,
+            WorkingDirectory = isLaunch ? StripVerbatimPrefix(workingDirectory) : null,
         };
-        var createdSummary = ProfileSummary(profile);
-        profiles.Add(profile);
-        SaveProfiles(profiles);
-        RecordProfileAudit("profile create", name, null, createdSummary);
-        Console.WriteLine($"Created profile: {name}");
+        try
+        {
+            SaveProfiles(profiles.Append(profile).ToList());
+        }
+        catch (InvalidDataException error)
+        {
+            Console.Error.WriteLine("Error: " + error.Message);
+            return 1;
+        }
+        RecordProfileAudit("profile create", name, null, ProfileSummary(profile));
+        Console.WriteLine($"Created {profile.ProfileType} profile: {name}");
         return 0;
     }
 

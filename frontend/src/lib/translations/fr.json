@@ -241,5 +241,6 @@
   "messages.secretVariable": "Variable secrete (masquee)",
   "profiles.addSecret": "Ajouter un secret",
   "profiles.secretValue": "Valeur du secret",
-  "profiles.secretHint": "Chiffre avec DPAPI (utilisateur courant). Seul cet utilisateur peut dechiffrer. Le lancement dechiffre dans le processus enfant."
+  "profiles.secretHint": "Chiffre avec DPAPI (utilisateur courant). Seul cet utilisateur peut dechiffrer. Le lancement dechiffre dans le processus enfant.",
+  "protection.lockedCannotToggle": "Verrouille : activation ou desactivation impossible"
 }

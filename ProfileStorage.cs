@@ -52,21 +52,17 @@ partial class Program
 
     static void ValidateProfiles(List<ProfileData> profiles)
     {
-        // v0.6.0: Global and Launch profiles share separate namespaces. Two Global profiles
-        // cannot share a name; two Launch profiles cannot share a name; a Global and a Launch
-        // profile MAY share a name because their effects do not collide (Global writes the
-        // registry, Launch only spawns a child process with an isolated environment block).
-        var globalNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        var launchNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        // CLI commands address profiles by name. Keep one namespace so a command
+        // can never target a Global profile when the caller intended Launch.
+        var profileNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var profile in profiles)
         {
             if (string.IsNullOrWhiteSpace(profile.Name))
                 throw new InvalidDataException("Profile names must be non-empty");
 
             bool isLaunch = profile.ProfileType.Equals("launch", StringComparison.OrdinalIgnoreCase);
-            var setName = isLaunch ? launchNames : globalNames;
-            if (!setName.Add(profile.Name))
-                throw new InvalidDataException($"Profile names must be unique within the same profile type (duplicate: {profile.Name})");
+            if (!profileNames.Add(profile.Name))
+                throw new InvalidDataException($"Profile names must be unique (duplicate: {profile.Name})");
 
             if (isLaunch)
             {

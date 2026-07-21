@@ -12,7 +12,7 @@ Modern, lightweight Windows environment variable manager with CLI and GUI dual-m
 - 18 commands for complete environment variable management
 - Simultaneous profiles with inheritance, conflict previews, PATH fragments, and safe reverse-order rollback
 - PATH editor with duplicate and missing-directory diagnostics
-- **v0.6.0 Launch profiles**: spawn a target executable with an isolated env block (`env_clear` + inject) - never writes the registry, never broadcasts `WM_SETTINGCHANGE`. Profile types `global` (existing behavior) and `launch` use independent name namespaces (cross-type name collision allowed).
+- **Launch profiles**: create a Global or Launch profile directly in the GUI or with one CLI transaction. Launch profiles start the selected executable with an isolated env block (`env_clear` + inject), never write the registry, and never broadcast `WM_SETTINGCHANGE`. Profile names are globally unique so name-addressed CLI commands remain unambiguous.
 - **v0.6.0 PATH health**: `path health [--fix] [--dry-run]` detects duplicates AND dead (non-existent) PATH entries in one command; `--fix` safely removes non-protected entries; protected entries always preserved.
 - **v0.7.0 DPAPI secrets**: `profile add-secret`/`edit-secret`/`remove-secret`/`reveal-secret` - per-profile variable values encrypted with Windows DPAPI CurrentUser. Plaintext lives only in transient process memory; `profile launch` decrypts at spawn time; `reveal-secret` is the only stdout-plaintext path. Audit records NAME only.
 - **v0.7.0 GUI**: PATH health badges (healthy/dead/duplicate/duplicate+dead) + Remove Dead bulk action; Launch profile type badge + Launch button + Create bar type selector + native file picker; variable search highlight + `%VAR%` expansion preview; `.env`/CSV bulk import/export in Settings (native file picker).
@@ -76,6 +76,8 @@ env-manager-cli.exe validate backup.json
 # Profile management
 env-manager-cli.exe profile list
 env-manager-cli.exe profile create dev-profile
+# Create an isolated profile for one executable
+env-manager-cli.exe profile create tool-run --type launch --target "C:\Tools\tool.exe"
 env-manager-cli.exe profile add-var dev-profile JAVA_HOME "D:\jdk17"
 env-manager-cli.exe profile apply dev-profile
 env-manager-cli.exe profile unapply dev-profile
@@ -154,7 +156,7 @@ powershell -ExecutionPolicy Bypass -File scripts/build-all.ps1
 | `profile set-inherits` | `profile set-inherits <name> [parent ...]` | Configure acyclic profile inheritance |
 | `profile add-path` | `profile add-path <name> <dir>` | Add a PATH fragment to a profile |
 | `profile list` | `profile list` | List all profiles |
-| `profile create` | `profile create <name>` | Create a new profile |
+| `profile create` | `profile create <name> [--type global|launch] [--target <exe>]` | Create a Global or isolated Launch profile atomically |
 | `profile apply` | `profile apply <name>` | Apply a profile (backs up existing vars) |
 | `profile unapply` | `profile unapply <name>` | Unapply a profile (restores originals) |
 | `profile add-var` | `profile add-var <profile> <name> <val>` | Add variable to profile |
@@ -325,3 +327,8 @@ Open source project. For issues, feature requests, or pull requests, visit the [
 ---
 
 **Version**: 0.7.1 | **License**: Apache-2.0 | **Status**: Active Development
+
+
+### Safety and Performance
+
+Protected variables and PATH entries are disabled in the GUI before a command is issued, while the CLI enforces the same rule as the authority. Disabled variables retain their original registry value kind and are restored only after an exact verification. The GUI uses bounded 5-second, generation-safe caches and single-flight IPC reads: large variable sets avoid duplicate refresh processes without allowing an old response to overwrite newer state.
