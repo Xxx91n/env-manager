@@ -242,5 +242,11 @@
   "profiles.addSecret": "添加密钥",
   "profiles.secretValue": "密钥值",
   "profiles.secretHint": "使用 DPAPI(当前用户)加密,仅当前用户可解密;启动时在子进程内解密。",
-  "protection.lockedCannotToggle": "已锁定：无法启用或关闭"
+  "protection.lockedCannotToggle": "已锁定：无法启用或关闭",
+  "secrets.providerTitle": "机密提供者",
+  "secrets.activeProvider": "活动提供者",
+  "secrets.changeProvider": "更改机密提供者",
+  "secrets.providerDpapi": "本地 DPAPI（当前用户）",
+  "secrets.providerCredMan": "Windows 凭据管理器",
+  "secrets.providerChanged": "机密提供者更改成功"
 }

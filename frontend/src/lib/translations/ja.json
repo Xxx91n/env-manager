@@ -242,5 +242,11 @@
   "profiles.addSecret": "シークレット追加",
   "profiles.secretValue": "シークレット値",
   "profiles.secretHint": "DPAPI(現在のユーザー)で暗号化されます。このユーザーのみ復号可能。起動時にプロセス内で復号されます。",
-  "protection.lockedCannotToggle": "ロック済み: 有効化または無効化できません"
+  "protection.lockedCannotToggle": "ロック済み: 有効化または無効化できません",
+  "secrets.providerTitle": "シークレットプロバイダー",
+  "secrets.activeProvider": "アクティブプロバイダー",
+  "secrets.changeProvider": "シークレットプロバイダーを変更",
+  "secrets.providerDpapi": "ローカル DPAPI（現在のユーザー）",
+  "secrets.providerCredMan": "Windows 資格情報マネージャー",
+  "secrets.providerChanged": "シークレットプロバイダーが正常に変更されました"
 }

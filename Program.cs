@@ -874,6 +874,8 @@ partial class Program
             "edit-secret" => args.Length < 6 ? ArgError("Usage: env-manager profile edit-secret <profile> <old> <new> <value>") : ProfileEditSecret(args[2], args[3], args[4], args[5]),
             "remove-secret" => args.Length < 4 ? ArgError("Usage: env-manager profile remove-secret <profile> <name>") : ProfileRemoveSecret(args[2], args[3]),
             "reveal-secret" => args.Length < 4 ? ArgError("Usage: env-manager profile reveal-secret <profile> <name>") : ProfileRevealSecret(args[2], args[3]),
+            // v0.8 secret provider management subcommands
+            "secret-provider" => RunSecretProviderCommand(args),
             "help" => ShowProfileHelp(),
             _ => ArgError($"Unknown profile subcommand: {sub}")
         };
@@ -1065,7 +1067,7 @@ partial class Program
         if (profile.IsEnabled) return ArgError("Error: Unapply the profile before changing its variables");
 
         profile.Variables.RemoveAll(v => v.Name.Equals(varName, StringComparison.OrdinalIgnoreCase));
-        string encrypted = DpapiHelper.EncryptSecret(varValue);
+        string encrypted = SecretProviderManager.Encrypt(varValue, profileName + "\\" + varName);
         profile.Variables.Add(new ProfileVariable { Name = varName, Value = encrypted });
         if (!profile.SecretVariables.Any(s => s.Equals(varName, StringComparison.OrdinalIgnoreCase)))
             profile.SecretVariables.Add(varName);
@@ -1074,7 +1076,7 @@ partial class Program
         RecordProfileAudit("profile add-secret", profileName,
             JsonSerializer.Serialize(new { name = varName, value = "<redacted>" }),
             JsonSerializer.Serialize(new { name = varName, value = "<encrypted>" }));
-        Console.WriteLine($"Added secret variable '{varName}' (DPAPI-CurrentUser) to profile '{profileName}'");
+        Console.WriteLine($"Added secret variable '{varName}' ({SecretProviderManager.GetActiveProviderName()}) to profile '{profileName}'");
         return 0;
     }
 
@@ -1095,7 +1097,7 @@ partial class Program
         if (v == null) { Console.Error.WriteLine($"Error: Secret variable '{oldVarName}' not found in profile '{profileName}'"); return 1; }
 
         bool wasMarkedSecret = profile.SecretVariables.Any(s => s.Equals(oldVarName, StringComparison.OrdinalIgnoreCase));
-        string encryptedNew = DpapiHelper.EncryptSecret(newVarValue);
+        string encryptedNew = SecretProviderManager.Encrypt(newVarValue, profileName + "\\" + newVarName);
         v.Name = newVarName;
         v.Value = encryptedNew;
 
@@ -1124,6 +1126,9 @@ partial class Program
         var v = profile.Variables.FirstOrDefault(x => x.Name.Equals(varName, StringComparison.OrdinalIgnoreCase));
         if (v == null) { Console.Error.WriteLine($"Error: Variable '{varName}' not found in profile '{profileName}'"); return 1; }
 
+        // Delete provider-side state (e.g. CredMan entry) before removing from profile
+        try { SecretProviderManager.Delete(v.Value, profileName + "\\" + varName); } catch { }
+
         profile.Variables.Remove(v);
         profile.SecretVariables.RemoveAll(s => s.Equals(varName, StringComparison.OrdinalIgnoreCase));
         SaveProfiles(profiles);
@@ -1151,13 +1156,64 @@ partial class Program
         }
         try
         {
-            Console.Out.Write(DpapiHelper.DecryptSecret(v.Value));
+            Console.Out.Write(SecretProviderManager.Decrypt(v.Value, profileName + "\\" + varName));
             return 0;
         }
         catch (Exception ex)
         {
             Console.Error.WriteLine($"Error: Failed to decrypt secret '{varName}': {ex.Message}");
             return 1;
+        }
+    }
+
+
+    // v0.8 Secret provider management
+    static int RunSecretProviderCommand(string[] args)
+    {
+        if (args.Length < 3)
+        {
+            Console.Error.WriteLine("Usage: env-manager profile secret-provider <list|set> [options]");
+            Console.Error.WriteLine("  secret-provider list              List available providers and active selection");
+            Console.Error.WriteLine("  secret-provider set <name>        Set the active secret provider");
+            return 1;
+        }
+        string sub = args[2];
+        switch (sub)
+        {
+            case "list":
+                var providers = SecretProviderManager.ListProviders();
+                string active = SecretProviderManager.GetActiveProviderName();
+                Console.WriteLine($"Active provider: {active}");
+                Console.WriteLine("Available providers:");
+                foreach (var (name, available) in providers)
+                {
+                    string marker = name.Equals(active, StringComparison.OrdinalIgnoreCase) ? " (active)" : "";
+                    Console.WriteLine($"  {name}{marker}{(available ? "" : " (unavailable)")}");
+                }
+                return 0;
+
+            case "set":
+                if (args.Length < 4)
+                {
+                    Console.Error.WriteLine("Usage: env-manager profile secret-provider set <name>");
+                    return 1;
+                }
+                try
+                {
+                    SecretProviderManager.SetActiveProvider(args[3]);
+                    Console.WriteLine($"Active secret provider set to: {args[3]}");
+                    Console.WriteLine("Note: existing secrets encrypted with the previous provider will still decrypt correctly (fail-closed on unknown provider).");
+                    return 0;
+                }
+                catch (Exception ex)
+                {
+                    Console.Error.WriteLine($"Error: {ex.Message}");
+                    return 1;
+                }
+
+            default:
+                Console.Error.WriteLine($"Unknown secret-provider subcommand: {sub}");
+                return 1;
         }
     }
 
@@ -1484,7 +1540,7 @@ partial class Program
             {
                 try
                 {
-                    valueToInject = DpapiHelper.DecryptSecret(valueToInject);
+                    valueToInject = SecretProviderManager.Decrypt(valueToInject, profile.Name + "\\" + v.Name);
                 }
                 catch (Exception)
                 {
@@ -1714,7 +1770,7 @@ partial class Program
 
     static string TryDecryptSafe(string ciphertext)
     {
-        try { return DpapiHelper.DecryptSecret(ciphertext); }
+        try { return SecretProviderManager.Decrypt(ciphertext); }
         catch { return "<decryption-failed>"; }
     }
 

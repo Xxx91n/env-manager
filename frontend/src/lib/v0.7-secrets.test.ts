@@ -78,6 +78,6 @@ describe('v0.7 secrets design invariants', () => {
   it('ProfileLaunch decrypts secrets in-process (never logs plaintext)', () => {
     const src = require('fs').readFileSync('D:/Aworker/env-manager/Program.cs', 'utf8')
     expect(src).toContain('profile.SecretVariables.Contains(v.Name, StringComparer.OrdinalIgnoreCase)')
-    expect(src).toContain('DpapiHelper.DecryptSecret(valueToInject)')
+    expect(src).toContain('SecretProviderManager.Decrypt(valueToInject, profile.Name')
   })
 })

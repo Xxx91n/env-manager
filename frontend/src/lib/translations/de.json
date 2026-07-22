@@ -242,5 +242,11 @@
   "profiles.addSecret": "Geheimnis hinzufuegen",
   "profiles.secretValue": "Geheimwert",
   "profiles.secretHint": "Mit DPAPI (aktueller Benutzer) verschluesselt. Nur dieser Benutzer kann entschluesseln. Start entschluesselt prozessintern.",
-  "protection.lockedCannotToggle": "Gesperrt: Kann nicht aktiviert or deaktiviert werden"
+  "protection.lockedCannotToggle": "Gesperrt: Kann nicht aktiviert or deaktiviert werden",
+  "secrets.providerTitle": "Geheimanbieter",
+  "secrets.activeProvider": "Aktiver Anbieter",
+  "secrets.changeProvider": "Geheimanbieter wechseln",
+  "secrets.providerDpapi": "Lokales DPAPI (Aktueller Benutzer)",
+  "secrets.providerCredMan": "Windows Anmeldeinformationsverwaltung",
+  "secrets.providerChanged": "Geheimanbieter erfolgreich gewechselt"
 }

@@ -242,5 +242,11 @@
   "profiles.addSecret": "إضافة سر",
   "profiles.secretValue": "قيمة السر",
   "profiles.secretHint": "مشفّر بـ DPAPI (المستخدم الحالي). يمكن فقط لهذا المستخدم فك التشفير. التشغيل يفك التشفير داخل العملية.",
-  "protection.lockedCannotToggle": "مقفل: لا يمكن التمكين أو التعطيل"
+  "protection.lockedCannotToggle": "مقفل: لا يمكن التمكين أو التعطيل",
+  "secrets.providerTitle": "مزود الأسرار",
+  "secrets.activeProvider": "المزود النشط",
+  "secrets.changeProvider": "تغيير مزود الأسرار",
+  "secrets.providerDpapi": "DPAPI محلي (المستخدم الحالي)",
+  "secrets.providerCredMan": "مدير بيانات اعتماد Windows",
+  "secrets.providerChanged": "تم تغيير مزود الأسرار بنجاح"
 }

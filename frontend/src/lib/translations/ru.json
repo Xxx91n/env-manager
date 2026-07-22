@@ -242,5 +242,11 @@
   "profiles.addSecret": "Dobavit sekret",
   "profiles.secretValue": "Znacheniye sekreta",
   "profiles.secretHint": "Zashifrovano DPAPI (tekushchiy polzovatel). Tolko etot polzovatel mozet rasshifrovat. Zapusk rasshifrovyet vnutri protsessa.",
-  "protection.lockedCannotToggle": "Заблокировано: нельзя включить или отключить"
+  "protection.lockedCannotToggle": "Заблокировано: нельзя включить или отключить",
+  "secrets.providerTitle": "Провайдер секретов",
+  "secrets.activeProvider": "Активный провайдер",
+  "secrets.changeProvider": "Сменить провайдера секретов",
+  "secrets.providerDpapi": "Локальный DPAPI (текущий пользователь)",
+  "secrets.providerCredMan": "Диспетчер учетных данных Windows",
+  "secrets.providerChanged": "Провайдер секретов успешно изменен"
 }

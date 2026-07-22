@@ -278,6 +278,19 @@ The current DPAPI-CurrentUser implementation corresponds to Phase 0 below. Each 
 - The CLI will NOT implement its own AEAD cryptography. Every provider either delegates to a vetted OS API (DPAPI, Credential Manager, Entra) or to a vetted CLI/library (sops, vault agent, PowerShell SecretManagement).
 - The CLI will NOT implement CRYPTPROTECT_LOCAL_MACHINE. LocalMachine scope encryption reads the same on any user of the machine and contradicts the per-user plaintext-never-persisted invariant.
 
+
+## Phase 1-2 Implementation Status (v0.8)
+
+Phase 1 (Versioned Envelopes) and Phase 2 (Windows Credential Manager) are implemented in `SecretProvider.cs`:
+
+- **ISecretProvider interface**: `Encrypt`, `Decrypt`, `CanRotate`, `Rotate`, `Delete` methods.
+- **DpapiCurrentUserProvider**: wraps existing `DpapiHelper` in a JSON envelope `{ provider, version, createdAt, ciphertext }`.
+- **CredentialManagerProvider**: uses `advapi32.dll` P/Invoke `CredWriteW`/`CredReadW`/`CredDeleteW` with `CRED_TYPE_GENERIC` and `CRED_PERSIST_ENTERPRISE`. The CredMan blob is DPAPI-encrypted before storage; the profile stores only the CRED target name.
+- **SecretProviderManager**: reads `%LOCALAPPDATA%\EnvManager\secret-providers.json` to determine the active provider. Unknown providers are fail-closed. Bare pre-v0.8 DPAPI base64 blobs are auto-detected and decrypted via `DpapiCurrentUserProvider`.
+- **CLI commands**: `profile secret-provider list` (read) and `profile secret-provider set <name>` (write).
+- **GUI**: ProfilePage shows the active provider as a toggle badge; clicking switches between dpapi-current-user and credential-manager.
+- **Backwards compatibility**: existing profiles with bare DPAPI base64 blobs continue to work transparently.
+
 ### Selection Matrix (operator guidance)
 
 - Single-user developer machine: Phase 0 (DPAPI CurrentUser); zero setup.

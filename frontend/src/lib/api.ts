@@ -1114,3 +1114,21 @@ export async function profileRemoveSecret(profileName: string, varName: string):
 export async function profileRevealSecret(profileName: string, varName: string): Promise<string> {
   return await runRead('profile', ['reveal-secret', profileName, varName])
 }
+
+// --- v0.8 Secret Provider Management ---
+
+/**
+ * Lists available secret providers and the active selection.
+ * CLI: `profile secret-provider list`
+ */
+export async function secretProviderList(): Promise<string> {
+  return await runRead('profile', ['secret-provider', 'list'])
+}
+
+/**
+ * Sets the active secret provider.
+ * CLI: `profile secret-provider set <name>`
+ */
+export async function secretProviderSet(providerName: string): Promise<string> {
+  return await runWrite('profile', ['secret-provider', 'set', providerName])
+}

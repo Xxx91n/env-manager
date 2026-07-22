@@ -242,5 +242,11 @@
   "profiles.addSecret": "Agregar secreto",
   "profiles.secretValue": "Valor del secreto",
   "profiles.secretHint": "Cifrado con DPAPI (usuario actual). Solo este usuario puede descifrar. El lanzamiento descifra dentro del proceso.",
-  "protection.lockedCannotToggle": "Bloqueado: no se puede activar ni desactivar"
+  "protection.lockedCannotToggle": "Bloqueado: no se puede activar ni desactivar",
+  "secrets.providerTitle": "Proveedor de secretos",
+  "secrets.activeProvider": "Proveedor activo",
+  "secrets.changeProvider": "Cambiar proveedor de secretos",
+  "secrets.providerDpapi": "DPAPI local (usuario actual)",
+  "secrets.providerCredMan": "Administrador de credenciales de Windows",
+  "secrets.providerChanged": "Proveedor de secretos cambiado correctamente"
 }

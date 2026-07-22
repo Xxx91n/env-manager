@@ -242,5 +242,11 @@
   "profiles.addSecret": "Add Secret",
   "profiles.secretValue": "Secret value",
   "profiles.secretHint": "Encrypted with DPAPI (CurrentUser). Only this user can decrypt. Launch decrypts in-process.",
-  "protection.lockedCannotToggle": "Locked: cannot enable or disable"
+  "protection.lockedCannotToggle": "Locked: cannot enable or disable",
+  "secrets.providerTitle": "Secret Provider",
+  "secrets.activeProvider": "Active provider",
+  "secrets.changeProvider": "Change secret provider",
+  "secrets.providerDpapi": "Local DPAPI (CurrentUser)",
+  "secrets.providerCredMan": "Windows Credential Manager",
+  "secrets.providerChanged": "Secret provider changed successfully"
 }

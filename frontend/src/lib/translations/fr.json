@@ -242,5 +242,11 @@
   "profiles.addSecret": "Ajouter un secret",
   "profiles.secretValue": "Valeur du secret",
   "profiles.secretHint": "Chiffre avec DPAPI (utilisateur courant). Seul cet utilisateur peut dechiffrer. Le lancement dechiffre dans le processus enfant.",
-  "protection.lockedCannotToggle": "Verrouille : activation ou desactivation impossible"
+  "protection.lockedCannotToggle": "Verrouille : activation ou desactivation impossible",
+  "secrets.providerTitle": "Fournisseur de secrets",
+  "secrets.activeProvider": "Fournisseur actif",
+  "secrets.changeProvider": "Changer le fournisseur de secrets",
+  "secrets.providerDpapi": "DPAPI local (utilisateur actuel)",
+  "secrets.providerCredMan": "Gestionnaire d'informations d'identification Windows",
+  "secrets.providerChanged": "Fournisseur de secrets change avec succes"
 }

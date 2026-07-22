@@ -26,6 +26,8 @@
     profileLaunch,
     profileAddSecret,
     profileRemoveSecret,
+    secretProviderList,
+    secretProviderSet,
   } from '../api'
   import type { ProfileData, EnvVariable } from '../api'
 
@@ -47,6 +49,10 @@
   let showAddSecretPanel = false
   let newSecretName = ''
   let newSecretValue = ''
+  // v0.8 secret provider state
+  let activeProvider = 'dpapi-current-user'
+  let availableProviders: string[] = ['dpapi-current-user', 'credential-manager']
+  let showProviderSelector = false
   // Pointer drag state remains local. Registry/profile persistence is never
   // touched by a GUI-only ordering change.
   let dragIndex: number | null = null
@@ -61,7 +67,22 @@
 
   onMount(() => {
     void refreshProfiles()
+    void loadProviderInfo()
   })
+
+  async function loadProviderInfo() {
+    try {
+      const result = await secretProviderList()
+      const lines = result.split('\n')
+      for (const line of lines) {
+        if (line.startsWith('Active provider:')) {
+          activeProvider = line.split(':')[1].trim()
+        }
+      }
+    } catch {
+      // keep defaults
+    }
+  }
 
   // Watch refreshTrigger from App.svelte: refresh profiles when header
   // refresh button is clicked, regardless of active view.
@@ -159,6 +180,17 @@
       showMessage(err instanceof Error ? err.message : String(err), 'error')
     } finally {
       actionLoading = false
+    }
+  }
+
+  async function handleChangeProvider() {
+    try {
+      const newProvider = activeProvider === 'dpapi-current-user' ? 'credential-manager' : 'dpapi-current-user'
+      await secretProviderSet(newProvider)
+      activeProvider = newProvider
+      showMessage($t('secrets.providerChanged'), 'success')
+    } catch (err) {
+      showMessage(localizeError(err instanceof Error ? err.message : String(err)), 'error')
     }
   }
 
@@ -773,6 +805,22 @@
               {/if}
 
               {#if profile.profileType === 'launch' && !profile.isEnabled}
+                <!-- v0.8 secret provider indicator -->
+                <div class="flex items-center gap-1.5 mt-2">
+                  <span class="text-[9px] text-gray-400 dark:text-gray-500">{$t('secrets.activeProvider')}:</span>
+                  <button
+                    type="button"
+                    class="text-[9px] px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
+                    on:click={handleChangeProvider}
+                    title={$t('secrets.changeProvider')}
+                  >
+                    {#if activeProvider === 'dpapi-current-user'}
+                      {$t('secrets.providerDpapi')}
+                    {:else}
+                      {$t('secrets.providerCredMan')}
+                    {/if}
+                  </button>
+                </div>
                 {#if !showAddSecretPanel}
                   <button
                     on:click={() => (showAddSecretPanel = true)}
