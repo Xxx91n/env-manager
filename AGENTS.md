@@ -17,6 +17,26 @@ This document is the single source of truth for the Env Manager project. All dev
 
 ---
 
+
+## CodeGraph (MANDATORY for code exploration)
+
+CodeGraph is the project's indexed code intelligence layer. The index lives at `.codegraph/` (gitignored). All agents and LLMs working on this project MUST use CodeGraph as the FIRST step for code exploration — it returns verbatim source of relevant symbols grouped by file in one capped call, far more efficient than manual Grep/Read loops.
+
+**How to use**:
+- Via MCP: call `codegraph_explore` with `projectPath: "D:\Aworker\env-manager"` and a query (symbol names, file names, or natural-language question).
+- Via CLI: `codegraph explore "<query>"` or `codegraph query "<symbol>"` or `codegraph node <symbol>` or `codegraph files`.
+- After any code change: run `codegraph sync .` to incrementally update the index. For a full rebuild: `codegraph index .`.
+- Check index status: `codegraph status .`.
+
+**When to call FIRST (before reading files)**:
+- "How does X work?" or "Where is X defined?"
+- "What calls Y?" or "What is the blast radius of changing Z?"
+- Surveying an area before an edit
+- Finding the call path between symbols
+
+**When NOT needed**: trivial one-file edits where you already know the exact line, or after CodeGraph has already returned the source in this session (treat returned source as already Read — do NOT re-open those files).
+
+**Index sync is mandatory after code changes** (same commit that changes code must update the index). The index is gitignored and never committed.
 ## Project Overview
 
 - **Name**: Env Manager
