@@ -184,7 +184,7 @@ describe('review-finder regressions', () => {
     const program = readFileSync(join(repoRoot, 'Program.cs'), 'utf8')
     expect(program).toContain('Internal disabled-variable backup names are not addressable')
     expect(program).toContain('IsInternalToggleBackupName')
-    expect(program).toContain('value == null && backupValue != null')
+    expect(program).toContain('backupVal != null && key.GetValue(name) == null')
   })
 
   it('projects disabled backup records from both registry scopes through one helper', () => {
