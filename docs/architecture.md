@@ -217,4 +217,87 @@ The frontend exposes `getCliAgentsSpec()` and `getCliAgentsPath()` in `api.ts` f
 
 ## Secret Capability Roadmap
 
-The current DPAPI CurrentUser implementation is the local default. Future secret providers must keep the CLI/native layer as the only encryption and persistence boundary; GUI and Rust IPC must never persist plaintext. Any provider extension needs a versioned envelope, explicit provider identity, redacted audit entries, rotation/export rules, and a refusal path when decryption fails. `CRYPTPROTECT_LOCAL_MACHINE` is not an acceptable default. Windows Credential Manager may be used only for small credential references; it is not a replacement for the encrypted profile store.
+The current DPAPI CurrentUser implementation is the local default (v0.7.0). Future secret providers must keep the CLI/native layer as the only encryption and persistence boundary; GUI and Rust IPC must never persist plaintext. Any provider extension needs a versioned envelope, explicit provider identity, redacted audit entries, rotation/export rules, and a refusal path when decryption fails. CRYPTPROTECT_LOCAL_MACHINE is not an acceptable default. Windows Credential Manager may be used only for small credential references; it is not a replacement for the encrypted profile store.
+
+### Staged Industrial-Grade Plan
+
+The current DPAPI-CurrentUser implementation corresponds to Phase 0 below. Each phase adds an opt-in provider while keeping the local default zero-operative without the provider installed or configured. No phase introduces plaintext persistence or weakens existing invariants.
+
+**Phase 0 - Local DPAPI (v0.7.0, current)**
+
+- DPAPI CurrentUser scope encryption via crypt32.dll P/Invoke, no network dependency, no service account required.
+- Suitability: single-user developer machines and local CI runners under the same user account that encrypted the secret. DPAPI ciphertext cannot be decrypted by another user or another machine.
+- Boundary: CRYPTPROTECT_LOCAL_MACHINE is forbidden. The audit log records only the variable name plus a redacted marker. Plaintext is zeroed after use in the launcher process.
+- Limitations: no machine-to-machine portability; an adversary with the interactive user session can call profile reveal-secret and read the plaintext.
+
+**Phase 1 - Versioned Envelopes (v0.8)**
+
+- Wrap the existing base64 DPAPI blob in a JSON envelope { provider, version, createdAt, ciphertext } so future providers can coexist and the CLI can refuse unknown providers rather than guess.
+- Add profile secret-provider config file (%LOCALAPPDATA%\EnvManager\secret-providers.json) declaring the active provider and fallback policy. Default to "dpapi-current-user" with fail-closed behavior when the configured provider is missing or rejects the key.
+- Add a provider interface in EnvFeatures.cs (ISecretProvider: Encrypt/Decrypt/CanRotate/Rotate) so Phase 2+ providers plug in without touching the profile storage layer.
+- Audit entries gain a "provider" field so dashboards and future rotation tooling know which envelope produced/decrypted each secret.
+
+**Phase 2 - Windows Credential Manager Reference Adapter (v0.8)**
+
+- Implement ISecretProvider for Windows Credential Manager using CredRead/CredWrite via advapi32.dll. Store a small CRED persistence entry whose credential blob is the DPAPI-CurrentUser-encrypted secret; the env-manager profile stores only the CRED target name.
+- Suitability: small per-app credentials and API keys that need to survive user re-logins but still user-bound. Windows Credential Manager is the Microsoft-recommended surface for Windows-native single-machine credential storage. It is NOT a replacement for the encrypted profile store; it only references small credential entries.
+- Boundary: the profile never stores plaintext; CredRead returns the blob only to the env-manager process; the launcher decrypts and zeroes as today.
+- Limitation: still per-user, still single-machine; no portability across machines or for headless services.
+
+**Phase 3 - PowerShell SecretManagement + SecretStore Provider (v0.9)**
+
+- Implement ISecretProvider that delegates to PowerShell SecretManagement (Microsoft.SecretManagement + Microsoft.SecretStore modules) so env-manager secrets live in the same store used by PowerShell automation workflows. The provider calls Get-Secret/Set-Secret via a hosted PowerShell runspace.
+- Suitability: Windows 10/11 + PowerShell 7 operators who already use SecretStore for CI scripts. Zero extra binary dependency; the modules are installed via Install-Module and managed by the operator.
+- Boundary: invocation is done via a constrained PSHost runspace with NoProfile; only the two cmdlets are exposed; VaultName is configured in secret-providers.json; fail-closed if the module is not installed. Audit entry adds "vault" field. Rotation = Remove-Secret + Set-Secret.
+- Limitation: requires PowerShell 7 and the SecretManagement modules; still no machine-to-machine portability unless the operator backs the vault to a syncable store.
+
+**Phase 4 - HashiCorp Vault Adapter (v1.0)**
+
+- Implement ISecretProvider that reads from a HashiCorp Vault KV v2 secret engine reference. The env-manager profile stores only the mount path + secret name; the provider calls the Vault HTTP API with a vault token pulled from VAULT_TOKEN env var or a configured token helper. Decryption happens in the launcher process memory.
+- Suitability: team-wide or production machines with network access to a Vault server. Enables access auditing, dynamic credentials, and secret rotation without touching env-manager storage.
+- Boundary: TLS mandatory; the provider refuses to dial a non-TLS Vault; token is not persisted by env-manager; fail-closed if Vault is unreachable or returns 403/404; audit entry adds "mount" and "version" fields; no plaintext in the audit log.
+- Limitation: introduces a network dependency; the env-manager CLI must not cache decrypted material beyond the lifetime of the launcher process.
+
+**Phase 5 - sops Encrypted Envelopes (v1.0)**
+
+- Implement ISecretProvider that consumes and produces sops-encrypted JSON envelopes. The profile JSON value becomes a sops envelope (with per-field Age/PGP/KMS key references); the provider shells out to a verified sops binary (-d / -e) under CREATE_NO_WINDOW.
+- Suitability: GitOps workflows where secrets are versioned alongside terraform/ansible configs; supports Age, PGP, AWS KMS, and Azure Key Vault decryptors; enables rotation via key re-encryption without CLI changes.
+- Boundary: the sops binary must be on PATH (verified at provider init); the profile never stores plaintext; the audit log records only the sops key reference name, not the key material.
+- Limitation: extra binary dependency; misconfigured age/pgp keys make secrets unrecoverable; operator must manage key material.
+
+**Phase 6 - Azure Key Vault Provider (v1.1)**
+
+- Implement ISecretProvider for Azure Key Vault via a managed-identity or service-principal access token. The profile stores only the vault URI and secret name; the provider calls the Key Vault REST API with a cached Entra ID token.
+- Suitability: cloud-native Windows 11 + Entra ID environments where secrets rotate automatically and access is gated by RBAC.
+- Boundary: token is cached only in process memory and refreshed on expiry; TLS mandatory; fail-closed when the identity lacks the Key Vault Get permission; audit adds "keyvault-uri" and "secret-version" fields; never persist the token.
+- Limitation: network dependency; operator must wire up the managed identity or SP; not suitable for airgapped machines.
+
+### Non-Goals
+
+- The CLI will NOT become a password manager (no browser autofill, no web-vault sync). Secret entries in env-manager are exclusively environment-variable-shaped values bound to a launch profile.
+- The CLI will NOT implement its own AEAD cryptography. Every provider either delegates to a vetted OS API (DPAPI, Credential Manager, Entra) or to a vetted CLI/library (sops, vault agent, PowerShell SecretManagement).
+- The CLI will NOT implement CRYPTPROTECT_LOCAL_MACHINE. LocalMachine scope encryption reads the same on any user of the machine and contradicts the per-user plaintext-never-persisted invariant.
+
+### Selection Matrix (operator guidance)
+
+- Single-user developer machine: Phase 0 (DPAPI CurrentUser); zero setup.
+- Windows-native single-machine with multi-relogin: Phase 2 (Windows Credential Manager).
+- PowerShell automation + CI on the same user account: Phase 3 (SecretManagement + SecretStore).
+- Team or production with network access: Phase 4 (HashiCorp Vault) or Phase 6 (Azure Key Vault).
+- GitOps workflow with secrets in version control: Phase 5 (sops).
+
+Each phase is opt-in via secret-providers.json; the default remains Phase 0 so existing installations upgrade without reconfiguration.
+
+
+## Profile Drag Reorder (Pointer Events)
+
+The profile page supports drag-to-reorder using Pointer Events, NOT the HTML5 Drag and Drop API. Root cause: HTML5 DnD is intercepted at the OS level in WebView2, causing a persistent "forbidden" cursor and dropped events.
+
+Implementation:
+- `pointerdown` on the drag handle calls `setPointerCapture(pointerId)`, setting `dragIndex` and `isDragging`.
+- `pointermove` tracks the cursor and highlights the drop target (`dragOverIndex`).
+- `pointerup` on the handle OR on `<svelte:window>` calls `finishPointerDrag`, which splices the item into the new position and saves the order to `localStorage`.
+- `lostpointercapture` on `<svelte:window>` also calls `finishPointerDrag` (not `cancelPointerDrag`). When pointer capture is lost after release, the reorder should complete, not cancel.
+- `finishPointerDrag` is idempotent: the first call reorders; subsequent calls are no-ops because `isDragging` is false.
+
+The reorder is GUI-only: it persists to `localStorage` (key `envManager_profileOrder`) and never touches the registry or CLI. The shared helper is in `src/lib/profileDrag.ts` with full test coverage in `profile-drag.test.ts`.

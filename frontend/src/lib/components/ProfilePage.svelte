@@ -446,7 +446,7 @@
   on:pointermove={handlePointerMove}
   on:pointerup={finishPointerDrag}
   on:pointercancel={cancelPointerDrag}
-  on:lostpointercapture={cancelPointerDrag}
+  on:lostpointercapture={finishPointerDrag}
 />
 
 <div class="space-y-3">
@@ -549,6 +549,7 @@
               aria-label={$t('profiles.dragToSort')}
               data-testid={`profile-drag-handle-${i}`}
               on:pointerdown={(event) => beginPointerDrag(event, i)}
+              on:pointerup={(event) => finishPointerDrag(event)}
             >
               <svg class="w-3 h-3 pointer-events-none" draggable="false" fill="currentColor" viewBox="0 0 20 20">
                 <path d="M7 4a1 1 0 11-2 0 1 1 0 012 0zM9 4a1 1 0 11-2 0 1 1 0 012 0zM11 4a1 1 0 11-2 0 1 1 0 012 0zM13 4a1 1 0 11-2 0 1 1 0 012 0zM7 8a1 1 0 11-2 0 1 1 0 012 0zM9 8a1 1 0 11-2 0 1 1 0 012 0zM11 8a1 1 0 11-2 0 1 1 0 012 0zM13 8a1 1 0 11-2 0 1 1 0 012 0zM7 12a1 1 0 11-2 0 1 1 0 012 0zM9 12a1 1 0 11-2 0 1 1 0 012 0zM11 12a1 1 0 11-2 0 1 1 0 012 0zM13 12a1 1 0 11-2 0 1 1 0 012 0zM7 16a1 1 0 11-2 0 1 1 0 012 0zM9 16a1 1 0 11-2 0 1 1 0 012 0zM11 16a1 1 0 11-2 0 1 1 0 012 0zM13 16a1 1 0 11-2 0 1 1 0 012 0z" />
