@@ -51,7 +51,7 @@
   let newSecretValue = ''
   // v0.8 secret provider state
   let activeProvider = 'dpapi-current-user'
-  let availableProviders: string[] = ['dpapi-current-user', 'credential-manager']
+  let availableProviders: string[] = []
   let showProviderSelector = false
   // Pointer drag state remains local. Registry/profile persistence is never
   // touched by a GUI-only ordering change.
@@ -70,6 +70,21 @@
     void loadProviderInfo()
   })
 
+  // Map provider name to i18n key
+  function providerDisplayName(name: string): string {
+    const map: Record<string, string> = {
+      'dpapi-current-user': $t('secrets.providerDpapi'),
+      'credential-manager': $t('secrets.providerCredMan'),
+      'powershell-secretmanagement': $t('secrets.providerPsm'),
+      'vault-kv2': $t('secrets.providerVault'),
+      'sops': $t('secrets.providerSops'),
+      'azure-keyvault': $t('secrets.providerAzure'),
+      '1password': $t('secrets.provider1Password'),
+      'aws-secretsmanager': $t('secrets.providerAws'),
+    }
+    return map[name] ?? name
+  }
+
   async function loadProviderInfo() {
     try {
       const result = await secretProviderList()
@@ -77,6 +92,19 @@
       for (const line of lines) {
         if (line.startsWith('Active provider:')) {
           activeProvider = line.split(':')[1].trim()
+        } else if (line.trim().startsWith('dpapi-current-user') ||
+                   line.trim().startsWith('credential-manager') ||
+                   line.trim().startsWith('powershell-secretmanagement') ||
+                   line.trim().startsWith('vault-kv2') ||
+                   line.trim().startsWith('sops') ||
+                   line.trim().startsWith('azure-keyvault') ||
+                   line.trim().startsWith('1password') ||
+                   line.trim().startsWith('aws-secretsmanager')) {
+          // This is an available provider line (possibly with "(active)" suffix)
+          const name = line.trim().replace('(active)', '').trim()
+          if (name && !availableProviders.includes(name)) {
+            availableProviders = [...availableProviders, name]
+          }
         }
       }
     } catch {
@@ -183,11 +211,12 @@
     }
   }
 
-  async function handleChangeProvider() {
+  async function handleChangeProvider(newProvider: string) {
+    if (newProvider === activeProvider) return
     try {
-      const newProvider = activeProvider === 'dpapi-current-user' ? 'credential-manager' : 'dpapi-current-user'
       await secretProviderSet(newProvider)
       activeProvider = newProvider
+      showProviderSelector = false
       showMessage($t('secrets.providerChanged'), 'success')
     } catch (err) {
       showMessage(localizeError(err instanceof Error ? err.message : String(err)), 'error')
@@ -808,18 +837,27 @@
                 <!-- v0.8 secret provider indicator -->
                 <div class="flex items-center gap-1.5 mt-2">
                   <span class="text-[9px] text-gray-400 dark:text-gray-500">{$t('secrets.activeProvider')}:</span>
-                  <button
-                    type="button"
-                    class="text-[9px] px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
-                    on:click={handleChangeProvider}
-                    title={$t('secrets.changeProvider')}
-                  >
-                    {#if activeProvider === 'dpapi-current-user'}
-                      {$t('secrets.providerDpapi')}
-                    {:else}
-                      {$t('secrets.providerCredMan')}
-                    {/if}
-                  </button>
+                  {#if showProviderSelector}
+                    <select
+                      class="text-[9px] px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 border border-gray-300 dark:border-gray-600 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                      on:change={(e) => handleChangeProvider(e.currentTarget.value)}
+                    >
+                      {#each availableProviders as prov}
+                        <option value={prov} selected={prov === activeProvider}>
+                          {providerDisplayName(prov)}{prov === activeProvider ? ' (active)' : ''}
+                        </option>
+                      {/each}
+                    </select>
+                  {:else}
+                    <button
+                      type="button"
+                      class="text-[9px] px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
+                      on:click={() => (showProviderSelector = true)}
+                      title={$t('secrets.changeProvider')}
+                    >
+                      {providerDisplayName(activeProvider)}
+                    </button>
+                  {/if}
                 </div>
                 {#if !showAddSecretPanel}
                   <button
