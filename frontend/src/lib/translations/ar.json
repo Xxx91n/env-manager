@@ -256,5 +256,7 @@
   "secrets.providerPsm": "PowerShell إدارة الأسرار",
   "secrets.providerVault": "HashiCorp Vault (KV v2)",
   "secrets.providerSops": "SOPS مظاريف مشفرة",
-  "secrets.providerAzure": "Azure Key Vault"
+  "secrets.providerAzure": "Azure Key Vault",
+  "secrets.provider1Password": "1Password CLI",
+  "secrets.providerAws": "AWS Secrets Manager"
 }

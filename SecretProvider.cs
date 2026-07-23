@@ -1113,6 +1113,365 @@ internal sealed class AzureKeyVaultProvider : ISecretProvider
     }
 }
 
+// --- Phase 8: 1Password CLI Provider ---
+
+internal sealed class OnePasswordProvider : ISecretProvider
+{
+    public string Name => "1password";
+
+    // Envelope: { provider, version, createdAt, targetName (vault|itemId|field) }
+    // The actual secret value is fetched via the 1Password CLI (op) at launch time.
+
+    private static readonly string OP_BINARY = FindOpBinary();
+
+    private static string FindOpBinary()
+    {
+        string envPath = Environment.GetEnvironmentVariable("OP_PATH");
+        if (!string.IsNullOrEmpty(envPath) && File.Exists(envPath))
+            return envPath;
+
+        string[] searchDirs = (Environment.GetEnvironmentVariable("PATH") ?? "")
+            .Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries);
+        foreach (string dir in searchDirs)
+        {
+            string candidate = Path.Combine(dir.Trim('"'), "op.exe");
+            if (File.Exists(candidate)) return candidate;
+            candidate = Path.Combine(dir.Trim('"'), "op");
+            if (File.Exists(candidate)) return candidate;
+        }
+
+        string[] commonPaths = {
+            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Programs", "1Password CLI", "op.exe"),
+            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "1Password CLI", "op.exe"),
+            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86), "1Password CLI", "op.exe")
+        };
+        foreach (string p in commonPaths)
+            if (File.Exists(p)) return p;
+
+        return "op";
+    }
+
+    private static void EnsureOpAvailable()
+    {
+        var psi = new System.Diagnostics.ProcessStartInfo
+        {
+            FileName = OP_BINARY,
+            Arguments = "--version",
+            UseShellExecute = false,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            CreateNoWindow = true
+        };
+        try
+        {
+            using var proc = System.Diagnostics.Process.Start(psi);
+            if (proc == null) throw new InvalidOperationException("1Password CLI (op) binary not found");
+            proc.WaitForExit(5000);
+            if (!proc.HasExited || proc.ExitCode != 0)
+                throw new InvalidOperationException("1Password CLI (op) binary not functional");
+        }
+        catch (System.ComponentModel.Win32Exception)
+        {
+            throw new InvalidOperationException(
+                "1Password CLI (op) not found. Install op and ensure it is on PATH, or set OP_PATH env var.");
+        }
+    }
+
+    public string Encrypt(string plaintext, string? context = null)
+    {
+        EnsureOpAvailable();
+        string vaultName = Environment.GetEnvironmentVariable("OP_VAULT") ?? "EnvManager";
+        string itemName = context != null
+            ? context.Split('/')[0]
+            : "env-manager-" + Guid.NewGuid().ToString("N").Substring(0, 12);
+
+        var psi = new System.Diagnostics.ProcessStartInfo
+        {
+            FileName = OP_BINARY,
+            Arguments = "item create --category=Password --title=" + ShellQuote(itemName) + " --vault=" + ShellQuote(vaultName) + " password=" + ShellQuote(plaintext ?? "") + " --format=json",
+            UseShellExecute = false,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            CreateNoWindow = true,
+            StandardOutputEncoding = Encoding.UTF8,
+            StandardErrorEncoding = Encoding.UTF8
+        };
+
+        string[] opEnvVars = { "OP_ACCOUNT", "OP_SERVICE_ACCOUNT_TOKEN", "OP_ACCESS_TOKEN" };
+        foreach (var envVar in opEnvVars)
+        {
+            var v = Environment.GetEnvironmentVariable(envVar);
+            if (v != null) psi.EnvironmentVariables[envVar] = v;
+        }
+
+        using var proc = System.Diagnostics.Process.Start(psi);
+        if (proc == null) throw new InvalidOperationException("Failed to start op process");
+        proc.WaitForExit(30000);
+        if (!proc.HasExited) { proc.Kill(); throw new InvalidOperationException("1Password CLI timed out"); }
+        if (proc.ExitCode != 0)
+        {
+            string stderr = proc.StandardError.ReadToEnd();
+            throw new InvalidOperationException("1Password CLI create failed (exit " + proc.ExitCode + "): " + stderr);
+        }
+
+        string json = proc.StandardOutput.ReadToEnd();
+        string itemId = "";
+        try
+        {
+            using var doc = System.Text.Json.JsonDocument.Parse(json);
+            if (doc.RootElement.TryGetProperty("id", out var id)) itemId = id.GetString() ?? "";
+        }
+        catch { }
+
+        var env = new SecretEnvelope
+        {
+            Provider = Name,
+            Version = 1,
+            CreatedAt = DateTimeOffset.UtcNow.ToString("O"),
+            TargetName = vaultName + "|" + itemId + "|password"
+        };
+        return env.Serialize();
+    }
+
+    public string Decrypt(string envelope, string? context = null)
+    {
+        var parsed = SecretEnvelope.TryParse(envelope)
+            ?? throw new InvalidOperationException("Invalid secret envelope format");
+        if (parsed.Provider != Name) throw new InvalidOperationException($"Provider mismatch: expected {Name}, got {parsed.Provider}");
+        if (string.IsNullOrEmpty(parsed.TargetName)) throw new InvalidOperationException("Missing targetName in envelope");
+
+        EnsureOpAvailable();
+        var parts = parsed.TargetName.Split('|');
+        if (parts.Length < 2) throw new InvalidOperationException("Invalid targetName format, expected vault|itemId|field");
+
+        string itemId = parts[1];
+        string fieldName = parts.Length > 2 ? parts[2] : "password";
+
+        var psi = new System.Diagnostics.ProcessStartInfo
+        {
+            FileName = OP_BINARY,
+            Arguments = "item get " + ShellQuote(itemId) + " --field " + ShellQuote(fieldName) + " --reveal",
+            UseShellExecute = false,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            CreateNoWindow = true,
+            StandardOutputEncoding = Encoding.UTF8,
+            StandardErrorEncoding = Encoding.UTF8
+        };
+
+        string[] opEnvVars = { "OP_ACCOUNT", "OP_SERVICE_ACCOUNT_TOKEN", "OP_ACCESS_TOKEN" };
+        foreach (var envVar in opEnvVars)
+        {
+            var v = Environment.GetEnvironmentVariable(envVar);
+            if (v != null) psi.EnvironmentVariables[envVar] = v;
+        }
+
+        using var proc = System.Diagnostics.Process.Start(psi);
+        if (proc == null) throw new InvalidOperationException("Failed to start op process");
+        proc.WaitForExit(30000);
+        if (!proc.HasExited) { proc.Kill(); throw new InvalidOperationException("1Password CLI timed out"); }
+        if (proc.ExitCode != 0)
+        {
+            string stderr = proc.StandardError.ReadToEnd();
+            throw new InvalidOperationException("1Password CLI get failed (exit " + proc.ExitCode + "): " + stderr);
+        }
+        return proc.StandardOutput.ReadToEnd().TrimEnd();
+    }
+
+    public void Delete(string envelope, string? context = null)
+    {
+        var parsed = SecretEnvelope.TryParse(envelope);
+        if (parsed == null || string.IsNullOrEmpty(parsed.TargetName)) return;
+        try
+        {
+            EnsureOpAvailable();
+            var parts = parsed.TargetName.Split('|');
+            if (parts.Length < 2) return;
+            var psi = new System.Diagnostics.ProcessStartInfo
+            {
+                FileName = OP_BINARY,
+                Arguments = "item delete " + ShellQuote(parts[1]) + " --archive",
+                UseShellExecute = false,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                CreateNoWindow = true
+            };
+            using var proc = System.Diagnostics.Process.Start(psi);
+            if (proc != null) proc.WaitForExit(15000);
+        }
+        catch { }
+    }
+
+    public bool CanRotate => true;
+    public string Rotate(string oldEnvelope, string? context = null)
+    {
+        string plaintext = Decrypt(oldEnvelope, context);
+        Delete(oldEnvelope, context);
+        return Encrypt(plaintext, context);
+    }
+
+    private static string ShellQuote(string s)
+    {
+        // Use double-quote wrapping with internal quote doubling
+        return "\"" + (s ?? "").Replace("\"", "\\\"") + "\"";
+    }
+}
+
+// --- Phase 9: AWS Secrets Manager Provider ---
+
+internal sealed class AwsSecretsManagerProvider : ISecretProvider
+{
+    public string Name => "aws-secretsmanager";
+
+    // Envelope: { provider, version, createdAt, targetName (region|secretId) }
+    // Uses AWS SigV4 signed REST API calls. TLS mandatory (HTTPS only).
+
+    private const string SERVICE = "secretsmanager";
+    private static readonly TimeSpan Timeout = TimeSpan.FromSeconds(15);
+
+    public string Encrypt(string plaintext, string? context = null)
+    {
+        if (plaintext == null) plaintext = "";
+        string region = Environment.GetEnvironmentVariable("AWS_REGION")
+            ?? Environment.GetEnvironmentVariable("AWS_DEFAULT_REGION")
+            ?? throw new InvalidOperationException("AWS_REGION or AWS_DEFAULT_REGION not set");
+        string secretId = context != null ? SanitizeSecretId(context) : "env-manager-" + Guid.NewGuid().ToString("N").Substring(0, 12);
+
+        string body = "{\"Name\":\"" + JsonEscape(secretId) + "\",\"SecretString\":\"" + JsonEscape(plaintext) + "\"}";
+        var response = CallAwsApi(region, "secretsmanager.CreateSecret", body);
+        if (!response.IsSuccessStatusCode) throw new InvalidOperationException($"AWS create failed ({response.StatusCode}): {response.Content.ReadAsStringAsync().GetAwaiter().GetResult()}");
+
+        var env = new SecretEnvelope { Provider = Name, Version = 1, CreatedAt = DateTimeOffset.UtcNow.ToString("O"), TargetName = region + "|" + secretId };
+        return env.Serialize();
+    }
+
+    public string Decrypt(string envelope, string? context = null)
+    {
+        var parsed = SecretEnvelope.TryParse(envelope) ?? throw new InvalidOperationException("Invalid secret envelope format");
+        if (parsed.Provider != Name) throw new InvalidOperationException($"Provider mismatch: expected {Name}, got {parsed.Provider}");
+        if (string.IsNullOrEmpty(parsed.TargetName)) throw new InvalidOperationException("Missing targetName");
+
+        var parts = parsed.TargetName.Split('|');
+        if (parts.Length < 2) throw new InvalidOperationException("Invalid targetName format");
+        string region = parts[0];
+        string secretId = parts[1];
+
+        string body = "{\"SecretId\":\"" + JsonEscape(secretId) + "\"}";
+        var response = CallAwsApi(region, "secretsmanager.GetSecretValue", body);
+        if (!response.IsSuccessStatusCode) throw new InvalidOperationException($"AWS read failed ({response.StatusCode}): {response.Content.ReadAsStringAsync().GetAwaiter().GetResult()}");
+
+        string json = response.Content.ReadAsStringAsync().GetAwaiter().GetResult();
+        using var doc = System.Text.Json.JsonDocument.Parse(json);
+        if (doc.RootElement.TryGetProperty("SecretString", out var val)) return val.GetString() ?? "";
+        throw new InvalidOperationException("AWS response does not contain SecretString");
+    }
+
+    public void Delete(string envelope, string? context = null)
+    {
+        var parsed = SecretEnvelope.TryParse(envelope);
+        if (parsed == null || string.IsNullOrEmpty(parsed.TargetName)) return;
+        try
+        {
+            var parts = parsed.TargetName.Split('|');
+            if (parts.Length < 2) return;
+            string body = "{\"SecretId\":\"" + JsonEscape(parts[1]) + "\",\"ForceDeleteWithoutRecovery\":true}";
+            CallAwsApi(parts[0], "secretsmanager.DeleteSecret", body);
+        }
+        catch { }
+    }
+
+    public bool CanRotate => true;
+    public string Rotate(string oldEnvelope, string? context = null)
+    {
+        string plaintext = Decrypt(oldEnvelope, context);
+        var parsed = SecretEnvelope.TryParse(oldEnvelope);
+        if (parsed == null || string.IsNullOrEmpty(parsed.TargetName)) return Encrypt(plaintext, context);
+        var parts = parsed.TargetName.Split('|');
+        if (parts.Length < 2) return Encrypt(plaintext, context);
+        string body = "{\"SecretId\":\"" + JsonEscape(parts[1]) + "\",\"SecretString\":\"" + JsonEscape(plaintext) + "\"}";
+        var resp = CallAwsApi(parts[0], "secretsmanager.PutSecretValue", body);
+        if (!resp.IsSuccessStatusCode) throw new InvalidOperationException("AWS rotation (PutSecretValue) failed");
+        return oldEnvelope;
+    }
+
+    private static System.Net.Http.HttpResponseMessage CallAwsApi(string region, string target, string body)
+    {
+        string host = "secretsmanager." + region + ".amazonaws.com";
+        string accessKey = Environment.GetEnvironmentVariable("AWS_ACCESS_KEY_ID") ?? "";
+        string secretKey = Environment.GetEnvironmentVariable("AWS_SECRET_ACCESS_KEY") ?? "";
+        string sessionToken = Environment.GetEnvironmentVariable("AWS_SESSION_TOKEN") ?? "";
+        if (string.IsNullOrEmpty(accessKey) || string.IsNullOrEmpty(secretKey))
+            throw new InvalidOperationException("AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY required");
+
+        string amzDate = DateTimeOffset.UtcNow.ToString("yyyyMMddTHHmmssZ");
+        string dateStamp = DateTimeOffset.UtcNow.ToString("yyyyMMdd");
+        string credentialScope = dateStamp + "/" + region + "/" + SERVICE + "/aws4_request";
+
+        string canonicalHeaders = "content-type:application/x-amz-json-1.1\nhost:" + host + "\nx-amz-date:" + amzDate + "\n" +
+            (!string.IsNullOrEmpty(sessionToken) ? "x-amz-security-token:" + sessionToken + "\n" : "");
+        string signedHeaders = "content-type;host;x-amz-date" + (!string.IsNullOrEmpty(sessionToken) ? ";x-amz-security-token" : "");
+        string payloadHash = HexSHA256(body);
+        string canonicalRequest = "POST\n/\n\n" + canonicalHeaders + "\n" + signedHeaders + "\n" + payloadHash;
+        string stringToSign = "AWS4-HMAC-SHA256\n" + amzDate + "\n" + credentialScope + "\n" + HexSHA256(canonicalRequest);
+
+        byte[] kDate = HmacSHA256(Encoding.UTF8.GetBytes("AWS4" + secretKey), dateStamp);
+        byte[] kRegion = HmacSHA256(kDate, region);
+        byte[] kService = HmacSHA256(kRegion, SERVICE);
+        byte[] kSigning = HmacSHA256(kService, "aws4_request");
+        byte[] signature = HmacSHA256(kSigning, stringToSign);
+        string auth = "AWS4-HMAC-SHA256 Credential=" + accessKey + "/" + credentialScope + ", SignedHeaders=" + signedHeaders + ", Signature=" + BytesToHex(signature);
+
+        using var client = new System.Net.Http.HttpClient();
+        client.Timeout = Timeout;
+        var content = new System.Net.Http.StringContent(body, Encoding.UTF8, "application/x-amz-json-1.1");
+        content.Headers.Add("X-Amz-Target", target);
+        content.Headers.Add("X-Amz-Date", amzDate);
+        content.Headers.Add("Authorization", auth);
+        if (!string.IsNullOrEmpty(sessionToken)) content.Headers.Add("X-Amz-Security-Token", sessionToken);
+        return client.PostAsync("https://" + host + "/", content).GetAwaiter().GetResult();
+    }
+
+    private static string HexSHA256(string s)
+    {
+        using var sha = System.Security.Cryptography.SHA256.Create();
+        return BytesToHex(sha.ComputeHash(Encoding.UTF8.GetBytes(s)));
+    }
+
+    private static byte[] HmacSHA256(byte[] key, string data) => new System.Security.Cryptography.HMACSHA256(key).ComputeHash(Encoding.UTF8.GetBytes(data));
+    private static byte[] HmacSHA256(byte[] key, byte[] data) => new System.Security.Cryptography.HMACSHA256(key).ComputeHash(data);
+
+    private static string BytesToHex(byte[] bytes)
+    {
+        var sb = new StringBuilder(bytes.Length * 2);
+        foreach (byte b in bytes) sb.Append(b.ToString("x2"));
+        return sb.ToString();
+    }
+
+    private static string SanitizeSecretId(string s)
+    {
+        var sb = new StringBuilder();
+        foreach (char c in s) { if (char.IsLetterOrDigit(c) || "/_+=.@-".IndexOf(c) >= 0) sb.Append(c); else sb.Append('-'); }
+        string r = sb.ToString();
+        return r.Length > 512 ? r.Substring(0, 512) : r;
+    }
+
+    private static string JsonEscape(string s)
+    {
+        var sb = new StringBuilder();
+        foreach (char c in s) {
+            switch (c) {
+                case '"': sb.Append("\\\""); break;
+                case '\\': sb.Append("\\\\"); break;
+                case '\n': sb.Append("\\n"); break;
+                case '\r': sb.Append("\\r"); break;
+                case '\t': sb.Append("\\t"); break;
+                default: sb.Append(c); break;
+            }
+        }
+        return sb.ToString();
+    }
+}
+
 internal static class SecretProviderManager
 {
     private static readonly Dictionary<string, ISecretProvider> _providers = new(StringComparer.OrdinalIgnoreCase)
@@ -1122,7 +1481,9 @@ internal static class SecretProviderManager
         ["powershell-secretmanagement"] = new PowerShellSecretManagementProvider(),
         ["vault-kv2"] = new VaultKV2Provider(),
         ["sops"] = new SopsProvider(),
-        ["azure-keyvault"] = new AzureKeyVaultProvider()
+        ["azure-keyvault"] = new AzureKeyVaultProvider(),
+        ["1password"] = new OnePasswordProvider(),
+        ["aws-secretsmanager"] = new AwsSecretsManagerProvider()
     };
 
     private const string PROVIDER_CONFIG_FILE = "secret-providers.json";

@@ -90,7 +90,7 @@ describe('v0.7.2 Phase 6-7 secret provider implementations', () => {
     const managerSection = src.slice(src.indexOf('internal static class SecretProviderManager'))
     const providerEntries = managerSection.match(/\["\w+-?[\w-]*"\] = new \w+Provider\(\)/g)
     expect(providerEntries).not.toBeNull()
-    expect(providerEntries!.length).toBe(6)
+    expect(providerEntries!.length).toBe(8)
   })
 
   it('i18n key secrets.providerSops exists in all 10 translation files', () => {
@@ -127,4 +127,61 @@ describe('v0.7.2 Phase 6-7 secret provider implementations', () => {
     const sopsSection = src.slice(src.indexOf('class SopsProvider'), src.indexOf('class AzureKeyVaultProvider'))
     expect(sopsSection).toContain('Directory.Delete(tempDir, true)')
   })
+
+  it('Phase 8: OnePasswordProvider class exists', () => {
+    const src = readFileSync('D:/Aworker/env-manager/SecretProvider.cs', 'utf8')
+    expect(src).toContain('class OnePasswordProvider : ISecretProvider')
+    expect(src).toContain('public string Name => "1password"')
+  })
+
+  it('Phase 8: OnePasswordProvider uses CREATE_NO_WINDOW and op binary', () => {
+    const src = readFileSync('D:/Aworker/env-manager/SecretProvider.cs', 'utf8')
+    expect(src).toContain('FindOpBinary')
+    expect(src).toContain('EnsureOpAvailable')
+  })
+
+  it('Phase 8: OnePasswordProvider supports rotation', () => {
+    const src = readFileSync('D:/Aworker/env-manager/SecretProvider.cs', 'utf8')
+    const opSection = src.slice(src.indexOf('class OnePasswordProvider'), src.indexOf('class AwsSecretsManagerProvider'))
+    expect(opSection).toContain('public bool CanRotate => true')
+  })
+
+  it('Phase 9: AwsSecretsManagerProvider class exists', () => {
+    const src = readFileSync('D:/Aworker/env-manager/SecretProvider.cs', 'utf8')
+    expect(src).toContain('class AwsSecretsManagerProvider : ISecretProvider')
+    expect(src).toContain('public string Name => "aws-secretsmanager"')
+  })
+
+  it('Phase 9: AwsSecretsManagerProvider implements SigV4 signing', () => {
+    const src = readFileSync('D:/Aworker/env-manager/SecretProvider.cs', 'utf8')
+    expect(src).toContain('CallAwsApi')
+    expect(src).toContain('AWS4-HMAC-SHA256')
+    expect(src).toContain('HmacSHA256')
+  })
+
+  it('Phase 9: AwsSecretsManagerProvider uses AWS env vars', () => {
+    const src = readFileSync('D:/Aworker/env-manager/SecretProvider.cs', 'utf8')
+    expect(src).toContain('AWS_ACCESS_KEY_ID')
+    expect(src).toContain('AWS_SECRET_ACCESS_KEY')
+    expect(src).toContain('AWS_SESSION_TOKEN')
+    expect(src).toContain('AWS_REGION')
+  })
+
+  it('Total 8 providers in _providers dictionary', () => {
+    const src = readFileSync('D:/Aworker/env-manager/SecretProvider.cs', 'utf8')
+    const managerSection = src.slice(src.indexOf('internal static class SecretProviderManager'))
+    const providerEntries = managerSection.match(/\["[^"]+"\] = new \w+Provider\(\)/g)
+    expect(providerEntries).not.toBeNull()
+    expect(providerEntries!.length).toBe(8)
+  })
+
+  it('i18n keys for Phase 8-9 exist in all 10 files', () => {
+    const langs = ['en', 'zh', 'ja', 'ko', 'de', 'fr', 'es', 'pt', 'ru', 'ar']
+    for (const lang of langs) {
+      const json = JSON.parse(readFileSync(`D:/Aworker/env-manager/frontend/src/lib/translations/${lang}.json`, 'utf8'))
+      expect(json['secrets.provider1Password'], `${lang}.json missing provider1Password`).toBeTruthy()
+      expect(json['secrets.providerAws'], `${lang}.json missing providerAws`).toBeTruthy()
+    }
+  })
+
 })

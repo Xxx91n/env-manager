@@ -112,6 +112,13 @@ These invariants must never be violated by any code change:
 - **AzureKeyVaultProvider** (name: azure-keyvault): calls Azure Key Vault REST API (PUT/GET /secrets/<name>?api-version=7.4). Profile stores only vault URI + secret name as TargetName (format: vaultUri|secretName). TLS mandatory (HTTPS only). Token obtained via managed identity (IMDS 169.254.169.254) or service principal (AZURE_CLIENT_ID/AZURE_CLIENT_SECRET/AZURE_TENANT_ID). Token cached in process memory only with 5-minute expiry buffer. 15s HTTP timeout. Fail-closed on 403/404. Supports rotation. Delete issues a soft-delete. Secret names sanitized to alphanumeric + hyphens, max 127 chars.
 
 
+- **v0.7.3 Phase 8-9 1Password + AWS Secrets Manager (hard boundary)**: Two new ISecretProvider implementations:
+
+- **OnePasswordProvider** (name: 1password): shells out to the 1Password CLI (op) binary via CREATE_NO_WINDOW with 30s timeout. Profile stores vault name + item ID + field name as TargetName (format: vault|itemId|field). Binary discovered via OP_PATH env var, PATH search, or common install locations. Fail-closed if op binary missing. Supports rotation (delete + recreate). Requires OP_ACCOUNT or OP_SERVICE_ACCOUNT_TOKEN for auth. Delete archives the 1Password item.
+
+- **AwsSecretsManagerProvider** (name: aws-secretsmanager): calls AWS Secrets Manager REST API with SigV4 signed requests (AWS4-HMAC-SHA256). Profile stores region + secret ID as TargetName (format: region|secretId). TLS mandatory (HTTPS to secretsmanager.<region>.amazonaws.com). Auth via AWS_ACCESS_KEY_ID + AWS_SECRET_ACCESS_KEY + optional AWS_SESSION_TOKEN env vars. 15s HTTP timeout. Supports rotation via PutSecretValue. Delete uses ForceDeleteWithoutRecovery. Secret IDs sanitized to alphanumeric + /_+=.@- max 512 chars. Full SigV4 canonical request, string-to-sign, HMAC-SHA256 signing key chain implemented in-process (no AWS SDK dependency).
+
+
 - **`RunChangeScope` ambiguous-scope rejection**: when a variable exists in both user and system scope, the caller must specify `--scope` explicitly; auto-detection is rejected (no silent pick of user).
 - **`path dedupe` HashSet isolation**: the dedupe `seen` HashSet only records non-protected entries, so protected entries are never treated as duplicates of themselves or each other.
 - **Backup file validation**: `.json` extension required; writes to `\Windows`, `\Program Files`, `\Program Files (x86)` blocked; 50 MB cap.
