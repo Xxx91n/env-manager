@@ -252,5 +252,7 @@
   "secrets.rotateAll": "すべてのシークレットをローテーション",
   "secrets.rotateComplete": "ローテーション完了: {rotated}/{total} 個のシークレットが再暗号化され、{failed} 個が失敗しました",
   "secrets.exportSecrets": "シークレットをエクスポート",
-  "secrets.importSecrets": "シークレットをインポート"
+  "secrets.importSecrets": "シークレットをインポート",
+  "secrets.providerPsm": "PowerShell シークレット管理",
+  "secrets.providerVault": "HashiCorp Vault (KV v2)"
 }

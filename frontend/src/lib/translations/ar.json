@@ -252,5 +252,7 @@
   "secrets.rotateAll": "تدوير جميع الأسرار",
   "secrets.rotateComplete": "اكتمل التدوير: {rotated}/{total} من الأسرار أعيد تشفيرها، {failed} فشلت",
   "secrets.exportSecrets": "تصدير الأسرار",
-  "secrets.importSecrets": "استيراد الأسرار"
+  "secrets.importSecrets": "استيراد الأسرار",
+  "secrets.providerPsm": "PowerShell إدارة الأسرار",
+  "secrets.providerVault": "HashiCorp Vault (KV v2)"
 }

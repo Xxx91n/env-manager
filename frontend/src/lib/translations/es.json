@@ -252,5 +252,7 @@
   "secrets.rotateAll": "Rotar todos los secretos",
   "secrets.rotateComplete": "Rotacion completada: {rotated}/{total} secretos recifrados, {failed} fallidos",
   "secrets.exportSecrets": "Exportar secretos",
-  "secrets.importSecrets": "Importar secretos"
+  "secrets.importSecrets": "Importar secretos",
+  "secrets.providerPsm": "PowerShell SecretManagement",
+  "secrets.providerVault": "HashiCorp Vault (KV v2)"
 }

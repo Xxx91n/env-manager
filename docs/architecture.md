@@ -292,6 +292,15 @@ Phase 1 (Versioned Envelopes) and Phase 2 (Windows Credential Manager) are imple
 - **Backwards compatibility**: existing profiles with bare DPAPI base64 blobs continue to work transparently.
 
 
+
+### Phase 4-5 Implementation Status (v0.9/v1.0)
+
+Phase 4 (PowerShell SecretManagement) and Phase 5 (HashiCorp Vault KV v2) are implemented in `SecretProvider.cs`:
+
+- **PowerShellSecretManagementProvider**: delegates to `Get-Secret`/`Set-Secret`/`Remove-Secret` via hosted `pwsh` process with `CREATE_NO_WINDOW` and 30s timeout. Profile stores only vault name + secret name. Requires PowerShell 7 + Microsoft.SecretManagement + Microsoft.SecretStore modules.
+- **VaultKV2Provider**: calls Vault HTTP API (`GET`/`POST /v1/secret/data/<path>`). Profile stores only mount path + secret path + key. Token from `VAULT_TOKEN` env var. TLS mandatory for non-localhost. 10s timeout. Fail-closed on network errors.
+- Both providers registered in `SecretProviderManager._providers` alongside `dpapi-current-user` and `credential-manager`.
+- CLI: `profile secret-provider list` now shows all 4 providers; `profile secret-provider set <name>` supports all 4.
 ### Phase 3 Implementation Status (v0.8.1)
 
 Phase 3 (Key Rotation + Secret Export/Import) is also implemented in `SecretProvider.cs`:
