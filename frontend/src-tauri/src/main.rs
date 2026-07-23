@@ -112,12 +112,12 @@ fn is_read_only(command: &str, args: &[String]) -> bool {
     match command {
         "profile" => {
             match args.first().map(|s| s.as_str()) {
-                Some("list") | Some("show") | Some("status") | Some("preview") | Some("export") | Some("launch") | Some("reveal-secret") => true,
-                // secret-provider list = read; secret-provider set = write
+                Some("list") | Some("show") | Some("status") | Some("preview") | Some("export") | Some("launch") | Some("reveal-secret") | Some("export-secrets") => true,
+                // secret-provider list = read; secret-provider set/rotate = write
                 Some("secret-provider") => {
                     args.get(1).map(|s| s.as_str()) == Some("list")
                 }
-                _ => false, // create, delete, apply, unapply, add-var, remove-var, edit-var, set-launch, rename, add-secret, edit-secret, remove-secret
+                _ => false, // create, delete, apply, unapply, add-var, remove-var, edit-var, set-launch, rename, add-secret, edit-secret, remove-secret, import-secrets
             }
         }
         "path" => {

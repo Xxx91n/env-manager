@@ -248,5 +248,9 @@
   "secrets.changeProvider": "Cambiar proveedor de secretos",
   "secrets.providerDpapi": "DPAPI local (usuario actual)",
   "secrets.providerCredMan": "Administrador de credenciales de Windows",
-  "secrets.providerChanged": "Proveedor de secretos cambiado correctamente"
+  "secrets.providerChanged": "Proveedor de secretos cambiado correctamente",
+  "secrets.rotateAll": "Rotar todos los secretos",
+  "secrets.rotateComplete": "Rotacion completada: {rotated}/{total} secretos recifrados, {failed} fallidos",
+  "secrets.exportSecrets": "Exportar secretos",
+  "secrets.importSecrets": "Importar secretos"
 }

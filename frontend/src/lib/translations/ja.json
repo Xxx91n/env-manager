@@ -248,5 +248,9 @@
   "secrets.changeProvider": "シークレットプロバイダーを変更",
   "secrets.providerDpapi": "ローカル DPAPI（現在のユーザー）",
   "secrets.providerCredMan": "Windows 資格情報マネージャー",
-  "secrets.providerChanged": "シークレットプロバイダーが正常に変更されました"
+  "secrets.providerChanged": "シークレットプロバイダーが正常に変更されました",
+  "secrets.rotateAll": "すべてのシークレットをローテーション",
+  "secrets.rotateComplete": "ローテーション完了: {rotated}/{total} 個のシークレットが再暗号化され、{failed} 個が失敗しました",
+  "secrets.exportSecrets": "シークレットをエクスポート",
+  "secrets.importSecrets": "シークレットをインポート"
 }

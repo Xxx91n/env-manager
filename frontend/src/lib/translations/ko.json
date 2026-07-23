@@ -248,5 +248,9 @@
   "secrets.changeProvider": "비밀 제공자 변경",
   "secrets.providerDpapi": "로컬 DPAPI (현재 사용자)",
   "secrets.providerCredMan": "Windows 자격 증명 관리자",
-  "secrets.providerChanged": "비밀 제공자가 성공적으로 변경되었습니다"
+  "secrets.providerChanged": "비밀 제공자가 성공적으로 변경되었습니다",
+  "secrets.rotateAll": "모든 비밀 회전",
+  "secrets.rotateComplete": "회전 완료: {rotated}/{total} 비밀이 재암호화됨, {failed} 실패",
+  "secrets.exportSecrets": "비밀 내보내기",
+  "secrets.importSecrets": "비밀 가져오기"
 }

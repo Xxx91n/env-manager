@@ -248,5 +248,9 @@
   "secrets.changeProvider": "تغيير مزود الأسرار",
   "secrets.providerDpapi": "DPAPI محلي (المستخدم الحالي)",
   "secrets.providerCredMan": "مدير بيانات اعتماد Windows",
-  "secrets.providerChanged": "تم تغيير مزود الأسرار بنجاح"
+  "secrets.providerChanged": "تم تغيير مزود الأسرار بنجاح",
+  "secrets.rotateAll": "تدوير جميع الأسرار",
+  "secrets.rotateComplete": "اكتمل التدوير: {rotated}/{total} من الأسرار أعيد تشفيرها، {failed} فشلت",
+  "secrets.exportSecrets": "تصدير الأسرار",
+  "secrets.importSecrets": "استيراد الأسرار"
 }

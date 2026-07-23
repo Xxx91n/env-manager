@@ -874,6 +874,9 @@ partial class Program
             "edit-secret" => args.Length < 6 ? ArgError("Usage: env-manager profile edit-secret <profile> <old> <new> <value>") : ProfileEditSecret(args[2], args[3], args[4], args[5]),
             "remove-secret" => args.Length < 4 ? ArgError("Usage: env-manager profile remove-secret <profile> <name>") : ProfileRemoveSecret(args[2], args[3]),
             "reveal-secret" => args.Length < 4 ? ArgError("Usage: env-manager profile reveal-secret <profile> <name>") : ProfileRevealSecret(args[2], args[3]),
+            // v0.8 secret export/import subcommands
+            "export-secrets" => ProfileExportSecrets(args),
+            "import-secrets" => ProfileImportSecrets(args),
             // v0.8 secret provider management subcommands
             "secret-provider" => RunSecretProviderCommand(args),
             "help" => ShowProfileHelp(),
@@ -1211,11 +1214,83 @@ partial class Program
                     return 1;
                 }
 
+            case "rotate":
+                var profilesToRotate = LoadProfiles();
+                var (total, rotatedN, failedN) = SecretProviderManager.RotateAll(profilesToRotate);
+                if (rotatedN > 0) SaveProfiles(profilesToRotate);
+                Console.WriteLine($"Rotation complete: {rotatedN}/{total} secrets re-encrypted, {failedN} failed");
+                if (rotatedN > 0)
+                {
+                    RecordProfileAudit("profile secret-provider rotate", "(all)",
+                        JsonSerializer.Serialize(new { total, rotated = rotatedN, failed = failedN }), null);
+                }
+                return 0;
+
             default:
                 Console.Error.WriteLine($"Unknown secret-provider subcommand: {sub}");
                 return 1;
         }
     }
+
+    // v0.8 Phase 3: Export secrets from a profile to an encrypted file
+    static int ProfileExportSecrets(string[] args)
+    {
+        if (args.Length < 4)
+        {
+            Console.Error.WriteLine("Usage: env-manager profile export-secrets <profile> <output-file>");
+            return 1;
+        }
+        string profileName = args[2];
+        string outputFile = args[3];
+        var profiles = LoadProfiles();
+        var profile = FindProfile(profiles, profileName);
+        if (profile == null) { Console.Error.WriteLine($"Error: Profile '{profileName}' not found"); return 1; }
+
+        // Validate output path
+        string? pathError = ValidateFilePath(outputFile, mustExist: false);
+        if (pathError != null) { Console.Error.WriteLine($"Error: {pathError}"); return 1; }
+
+        string encrypted = SecretProviderManager.ExportSecrets(profile);
+        File.WriteAllText(outputFile, encrypted);
+        int secretCount = profile.SecretVariables.Count;
+        Console.WriteLine($"Exported {secretCount} secret(s) from profile '{profileName}' to '{outputFile}'");
+        RecordProfileAudit("profile export-secrets", profileName,
+            JsonSerializer.Serialize(new { file = outputFile, count = secretCount }), null);
+        return 0;
+    }
+
+    // v0.8 Phase 3: Import secrets from an encrypted file into a profile
+    static int ProfileImportSecrets(string[] args)
+    {
+        if (args.Length < 4)
+        {
+            Console.Error.WriteLine("Usage: env-manager profile import-secrets <profile> <input-file>");
+            return 1;
+        }
+        string profileName = args[2];
+        string inputFile = args[3];
+        var profiles = LoadProfiles();
+        var profile = FindProfile(profiles, profileName);
+        if (profile == null) { Console.Error.WriteLine($"Error: Profile '{profileName}' not found"); return 1; }
+        if (profile.IsEnabled) return ArgError("Error: Unapply the profile before importing secrets");
+
+        // Validate input path
+        string? pathError = ValidateFilePath(inputFile, mustExist: true);
+        if (pathError != null) { Console.Error.WriteLine($"Error: {pathError}"); return 1; }
+        if (!File.Exists(inputFile)) { Console.Error.WriteLine($"Error: File '{inputFile}' not found"); return 1; }
+
+        string encryptedBackup = File.ReadAllText(inputFile);
+        var results = SecretProviderManager.ImportSecrets(profile, encryptedBackup);
+        SaveProfiles(profiles);
+
+        int succeeded = results.Count(r => r.success);
+        int failedImp = results.Count(r => !r.success);
+        Console.WriteLine($"Imported {succeeded} secret(s) into profile '{profileName}', {failedImp} failed");
+        RecordProfileAudit("profile import-secrets", profileName,
+            JsonSerializer.Serialize(new { file = inputFile, imported = succeeded, failed = failedImp }), null);
+        return 0;
+    }
+
 
     static int ProfileStatus(string name)
     {
@@ -1597,7 +1672,12 @@ partial class Program
   profile edit-secret <profile> <old> <new> <val>  Rename/re-encrypt a secret; plaintext lives only in memory
   profile remove-secret <profile> <name>          Remove a secret variable from a profile
   profile reveal-secret <profile> <name>          Print one secret's plaintext to stdout (DPAPI-bound to current user only)
-  profile show <name> [--reveal]                  Show profile details (secret values masked unless --reveal; --reveal still only outputs decrypted value for the current user)");
+  profile show <name> [--reveal]                  Show profile details (secret values masked unless --reveal; --reveal still only outputs decrypted value for the current user)
+  profile export-secrets <profile> <file>          Export encrypted secrets from a profile to a file
+  profile import-secrets <profile> <file>          Import encrypted secrets from a file into a profile
+  profile secret-provider list                     List available secret providers and active selection
+  profile secret-provider set <name>               Set the active secret provider
+  profile secret-provider rotate                   Re-encrypt all secrets across all profiles with the active provider");
         return 0;
     }
 

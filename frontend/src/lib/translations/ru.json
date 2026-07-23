@@ -248,5 +248,9 @@
   "secrets.changeProvider": "Сменить провайдера секретов",
   "secrets.providerDpapi": "Локальный DPAPI (текущий пользователь)",
   "secrets.providerCredMan": "Диспетчер учетных данных Windows",
-  "secrets.providerChanged": "Провайдер секретов успешно изменен"
+  "secrets.providerChanged": "Провайдер секретов успешно изменен",
+  "secrets.rotateAll": "Ротировать все секреты",
+  "secrets.rotateComplete": "Ротация завершена: {rotated}/{total} секретов перешифровано, {failed} не удалось",
+  "secrets.exportSecrets": "Экспортировать секреты",
+  "secrets.importSecrets": "Импортировать секреты"
 }

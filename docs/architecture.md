@@ -291,6 +291,26 @@ Phase 1 (Versioned Envelopes) and Phase 2 (Windows Credential Manager) are imple
 - **GUI**: ProfilePage shows the active provider as a toggle badge; clicking switches between dpapi-current-user and credential-manager.
 - **Backwards compatibility**: existing profiles with bare DPAPI base64 blobs continue to work transparently.
 
+
+### Phase 3 Implementation Status (v0.8.1)
+
+Phase 3 (Key Rotation + Secret Export/Import) is also implemented in `SecretProvider.cs`:
+
+- **Rotation**: `SecretProviderManager.RotateAll(profiles)` iterates all profiles and all secret variables, decrypts each with its original provider, re-encrypts with the active provider. Failed decryptions are counted and skipped (not deleted). CLI: `profile secret-provider rotate`.
+- **Export**: `SecretProviderManager.ExportSecrets(profile)` serializes all secrets from a profile to JSON, DPAPI-encrypts the entire blob, and writes to a file. The export is portable within the same user account regardless of the provider used. CLI: `profile export-secrets <profile> <file>`.
+- **Import**: `SecretProviderManager.ImportSecrets(profile, encryptedBackup)` decrypts the backup with DPAPI, parses the JSON, verifies each secret by trial-decryption, then writes verified secrets to the profile. CLI: `profile import-secrets <profile> <file>`.
+- **Audit**: Rotation, export, and import all create audit entries with the operation name, file path (for export/import), and success/failure counts. No plaintext or ciphertext values are ever recorded.
+
+
+### Phase 3 Implementation Status (v0.8.1)
+
+Phase 3 (Key Rotation + Secret Export/Import) is also implemented in `SecretProvider.cs`:
+
+- **Rotation**: `SecretProviderManager.RotateAll(profiles)` iterates all profiles and all secret variables, decrypts each with its original provider, re-encrypts with the active provider. Failed decryptions are counted and skipped (not deleted). CLI: `profile secret-provider rotate`.
+- **Export**: `SecretProviderManager.ExportSecrets(profile)` serializes all secrets from a profile to JSON, DPAPI-encrypts the entire blob, and writes to a file. The export is portable within the same user account regardless of the provider used. CLI: `profile export-secrets <profile> <file>`.
+- **Import**: `SecretProviderManager.ImportSecrets(profile, encryptedBackup)` decrypts the backup with DPAPI, parses the JSON, verifies each secret by trial-decryption, then writes verified secrets to the profile. CLI: `profile import-secrets <profile> <file>`.
+- **Audit**: Rotation, export, and import all create audit entries with the operation name, file path (for export/import), and success/failure counts. No plaintext or ciphertext values are ever recorded.
+
 ### Selection Matrix (operator guidance)
 
 - Single-user developer machine: Phase 0 (DPAPI CurrentUser); zero setup.

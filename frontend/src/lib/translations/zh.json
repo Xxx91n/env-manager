@@ -248,5 +248,9 @@
   "secrets.changeProvider": "更改机密提供者",
   "secrets.providerDpapi": "本地 DPAPI（当前用户）",
   "secrets.providerCredMan": "Windows 凭据管理器",
-  "secrets.providerChanged": "机密提供者更改成功"
+  "secrets.providerChanged": "机密提供者更改成功",
+  "secrets.rotateAll": "轮换所有机密",
+  "secrets.rotateComplete": "轮换完成：{rotated}/{total} 个机密已重新加密，{failed} 个失败",
+  "secrets.exportSecrets": "导出机密",
+  "secrets.importSecrets": "导入机密"
 }

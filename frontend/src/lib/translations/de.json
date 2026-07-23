@@ -248,5 +248,9 @@
   "secrets.changeProvider": "Geheimanbieter wechseln",
   "secrets.providerDpapi": "Lokales DPAPI (Aktueller Benutzer)",
   "secrets.providerCredMan": "Windows Anmeldeinformationsverwaltung",
-  "secrets.providerChanged": "Geheimanbieter erfolgreich gewechselt"
+  "secrets.providerChanged": "Geheimanbieter erfolgreich gewechselt",
+  "secrets.rotateAll": "Alle Geheimnisse rotieren",
+  "secrets.rotateComplete": "Rotation abgeschlossen: {rotated}/{total} Geheimnisse neu verschluesselt, {failed} fehlgeschlagen",
+  "secrets.exportSecrets": "Geheimnisse exportieren",
+  "secrets.importSecrets": "Geheimnisse importieren"
 }

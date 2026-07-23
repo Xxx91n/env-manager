@@ -461,4 +461,98 @@ internal static class SecretProviderManager
         string json = JsonSerializer.Serialize(config, ProviderConfigJsonContext.Default.ProviderConfig);
         File.WriteAllText(GetConfigPath(), json);
     }
+
+    // Phase 3: Key Rotation - re-encrypt all secrets in all profiles with the active provider
+    // Returns (totalSecrets, rotatedCount, failedCount)
+    public static (int total, int rotated, int failed) RotateAll(System.Collections.Generic.List<ProfileData> profiles)
+    {
+        var provider = GetActiveProvider();
+        int total = 0, rotated = 0, failed = 0;
+
+        foreach (var profile in profiles)
+        {
+            foreach (var v in profile.Variables)
+            {
+                if (!profile.SecretVariables.Any(s => s.Equals(v.Name, StringComparison.OrdinalIgnoreCase)))
+                    continue;
+                total++;
+                try
+                {
+                    // Decrypt with whatever provider encrypted it
+                    string plaintext = Decrypt(v.Value, profile.Name + "\\" + v.Name);
+                    // Re-encrypt with the active provider
+                    v.Value = Encrypt(plaintext, profile.Name + "\\" + v.Name);
+                    rotated++;
+                }
+                catch
+                {
+                    // Decryption failed (wrong provider, deleted CredMan entry, etc.)
+                    failed++;
+                }
+            }
+        }
+        return (total, rotated, failed);
+    }
+
+    // Phase 3: Export secrets from a profile to an encrypted backup file
+    // The backup is itself DPAPI-encrypted (CurrentUser scope) regardless of the provider,
+    // so the backup is portable within the same user account.
+    public static string ExportSecrets(ProfileData profile)
+    {
+        var secretsToExport = new System.Collections.Generic.List<(string name, string envelope)>();
+        foreach (var v in profile.Variables)
+        {
+            if (profile.SecretVariables.Any(s => s.Equals(v.Name, StringComparison.OrdinalIgnoreCase)))
+            {
+                secretsToExport.Add((v.Name, v.Value));
+            }
+        }
+        var exportData = new
+        {
+            profileName = profile.Name,
+            exportedAt = DateTimeOffset.UtcNow.ToString("O"),
+            secrets = secretsToExport.Select(s => new { name = s.name, envelope = s.envelope }).ToList()
+        };
+        string json = System.Text.Json.JsonSerializer.Serialize(exportData, new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
+        return DpapiHelper.EncryptSecret(json);
+    }
+
+    // Phase 3: Import secrets from an encrypted backup into a profile
+    // Returns list of (name, success) tuples
+    public static System.Collections.Generic.List<(string name, bool success)> ImportSecrets(ProfileData profile, string encryptedBackup)
+    {
+        var results = new System.Collections.Generic.List<(string, bool)>();
+        // Decrypt the backup (DPAPI CurrentUser - same user that exported it)
+        string json = DpapiHelper.DecryptSecret(encryptedBackup);
+        using var doc = System.Text.Json.JsonDocument.Parse(json);
+        var secrets = doc.RootElement.GetProperty("secrets");
+        foreach (var secret in secrets.EnumerateArray())
+        {
+            string name = secret.GetProperty("name").GetString() ?? "";
+            string envelope = secret.GetProperty("envelope").GetString() ?? "";
+            if (string.IsNullOrEmpty(name))
+            {
+                results.Add((name, false));
+                continue;
+            }
+            try
+            {
+                // Verify the envelope can be decrypted by trying to decrypt it
+                _ = Decrypt(envelope, profile.Name + "\\" + name);
+
+                // Remove existing variable with same name, then add the imported one
+                profile.Variables.RemoveAll(x => x.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
+                profile.Variables.Add(new ProfileVariable { Name = name, Value = envelope });
+                if (!profile.SecretVariables.Any(s => s.Equals(name, StringComparison.OrdinalIgnoreCase)))
+                    profile.SecretVariables.Add(name);
+
+                results.Add((name, true));
+            }
+            catch
+            {
+                results.Add((name, false));
+            }
+        }
+        return results;
+    }
 }

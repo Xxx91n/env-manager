@@ -1132,3 +1132,29 @@ export async function secretProviderList(): Promise<string> {
 export async function secretProviderSet(providerName: string): Promise<string> {
   return await runWrite('profile', ['secret-provider', 'set', providerName])
 }
+
+// --- v0.8 Phase 3: Secret Export/Import ---
+
+/**
+ * Exports secrets from a profile to an encrypted backup file.
+ * CLI: `profile export-secrets <profile> <output-file>`
+ */
+export async function profileExportSecrets(profileName: string, outputFile: string): Promise<string> {
+  return await runRead('profile', ['export-secrets', profileName, outputFile])
+}
+
+/**
+ * Imports secrets from an encrypted backup file into a profile.
+ * CLI: `profile import-secrets <profile> <input-file>`
+ */
+export async function profileImportSecrets(profileName: string, inputFile: string): Promise<string> {
+  return await runWrite('profile', ['import-secrets', profileName, inputFile])
+}
+
+/**
+ * Rotates (re-encrypts) all secrets across all profiles with the active provider.
+ * CLI: `profile secret-provider rotate`
+ */
+export async function secretProviderRotate(): Promise<string> {
+  return await runWrite('profile', ['secret-provider', 'rotate'])
+}
