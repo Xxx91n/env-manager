@@ -383,11 +383,25 @@
 
   function updateDragTarget(clientX: number, clientY: number): void {
     if (!isDragging) return
-    const target = document.elementFromPoint(clientX, clientY)?.closest<HTMLElement>('[data-profile-index]')
-    const rawIndex = target?.dataset.profileIndex
-    if (rawIndex === undefined) return
+    // Temporarily hide the dragged element so elementFromPoint can see through it
+    const draggedEl = document.querySelector('[data-profile-index="' + dragIndex + '"]') as HTMLElement | null
+    let prevPointerEvents = ''
+    if (draggedEl) {
+      prevPointerEvents = draggedEl.style.pointerEvents
+      draggedEl.style.pointerEvents = 'none'
+    }
+    const el = document.elementFromPoint(clientX, clientY)
+    if (draggedEl) {
+      draggedEl.style.pointerEvents = prevPointerEvents
+    }
+    const target = el?.closest<HTMLElement>('[data-profile-index]')
+    if (!target) return
+    const rawIndex = target.dataset.profileIndex
+    if (rawIndex === undefined || rawIndex === null || rawIndex === '') return
     const nextIndex = Number(rawIndex)
-    if (Number.isInteger(nextIndex)) dragOverIndex = nextIndex
+    if (Number.isInteger(nextIndex) && nextIndex >= 0 && nextIndex < profileList.length) {
+      dragOverIndex = nextIndex
+    }
   }
 
   function handlePointerMove(event: PointerEvent): void {
@@ -404,8 +418,8 @@
   function beginPointerDrag(event: PointerEvent, index: number): void {
     if (event.button !== 0) return
     event.preventDefault()
-    const handle = event.currentTarget as HTMLElement
-    handle.setPointerCapture(event.pointerId)
+    // Do NOT use setPointerCapture here - it hijacks elementFromPoint results
+    // svelte:window already captures pointermove/pointerup globally
     dragIndex = index
     dragOverIndex = index
     isDragging = true

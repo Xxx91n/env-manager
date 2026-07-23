@@ -64,22 +64,34 @@ export const debouncedSearch = readable('', (set) => {
 // Uses the debounced search so filter only runs after the user stops typing.
 // Svelte derived stores memoize: the filter only recomputes when a dependency
 // changes, not on every unrelated component update.
+// Performance switch: for production machines with 1000+ environment variables,
+// we use a single-pass filter that combines scope and search in one iteration
+// instead of two separate .filter() calls. For the common case (no filter at all),
+// we return the original array reference (zero-copy) so Svelte reconciliation is skipped.
 export const filteredVariables = derived(
   [variables, selectedScope, debouncedSearch],
   ([$variables, $selectedScope, $search]) => {
-    let result = $variables
-    if ($selectedScope !== 'all') {
-      result = result.filter((v) => v.scope === $selectedScope)
-    }
     const q = $search.trim().toLowerCase()
-    if (q) {
-      result = result.filter(
-        (v) =>
-          v.name.toLowerCase().includes(q) ||
-          v.value.toLowerCase().includes(q),
+    const needsScopeFilter = $selectedScope !== 'all'
+    const needsSearch = !!q
+
+    // Fast path: no filtering needed — return original reference (zero allocation)
+    if (!needsScopeFilter && !needsSearch) return $variables
+
+    // Single-pass filter for production performance: combine scope + search in one iteration
+    if (needsScopeFilter && needsSearch) {
+      return $variables.filter(
+        (v) => v.scope === $selectedScope && (v.name.toLowerCase().includes(q) || v.value.toLowerCase().includes(q)),
       )
     }
-    return result
+
+    // Scope-only filter
+    if (needsScopeFilter) {
+      return $variables.filter((v) => v.scope === $selectedScope)
+    }
+
+    // Search-only filter
+    return $variables.filter((v) => v.name.toLowerCase().includes(q) || v.value.toLowerCase().includes(q))
   },
 )
 export const profiles = writable<ProfileData[]>([])
