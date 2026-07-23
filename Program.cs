@@ -78,7 +78,7 @@ partial class Program
                 if (!File.Exists(file)) return new();
                 return JsonSerializer.Deserialize<List<string>>(File.ReadAllText(file), JsonOpts) ?? new();
             }
-            catch { return new(); }
+            catch (Exception ex) { DebugLog("Warning: corrupt protection config, using defaults: " + ex.GetType().Name); return new(); }
         }
     }
 
@@ -114,7 +114,7 @@ partial class Program
                 if (!File.Exists(file)) return new();
                 return JsonSerializer.Deserialize<List<string>>(File.ReadAllText(file), JsonOpts) ?? new();
             }
-            catch { return new(); }
+            catch (Exception ex) { DebugLog("Warning: corrupt protection config, using defaults: " + ex.GetType().Name); return new(); }
         }
     }
 
@@ -1251,7 +1251,9 @@ partial class Program
         if (pathError != null) { Console.Error.WriteLine($"Error: {pathError}"); return 1; }
 
         string encrypted = SecretProviderManager.ExportSecrets(profile);
-        File.WriteAllText(outputFile, encrypted);
+        string tmpExport = outputFile + ".tmp." + Environment.ProcessId;
+        File.WriteAllText(tmpExport, encrypted, new System.Text.UTF8Encoding(false));
+        File.Move(tmpExport, outputFile, true);
         int secretCount = profile.SecretVariables.Count;
         Console.WriteLine($"Exported {secretCount} secret(s) from profile '{profileName}' to '{outputFile}'");
         RecordProfileAudit("profile export-secrets", profileName,
@@ -1345,7 +1347,9 @@ partial class Program
         };
 
         string json = JsonSerializer.Serialize(exportData, JsonOptsIndented);
-        File.WriteAllText(outputPath, json);
+        string tmpExport = outputPath + ".tmp." + Environment.ProcessId;
+        File.WriteAllText(tmpExport, json, new System.Text.UTF8Encoding(false));
+        File.Move(tmpExport, outputPath, true);
         Console.WriteLine($"Exported profile '{profileName}' to {outputPath}");
         return 0;
     }
@@ -2627,7 +2631,9 @@ partial class Program
         catch (UnauthorizedAccessException) { }
 
         var json = JsonSerializer.Serialize(backup, JsonOptsIndented);
-        File.WriteAllText(outputPath, json);
+        string tmpBackup = outputPath + ".tmp." + Environment.ProcessId;
+        File.WriteAllText(tmpBackup, json, new System.Text.UTF8Encoding(false));
+        File.Move(tmpBackup, outputPath, true);
         Console.WriteLine($"Backup created: {outputPath} ({backup.Variables.Count} variables)");
     }
 
@@ -2748,7 +2754,9 @@ partial class Program
             Variables = merged.Values.ToList()
         };
 
-        File.WriteAllText(outFull, JsonSerializer.Serialize(result, JsonOptsIndented));
+        string tmpMerge = outFull + ".tmp." + Environment.ProcessId;
+        File.WriteAllText(tmpMerge, JsonSerializer.Serialize(result, JsonOptsIndented), new System.Text.UTF8Encoding(false));
+        File.Move(tmpMerge, outFull, true);
         Console.WriteLine($"Merged: {outFull} ({result.Variables.Count} variables)");
         return 0;
     }

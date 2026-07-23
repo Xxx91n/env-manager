@@ -2,7 +2,7 @@
   import { createEventDispatcher, onMount } from 'svelte'
   import { t, locale } from 'svelte-i18n'
   import { locales, defaultLanguage } from '../i18n'
-  import { updateTrayLocale, isCliInPath, addCliToPath, removeCliFromPath, checkForUpdates, bulkImport, bulkExport, pickOpenFile, pickSaveFile } from '../api'
+  import { updateTrayLocale, isCliInPath, addCliToPath, removeCliFromPath, listPathEntries, checkForUpdates, bulkImport, bulkExport, pickOpenFile, pickSaveFile } from '../api'
   import { get } from 'svelte/store'
   import { showToast } from '../stores'
   import { t as tStore } from 'svelte-i18n'
@@ -78,28 +78,29 @@
     try {
       if (cliInPath) {
         const result = await removeCliFromPath()
-        // Immediately re-check real PATH to update toggle state
         cliInPath = await isCliInPath()
         if (result.removed || !cliInPath) {
           showToast(get(tStore)('settings.cliRemoved'), 'success')
         } else {
-          showToast(get(tStore)('settings.cliRemoveFailed'), 'error')
+          showToast(get(tStore)('settings.cliRemoveFailed') + ': ' + result.message, 'error')
         }
       } else {
         const result = await addCliToPath()
-        // Immediately re-check real PATH to update toggle state
+        // Force refresh PATH cache to see the new entry
+        await listPathEntries('user', true)
         cliInPath = await isCliInPath()
         if (result.added || cliInPath) {
           showToast(get(tStore)('settings.cliAdded'), 'success')
+          dispatch('refresh')
         } else {
-          showToast(get(tStore)('settings.cliAddFailed'), 'error')
+          showToast(get(tStore)('settings.cliAddFailed') + ': ' + result.message, 'error')
         }
       }
+    } catch (err) {
+      showToast(get(tStore)('settings.cliAddFailed') + ': ' + (err instanceof Error ? err.message : String(err)), 'error')
     } finally {
       cliToggleLoading = false
     }
-    // Notify parent to refresh all views (PATH entries changed)
-    dispatch('pathChanged')
   }
 
   function changeFontScale(scale: number) {
