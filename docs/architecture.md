@@ -320,6 +320,19 @@ Phase 3 (Key Rotation + Secret Export/Import) is also implemented in `SecretProv
 - **Import**: `SecretProviderManager.ImportSecrets(profile, encryptedBackup)` decrypts the backup with DPAPI, parses the JSON, verifies each secret by trial-decryption, then writes verified secrets to the profile. CLI: `profile import-secrets <profile> <file>`.
 - **Audit**: Rotation, export, and import all create audit entries with the operation name, file path (for export/import), and success/failure counts. No plaintext or ciphertext values are ever recorded.
 
+### Phase 6-7 Implementation Status (v0.7.2)
+
+Phase 6 (SOPS Encrypted Envelopes) and Phase 7 (Azure Key Vault) are implemented in `SecretProvider.cs`:
+
+- **SopsProvider**: shells out to a verified `sops` binary (`-e`/`-d`) under `CREATE_NO_WINDOW` with 30s timeout. The profile stores the full sops-encrypted JSON as the envelope `ciphertext` field. Supports Age, PGP, AWS KMS, Azure Key Vault, GCP KMS, and HashiCorp Vault decryptors via sops env vars (`SOPS_AGE_RECIPIENT`, `SOPS_AGE_KEY_FILE`, `SOPS_PGP_FP`, `SOPS_KMS_ARN`, etc.). Binary is discovered via `SOPS_PATH` env var, PATH search, or common install locations. Fail-closed if sops binary is missing or non-functional. Temp files are created in a per-operation isolated directory and securely cleaned up in a finally block.
+- **AzureKeyVaultProvider**: calls Azure Key Vault REST API (`PUT`/`GET /secrets/<name>?api-version=7.4`). Profile stores only vault URI + secret name as `TargetName` (format: `vaultUri|secretName`). TLS mandatory (HTTPS only). Token obtained via managed identity (IMDS `169.254.169.254`) or service principal (`AZURE_CLIENT_ID`/`AZURE_CLIENT_SECRET`/`AZURE_TENANT_ID`). Token cached in process memory only with 5-minute expiry buffer. 15s HTTP timeout. Fail-closed on 403/404. Supports rotation (decrypt + re-encrypt). Delete issues a soft-delete via DELETE API.
+- Both providers registered in `SecretProviderManager._providers` alongside the existing 4 providers (total 6).
+- CLI: `profile secret-provider list` now shows all 6 providers; `profile secret-provider set <name>` supports all 6.
+- **Secret name sanitization**: Azure Key Vault secret names are restricted to alphanumeric and hyphens, max 127 chars. Non-conforming characters are replaced with hyphens.
+- **No new CLI commands**: the existing `profile secret-provider list/set/rotate` and `profile export-secrets/import-secrets` work transparently with the new providers.
+- Audit: rotation records provider name and counts. No plaintext or ciphertext values are ever recorded.
+
+
 ### Selection Matrix (operator guidance)
 
 - Single-user developer machine: Phase 0 (DPAPI CurrentUser); zero setup.

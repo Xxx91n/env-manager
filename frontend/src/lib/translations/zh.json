@@ -254,5 +254,7 @@
   "secrets.exportSecrets": "导出机密",
   "secrets.importSecrets": "导入机密",
   "secrets.providerPsm": "PowerShell 机密管理",
-  "secrets.providerVault": "HashiCorp Vault (KV v2)"
+  "secrets.providerVault": "HashiCorp Vault (KV v2)",
+  "secrets.providerSops": "SOPS 加密信封",
+  "secrets.providerAzure": "Azure 密钥保管库"
 }

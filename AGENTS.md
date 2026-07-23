@@ -101,8 +101,15 @@ These invariants must never be violated by any code change:
 
 - **PowerShellSecretManagementProvider** (name: powershell-secretmanagement): delegates encryption to PowerShell Set-Secret and decryption to Get-Secret via a hosted pwsh process with CREATE_NO_WINDOW. The profile stores only the vault name and secret name in the envelope TargetName; the actual secret value lives in the PowerShell SecretManagement vault. Requires PowerShell 7 + Microsoft.SecretManagement + Microsoft.SecretStore modules installed. Fail-closed if pwsh is not found or exits non-zero. The 30-second process timeout prevents indefinite hangs.
 
-- **VaultKV2Provider** (name: ault-kv2): reads/writes secrets via the Vault HTTP API (POST /v1/secret/data/<path> and GET /v1/secret/data/<path>). The profile stores only the mount path, secret path, and key name in the envelope TargetName. Token is read from VAULT_TOKEN env var (never persisted). TLS is mandatory: VAULT_ADDR must use https:// for non-localhost addresses; http:// is only permitted for 127.0.0.1/localhost/[::1]. Fail-closed on network errors, 403/404, or timeout (10s). The CLI does not cache decrypted material beyond the launcher process lifetime.
+- **VaultKV2Provider** (name: vault-kv2): reads/writes secrets via the Vault HTTP API (POST /v1/secret/data/<path> and GET /v1/secret/data/<path>). The profile stores only the mount path, secret path, and key name in the envelope TargetName. Token is read from VAULT_TOKEN env var (never persisted). TLS is mandatory: VAULT_ADDR must use https:// for non-localhost addresses; http:// is only permitted for 127.0.0.1/localhost/[::1]. Fail-closed on network errors, 403/404, or timeout (10s). The CLI does not cache decrypted material beyond the launcher process lifetime.
 
+
+
+- **v0.7.2 Phase 6-7 SOPS + Azure Key Vault (hard boundary)**: Two new ISecretProvider implementations are registered in SecretProviderManager:
+
+- **SopsProvider** (name: sops): shells out to a verified sops binary (-e/-d) under CREATE_NO_WINDOW with 30s timeout. The profile stores the full sops-encrypted JSON as the envelope ciphertext field. Supports Age, PGP, AWS KMS, Azure Key Vault, GCP KMS, and HashiCorp Vault decryptors via sops env vars. Binary is discovered via SOPS_PATH env var, PATH search, or common install locations. Fail-closed if sops binary is missing or non-functional. Temp files are created in a per-operation isolated directory and securely cleaned up in a finally block. The envelope is self-contained; Delete is a no-op.
+
+- **AzureKeyVaultProvider** (name: azure-keyvault): calls Azure Key Vault REST API (PUT/GET /secrets/<name>?api-version=7.4). Profile stores only vault URI + secret name as TargetName (format: vaultUri|secretName). TLS mandatory (HTTPS only). Token obtained via managed identity (IMDS 169.254.169.254) or service principal (AZURE_CLIENT_ID/AZURE_CLIENT_SECRET/AZURE_TENANT_ID). Token cached in process memory only with 5-minute expiry buffer. 15s HTTP timeout. Fail-closed on 403/404. Supports rotation. Delete issues a soft-delete. Secret names sanitized to alphanumeric + hyphens, max 127 chars.
 
 
 - **`RunChangeScope` ambiguous-scope rejection**: when a variable exists in both user and system scope, the caller must specify `--scope` explicitly; auto-detection is rejected (no silent pick of user).

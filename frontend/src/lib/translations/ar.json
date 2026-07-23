@@ -254,5 +254,7 @@
   "secrets.exportSecrets": "تصدير الأسرار",
   "secrets.importSecrets": "استيراد الأسرار",
   "secrets.providerPsm": "PowerShell إدارة الأسرار",
-  "secrets.providerVault": "HashiCorp Vault (KV v2)"
+  "secrets.providerVault": "HashiCorp Vault (KV v2)",
+  "secrets.providerSops": "SOPS مظاريف مشفرة",
+  "secrets.providerAzure": "Azure Key Vault"
 }

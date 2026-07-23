@@ -254,5 +254,7 @@
   "secrets.exportSecrets": "シークレットをエクスポート",
   "secrets.importSecrets": "シークレットをインポート",
   "secrets.providerPsm": "PowerShell シークレット管理",
-  "secrets.providerVault": "HashiCorp Vault (KV v2)"
+  "secrets.providerVault": "HashiCorp Vault (KV v2)",
+  "secrets.providerSops": "SOPS 暗号化エンベロープ",
+  "secrets.providerAzure": "Azure Key Vault"
 }

@@ -254,5 +254,7 @@
   "secrets.exportSecrets": "Geheimnisse exportieren",
   "secrets.importSecrets": "Geheimnisse importieren",
   "secrets.providerPsm": "PowerShell Geheimverwaltung",
-  "secrets.providerVault": "HashiCorp Vault (KV v2)"
+  "secrets.providerVault": "HashiCorp Vault (KV v2)",
+  "secrets.providerSops": "SOPS Verschlüsselte Umschläge",
+  "secrets.providerAzure": "Azure Key Vault"
 }

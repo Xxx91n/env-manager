@@ -254,5 +254,7 @@
   "secrets.exportSecrets": "비밀 내보내기",
   "secrets.importSecrets": "비밀 가져오기",
   "secrets.providerPsm": "PowerShell 비밀 관리",
-  "secrets.providerVault": "HashiCorp Vault (KV v2)"
+  "secrets.providerVault": "HashiCorp Vault (KV v2)",
+  "secrets.providerSops": "SOPS 암호화 엔벨로프",
+  "secrets.providerAzure": "Azure Key Vault"
 }
