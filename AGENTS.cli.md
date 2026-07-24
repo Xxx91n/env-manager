@@ -48,7 +48,7 @@ All commands: `env-manager-cli <command> [args] [--scope user|system] [--debug]`
 
 ### Profile Subcommands
 
-`profile list | create <name> [--type global|launch] [--target <exe>] [--args <args>] [--cwd <dir>] | delete <name> | show <name> | apply <name> | unapply <name> | add-var <profile> <name> <val> | remove-var <profile> <name> | edit-var <profile> <old> <new> <val> | status <name>`
+`profile list | create <name> [--type global|launch] [--target <exe>] [--args <args>] [--cwd <dir>] | delete <name> | show <name> | apply <name> | unapply <name> | add-var <profile> <name> <val> [--scope user|system] | add-path <profile> <dir> [--scope user|system] | remove-path <profile> <dir> | remove-var <profile> <name> | edit-var <profile> <old> <new> <val> | status <name>`
 
 ### Path Subcommands
 

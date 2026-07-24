@@ -26,7 +26,9 @@ All commands follow: `env-manager-cli <command> [arguments] [--flags]`
 | `profile show` | `profile show <name>` | Show profile details (JSON) |
 | `profile apply` | `profile apply <name>` | Apply a profile (backs up existing user vars) |
 | `profile unapply` | `profile unapply <name>` | Unapply a profile (restores backed-up user vars) |
-| `profile add-var` | `profile add-var <profile> <name> <val>` | Add a variable to a profile |
+| `profile add-var` | `profile add-var <profile> <name> <val> [--scope user|system]` | Add a variable to a profile (v0.7.1: optional scope routes the variable to user or system on apply; default user) |
+| `profile add-path` | `profile add-path <profile> <dir> [--scope user|system]` | Add a PATH entry to a profile (v0.7.1: optional scope stored per-entry; default user) |
+| `profile remove-path` | `profile remove-path <profile> <dir>` | Remove a PATH entry from a profile |
 | `profile remove-var` | `profile remove-var <profile> <name>` | Remove a variable from a profile |
 | `profile edit-var` | `profile edit-var <profile> <old> <new> <val>` | Edit a variable in a profile |
 | `profile status` | `profile status <name>` | Check profile application status (JSON) |

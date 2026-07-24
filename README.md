@@ -78,7 +78,9 @@ env-manager-cli.exe profile list
 env-manager-cli.exe profile create dev-profile
 # Create an isolated profile for one executable
 env-manager-cli.exe profile create tool-run --type launch --target "C:\Tools\tool.exe"
-env-manager-cli.exe profile add-var dev-profile JAVA_HOME "D:\jdk17"
+env-manager-cli.exe profile add-var dev-profile JAVA_HOME "D:\jdk17"env-manager-cli.exe profile add-var dev-profile JAVA_HOME "D:\jdk17"
+# Scope: default user; --scope system routes to HKLM on apply
+env-manager-cli.exe profile add-path dev-profile "C:\Tools\bin" --scope user
 env-manager-cli.exe profile apply dev-profile
 env-manager-cli.exe profile unapply dev-profile
 env-manager-cli.exe profile delete dev-profile

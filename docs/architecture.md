@@ -127,7 +127,7 @@ Per-app launch profiles extend the profile system without modifying existing Glo
 
 **WARNING: When adding or changing GUI features, you MUST verify the CLI has matching support.** The GUI communicates with the CLI exclusively through `invoke('run_cli', { command, args })`. Every GUI action maps to a CLI command. If a GUI feature is added without CLI support, it will fail at runtime with "Unknown command".
 
-### Current Alignment Status (v0.7.0)
+### Current Alignment Status (v0.7.1)
 
 | GUI Feature | CLI Command | API Function | Aligned |
 |---|---|---|---|
@@ -145,6 +145,8 @@ Per-app launch profiles extend the profile system without modifying existing Glo
 | Profile unapply | `profile unapply` | `unapplyProfile()` | Yes |
 | Profile show | `profile show` | `showProfile()` | Yes |
 | Profile add-var | `profile add-var` | `addProfileVar()` | Yes |
+| Profile add-path | `profile add-path` | `addProfilePath()` | Yes |
+| Profile remove-path | `profile remove-path` | `removeProfilePath()` | Yes |
 | Profile remove-var | `profile remove-var` | `removeProfileVar()` | Yes |
 | Profile edit-var | `profile edit-var` | `editProfileVar()` | Yes |
 | Profile status | `profile status` | `getProfileStatus()` | Yes |
@@ -169,6 +171,7 @@ Per-app launch profiles extend the profile system without modifying existing Glo
 | v0.7.0 Profile set-launch | `profile set-launch` | `profileSetLaunch()` + type badge + Create bar type selector | Yes (CLI/API/GUI) |
 | v0.7.0 Profile launch (isolated env spawn) | `profile launch` | `profileLaunch()` + Launch button + browse target | Yes (CLI/API/GUI) |
 | v0.7.0 Variable conflict confirmation modal | `set --overwrite` strictly enforced | (reuse) EditDialog Save + conflictConfirm | Yes (CLI/GUI) |
+| v0.7.1 Profile var/path scope selector | `profile add-var/add-path --scope` | `addProfileVar()`/`addProfilePath()` with scope param + ProfilePage scope `<select>` | Yes (CLI/API/GUI) |
 
 ### Alignment Checklist
 

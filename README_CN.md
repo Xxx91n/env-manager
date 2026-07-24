@@ -78,6 +78,8 @@ env-manager-cli.exe profile create dev-profile
 # 为单个程序创建隔离环境配置
 env-manager-cli.exe profile create tool-run --type launch --target "C:\Tools\tool.exe"
 env-manager-cli.exe profile add-var dev-profile JAVA_HOME "D:\jdk17"
+# 作用域默认为用户；--scope system 在 apply 时写入系统 HKLM
+env-manager-cli.exe profile add-path dev-profile "C:\Tools\bin" --scope user
 env-manager-cli.exe profile apply dev-profile
 env-manager-cli.exe profile unapply dev-profile
 env-manager-cli.exe profile delete dev-profile
@@ -159,6 +161,7 @@ powershell -ExecutionPolicy Bypass -File scripts/build-all.ps1
 | `profile apply` | `profile apply <name>` | 应用配置文件（备份现有变量） |
 | `profile unapply` | `profile unapply <name>` | 取消应用（恢复原始变量） |
 | `profile add-var` | `profile add-var <profile> <name> <val>` | 向配置文件添加变量 |
+| `profile add-path` | `profile add-path <profile> <dir> [--scope user\|system]` | 向配置文件添加 PATH 条目 |
 | `path list` | `path list [--scope]` | 列出 PATH 条目 |
 | `path add` | `path add <dir> [--scope]` | 添加目录到 PATH |
 | `path remove` | `path remove <dir> [--scope]` | 从 PATH 移除目录 |
