@@ -296,6 +296,7 @@
   "profiles.typeLocal": "محلي",
   "profiles.typeLocalDesc": "تنطبق المتغيرات على تطبيق محلي يُطلق من هذا الملف",
   "profiles.localLaunch": "تشغيل محلياً",
+  "profiles.launchApplyDisabled": "الملفات المحلية تحقن بيئة معزولة عبر إطلاق ولا يمكن تطبيقها على السجل",
   "messages.profileNotLocal": "فقط الملفات المحلية يمكن تشغيلها محلياً",
   "messages.profileLocalLaunched": "تم تشغيل الملف محلياً",
   "profiles.localTarget": "الملف التنفيذي الهدف",

@@ -296,6 +296,7 @@
   "profiles.typeLocal": "로컬",
   "profiles.typeLocalDesc": "이 프로필에서 실행된 로컬 앱에만 적용",
   "profiles.localLaunch": "로컬 실행",
+  "profiles.launchApplyDisabled": "로컬 프로필은 시작 을 통해 격리된 환경을 주입하므로 레지스트리에 적용할 수 없습니다",
   "messages.profileNotLocal": "로컬 프로필만 로컬로 실행 가능",
   "messages.profileLocalLaunched": "프로필이 로컬로 실행되었습니다",
   "profiles.localTarget": "대상 실행 파일",

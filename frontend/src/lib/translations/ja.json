@@ -296,6 +296,7 @@
   "profiles.typeLocal": "局所",
   "profiles.typeLocalDesc": "このプロファイルから起動した局所アプリにのみ適用",
   "profiles.localLaunch": "局所起動",
+  "profiles.launchApplyDisabled": "ローカルプロファイルは 起動 で隔離された環境を注入するため、レジストリに適用できません",
   "messages.profileNotLocal": "局所プロファイルのみ起動可能",
   "messages.profileLocalLaunched": "プロファイルが局所起動されました",
   "profiles.localTarget": "対象実行ファイル",

@@ -296,6 +296,7 @@
   "profiles.typeLocal": "局部",
   "profiles.typeLocalDesc": "变量只对该配置文件局部启动的软件生效",
   "profiles.localLaunch": "局部启动",
+  "profiles.launchApplyDisabled": "局部配置文件通过 启动 注入隔离环境，不能写入注册表",
   "messages.profileNotLocal": "只有局部配置文件才能局部启动",
   "messages.profileLocalLaunched": "配置文件已局部启动",
   "profiles.localTarget": "目标可执行文件",

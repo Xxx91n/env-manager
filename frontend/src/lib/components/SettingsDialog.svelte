@@ -74,7 +74,6 @@
   async function toggleCliInPath() {
     if (cliToggleLoading) return
     cliToggleLoading = true
-    cliMessage = ''
     try {
       if (cliInPath) {
         const result = await removeCliFromPath()

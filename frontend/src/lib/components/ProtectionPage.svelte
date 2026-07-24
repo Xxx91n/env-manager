@@ -31,25 +31,36 @@
     loading = true
     try {
       data = await listProtection()
-      // Load all available vars and path entries in parallel using cached data
-      // (caches are invalidated after writes, so data is always fresh post-mutation)
+      // Per-call timeout helper: a single slow call (e.g. HKLM access denied,
+      // or a UNC PATH entry stalling Directory.Exists) must not block the whole
+      // page. We race the call against a 4500ms timeout and treat a timeout as
+      // an empty result so the UI renders the rest.
+      const withTimeout = (p, ms) => Promise.race([
+        p,
+        new Promise((_, reject) => setTimeout(() => reject(new Error("timeout")), ms)),
+      ]).catch(() => null)
+      const varsP = withTimeout(listVariablesRaw(), 4500)
+      const userPathsP = withTimeout(listPathEntries("user"), 4500)
+      const systemPathsP = withTimeout(listPathEntries("system"), 4500)
       const [varsResult, userPaths, systemPaths] = await Promise.all([
-        listVariablesRaw(),
-        (async () => { try { return await listPathEntries('user') } catch { return [] } })(),
-        (async () => { try { return await listPathEntries('system') } catch { return [] } })(),
+        varsP,
+        userPathsP,
+        systemPathsP,
       ])
       if (varsResult) {
         allVars = varsResult
           .filter(v => !data!.protectedVars.builtIn.includes(v.name) && !data!.protectedVars.custom.includes(v.name))
           .map(v => ({ name: v.name, scope: v.scope }))
       }
-      // Combine user + system PATH entries
+      // Combine user + system PATH entries; a timeout yields null -> empty list
+      const up = userPaths ?? []
+      const sp = systemPaths ?? []
       allPathEntries = [
-        ...userPaths.map(e => ({ path: e.path, scope: 'user' })),
-        ...systemPaths.map(e => ({ path: e.path, scope: 'system' })),
+        ...up.map(e => ({ path: e.path, scope: "user" })),
+        ...sp.map(e => ({ path: e.path, scope: "system" })),
       ].filter(p => !data!.protectedPaths.builtIn.includes(p.path) && !data!.protectedPaths.custom.includes(p.path))
     } catch (err) {
-      showToast(err instanceof Error ? err.message : String(err), 'error')
+      showToast(err instanceof Error ? err.message : String(err), "error")
     } finally {
       loading = false
     }

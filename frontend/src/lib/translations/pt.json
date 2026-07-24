@@ -296,6 +296,7 @@
   "profiles.typeLocal": "Local",
   "profiles.typeLocalDesc": "As variaveis se aplicam a um aplicativo local lancado a partir deste perfil",
   "profiles.localLaunch": "Lancar localmente",
+  "profiles.launchApplyDisabled": "Perfis locais injetam um ambiente isolado via Iniciar e nao podem ser aplicados ao registro",
   "messages.profileNotLocal": "Apenas perfis locais podem ser lancados localmente",
   "messages.profileLocalLaunched": "Perfil lancado localmente",
   "profiles.localTarget": "Executavel alvo",

@@ -296,6 +296,7 @@
   "profiles.typeLocal": "Локальный",
   "profiles.typeLocalDesc": "Переменные применяются к локальному приложению из этого профиля",
   "profiles.localLaunch": "Запустить локально",
+  "profiles.launchApplyDisabled": "Локальные профили используют изолированную среду через Запуск и не могут быть применены к реестру",
   "messages.profileNotLocal": "Только локальные профили можно запускать локально",
   "messages.profileLocalLaunched": "Профиль запущен локально",
   "profiles.localTarget": "Целевой исполняемый файл",

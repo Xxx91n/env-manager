@@ -35,14 +35,19 @@
     }
     applyDarkMode(darkMode)
     applyFontScale(fontScale)
-
-    // Sync tray locale on startup with saved language
-    setTimeout(() => {
+    // Sync tray locale on startup with saved language. Run BEFORE the first
+    // await listVariables() so the tray menu is translated even if listVariables
+    // happens to hang for several seconds on a slow registry read. Previously
+    // this sat inside a setTimeout(500ms) AFTER await listVariables, so a slow
+    // first paint left the tray stuck on the hardcoded English defaults.
+    try {
       const showText = get(tStore)('tray.show')
       const quitText = get(tStore)('tray.quit')
       const tooltip = get(tStore)('tray.tooltip')
       updateTrayLocale(showText, quitText, tooltip)
-    }, 500)
+    } catch {
+      // best-effort; ignore
+    }
 
     try {
       await listVariables()

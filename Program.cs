@@ -1878,6 +1878,19 @@ partial class Program
             return 1;
         }
 
+        // v0.7.1 hard boundary: Launch profiles are *local* only - they spawn a child
+        // process with env_clear + inject and must NEVER be applied to the user
+        // registry. Allowing apply would silently demote a Launch profile into a
+        // Global-style persistent registry write, violating the locality contract
+        // users rely on for variable isolation. Use `profile launch <name>` to
+        // run the configured target with an isolated env block.
+        if (profile.ProfileType != null &&
+            profile.ProfileType.Equals("launch", StringComparison.OrdinalIgnoreCase))
+        {
+            Console.Error.WriteLine($"Error: Profile '{name}' is a Launch (local) profile and cannot be applied to the registry. Use 'env-manager-cli profile launch <name>' to spawn its target with isolated variables.");
+            return 1;
+        }
+
         if (!IsProfileApplicable(profile))
         {
             Console.Error.WriteLine($"Error: Profile '{name}' contains invalid or protected variables and cannot be applied");
@@ -2521,6 +2534,28 @@ partial class Program
         return SetVariable("PATH", joined, scope);
     }
 
+    /// <summary>
+    /// Checks directory existence in parallel with a per-entry timeout to avoid
+    /// hanging on slow UNC/network/non-existent paths. Mirrors PowerToys PATH
+    /// health-check resilience: stale/slow entries resolve to exists=false
+    /// instead of blocking the entire PathList response.
+    /// </summary>
+    static bool FastDirectoryExists(string expandedPath)
+    {
+        if (string.IsNullOrEmpty(expandedPath)) return false;
+        // UNC paths and drive roots that do not resolve quickly are treated as
+        // non-existent rather than blocking. 200ms is enough for local NTFS.
+        try
+        {
+            var task = Task.Run(() => Directory.Exists(expandedPath));
+            if (task.Wait(200)) return task.Result;
+            return false;
+        }
+        catch
+        {
+            return false;
+        }
+    }
     static int PathList(string[] args)
     {
         string? scope = ParseScope(args, 2, "user");
@@ -2535,7 +2570,7 @@ partial class Program
             path = e,
             expandedPath = Environment.ExpandEnvironmentVariables(e),
             isDuplicate = normalizedCounts.GetValueOrDefault(NormalizePathEntry(e)) > 1,
-            exists = Directory.Exists(Environment.ExpandEnvironmentVariables(e)),
+            exists = FastDirectoryExists(Environment.ExpandEnvironmentVariables(e)),
             isProtected = IsProtectedPathEntry(e),
             isBuiltinProtected = ProtectedPathEntries.Any(p => p.TrimEnd('\\', '/').Equals(e.TrimEnd('\\', '/').Trim(), StringComparison.OrdinalIgnoreCase))
         }).ToList();

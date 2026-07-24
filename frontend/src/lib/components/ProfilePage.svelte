@@ -603,11 +603,11 @@
               <!-- Toggle switch -->
               <button
                 on:click={() => handleToggleProfile(profile)}
-                disabled={actionLoading}
-                class="relative inline-flex h-4 w-7 items-center rounded-full transition disabled:opacity-50 {profile.isEnabled ? 'bg-blue-600 dark:bg-blue-500' : 'bg-gray-300 dark:bg-gray-600'}"
+                disabled={actionLoading || profile.profileType === 'launch'}
+                class="relative inline-flex h-4 w-7 items-center rounded-full transition disabled:opacity-40 disabled:cursor-not-allowed {profile.isEnabled ? 'bg-blue-600 dark:bg-blue-500' : 'bg-gray-300 dark:bg-gray-600'}"
                 role="switch"
                 aria-checked={profile.isEnabled}
-                title={profile.isEnabled ? $t('profiles.unapply') : $t('profiles.apply')}
+                title={profile.profileType === 'launch' ? $t('profiles.launchApplyDisabled') : (profile.isEnabled ? $t('profiles.unapply') : $t('profiles.apply'))}
               >
                 <span class="inline-block h-3 w-3 transform rounded-full bg-white shadow transition {profile.isEnabled ? 'translate-x-3.5' : 'translate-x-0.5'}"></span>
               </button>
