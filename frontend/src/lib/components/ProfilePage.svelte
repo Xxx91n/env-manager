@@ -38,10 +38,16 @@
   let newProfileName = ''
   let newVarName = ''
   let newVarValue = ''
+  let newVarScope: 'user' | 'system' = 'user'
   let showAddVarPanel = false
   let cloneSource = ''
+  let cloneSearchQuery = ''
+  $: cloneFilteredVars = cloneSearchQuery.trim()
+    ? allVars.filter(v => v.name.toLowerCase().includes(cloneSearchQuery.toLowerCase()))
+    : allVars
   let allVars: EnvVariable[] = []
   let newPathEntry = ''
+  let newPathScope: 'user' | 'system' = 'user'
   let newProfileType: 'global' | 'launch' = 'global'
   let newProfileTarget = ''
   let newProfileArgs = ''
@@ -56,14 +62,8 @@
   // Pointer drag state remains local. Registry/profile persistence is never
   // touched by a GUI-only ordering change.
   let dragIndex: number | null = null
-  let dragOverIndex: number | null = null
   let isDragging = false
   let pointerId: number | null = null
-  let pointerX = 0
-  let pointerY = 0
-  let startY = 0
-  let dragFrame: number | null = null
-  $: deltaY = isDragging ? pointerY - startY : 0
 
   onMount(() => {
     void refreshProfiles()
@@ -346,9 +346,10 @@
     if (!selectedProfile || !newVarName.trim()) return
     actionLoading = true
     try {
-      await addProfileVar(selectedProfile.name, newVarName.trim(), newVarValue)
+      await addProfileVar(selectedProfile.name, newVarName.trim(), newVarValue, newVarScope)
       newVarName = ''
       newVarValue = ''
+      newVarScope = 'user'
       cloneSource = ''
       showAddVarPanel = false
       await refreshProfiles()
@@ -381,97 +382,44 @@
     }
   }
 
-  function updateDragTarget(clientX: number, clientY: number): void {
-    if (!isDragging) return
-    // Temporarily hide the dragged element so elementFromPoint can see through it
-    const draggedEl = document.querySelector('[data-profile-index="' + dragIndex + '"]') as HTMLElement | null
-    let prevPointerEvents = ''
-    if (draggedEl) {
-      prevPointerEvents = draggedEl.style.pointerEvents
-      draggedEl.style.pointerEvents = 'none'
-    }
-    const el = document.elementFromPoint(clientX, clientY)
-    if (draggedEl) {
-      draggedEl.style.pointerEvents = prevPointerEvents
-    }
-    const target = el?.closest<HTMLElement>('[data-profile-index]')
-    if (!target) return
-    const rawIndex = target.dataset.profileIndex
-    if (rawIndex === undefined || rawIndex === null || rawIndex === '') return
-    const nextIndex = Number(rawIndex)
-    if (Number.isInteger(nextIndex) && nextIndex >= 0 && nextIndex < profileList.length) {
-      dragOverIndex = nextIndex
-    }
-  }
+  // Instant swap approach: on pointerenter, immediately swap the dragged item
+  // with the target item. No animation, no placeholder, no bounce-back.
 
-  function handlePointerMove(event: PointerEvent): void {
-    if (!isDragging || event.pointerId !== pointerId) return
-    pointerX = event.clientX
-    pointerY = event.clientY
-    if (dragFrame !== null) return
-    dragFrame = requestAnimationFrame(() => {
-      dragFrame = null
-      updateDragTarget(pointerX, pointerY)
-    })
+  function handleDragPointerEnter(index: number): void {
+    if (!isDragging || dragIndex === null || dragIndex === index) return
+    // Instant swap: exchange the two items in the list
+    const newList = [...profileList]
+    const tmp = newList[dragIndex]
+    newList[dragIndex] = newList[index]
+    newList[index] = tmp
+    profileList = newList
+    profiles.set(newList)
+    // The dragged item is now at the new index
+    dragIndex = index
   }
 
   function beginPointerDrag(event: PointerEvent, index: number): void {
     if (event.button !== 0) return
     event.preventDefault()
-    // Do NOT use setPointerCapture here - it hijacks elementFromPoint results
-    // svelte:window already captures pointermove/pointerup globally
     dragIndex = index
-    dragOverIndex = index
     isDragging = true
     pointerId = event.pointerId
-    pointerX = event.clientX
-    pointerY = event.clientY
-    startY = event.clientY
   }
 
   function finishPointerDrag(event?: PointerEvent): void {
-    if (event && pointerId !== null && event.pointerId !== pointerId) return
     if (!isDragging || dragIndex === null) {
       cancelPointerDrag()
       return
     }
-
-    if (dragFrame !== null) {
-      cancelAnimationFrame(dragFrame)
-      dragFrame = null
-    }
-    if (event) {
-      pointerX = event.clientX
-      pointerY = event.clientY
-    }
-    updateDragTarget(pointerX, pointerY)
-    const targetIndex = dragOverIndex ?? dragIndex
-    if (dragIndex !== targetIndex) {
-      const item = profileList[dragIndex]
-      if (item) {
-        const newList = [...profileList]
-        newList.splice(dragIndex, 1)
-        newList.splice(targetIndex, 0, item)
-        profileList = newList
-        profiles.set(newList)
-        saveStoredOrder(newList.map((profile) => profile.name))
-      }
-    }
+    // Persist the final order
+    saveStoredOrder(profileList.map((profile) => profile.name))
     cancelPointerDrag()
   }
 
   function cancelPointerDrag(): void {
-    if (dragFrame !== null) {
-      cancelAnimationFrame(dragFrame)
-      dragFrame = null
-    }
     dragIndex = null
-    dragOverIndex = null
     isDragging = false
     pointerId = null
-    pointerX = 0
-    pointerY = 0
-    startY = 0
   }
 
   async function handleInheritance(parent: string, enabled: boolean) {
@@ -490,8 +438,9 @@
   async function handleAddPath() {
     if (!selectedProfile || !newPathEntry.trim()) return
     try {
-      await addProfilePath(selectedProfile.name, newPathEntry.trim())
+      await addProfilePath(selectedProfile.name, newPathEntry.trim(), newPathScope)
       newPathEntry = ''
+      newPathScope = 'user'
       await refreshProfiles()
     } catch (err) {
       showMessage(localizeError(err instanceof Error ? err.message : String(err)), 'error')
@@ -518,10 +467,8 @@
 </script>
 
 <svelte:window
-  on:pointermove={handlePointerMove}
   on:pointerup={finishPointerDrag}
   on:pointercancel={cancelPointerDrag}
-  on:lostpointercapture={finishPointerDrag}
 />
 
 <div class="space-y-3">
@@ -534,7 +481,7 @@
         <input type="radio" bind:group={newProfileType} value="global" class="mr-1" /> {$t('profiles.typeGlobal')}
       </label>
       <label class="text-xs font-medium text-gray-600 dark:text-gray-400">
-        <input type="radio" bind:group={newProfileType} value="launch" class="mr-1" /> {$t('profiles.typeLaunch')}
+        <input type="radio" bind:group={newProfileType} value="launch" class="mr-1" /> {$t('profiles.typeLocal')}
       </label>
       {#if newProfileType === 'launch'}
         <input
@@ -552,7 +499,7 @@
         </button>
         <input
           type="text"
-          placeholder={$t('profiles.launchArgs')}
+          placeholder={$t('profiles.localArgs')}
           bind:value={newProfileArgs}
           class="flex-1 min-w-[160px] px-2 py-1 text-xs border border-gray-300 rounded-md font-mono dark:bg-gray-800 dark:border-gray-600 dark:text-gray-100"
         />
@@ -609,8 +556,8 @@
     <div class="space-y-2" role="list" data-testid="profile-list">
       {#each profileList as profile, i (profile.name)}
         <div
-          class="bg-white rounded-md border border-gray-200 transition-[border-color,box-shadow,opacity,transform] dark:bg-gray-800 dark:border-gray-700 {isDragging && dragIndex === i ? 'opacity-80 shadow-lg z-10 scale-[1.02]' : ''} {isDragging && dragOverIndex === i && dragIndex !== i ? 'ring-2 ring-blue-500 border-blue-500' : ''}"
-          style={isDragging && dragIndex === i ? `transform: translateY(${deltaY}px); cursor: grabbing;` : ''}
+          class="bg-white rounded-md border border-gray-200 dark:bg-gray-800 dark:border-gray-700 {isDragging && dragIndex === i ? 'opacity-60' : ''}"
+          on:pointerenter={() => handleDragPointerEnter(i)}
           role="listitem"
           data-profile-name={profile.name}
           data-profile-index={i}
@@ -637,7 +584,7 @@
               <span class="text-xs font-medium text-gray-900 dark:text-gray-100">{profile.name}</span>
               {#if profile.profileType === 'launch'}
                 <span class="inline-flex px-1.5 py-0.5 rounded text-[10px] font-medium bg-purple-50 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300" title={profile.targetExecutable || ''}>
-                  {$t('profiles.typeLaunch')}
+                  {$t('profiles.typeLocal')}
                 </span>
               {:else}
                 <span class="inline-flex px-1.5 py-0.5 rounded text-[10px] font-medium bg-blue-50 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300">
@@ -671,8 +618,8 @@
                   on:click={() => handleLaunchProfile(profile)}
                   disabled={actionLoading}
                   class="p-1 text-green-600 hover:bg-green-50 rounded transition dark:text-green-400 dark:hover:bg-green-900/30"
-                  title={$t('profiles.launch')}
-                  aria-label={$t('profiles.launch')}
+                  title={$t('profiles.localLaunch')}
+                  aria-label={$t('profiles.localLaunch')}
                 >
                   <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
                     <path stroke-linecap="round" stroke-linejoin="round" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
@@ -744,7 +691,11 @@
                       </div>
                     {/each}
                   </div>
-                  <div class="flex gap-1">
+                  <div class="flex gap-1 items-center">
+                    <select bind:value={newPathScope} disabled={profile.isEnabled} class="px-1.5 py-1 text-[10px] border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100">
+                      <option value="user">{$t('scope.user')}</option>
+                      <option value="system">{$t('scope.system')}</option>
+                    </select>
                     <input bind:value={newPathEntry} disabled={profile.isEnabled} on:keydown={(event) => { if (event.key === 'Enter') handleAddPath() }} class="min-w-0 flex-1 px-2 py-1 text-[10px] font-mono border rounded dark:bg-gray-700 dark:border-gray-600" placeholder={$t('path.entryPlaceholder')} />
                     <button on:click={handleAddPath} disabled={profile.isEnabled || !newPathEntry.trim()} class="px-2 text-[10px] text-blue-600 disabled:opacity-30">{$t('buttons.add')}</button>
                   </div>
@@ -799,11 +750,17 @@
               {:else}
                 <!-- Add variable panel with clone-from-existing dropdown -->
                 <div class="space-y-1.5 pt-2 border-t border-gray-100 dark:border-gray-700">
-                  <!-- Clone from existing variable -->
+                  <!-- Clone from existing variable with searchable filter -->
                   <div>
                     <label for="profile-clone-source" class="block text-[10px] font-medium text-gray-500 dark:text-gray-400 mb-0.5">
                       {$t('profiles.cloneFromExisting')}
                     </label>
+                    <input
+                      type="text"
+                      placeholder={$t('variables.search')}
+                      bind:value={cloneSearchQuery}
+                      class="w-full px-2 py-1 mb-1 text-[10px] border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100"
+                    />
                     <select
                       id="profile-clone-source"
                       bind:value={cloneSource}
@@ -811,9 +768,24 @@
                       class="w-full px-2 py-1 text-[10px] border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100"
                     >
                       <option value="">-- {$t('profiles.selectVariable')} --</option>
-                      {#each allVars as v (v.name)}
+                      {#each cloneFilteredVars as v (v.name)}
                         <option value={v.name}>{v.name}</option>
                       {/each}
+                    </select>
+                  </div>
+
+                  <!-- Scope selector: user vs system -->
+                  <div class="flex items-center gap-2 mb-1">
+                    <label for="profile-var-scope" class="text-[10px] font-medium text-gray-500 dark:text-gray-400">
+                      {$t('labels.scope')}
+                    </label>
+                    <select
+                      id="profile-var-scope"
+                      bind:value={newVarScope}
+                      class="px-2 py-1 text-[10px] border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100"
+                    >
+                      <option value="user">{$t('scope.user')}</option>
+                      <option value="system">{$t('scope.system')}</option>
                     </select>
                   </div>
 
@@ -838,7 +810,7 @@
                       {$t('buttons.save')}
                     </button>
                     <button
-                      on:click={() => { showAddVarPanel = false; newVarName = ''; newVarValue = ''; cloneSource = '' }}
+                      on:click={() => { showAddVarPanel = false; newVarName = ''; newVarValue = ''; newVarScope = 'user'; cloneSource = '' }}
                       class="px-2 py-1 text-[10px] text-gray-600 border border-gray-300 rounded hover:bg-gray-50 transition dark:text-gray-300 dark:border-gray-600 dark:hover:bg-gray-700"
                     >
                       {$t('buttons.cancel')}

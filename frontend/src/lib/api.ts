@@ -236,6 +236,22 @@ const PATH_CACHE_TTL_MS = 5000
 const pathEntriesCache: Map<string, { data: PathEntry[]; time: number; generation: number }> = new Map()
 const pathReadsInFlight = new Map<string, { generation: number; promise: Promise<PathEntry[]> }>()
 
+// History audit cache mirrors the variables cache shape: bounded TTL + single-flight
+// reads so secondary pages (History, profile audit replay) don't re-shell the CLI
+// on every tab switch. Invalidated by invalidateApiCache() on any write.
+const HISTORY_CACHE_TTL_MS = 5000
+let historyCacheData: AuditEntry[] = []
+let lastHistoryCacheTime = 0
+let historyReadInFlight: Promise<AuditEntry[]> | null = null
+
+// Protection page cache: same pattern. ListProtection runs a read-only CLI command
+// whose output rarely changes between renders; cache it for the TTL window and
+// invalidate on any write (protect/unprotect, add/remove protected path, etc.).
+const PROTECTION_CACHE_TTL_MS = 5000
+let protectionCacheData: ProtectionData | null = null
+let lastProtectionCacheTime = 0
+let protectionReadInFlight: Promise<ProtectionData> | null = null
+
 /**
  * Invalidate all cached data. Called after any write operation to ensure
  * secondary pages see fresh data on their next read.
@@ -245,6 +261,14 @@ export function invalidateApiCache(): void {
   dataGeneration += 1
   variablesRequestEpoch += 1
   pathEntriesCache.clear()
+  // Secondary-page caches are also dropped so the next read after a write sees
+  // fresh data instead of a stale TTL snapshot.
+  historyCacheData = []
+  lastHistoryCacheTime = 0
+  historyReadInFlight = null
+  protectionCacheData = null
+  lastProtectionCacheTime = 0
+  protectionReadInFlight = null
 }
 
 /**
@@ -508,10 +532,12 @@ export async function showProfile(name: string): Promise<ProfileData | null> {
 export async function addProfileVar(
   profileName: string,
   varName: string,
-  varValue: string
+  varValue: string,
+  scope: 'user' | 'system' = 'user'
 ): Promise<string> {
   try {
-    return await runWrite('profile', ['add-var', profileName, varName, varValue])
+    const args = ['add-var', profileName, varName, varValue, '--scope', scope]
+    return await runWrite('profile', args)
   } catch (err) {
     error.set(err instanceof Error ? err.message : 'Failed to add variable to profile')
     throw err
@@ -741,9 +767,28 @@ export async function expandVariableValue(value: string): Promise<string> {
   return (JSON.parse(output) as { expanded: string }).expanded
 }
 
-export async function listHistory(limit = 200): Promise<AuditEntry[]> {
-  const output = await runRead('history', ['list', '--limit', String(limit)])
-  return JSON.parse(output) as AuditEntry[]
+export async function listHistory(limit = 200, force: boolean = false): Promise<AuditEntry[]> {
+  const now = Date.now()
+  if (!force && historyCacheData.length > 0 && (now - lastHistoryCacheTime) < HISTORY_CACHE_TTL_MS) {
+    return historyCacheData
+  }
+  if (historyReadInFlight) return historyReadInFlight as Promise<AuditEntry[]>
+  const promise = (async () => {
+    try {
+      const output = await runRead('history', ['list', '--limit', String(limit)])
+      const data = JSON.parse(output) as AuditEntry[]
+      historyCacheData = data
+      lastHistoryCacheTime = Date.now()
+      return data
+    } catch (err) {
+      error.set(err instanceof Error ? err.message : 'Failed to load history')
+      throw err
+    } finally {
+      historyReadInFlight = null
+    }
+  })()
+  historyReadInFlight = promise
+  return promise
 }
 
 export async function undoHistory(id: string, force = false): Promise<void> {
@@ -785,8 +830,12 @@ export async function setProfileInheritance(name: string, parents: string[]): Pr
   await runWrite('profile', ['set-inherits', name, ...parents])
 }
 
-export async function addProfilePath(name: string, path: string): Promise<void> {
-  await runWrite('profile', ['add-path', name, path])
+export async function addProfilePath(
+  name: string,
+  path: string,
+  scope: 'user' | 'system' = 'user'
+): Promise<void> {
+  await runWrite('profile', ['add-path', name, path, '--scope', scope])
 }
 
 export async function removeProfilePath(name: string, path: string): Promise<void> {
@@ -975,9 +1024,27 @@ export interface ProtectionData {
   }
 }
 
-export async function listProtection(): Promise<ProtectionData> {
-  const output = await runRead('protection', ['list'])
-  return JSON.parse(output) as ProtectionData
+export async function listProtection(force: boolean = false): Promise<ProtectionData> {
+  const now = Date.now()
+  if (!force && protectionCacheData && (now - lastProtectionCacheTime) < PROTECTION_CACHE_TTL_MS) {
+    return protectionCacheData
+  }
+  if (protectionReadInFlight) return protectionReadInFlight
+  const promise = (async () => {
+    try {
+      const result = await invoke<ProtectionData>('run_cli', { command: 'protection', args: ['list'] })
+      protectionCacheData = result
+      lastProtectionCacheTime = Date.now()
+      return result
+    } catch (err) {
+      error.set(err instanceof Error ? err.message : 'Failed to load protection data')
+      throw err
+    } finally {
+      protectionReadInFlight = null
+    }
+  })()
+  protectionReadInFlight = promise
+  return promise
 }
 
 export async function addProtectedPath(entry: string): Promise<void> {

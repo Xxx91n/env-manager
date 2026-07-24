@@ -517,14 +517,24 @@ partial class Program
         return 0;
     }
 
-    static int ProfileAddPath(string profileName, string path)
+    static int ProfileAddPath(string profileName, string path, string scope = "user")
     {
+        if (scope != "user" && scope != "system")
+            return ArgError("Error: Invalid scope. Must be 'user' or 'system'");
         var profiles = LoadProfiles();
         var profile = FindProfile(profiles, profileName);
         if (profile == null) return ArgError("Error: Profile not found");
         if (profile.IsEnabled) return ArgError("Error: Unapply the profile before changing PATH entries");
         ValidatePathFragment(path);
-        if (!profile.PathEntries.Any(p => NormalizePathEntry(p).Equals(NormalizePathEntry(path), StringComparison.OrdinalIgnoreCase))) profile.PathEntries.Add(path);
+        if (!profile.PathEntries.Any(p => NormalizePathEntry(p).Equals(NormalizePathEntry(path), StringComparison.OrdinalIgnoreCase)))
+        {
+            profile.PathEntries.Add(path);
+            // Track the scope the user chose for this entry. The list is parallel to
+            // PathEntries; older profiles.json files without PathScopes are treated
+            // as "user" by ProfileApply (index-based lookup with out-of-range guard).
+            while (profile.PathScopes.Count < profile.PathEntries.Count - 1) profile.PathScopes.Add("user");
+            profile.PathScopes.Add(scope);
+        }
         SaveProfiles(profiles);
         Console.WriteLine("Added PATH entry to profile: " + profileName);
         return 0;
@@ -536,7 +546,14 @@ partial class Program
         var profile = FindProfile(profiles, profileName);
         if (profile == null) return ArgError("Error: Profile not found");
         if (profile.IsEnabled) return ArgError("Error: Unapply the profile before changing PATH entries");
-        profile.PathEntries.RemoveAll(p => NormalizePathEntry(p).Equals(NormalizePathEntry(path), StringComparison.OrdinalIgnoreCase));
+        int idx = profile.PathEntries.FindIndex(p => NormalizePathEntry(p).Equals(NormalizePathEntry(path), StringComparison.OrdinalIgnoreCase));
+        if (idx >= 0)
+        {
+            profile.PathEntries.RemoveAt(idx);
+            // Keep PathScopes in lockstep with PathEntries by index. If PathScopes
+            // was shorter (legacy profile), simply drop the matching tail entry.
+            if (idx < profile.PathScopes.Count) profile.PathScopes.RemoveAt(idx);
+        }
         SaveProfiles(profiles);
         Console.WriteLine("Removed PATH entry from profile: " + profileName);
         return 0;

@@ -10,6 +10,14 @@
   let loading = false
   let scope: 'user' | 'system' | 'profile' | 'all' = 'all'
 
+  // i18n helper: map audit command string to localized operation name
+  function getOperationLabel(command: string): string {
+    const key = 'history.op.' + command
+    const translated = $t(key)
+    if (translated === key) return command
+    return translated
+  }
+
   // Derived: filter history by selected scope
   $: filteredHistory = scope === 'all' ? allHistory : allHistory.filter(e => e.scope === scope)
 
@@ -254,7 +262,7 @@
           {#each filteredHistory as entry (entry.id)}
             <tr class="hover:bg-gray-50 dark:hover:bg-gray-750">
               <td class="px-3 py-2 text-[10px] text-gray-500">{new Date(entry.timestamp).toLocaleString()}</td>
-              <td class="px-3 py-2 text-[10px] font-mono break-all whitespace-normal" title={entry.command}>{entry.scope === 'profile' ? entry.command : entry.command.split(' ')[0]}</td>
+              <td class="px-3 py-2 text-[10px] font-mono break-all whitespace-normal" title={entry.command}>{getOperationLabel(entry.scope === 'profile' ? entry.command : entry.command.split(' ')[0])}</td>
               <td class="px-3 py-2 text-[10px]">
                 {#if entry.scope === 'profile'}
                   <span class="px-1.5 py-0.5 rounded text-[9px] font-medium bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300">{$t('scope.profile')}</span>

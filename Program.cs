@@ -27,6 +27,8 @@ class ProfileVariable
 {
     [JsonPropertyName("name")] public string Name { get; set; } = "";
     [JsonPropertyName("value")] public string Value { get; set; } = "";
+    // Optional scope: "user" (default) or "system". Only meaningful for global profiles.
+    [JsonPropertyName("scope")] public string Scope { get; set; } = "user";
 }
 
 class ProfileData
@@ -37,6 +39,10 @@ class ProfileData
     [JsonPropertyName("appliedAt")] public long? AppliedAt { get; set; }
     [JsonPropertyName("inherits")] public List<string> Inherits { get; set; } = new();
     [JsonPropertyName("pathEntries")] public List<string> PathEntries { get; set; } = new();
+    // Per-entry scope mirror: PathScopes[i] is "user" (default) or "system" for PathEntries[i].
+    // Older profiles.json files written before this field existed load as empty list;
+    // ProfileApply treats a missing entry as "user" so existing behaviour is unchanged.
+    [JsonPropertyName("pathScopes")] public List<string> PathScopes { get; set; } = new();
     [JsonPropertyName("variables")] public List<ProfileVariable> Variables { get; set; } = new();
 
     // Launch profile type: "global" (default, applies to user registry) or "launch" (launcher template, never writes registry).
@@ -856,9 +862,9 @@ partial class Program
             "show" => args.Length < 3 ? ArgError("Usage: env-manager profile show <name> [--reveal]") : ProfileShow(args[2], args.Any(a => a.Equals("--reveal", StringComparison.OrdinalIgnoreCase))),
             "preview" => args.Length < 3 ? ArgError("Usage: env-manager profile preview <name>") : ProfilePreview(args[2]),
             "set-inherits" => args.Length < 3 ? ArgError("Usage: env-manager profile set-inherits <name> [parent ...]") : ProfileSetInherits(args),
-            "add-path" => args.Length < 4 ? ArgError("Usage: env-manager profile add-path <name> <directory>") : ProfileAddPath(args[2], args[3]),
+            "add-path" => ProfileAddPathWithScope(args),
             "remove-path" => args.Length < 4 ? ArgError("Usage: env-manager profile remove-path <name> <directory>") : ProfileRemovePath(args[2], args[3]),
-            "add-var" => args.Length < 5 ? ArgError("Usage: env-manager profile add-var <profile> <name> <value>") : ProfileAddVar(args[2], args[3], args[4]),
+            "add-var" => ProfileAddVarWithScope(args),
             "remove-var" => args.Length < 4 ? ArgError("Usage: env-manager profile remove-var <profile> <name>") : ProfileRemoveVar(args[2], args[3]),
             "edit-var" => args.Length < 6 ? ArgError("Usage: env-manager profile edit-var <profile> <old-name> <new-name> <new-value>") : ProfileEditVar(args[2], args[3], args[4], args[5]),
             "status" => args.Length < 3 ? ArgError("Usage: env-manager profile status <name>") : ProfileStatus(args[2]),
@@ -1945,11 +1951,81 @@ partial class Program
         return 0;
     }
 
-    static int ProfileAddVar(string profileName, string varName, string varValue)
+    // Wrapper that parses optional --scope user|system from argv and delegates to
+    // ProfileAddVar with the resolved scope. Mirrors the pattern used by other commands
+    // that accept an optional --scope flag at the end of their argv vector.
+    static int ProfileAddVarWithScope(string[] args)
+    {
+        if (args.Length < 5)
+            return ArgError("Usage: env-manager profile add-var <profile> <name> <value> [--scope user|system]");
+
+        string profileName = args[2];
+        string varName = args[3];
+        string varValue = args[4];
+        string scope = "user";
+
+        // Scan for --scope; skip and consume its value. Any extra token after the
+        // value is rejected to keep behaviour predictable.
+        for (int i = 5; i < args.Length; i++)
+        {
+            if (args[i].Equals("--scope", StringComparison.OrdinalIgnoreCase))
+            {
+                if (i + 1 >= args.Length)
+                    return ArgError("Error: --scope requires a value (user or system)");
+                scope = args[++i];
+                if (scope != "user" && scope != "system")
+                    return ArgError("Error: Invalid scope. Must be 'user' or 'system'");
+            }
+            else
+            {
+                return ArgError("Error: Unexpected argument: " + args[i]);
+            }
+        }
+
+        return ProfileAddVar(profileName, varName, varValue, scope);
+    }
+
+    // Wrapper that parses optional --scope for add-path. Delegates to ProfileAddPath
+    // with the resolved scope (default "user"). PATH entries tagged "system" are
+    // stored with a scope attribute so ProfileApply can route them to HKLM.
+    static int ProfileAddPathWithScope(string[] args)
+    {
+        if (args.Length < 4)
+            return ArgError("Usage: env-manager profile add-path <profile> <directory> [--scope user|system]");
+
+        string profileName = args[2];
+        string path = args[3];
+        string scope = "user";
+
+        for (int i = 4; i < args.Length; i++)
+        {
+            if (args[i].Equals("--scope", StringComparison.OrdinalIgnoreCase))
+            {
+                if (i + 1 >= args.Length)
+                    return ArgError("Error: --scope requires a value (user or system)");
+                scope = args[++i];
+                if (scope != "user" && scope != "system")
+                    return ArgError("Error: Invalid scope. Must be 'user' or 'system'");
+            }
+            else
+            {
+                return ArgError("Error: Unexpected argument: " + args[i]);
+            }
+        }
+
+        return ProfileAddPath(profileName, path, scope);
+    }
+
+    static int ProfileAddVar(string profileName, string varName, string varValue, string scope = "user")
     {
         if (string.IsNullOrWhiteSpace(varName) || varName.Length > 255 || varName.Contains('=') || ProtectedSystemVars.Contains(varName))
         {
             Console.Error.WriteLine("Error: Invalid variable name");
+            return 1;
+        }
+        if (scope != "user" && scope != "system")
+        {
+            Console.Error.WriteLine("Error: Invalid scope. Must be 'user' or 'system'");
             return 1;
         }
         var profiles = LoadProfiles();
@@ -1964,14 +2040,15 @@ partial class Program
             return ArgError("Error: Unapply the profile before changing its variables");
 
         profile.Variables.RemoveAll(v => v.Name.Equals(varName, StringComparison.OrdinalIgnoreCase));
-        var addedVar = new ProfileVariable { Name = varName, Value = varValue };
+        var addedVar = new ProfileVariable { Name = varName, Value = varValue, Scope = scope };
         profile.Variables.Add(addedVar);
         SaveProfiles(profiles);
 
         // If profile is currently applied, propagate the change to the registry
+        // using the scope the user chose for this variable.
         if (profile.IsEnabled)
         {
-            SetVariableWithoutNotify(varName, varValue, "user");
+            SetVariableWithoutNotify(varName, varValue, scope);
             BroadcastSettingChange();
         }
 
