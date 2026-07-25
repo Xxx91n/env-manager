@@ -500,11 +500,37 @@ partial class Program
         return 0;
     }
 
-    static int ProfileSetInherits(string[] args)
+    // v0.7.5: DFS to detect if adding parents would close a cycle. Walk
+// every requested parent's existing Inherits chain; if any chain leads back
+// to the target profile name there is a cycle.
+static bool HasInheritanceCycle(string targetName, List<string> requestedParents, List<ProfileData> allProfiles)
+{
+    var visited = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+    var stack = new Stack<string>(requestedParents);
+    while (stack.Count > 0)
+    {
+        var cur = stack.Pop();
+        if (cur.Equals(targetName, StringComparison.OrdinalIgnoreCase)) return true;
+        if (!visited.Add(cur)) continue;
+        var p = allProfiles.FirstOrDefault(x => x.Name.Equals(cur, StringComparison.OrdinalIgnoreCase));
+        if (p != null) foreach (var parent in p.Inherits) stack.Push(parent);
+    }
+    return false;
+}
+
+static int ProfileSetInherits(string[] args)
     {
         var profiles = LoadProfiles();
         var profile = FindProfile(profiles, args[2]);
         if (profile == null) return ArgError("Error: Profile not found");
+        // v0.7.5: reject self-inheritance and cycles. A cycle (A inherits B
+        // which inherits A) or a self-loop makes ResolveProfileVariables
+        // infinite-loop and the profile un-recoverable.
+        var requestedParents = args.Skip(3).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        if (requestedParents.Any(p => p.Equals(args[2], StringComparison.OrdinalIgnoreCase)))
+            return ArgError("Error: A profile cannot inherit itself");
+        if (HasInheritanceCycle(args[2], requestedParents, profiles))
+            return ArgError("Error: Inheritance cycle detected. One of the requested parents already inherits (transitively) from '" + args[2] + "'.");
         bool wasEnabled = profile.IsEnabled;
         if (wasEnabled) UnapplyProfile(profile);
         profile.Inherits = args.Skip(3).Distinct(StringComparer.OrdinalIgnoreCase).ToList();

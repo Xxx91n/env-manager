@@ -248,6 +248,12 @@
     font-size: 13px;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+    /* v0.7.5: DPI-aware glyph rendering. These four together fix the
+       "fuzzy on zoom, blurry on 4K Windows scaling" complaint. */
+    text-rendering: optimizeLegibility;
+    font-feature-settings: "kern" 1, "liga" 1, "calt" 1;
+    -webkit-text-size-adjust: 100%;
+    -webkit-text-rendering: optimizeLegibility;
   }
 
   :global([dir='rtl']) {

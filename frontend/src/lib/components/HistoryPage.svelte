@@ -12,10 +12,19 @@
 
   // i18n helper: map audit command string to localized operation name
   function getOperationLabel(command: string): string {
-    const key = 'history.op.' + command
-    const translated = $t(key)
-    if (translated === key) return command
-    return translated
+    // v0.7.5: try the full command first (e.g. 'path add', 'history undo')
+    // and fall back to the leading word if the full key is missing.
+    // Previous code sliced entry.command split(' ')[0] upstream and lost the
+    // subcommand; this restores 'path add'/'path remove'/'history undo' as
+    // distinct labels instead of all collapsing to 'path' / 'history'.
+    const fullKey = 'history.op.' + command
+    const fullTranslated = $t(fullKey)
+    if (fullTranslated !== fullKey) return fullTranslated
+    const head = command.split(' ')[0]
+    const headKey = 'history.op.' + head
+    const headTranslated = $t(headKey)
+    if (headTranslated !== headKey) return headTranslated
+    return command
   }
 
   // Derived: filter history by selected scope

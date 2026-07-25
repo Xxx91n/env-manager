@@ -1073,6 +1073,17 @@ partial class Program
         var profiles = LoadProfiles();
         var profile = FindProfile(profiles, profileName);
         if (profile == null) { Console.Error.WriteLine($"Error: Profile '{profileName}' not found"); return 1; }
+        // v0.7.5: secrets are meaningful only on Launch (local) profiles. A
+        // Global profile cannot be applied (IsProfileApplicable rejects any
+        // profile containing SecretVariables) and a decrypted plaintext can
+        // never reach a process env block via the Global write path (Global
+        // writes to the registry). Prohibit at entry so users do not encrypt
+        // a secret on a Global profile and discover later that it is inert.
+        if (!profile.ProfileType.Equals("launch", StringComparison.OrdinalIgnoreCase))
+            return ArgError("Error: Secrets can only be added to Launch (local) profiles. Use \"profile set-launch <name> --target <exe>\" to convert a Global profile to Launch first.");
+        // v0.7.5: same invariant as AddSecret - reject non-launch profiles.
+        if (!profile.ProfileType.Equals("launch", StringComparison.OrdinalIgnoreCase))
+            return ArgError("Error: Secrets can only be edited on Launch (local) profiles. Use \"profile set-launch <name> --target <exe>\" to convert first.");
         if (profile.IsEnabled) return ArgError("Error: Unapply the profile before changing its variables");
 
         profile.Variables.RemoveAll(v => v.Name.Equals(varName, StringComparison.OrdinalIgnoreCase));

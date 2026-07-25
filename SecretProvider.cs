@@ -332,30 +332,35 @@ internal sealed class PowerShellSecretManagementProvider : ISecretProvider
     // The envelope stores: { provider, version, vaultName, secretName }
     // The actual secret value lives in the PowerShell SecretManagement vault
 
+    private const string VaultName = "EnvManager";
+
     public string Encrypt(string plaintext, string? context = null)
     {
         if (plaintext == null) plaintext = "";
-        // Determine vault name and secret name from context or generate
-        string vaultName = "EnvManager";
         string secretName = context != null
             ? "EnvManager_" + SanitizeSecretName(context)
             : "EnvManager_" + Guid.NewGuid().ToString("N");
 
-        // Build PowerShell script to set the secret
-        string script = $"$ErrorActionPreference='Stop'; " +
-            $"Set-Secret -Name '{EscapeForPowerShell(secretName)}' -Secret '{EscapeForPowerShell(plaintext)}' -Vault '{EscapeForPowerShell(vaultName)}'; " +
-            $"Write-Output 'OK'";
+        EnsureSecretManagementAvailable();
+        EnsureVaultRegistered();
+
+        string script =
+            "$ErrorActionPreference='Stop'; " +
+            "Set-Secret -Name '" + EscapeForPowerShell(secretName) + "' " +
+            "-Secret (ConvertTo-SecureString '" + EscapeForPowerShell(plaintext) + "' -AsPlainText -Force) " +
+            "-Vault '" + EscapeForPowerShell(VaultName) + "'; " +
+            "Write-Output 'OK'";
 
         string output = RunPowerShell(script);
         if (!output.Contains("OK"))
-            throw new InvalidOperationException($"Set-Secret failed: {output}");
+            throw new InvalidOperationException("Set-Secret failed: " + StripClixml(output));
 
         var envelope = new SecretEnvelope
         {
             Provider = Name,
             Version = 1,
             CreatedAt = DateTimeOffset.UtcNow.ToString("O"),
-            TargetName = vaultName + "\\" + secretName
+            TargetName = VaultName + "\\" + secretName
         };
         return envelope.Serialize();
     }
@@ -365,7 +370,7 @@ internal sealed class PowerShellSecretManagementProvider : ISecretProvider
         var parsed = SecretEnvelope.TryParse(envelope)
             ?? throw new InvalidOperationException("Invalid secret envelope format");
         if (parsed.Provider != Name)
-            throw new InvalidOperationException($"Provider mismatch: expected {Name}, got {parsed.Provider}");
+            throw new InvalidOperationException("Provider mismatch: expected " + Name + ", got " + parsed.Provider);
         if (string.IsNullOrEmpty(parsed.TargetName))
             throw new InvalidOperationException("Missing targetName in envelope");
 
@@ -376,9 +381,13 @@ internal sealed class PowerShellSecretManagementProvider : ISecretProvider
         string vaultName = parts[0];
         string secretName = parts[1];
 
-        string script = $"$ErrorActionPreference='Stop'; " +
-            $"$s = Get-Secret -Name '{EscapeForPowerShell(secretName)}' -Vault '{EscapeForPowerShell(vaultName)}' -AsPlainText; " +
-            $"Write-Output $s";
+        EnsureSecretManagementAvailable();
+
+        string script =
+            "$ErrorActionPreference='Stop'; " +
+            "$s = Get-Secret -Name '" + EscapeForPowerShell(secretName) + "' " +
+            "-Vault '" + EscapeForPowerShell(vaultName) + "' -AsPlainText; " +
+            "Write-Output $s";
 
         string output = RunPowerShell(script);
         return output.TrimEnd();
@@ -392,10 +401,53 @@ internal sealed class PowerShellSecretManagementProvider : ISecretProvider
             var parts = parsed.TargetName.Split("\\");
             if (parts.Length >= 2)
             {
-                string script = $"$ErrorActionPreference='Stop'; " +
-                    $"Remove-Secret -Name '{EscapeForPowerShell(parts[1])}' -Vault '{EscapeForPowerShell(parts[0])}' -ErrorAction SilentlyContinue";
+                string script =
+                    "$ErrorActionPreference='Stop'; " +
+                    "Remove-Secret -Name '" + EscapeForPowerShell(parts[1]) + "' " +
+                    "-Vault '" + EscapeForPowerShell(parts[0]) + "' -ErrorAction SilentlyContinue";
                 try { RunPowerShell(script); } catch { }
             }
+        }
+    }
+
+    // v0.7.5: probe that the PowerShell SecretManagement module is installed.
+    // This is called BEFORE a real Set-Secret so we do not surface the raw
+    // CLIXML "Set-Secret is not recognized" catastrophe to the user. Instead
+    // we get a clear actionable error pointing at Install-Module.
+    private static void EnsureSecretManagementAvailable()
+    {
+        string probe =
+            "$ErrorActionPreference='Stop'; " +
+            "$m = Get-Module -ListAvailable Microsoft.SecretManagement; " +
+            "if ($null -eq $m) { Write-Output 'MISSING_MODULE' } else { Write-Output 'OK' }";
+        string moduleCheck = RunPowerShell(probe);
+        if (!moduleCheck.Contains("OK"))
+            throw new InvalidOperationException(
+                "PowerShell SecretManagement module is not installed. " +
+                "Run: pwsh -Command \"Install-Module Microsoft.SecretManagement, Microsoft.SecretStore -Scope CurrentUser -Force\" " +
+                "then retry. (Vault: " + VaultName + ")");
+    }
+
+    // v0.7.5: auto-register the EnvManager vault if it is not already registered.
+    // Idempotent: Register-SecretVault errors if already registered, so we
+    // probe with Get-SecretVault first and only register when absent.
+    private static void EnsureVaultRegistered()
+    {
+        string probe =
+            "$ErrorActionPreference='Stop'; " +
+            "try { $v = Get-SecretVault -Name '" + EscapeForPowerShell(VaultName) + "' -ErrorAction Stop; if ($null -ne $v) { Write-Output 'OK' } else { Write-Output 'REGISTER' } } " +
+            "catch { Write-Output 'REGISTER' }";
+        string vaultCheck = RunPowerShell(probe);
+        if (!vaultCheck.Contains("OK"))
+        {
+            string register =
+                "$ErrorActionPreference='Stop'; " +
+                "Register-SecretVault -Name '" + EscapeForPowerShell(VaultName) + "' " +
+                "-ModuleName Microsoft.SecretStore -DefaultVault -AllowClobber; " +
+                "Write-Output 'OK'";
+            string reg = RunPowerShell(register);
+            if (!reg.Contains("OK"))
+                throw new InvalidOperationException("Failed to register SecretManagement vault '" + VaultName + "': " + StripClixml(reg));
         }
     }
 
@@ -410,6 +462,11 @@ internal sealed class PowerShellSecretManagementProvider : ISecretProvider
     // which is the canonical Microsoft-recommended way to invoke pwsh with
     // arbitrary content. No shell quoting, no escape doubling, no tokenization
     // ambiguity. CREATE_NO_WINDOW stays so no terminal flashes.
+    //
+    // v0.7.5: stderr is parsed through `StripClixml` before being thrown so
+    // callers see a clean human-readable message instead of the raw CLIXML
+    // serialization wrapper (the `#< CLIXML <Objs ...>` blob that pwsh emits
+    // when stderr is redirected by a non-interactive host).
     private static string RunPowerShell(string script)
     {
         string encoded = Convert.ToBase64String(
@@ -434,15 +491,45 @@ internal sealed class PowerShellSecretManagementProvider : ISecretProvider
         string stdout = proc.StandardOutput.ReadToEnd();
         string stderr = proc.StandardError.ReadToEnd();
         if (proc.ExitCode != 0)
-            throw new InvalidOperationException($"pwsh exited {proc.ExitCode}: {stderr}");
+            throw new InvalidOperationException("pwsh exited " + proc.ExitCode + ": " + StripClixml(stderr));
         return stdout;
     }
 
-    // Single-quote escaper for PowerShell single-quoted string literals.
-    // Now used only INSIDE the script (e.g. `Set-Secret -Name '...'`) where
-    // doubling ''' is the correct PowerShell escape. The outer command is no
-    // longer subject to shell quoting because -EncodedCommand carries the
-    // script base64-encoded, eliminating the nested-quote catastrophe.
+    // v0.7.5: strips CLIXML serialization wrapper that pwsh emits when stderr
+    // is redirected by a non-interactive host. The wrapper looks like:
+    //   #< CLIXML <Objs Version="1.1.0.1" ...><S S="Error">...escaped text...</S>...</Objs>
+    // We extract the inner text of every <S S="Error"> element, restore the
+    // encoded control sequences (_x001B_ -> ESC, _x000D_ -> CR, _x000A_ -> LF),
+    // and concatenate. If the input is not CLIXML we return it unchanged.
+    private static string StripClixml(string s)
+    {
+        if (string.IsNullOrEmpty(s)) return s ?? "";
+        int cli = s.IndexOf("CLIXML", StringComparison.OrdinalIgnoreCase);
+        if (cli < 0) return s;
+        string text = s;
+        var sb = new System.Text.StringBuilder();
+        int i = 0;
+        while (i < text.Length)
+        {
+            int open = text.IndexOf("<S S=\"Error\">", i, StringComparison.OrdinalIgnoreCase);
+            if (open < 0) break;
+            int contentStart = open + "<S S=\"Error\">".Length;
+            int close = text.IndexOf("</S>", contentStart, StringComparison.OrdinalIgnoreCase);
+            if (close < 0) break;
+            string inner = text.Substring(contentStart, close - contentStart);
+            inner = inner.Replace("_x001B_", "\u001B")
+                          .Replace("_x000D_", "\r")
+                          .Replace("_x000A_", "\n")
+                          .Replace("_x0009_", "\t");
+            // strip ANSI color sequences (ESC [ digit ; ... m)
+            inner = System.Text.RegularExpressions.Regex.Replace(inner, "\u001B\\[[0-9;]*m", "");
+            sb.Append(inner);
+            i = close + "</S>".Length;
+        }
+        string result = sb.ToString();
+        return string.IsNullOrEmpty(result) ? s : result.Trim();
+    }
+
     private static string EscapeForPowerShell(string s)
     {
         return s.Replace("'", "''");
@@ -1621,8 +1708,33 @@ internal static class SecretProviderManager
     // Set the active provider (persists to config file)
     public static void SetActiveProvider(string name)
     {
-        if (!_providers.ContainsKey(name))
+        if (!_providers.TryGetValue(name, out var provider))
             throw new InvalidOperationException($"Unknown secret provider: {name}");
+
+        // v0.7.5: probe the provider with a sentinel Encrypt/Decrypt round-trip
+        // before committing it as the active provider. A provider that cannot
+        // complete the round-trip (pwsh missing module, Vault no VAULT_ADDR,
+        // cloud credentials missing) is REJECTED here so the user gets an
+        // actionable error at config time instead of a CLIXML catastrophe at
+        // add-secret time. This matches the PowerToys pattern of validating
+        // extension dependencies at config time, not at use time.
+        try
+        {
+            // Use a truly off-name sentinel so a real profile variable named
+            // "__compat_probe__" never collides. Delete is best-effort because
+            // some providers are pure-local and others have side effects.
+            const string probeContext = "__env_manager_compat_probe__";
+            string envelope = provider.Encrypt("__probe_value__", probeContext);
+            try { provider.Decrypt(envelope, probeContext); } catch { /* async/network providers may not round-trip immediately */ }
+            try { provider.Delete(envelope, probeContext); } catch { /* best-effort cleanup */ }
+        }
+        catch (Exception ex)
+        {
+            throw new InvalidOperationException(
+                "Cannot activate provider '" + name + "': " + ex.Message +
+                ". Fix the provider environment first (e.g. install pwsh modules, " +
+                "set VAULT_ADDR, or configure cloud credentials).");
+        }
 
         string dir = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),

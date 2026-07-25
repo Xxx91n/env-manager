@@ -383,6 +383,8 @@
 
   async function handleAddVar() {
     if (!selectedProfile || !newVarName.trim()) return
+    const nameErr = validateVarNameInput(newVarName.trim())
+    if (nameErr) { showToast(nameErr, 'error'); return }
     actionLoading = true
     try {
       await addProfileVar(selectedProfile.name, newVarName.trim(), newVarValue, newVarScope)
@@ -476,6 +478,8 @@
 
   async function handleAddPath() {
     if (!selectedProfile || !newPathEntry.trim()) return
+    const pathErr = validatePathInput(newPathEntry.trim())
+    if (pathErr) { showToast(pathErr, 'error'); return }
     try {
       await addProfilePath(selectedProfile.name, newPathEntry.trim(), newPathScope)
       newPathEntry = ''
