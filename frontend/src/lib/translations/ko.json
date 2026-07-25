@@ -302,5 +302,17 @@
   "profiles.localTarget": "대상 실행 파일",
   "profiles.localArgs": "실행 인수",
   "profiles.localCwd": "작업 디렉터리",
-  "profiles.scopeLabel": "스코프"
+  "profiles.scopeLabel": "스코프",
+  "secrets.providerChangeTitle": "시크릿 프로바이더를 변경하시겠습니까?",
+  "secrets.providerChangeWarning": "기존 비밀은 현재 프로바이더로 암호화된 상태로 유지되며 자동 마이그레이션되지 않습니다. 전환 후 \"모든 비밀 로테이션\"을 실행하여 새 프로바이더로 다시 암호화하세요.",
+  "secrets.confirmChange": "변경 확인",
+  "errors.launchTargetEmpty": "런치 대상이 비어 있습니다",
+  "errors.launchTargetMissing": "런치 대상이 존재하지 않습니다: {path}",
+  "errors.launchTargetInvalidExt": "런치 대상은 .exe/.bat/.cmd/.ps1 파일이어야 합니다 (실제: {ext})",
+  "errors.launchTargetSystem32": "Windows\\System32 내부의 런치 대상은 시스템32 하이재킹 방지를 위해 거부됩니다",
+  "errors.vaultAddrNotSet": "VAULT_ADDR 환경 변수가 설정되지 않았습니다",
+  "errors.vaultTlsRequired": "VAULT_ADDR은 로컬이 아닌 주소에 https://를 사용해야 합니다",
+  "profiles.regularVariables": "일반 변수",
+  "profiles.secretVariables": "비밀 변수",
+  "profiles.secretsGlobalDisabled": "글로벌 프로필에서는 비밀을 사용할 수 없습니다. 로컬(Launch) 프로필을 사용하여 단일 프로세스에 비밀을 주입하세요."
 }

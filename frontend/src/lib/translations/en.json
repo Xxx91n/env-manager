@@ -302,5 +302,17 @@
   "profiles.localTarget": "Target executable",
   "profiles.localArgs": "Launch arguments",
   "profiles.localCwd": "Working directory",
-  "profiles.scopeLabel": "Scope"
+  "profiles.scopeLabel": "Scope",
+  "secrets.providerChangeTitle": "Change secret provider?",
+  "secrets.providerChangeWarning": "Existing secrets stay encrypted with their current provider. They are not automatically migrated. Run \"Rotate all secrets\" after switching to re-encrypt them with the new provider.",
+  "secrets.confirmChange": "Confirm change",
+  "errors.launchTargetEmpty": "Launch target is empty",
+  "errors.launchTargetMissing": "Launch target does not exist: {path}",
+  "errors.launchTargetInvalidExt": "Launch target must be an .exe/.bat/.cmd/.ps1 file (got: {ext})",
+  "errors.launchTargetSystem32": "Launch targets inside Windows\\System32 are rejected to prevent system32 hijacking",
+  "errors.vaultAddrNotSet": "VAULT_ADDR environment variable not set",
+  "errors.vaultTlsRequired": "VAULT_ADDR must use https:// for non-localhost addresses",
+  "profiles.regularVariables": "Regular variables",
+  "profiles.secretVariables": "Secret variables",
+  "profiles.secretsGlobalDisabled": "Secrets are not available for Global profiles. Use a Local (Launch) profile to inject secrets into a single process."
 }

@@ -399,12 +399,25 @@ internal sealed class PowerShellSecretManagementProvider : ISecretProvider
         }
     }
 
+    // v0.7.4: RunPowerShell no longer uses `pwsh -Command "<escaped script>"`.
+    // The previous approach caused a nested-quoting catastrophe:
+    // EscapeForPowerShell doubled every single quote, then the outer double
+    // quotes wrapped the script, and pwsh re-parsed the inner ''Stop'' as a
+    // broken token -> "Unexpected token 'Stop''". Any value containing a
+    // single quote (e.g. a secret with an apostrophe) hit the same wall.
+    //
+    // Fix: pass the script via `-EncodedCommand` as base64 of UTF-16LE,
+    // which is the canonical Microsoft-recommended way to invoke pwsh with
+    // arbitrary content. No shell quoting, no escape doubling, no tokenization
+    // ambiguity. CREATE_NO_WINDOW stays so no terminal flashes.
     private static string RunPowerShell(string script)
     {
+        string encoded = Convert.ToBase64String(
+            Encoding.Unicode.GetBytes(script));
         var psi = new System.Diagnostics.ProcessStartInfo
         {
             FileName = "pwsh",
-            Arguments = "-NoProfile -NonInteractive -Command \"" + EscapeForPowerShell(script) + "\"",
+            Arguments = "-NoProfile -NonInteractive -EncodedCommand " + encoded,
             UseShellExecute = false,
             RedirectStandardOutput = true,
             RedirectStandardError = true,
@@ -425,9 +438,13 @@ internal sealed class PowerShellSecretManagementProvider : ISecretProvider
         return stdout;
     }
 
+    // Single-quote escaper for PowerShell single-quoted string literals.
+    // Now used only INSIDE the script (e.g. `Set-Secret -Name '...'`) where
+    // doubling ''' is the correct PowerShell escape. The outer command is no
+    // longer subject to shell quoting because -EncodedCommand carries the
+    // script base64-encoded, eliminating the nested-quote catastrophe.
     private static string EscapeForPowerShell(string s)
     {
-        // Escape single quotes by doubling them
         return s.Replace("'", "''");
     }
 

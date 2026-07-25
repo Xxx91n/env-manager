@@ -239,7 +239,10 @@
   @tailwind utilities;
 
   :global(body) {
-    font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+    /* Microsoft YaHei UI first so Chinese glyphs render with the canonical Windows
+       CJK UI face; Segoe UI keeps Latin/digits looking native on Windows 10/11;
+       system-ui + sans-serif are the safe tail for any locale without YaHei. */
+    font-family: 'Microsoft YaHei UI', 'Segoe UI', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
     margin: 0;
     padding: 0;
     font-size: 13px;

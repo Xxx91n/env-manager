@@ -42,6 +42,8 @@
   let showAddVarPanel = false
   let cloneSource = ''
   let cloneSearchQuery = ''
+  let cloneHighlightIndex = -1
+  let cloneDropdownOpen = false
   $: cloneFilteredVars = cloneSearchQuery.trim()
     ? allVars.filter(v => v.name.toLowerCase().includes(cloneSearchQuery.toLowerCase()))
     : allVars
@@ -155,6 +157,20 @@
     if (/already exists in PATH/i.test(errMsg)) {
       return $t('messages.pathDuplicate')
     }
+    // Launch target validation errors (EnvFeatures.ValidateLaunchTarget)
+    if (/Launch target is empty/i.test(errMsg)) return $t('errors.launchTargetEmpty')
+    {
+      const m = errMsg.match(/Launch target does not exist:\s*([^\n]+)/i)
+      if (m) return $t('errors.launchTargetMissing', { values: { path: m[1].trim() } })
+    }
+    {
+      const m = errMsg.match(/Launch target must be an \.(exe|bat|cmd|ps1) file \(got:\s*([^)]+)\)/i)
+      if (m) return $t('errors.launchTargetInvalidExt', { values: { ext: m[2].trim() } })
+    }
+    if (/System32 are rejected/i.test(errMsg)) return $t('errors.launchTargetSystem32')
+    // Vault provider errors (VaultKV2Provider)
+    if (/VAULT_ADDR environment variable not set/i.test(errMsg)) return $t('errors.vaultAddrNotSet')
+    if (/VAULT_ADDR must use https/i.test(errMsg)) return $t('errors.vaultTlsRequired')
     return errMsg
   }
 
@@ -211,16 +227,39 @@
     }
   }
 
-  async function handleChangeProvider(newProvider: string) {
+  // v0.7.4: switching the active secret provider used to silently succeed and
+  // leave all pre-existing secrets still encrypted with the OLD provider. The user
+  // got no warning and could not recover the olds if the old provider was removed
+  // (the DPAPI fallback can't decrypt CredMan/SOPS/etc). Now we show a confirm
+  // modal: the user must acknowledge that existing secrets are NOT auto-migrated
+  // and that they should run "Rotate all secrets" afterwards.
+  let pendingProvider: string | null = null
+
+  function requestChangeProvider(newProvider: string) {
     if (newProvider === activeProvider) return
+    pendingProvider = newProvider
+    showProviderSelector = false
+  }
+
+  function cancelChangeProvider() {
+    pendingProvider = null
+  }
+
+  async function confirmChangeProvider() {
+    if (!pendingProvider) return
+    const target = pendingProvider
+    pendingProvider = null
     try {
-      await secretProviderSet(newProvider)
-      activeProvider = newProvider
-      showProviderSelector = false
+      await secretProviderSet(target)
+      activeProvider = target
       showMessage($t('secrets.providerChanged'), 'success')
     } catch (err) {
       showMessage(localizeError(err instanceof Error ? err.message : String(err)), 'error')
     }
+  }
+
+  async function handleChangeProvider(newProvider: string) {
+    requestChangeProvider(newProvider)
   }
 
   async function handleAddSecret() {
@@ -704,36 +743,64 @@
               {#if profile.variables.length === 0}
                 <p class="text-[10px] text-gray-400 dark:text-gray-500 py-2">{$t('profiles.noVariables')}</p>
               {:else}
-                <div class="space-y-1 mb-2">
-                  {#each profile.variables as pv (pv.name)}
-                    <div class="flex items-center gap-2 px-2 py-1 rounded bg-gray-50 dark:bg-gray-700/50">
-                      <span class="text-[10px] font-mono text-gray-700 dark:text-gray-300 flex-1 truncate">{pv.name}</span>
-                      <span class="text-[10px] font-mono text-gray-400 dark:text-gray-500 flex-1 truncate">
-                        {#if selectedProfile?.secretVariables?.includes(pv.name)}
-                          {'<encrypted>'}
-                        {:else}
-                          {pv.value}
-                        {/if}
-                      </span>
-                      {#if selectedProfile?.secretVariables?.includes(pv.name)}
-                        <svg class="w-3 h-3 text-amber-500" fill="currentColor" viewBox="0 0 24 24" title={$t('messages.secretVariable')}>
-                          <path d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-                        </svg>
-                      {/if}
-                      <button
-                        on:click={() => selectedProfile?.secretVariables?.includes(pv.name) ? handleRemoveSecret(pv.name) : handleRemoveVar(pv.name)}
-                        disabled={actionLoading}
-                        class="p-0.5 text-gray-400 hover:text-red-600 rounded transition dark:hover:text-red-400"
-                        title={$t('buttons.delete')}
-                        aria-label={$t('buttons.delete')}
-                      >
-                        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
-                          <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
-                        </svg>
-                      </button>
+                <!-- Regular variables section -->
+                {#if profile.variables.filter(pv => !selectedProfile?.secretVariables?.includes(pv.name)).length > 0}
+                  <div class="mt-1 mb-1">
+                    <div class="text-[10px] font-semibold text-gray-500 dark:text-gray-400 mb-1">{$t('profiles.regularVariables')}</div>
+                    <div class="space-y-1 mb-2">
+                      {#each profile.variables.filter(pv => !selectedProfile?.secretVariables?.includes(pv.name)) as pv (pv.name)}
+                        <div class="flex items-center gap-2 px-2 py-1 rounded bg-gray-50 dark:bg-gray-700/50">
+                          <span class="text-[10px] font-mono text-gray-700 dark:text-gray-300 flex-1 truncate">{pv.name}</span>
+                          <span class="text-[10px] font-mono text-gray-400 dark:text-gray-500 flex-1 truncate">{pv.value}</span>
+                          <button
+                            on:click={() => handleRemoveVar(pv.name)}
+                            disabled={actionLoading}
+                            class="p-0.5 text-gray-400 hover:text-red-600 rounded transition dark:hover:text-red-400"
+                            title={$t('buttons.delete')}
+                            aria-label={$t('buttons.delete')}
+                          >
+                            <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+                              <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                          </button>
+                        </div>
+                      {/each}
                     </div>
-                  {/each}
-                </div>
+                  </div>
+                {/if}
+                <!-- Secret variables section -->
+                {#if profile.variables.filter(pv => selectedProfile?.secretVariables?.includes(pv.name)).length > 0}
+                  <div class="mt-1 mb-1">
+                    <div class="text-[10px] font-semibold text-amber-600 dark:text-amber-400 mb-1 flex items-center gap-1">
+                      <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 24 24">
+                        <path d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                      </svg>
+                      {$t('profiles.secretVariables')}
+                    </div>
+                    <div class="space-y-1 mb-2">
+                      {#each profile.variables.filter(pv => selectedProfile?.secretVariables?.includes(pv.name)) as pv (pv.name)}
+                        <div class="flex items-center gap-2 px-2 py-1 rounded bg-amber-50 dark:bg-amber-900/20">
+                          <span class="text-[10px] font-mono text-gray-700 dark:text-gray-300 flex-1 truncate">{pv.name}</span>
+                          <span class="text-[10px] font-mono text-gray-400 dark:text-gray-500 flex-1 truncate">{'<encrypted>'}</span>
+                          <svg class="w-3 h-3 text-amber-500" fill="currentColor" viewBox="0 0 24 24" title={$t('messages.secretVariable')}>
+                            <path d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                          </svg>
+                          <button
+                            on:click={() => handleRemoveSecret(pv.name)}
+                            disabled={actionLoading}
+                            class="p-0.5 text-gray-400 hover:text-red-600 rounded transition dark:hover:text-red-400"
+                            title={$t('buttons.delete')}
+                            aria-label={$t('buttons.delete')}
+                          >
+                            <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+                              <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                          </button>
+                        </div>
+                      {/each}
+                    </div>
+                  </div>
+                {/if}
               {/if}
 
               <!-- Add variable button -->
@@ -755,23 +822,43 @@
                     <label for="profile-clone-source" class="block text-[10px] font-medium text-gray-500 dark:text-gray-400 mb-0.5">
                       {$t('profiles.cloneFromExisting')}
                     </label>
+                    <div class="relative">
                     <input
                       type="text"
                       placeholder={$t('variables.search')}
                       bind:value={cloneSearchQuery}
-                      class="w-full px-2 py-1 mb-1 text-[10px] border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100"
+                      on:input={() => { cloneHighlightIndex = -1; cloneDropdownOpen = true }}
+                      on:focus={() => { cloneDropdownOpen = true }}
+                      on:keydown={(e) => {
+                        if (e.key === 'ArrowDown') { e.preventDefault(); if (cloneFilteredVars.length) { cloneDropdownOpen = true; cloneHighlightIndex = Math.min(cloneHighlightIndex + 1, Math.min(cloneFilteredVars.length, 10) - 1) } }
+                        else if (e.key === 'ArrowUp') { e.preventDefault(); cloneHighlightIndex = Math.max(cloneHighlightIndex - 1, 0) }
+                        else if (e.key === 'Enter') { e.preventDefault(); const v = cloneFilteredVars[cloneHighlightIndex >= 0 ? cloneHighlightIndex : 0]; if (v) { cloneSource = v.name; handleCloneSelect(); cloneDropdownOpen = false } }
+                        else if (e.key === 'Escape') { cloneDropdownOpen = false }
+                      }}
+                      on:blur={() => { setTimeout(() => { cloneDropdownOpen = false }, 150) }}
+                      class="w-full px-2 py-1 mb-0.5 text-[10px] border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100"
                     />
-                    <select
-                      id="profile-clone-source"
-                      bind:value={cloneSource}
-                      on:change={handleCloneSelect}
-                      class="w-full px-2 py-1 text-[10px] border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100"
-                    >
-                      <option value="">-- {$t('profiles.selectVariable')} --</option>
-                      {#each cloneFilteredVars as v (v.name)}
-                        <option value={v.name}>{v.name}</option>
-                      {/each}
-                    </select>
+                    {#if !cloneSource}
+                      <div class="text-[9px] text-gray-400 mb-0.5">-- {$t('profiles.selectVariable')} --</div>
+                    {:else}
+                      <div class="text-[10px] text-gray-600 dark:text-gray-300 mb-0.5 truncate font-mono">{cloneSource}</div>
+                    {/if}
+                    {#if cloneDropdownOpen && cloneFilteredVars.length > 0}
+                      <ul class="absolute z-30 left-0 right-0 mt-0.5 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded shadow-lg max-h-40 overflow-auto">
+                        {#each cloneFilteredVars.slice(0, 10) as v, i (v.name)}
+                          <li
+                            class="px-2 py-1 cursor-pointer text-[10px] flex items-center gap-2 {i === cloneHighlightIndex ? 'bg-blue-100 dark:bg-blue-900/40' : 'hover:bg-gray-100 dark:hover:bg-gray-700'}"
+                            on:mousedown={(e) => { e.preventDefault(); cloneSource = v.name; handleCloneSelect(); cloneDropdownOpen = false; cloneSearchQuery = '' }}
+                            role="option"
+                            aria-selected={i === cloneHighlightIndex}
+                          >
+                            <span class="font-mono text-gray-700 dark:text-gray-200 truncate flex-1">{v.name}</span>
+                            <span class="font-mono text-[9px] text-gray-400 dark:text-gray-500 truncate max-w-[40%]">{v.value}</span>
+                          </li>
+                        {/each}
+                      </ul>
+                    {/if}
+                  </div>
                   </div>
 
                   <!-- Scope selector: user vs system -->
@@ -826,7 +913,12 @@
                   {#if showProviderSelector}
                     <select
                       class="text-[9px] px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 border border-gray-300 dark:border-gray-600 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                      on:change={(e) => handleChangeProvider(e.currentTarget.value)}
+                      value={activeProvider}
+                      on:change={(e) => {
+                        const next = e.currentTarget.value;
+                        e.currentTarget.value = activeProvider;
+                        requestChangeProvider(next);
+                      }}
                     >
                       {#each availableProviders as prov}
                         <option value={prov} selected={prov === activeProvider}>
@@ -892,6 +984,31 @@
           {/if}
         </div>
       {/each}
+    </div>
+  {/if}
+
+  {#if pendingProvider}
+    <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/40" role="dialog" aria-modal="true">
+      <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-sm w-full mx-4 p-4">
+        <h3 class="text-sm font-semibold text-gray-800 dark:text-gray-100 mb-2">{$t('secrets.providerChangeTitle')}</h3>
+        <p class="text-[11px] text-gray-600 dark:text-gray-300 mb-3">{$t('secrets.providerChangeWarning')}</p>
+        <div class="flex justify-end gap-2">
+          <button
+            type="button"
+            on:click={cancelChangeProvider}
+            class="px-3 py-1 text-[11px] text-gray-600 border border-gray-300 rounded hover:bg-gray-50 transition dark:text-gray-300 dark:border-gray-600 dark:hover:bg-gray-700"
+          >
+            {$t('buttons.cancel')}
+          </button>
+          <button
+            type="button"
+            on:click={confirmChangeProvider}
+            class="px-3 py-1 text-[11px] font-medium text-white bg-amber-600 rounded hover:bg-amber-700 transition dark:bg-amber-500 dark:hover:bg-amber-600"
+          >
+            {$t('secrets.confirmChange')}
+          </button>
+        </div>
+      </div>
     </div>
   {/if}
 </div>

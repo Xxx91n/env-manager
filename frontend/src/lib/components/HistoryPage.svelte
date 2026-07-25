@@ -172,6 +172,8 @@
     const th = e.currentTarget as HTMLElement
     const col = th.dataset.col
     if (!col) return
+    th.classList.add('col-resizing')
+    document.querySelector('.history-table-root')?.classList.add('col-resizing-active')
     resizing = { col, startX: e.clientX, startW: colWidths[col] ?? COL_DEFAULTS[col] ?? 120 }
     document.body.classList.add('select-none', 'cursor-col-resize')
     window.addEventListener('mousemove', onResizeMove)
@@ -192,6 +194,8 @@
     if (resizing) {
       try { localStorage.setItem(COL_STORAGE_KEY, JSON.stringify(colWidths)) } catch {}
     }
+    document.querySelectorAll('.history-table-root .col-resizing').forEach(el => el.classList.remove('col-resizing'))
+    document.querySelector('.history-table-root')?.classList.remove('col-resizing-active')
     resizing = null
     document.body.classList.remove('select-none', 'cursor-col-resize')
     window.removeEventListener('mousemove', onResizeMove)
@@ -207,14 +211,28 @@
     position: absolute;
     top: 0;
     right: 0;
-    width: 4px;
+    width: 6px;
+    /* Extend left edge so the hit area starts inside this th, not in the next one */
+    margin-left: -2px;
     height: 100%;
     cursor: col-resize;
     background: transparent;
     transition: background 0.15s;
+    pointer-events: auto;
+    z-index: 2;
   }
+  /* Only the th currently being dragged shows the blue highlight.
+     During active resize the neighbours' hover highlight is suppressed
+     so the blue bar doesn't appear to jump to the next column when
+     the pointer crosses the boundary while dragging right. */
   .history-table-root th.resize:hover::after {
     background: rgba(59, 130, 246, 0.4);
+  }
+  .history-table-root th.resize.col-resizing::after {
+    background: rgba(59, 130, 246, 0.7);
+  }
+  .history-table-root.col-resizing-active th.resize:hover::after {
+    background: transparent;
   }
 </style>
 <div class="space-y-3">

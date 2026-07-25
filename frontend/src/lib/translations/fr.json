@@ -302,5 +302,17 @@
   "profiles.localTarget": "Executable cible",
   "profiles.localArgs": "Arguments de lancement",
   "profiles.localCwd": "Repertoire de travail",
-  "profiles.scopeLabel": "Portee"
+  "profiles.scopeLabel": "Portee",
+  "secrets.providerChangeTitle": "Changer le fournisseur de secrets ?",
+  "secrets.providerChangeWarning": "Les secrets existants restent chiffrés par leur fournisseur actuel et ne sont pas migrés automatiquement. Lancez \"Rotation de tous les secrets\" après le changement pour les re-chiffrer avec le nouveau fournisseur.",
+  "secrets.confirmChange": "Confirmer le changement",
+  "errors.launchTargetEmpty": "La cible de lancement est vide",
+  "errors.launchTargetMissing": "La cible de lancement est introuvable : {path}",
+  "errors.launchTargetInvalidExt": "La cible de lancement doit être un fichier .exe/.bat/.cmd/.ps1 (obtenu : {ext})",
+  "errors.launchTargetSystem32": "Les cibles de lancement dans Windows\\System32 sont rejetées pour empêcher le détournement de System32",
+  "errors.vaultAddrNotSet": "La variable d'environnement VAULT_ADDR n'est pas définie",
+  "errors.vaultTlsRequired": "VAULT_ADDR doit utiliser https:// pour les adresses non-localhost",
+  "profiles.regularVariables": "Variables normales",
+  "profiles.secretVariables": "Variables secrètes",
+  "profiles.secretsGlobalDisabled": "Les secrets ne sont pas disponibles pour les profils globaux. Utilisez un profil local (Launch) pour injecter des secrets dans un seul processus."
 }

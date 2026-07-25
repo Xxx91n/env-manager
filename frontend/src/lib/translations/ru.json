@@ -302,5 +302,17 @@
   "profiles.localTarget": "Целевой исполняемый файл",
   "profiles.localArgs": "Аргументы запуска",
   "profiles.localCwd": "Рабочий каталог",
-  "profiles.scopeLabel": "Область"
+  "profiles.scopeLabel": "Область",
+  "secrets.providerChangeTitle": "Сменить провайдера секретов?",
+  "secrets.providerChangeWarning": "Существующие секреты остаются зашифрованными текущим провайдером и не переносятся автоматически. После переключения запустите \"Ротация всех секретов\", чтобы перешифровать их новым провайдером.",
+  "secrets.confirmChange": "Подтвердить смену",
+  "errors.launchTargetEmpty": "Цель запуска пуста",
+  "errors.launchTargetMissing": "Цель запуска не существует: {path}",
+  "errors.launchTargetInvalidExt": "Цель запуска должна быть файлом .exe/.bat/.cmd/.ps1 (получено: {ext})",
+  "errors.launchTargetSystem32": "Цели запуска внутри Windows\\System32 отклоняются для предотвращения перехвата System32",
+  "errors.vaultAddrNotSet": "Переменная окружения VAULT_ADDR не задана",
+  "errors.vaultTlsRequired": "VAULT_ADDR должен использовать https:// для не-localhost адресов",
+  "profiles.regularVariables": "Обычные переменные",
+  "profiles.secretVariables": "Секретные переменные",
+  "profiles.secretsGlobalDisabled": "Секреты недоступны для глобальных профилей. Используйте локальный (Launch) профиль для внедрения секретов в один процесс."
 }

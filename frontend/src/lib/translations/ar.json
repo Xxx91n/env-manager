@@ -302,5 +302,17 @@
   "profiles.localTarget": "الملف التنفيذي الهدف",
   "profiles.localArgs": "معاملات التشغيل",
   "profiles.localCwd": "دليل العمل",
-  "profiles.scopeLabel": "النطاق"
+  "profiles.scopeLabel": "النطاق",
+  "secrets.providerChangeTitle": "تغيير مزود الأسرار؟",
+  "secrets.providerChangeWarning": "تبقى الأسرار الحالية مشفرة بمزودها الحالي ولا يتم ترحيلها تلقائيًا. بعد التبديل، شغّل \"تدوير كل الأسرار\" لإعادة تشفيرها بالمزود الجديد.",
+  "secrets.confirmChange": "تأكيد التغيير",
+  "errors.launchTargetEmpty": "هدف التشغيل فارغ",
+  "errors.launchTargetMissing": "هدف التشغيل غير موجود: {path}",
+  "errors.launchTargetInvalidExt": "يجب أن يكون هدف التشغيل ملف .exe/.bat/.cmd/.ps1 (المُستلم: {ext})",
+  "errors.launchTargetSystem32": "يتم رفض أهداف التشغيل داخل Windows\\System32 لمنع اختطاف System32",
+  "errors.vaultAddrNotSet": "لم يتم تعيين متغير البيئة VAULT_ADDR",
+  "errors.vaultTlsRequired": "يجب أن يستخدم VAULT_ADDR بروتوكول https:// للعناوين غير المحلية",
+  "profiles.regularVariables": "متغيرات عادية",
+  "profiles.secretVariables": "متغيرات سرية",
+  "profiles.secretsGlobalDisabled": "الأسرار غير متاحة للملفات الشخصية العالمية. استخدم ملفًا شخصيًا محليًا (Launch) لحقن الأسرار في عملية واحدة."
 }

@@ -302,5 +302,17 @@
   "profiles.localTarget": "Executavel alvo",
   "profiles.localArgs": "Argumentos de lancamento",
   "profiles.localCwd": "Diretorio de trabalho",
-  "profiles.scopeLabel": "Escopo"
+  "profiles.scopeLabel": "Escopo",
+  "secrets.providerChangeTitle": "Alterar o provedor de segredos?",
+  "secrets.providerChangeWarning": "Os segredos existentes permanecem criptografados com seu provedor atual e não são migrados automaticamente. Execute \"Rotacionar todos os segredos\" após a troca para recriptografá-los com o novo provedor.",
+  "secrets.confirmChange": "Confirmar alteração",
+  "errors.launchTargetEmpty": "O destino de lançamento está vazio",
+  "errors.launchTargetMissing": "O destino de lançamento não existe: {path}",
+  "errors.launchTargetInvalidExt": "O destino de lançamento deve ser um arquivo .exe/.bat/.cmd/.ps1 (obtido: {ext})",
+  "errors.launchTargetSystem32": "Destinos de lançamento dentro de Windows\\System32 são rejeitados para evitar sequestro de System32",
+  "errors.vaultAddrNotSet": "Variável de ambiente VAULT_ADDR não definida",
+  "errors.vaultTlsRequired": "VAULT_ADDR deve usar https:// para endereços não-localhost",
+  "profiles.regularVariables": "Variáveis normais",
+  "profiles.secretVariables": "Variáveis secretas",
+  "profiles.secretsGlobalDisabled": "Segredos não estão disponíveis para perfis globais. Use um perfil local (Launch) para injetar segredos em um único processo."
 }

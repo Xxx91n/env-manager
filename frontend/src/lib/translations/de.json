@@ -302,5 +302,17 @@
   "profiles.localTarget": "Ziel-Programmdatei",
   "profiles.localArgs": "Start-Argumente",
   "profiles.localCwd": "Arbeitsverzeichnis",
-  "profiles.scopeLabel": "Bereich"
+  "profiles.scopeLabel": "Bereich",
+  "secrets.providerChangeTitle": "Secret-Anbieter wechseln?",
+  "secrets.providerChangeWarning": "Vorhandene Secrets bleiben bei ihrem aktuellen Anbieter verschlüsselt und werden nicht automatisch migriert. Führen Sie nach dem Wechsel \"Alle Secrets rotieren\" aus, um sie mit dem neuen Anbieter neu zu verschlüsseln.",
+  "secrets.confirmChange": "Wechsel bestätigen",
+  "errors.launchTargetEmpty": "Launch-Ziel ist leer",
+  "errors.launchTargetMissing": "Launch-Ziel existiert nicht: {path}",
+  "errors.launchTargetInvalidExt": "Launch-Ziel muss eine .exe/.bat/.cmd/.ps1-Datei sein (erhalten: {ext})",
+  "errors.launchTargetSystem32": "Launch-Ziele innerhalb von Windows\\System32 werden abgelehnt, um System32-Hijacking zu verhindern",
+  "errors.vaultAddrNotSet": "Umgebungsvariable VAULT_ADDR ist nicht gesetzt",
+  "errors.vaultTlsRequired": "VAULT_ADDR muss https:// für Nicht-Localhost-Adressen verwenden",
+  "profiles.regularVariables": "Normale Variablen",
+  "profiles.secretVariables": "Secret-Variablen",
+  "profiles.secretsGlobalDisabled": "Secrets sind für globale Profile nicht verfügbar. Verwenden Sie ein lokales (Launch) Profil, um Secrets in einen einzelnen Prozess zu injizieren."
 }

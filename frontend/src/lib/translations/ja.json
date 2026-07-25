@@ -302,5 +302,17 @@
   "profiles.localTarget": "対象実行ファイル",
   "profiles.localArgs": "起動引数",
   "profiles.localCwd": "作業ディレクトリ",
-  "profiles.scopeLabel": "スコープ"
+  "profiles.scopeLabel": "スコープ",
+  "secrets.providerChangeTitle": "シークレットプロバイダを変更しますか？",
+  "secrets.providerChangeWarning": "既存のシークレットは現在のプロバイダで暗号化されたままです。自動移行されません。切り替え後に「すべてのシークレットをローテート」を実行して新しいプロバイダで再暗号化してください。",
+  "secrets.confirmChange": "変更を確認",
+  "errors.launchTargetEmpty": "ローンチターゲットが空です",
+  "errors.launchTargetMissing": "ローンチターゲットが存在しません：{path}",
+  "errors.launchTargetInvalidExt": "ローンチターゲットは .exe/.bat/.cmd/.ps1 である必要があります（取得: {ext}）",
+  "errors.launchTargetSystem32": "Windows\\System32 内のローンチターゲットは、システム32ハイジャック防止のため拒否されます",
+  "errors.vaultAddrNotSet": "VAULT_ADDR 環境変数が設定されていません",
+  "errors.vaultTlsRequired": "VAULT_ADDR は非ローカルホストには https:// を使用する必要があります",
+  "profiles.regularVariables": "通常変数",
+  "profiles.secretVariables": "シークレット変数",
+  "profiles.secretsGlobalDisabled": "グローバルプロファイルではシークレットを使用できません。ローカル（Launch）プロファイルを使用して単一プロセスにシークレットを注入してください。"
 }
