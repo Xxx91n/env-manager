@@ -329,3 +329,4 @@ A commit that does not update AGENTS.md (and the relevant `docs/` file) when the
 | Build system, prerequisites, output layout, mandatory build rules, release steps, dependencies, CodeGraph, performance targets, logging, debugging | [docs/build-and-release.md](docs/build-and-release.md) |
 | Backup JSON format, profile JSON format, extended state and safety contracts, full security list, agent safety guidelines | [docs/backup-and-profiles.md](docs/backup-and-profiles.md) |
 | CLI-level agent guide (distributed with CLI binary) | [AGENTS.cli.md](AGENTS.cli.md) |
+| Secrets architecture blueprint: current capabilities, limitations, v0.8-v1.0 phased roadmap, anti-rejection checklist, risk counter-decisions | [docs/secret-architecture-blueprint.md](docs/secret-architecture-blueprint.md) |
