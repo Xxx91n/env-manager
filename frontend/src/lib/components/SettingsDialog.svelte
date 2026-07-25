@@ -2,7 +2,7 @@
   import { createEventDispatcher, onMount } from 'svelte'
   import { t, locale } from 'svelte-i18n'
   import { locales, defaultLanguage } from '../i18n'
-  import { updateTrayLocale, isCliInPath, addCliToPath, removeCliFromPath, listPathEntries, checkForUpdates, bulkImport, bulkExport, pickOpenFile, pickSaveFile } from '../api'
+  import { isCliInPath, addCliToPath, removeCliFromPath, listPathEntries, checkForUpdates, bulkImport, bulkExport, pickOpenFile, pickSaveFile } from '../api'
   import { get } from 'svelte/store'
   import { showToast } from '../stores'
   import { t as tStore } from 'svelte-i18n'
@@ -52,13 +52,11 @@
     } catch {
       // Ignore storage errors
     }
-    // Sync tray menu text and tooltip with the new locale
-    setTimeout(() => {
-      const showText = get(tStore)('tray.show')
-      const quitText = get(tStore)('tray.quit')
-      const tooltip = get(tStore)('tray.tooltip')
-      updateTrayLocale(showText, quitText, tooltip)
-    }, 200)
+    // Tray i18n is now reactively synced in App.svelte whenever $locale
+    // changes. Previously this used setTimeout(200ms) here, which could race
+    // with the async locale message loader and leave the tray menu stuck on
+    // the previous language. The reactive subscription in App.svelte is the
+    // single source of truth for tray locale sync.
   }
 
   function toggleDarkMode() {

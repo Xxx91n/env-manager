@@ -17,7 +17,7 @@ import {
   listVariablesRaw,
   invalidateApiCache,
 } from './api'
-import { isCliInPath, removeCliFromPath } from './api'
+import { isCliInPath, removeCliFromPath, listProtection } from './api'
 import { variables, error } from './stores'
 
 const mockInvoke = invoke as unknown as ReturnType<typeof vi.fn>
@@ -349,6 +349,65 @@ describe('api module', () => {
       const cached = await listPathEntries('user')
       expect(fresh[0].path).toBe('C:\\Fresh')
       expect(cached[0].path).toBe('C:\\Fresh')
+    })
+  })
+
+  describe('listProtection IPC unwrap regression', () => {
+    // Regression: listProtection previously called invoke<ProtectionData>('run_cli', ...)
+    // directly, bypassing runCommand's `result.data` unwrap + JSON.parse. The invoke
+    // returned a CliResponse { success, data, error } shape cast to ProtectionData,
+    // which left data.protectedVars undefined inside ProtectionPage.refresh. Accessing
+    // data!.protectedVars.builtIn.includes() then threw a TypeError on every refresh,
+    // the catch block showed a toast but loading was never reset to false, and the
+    // page appeared stuck on a spinner. The fix routes listProtection through runRead
+    // + JSON.parse the same way listHistory does. This test asserts the new path: a
+    // CLI invocation returning the wrapped JSON body is correctly unwrapped into a
+    // ProtectionData object whose sub-fields are defined.
+    it('unwraps CliResponse.data JSON into ProtectionData (no more undefined sub-fields)', async () => {
+      const mockProtectionData = {
+        protectedVars: {
+          builtIn: ['PATH', 'SystemRoot'],
+          custom: ['MY_LOCKED_VAR'],
+        },
+        protectedPaths: {
+          builtIn: ['C:\\Windows\\System32'],
+          custom: ['C:\\My\\Locked'],
+        },
+      }
+      mockInvoke.mockResolvedValue({
+        success: true,
+        data: JSON.stringify(mockProtectionData),
+        error: null,
+      })
+      const result = await listProtection(true)
+
+      expect(result).toStrictEqual(mockProtectionData)
+      expect(result.protectedVars.builtIn).toContain('PATH')
+      expect(result.protectedVars.custom).toContain('MY_LOCKED_VAR')
+      expect(result.protectedPaths.builtIn).toContain('C:\\Windows\\System32')
+      expect(result.protectedPaths.custom).toContain('C:\\My\\Locked')
+      expect(mockInvoke).toHaveBeenCalledTimes(1)
+      expect(mockInvoke).toHaveBeenCalledWith('run_cli', { command: 'protection', args: ['list'] })
+    })
+
+    it('does not leak a CliResponse object shape as ProtectionData', async () => {
+      mockInvoke.mockResolvedValue({
+        success: true,
+        data: JSON.stringify({
+          protectedVars: { builtIn: [], custom: [] },
+          protectedPaths: { builtIn: [], custom: [] },
+        }),
+        error: null,
+      })
+
+      const result = await listProtection(true)
+      // If the regression returns, result would be the full CliResponse object.
+      // Asserting it has NO `success`/`data`/`error` keys keeps the unwrap honest.
+      expect(result).not.toHaveProperty('success')
+      expect(result).not.toHaveProperty('data')
+      expect(result).not.toHaveProperty('error')
+      expect(result).toHaveProperty('protectedVars')
+      expect(result).toHaveProperty('protectedPaths')
     })
   })
 })

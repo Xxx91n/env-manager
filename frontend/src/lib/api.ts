@@ -1032,10 +1032,18 @@ export async function listProtection(force: boolean = false): Promise<Protection
   if (protectionReadInFlight) return protectionReadInFlight
   const promise = (async () => {
     try {
-      const result = await invoke<ProtectionData>('run_cli', { command: 'protection', args: ['list'] })
-      protectionCacheData = result
+      // Go through runRead + JSON.parse (same pattern as listHistory), not
+      // raw invoke<ProtectionData>('run_cli', ...) which returns a CliResponse
+      // enforced as ProtectionData and leaves sub-fields undefined --
+      // causing data!.protectedVars.builtIn.includes() to throw. This was the
+      // root cause of the "protection page always spinning" bug: repeated
+      // TypeErrors in refresh() catch were swallowed by showToast but loading
+      // never reset to false, so the page stayed visually spinning.
+      const output = await runRead('protection', ['list'])
+      const data = JSON.parse(output) as ProtectionData
+      protectionCacheData = data
       lastProtectionCacheTime = Date.now()
-      return result
+      return data
     } catch (err) {
       error.set(err instanceof Error ? err.message : 'Failed to load protection data')
       throw err

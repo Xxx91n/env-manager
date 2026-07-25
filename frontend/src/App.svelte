@@ -22,24 +22,17 @@
 
   $: if ($locale) currentLocale = $locale
 
-  onMount(async () => {
-    try {
-      const stored = typeof localStorage !== 'undefined' ? localStorage.getItem('darkMode') : null
-      darkMode = stored === 'true'
-      const storedScale = typeof localStorage !== 'undefined' ? localStorage.getItem('fontScale') : null
-      if (storedScale) {
-        fontScale = parseFloat(storedScale) || 1
-      }
-    } catch {
-      // Ignore
-    }
-    applyDarkMode(darkMode)
-    applyFontScale(fontScale)
-    // Sync tray locale on startup with saved language. Run BEFORE the first
-    // await listVariables() so the tray menu is translated even if listVariables
-    // happens to hang for several seconds on a slow registry read. Previously
-    // this sat inside a setTimeout(500ms) AFTER await listVariables, so a slow
-    // first paint left the tray stuck on the hardcoded English defaults.
+  // Reactive tray i18n: whenever the svelte-i18n locale store changes (either
+  // because setupI18n queued a microtask to switch from the synchronous "en"
+  // boot default to the user saved locale, or because the user picked a new
+  // language in Settings), we synchronise the system tray menu and tooltip.
+  // This replaces the previous imperative `timeout`-based approach which synced
+  // the tray from inside onMount BEFORE i18n loaded the saved locale, causing the
+  // tray to permanently show English ("Show" / "Quit") even when the user had
+  // chosen a different language.
+  let lastSyncedTrayLocale = ''
+  $: if ($locale && $locale !== lastSyncedTrayLocale) {
+    lastSyncedTrayLocale = $locale
     try {
       const showText = get(tStore)('tray.show')
       const quitText = get(tStore)('tray.quit')
@@ -48,6 +41,10 @@
     } catch {
       // best-effort; ignore
     }
+  }
+  onMount(async () => {
+    applyDarkMode(darkMode)
+    applyFontScale(fontScale)
 
     try {
       await listVariables()
