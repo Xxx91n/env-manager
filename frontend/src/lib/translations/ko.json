@@ -337,5 +337,15 @@
   "history.op.expand": "값 확장",
   "history.op.update": "업데이트",
   "history.op.update check": "업데이트 확인",
-  "history.op.agents": "Agent 계약"
+  "history.op.agents": "Agent 계약",
+  "errors.activateProvider": "{name} 활성화 불가: {reason}. 먼저 프로바이더 환경을 수정한 뒤 재시도하세요.",
+  "errors.activate.pwsh": "PowerShell SecretManagement 모듈이 설치되어 있지 않습니다. pwsh -Command \"Install-Module Microsoft.SecretManagement, Microsoft.SecretStore -Scope CurrentUser -Force\" 실행 후 재시도하세요.",
+  "errors.activate.sops": "PATH에서 SOPS 실행 파일을 찾을 수 없습니다. sops를 설치하거나 SOPS_PATH 환경변수로 실행 파일 전체 경로를 지정하세요.",
+  "errors.activate.azure": "AZURE_KEYVAULT_URI 환경변수가 설정되지 않았습니다. Key Vault URL(예: https://myvault.vault.azure.net)을 설정하거나 관리 ID / 서비스 주체 자격 증명을 구성하세요.",
+  "errors.activate.op": "PATH에서 1Password CLI (op)를 찾을 수 없습니다. op를 설치하거나 OP_PATH 환경변수로 전체 경로를 지정하세요.",
+  "errors.activate.aws": "AWS_REGION 또는 AWS_DEFAULT_REGION이 설정되지 않았습니다. AWS 자격 증명과 리전을 구성한 뒤 AWS Secrets Manager 프로바이더를 활성화하세요.",
+  "errors.activate.vaultAddr": "VAULT_ADDR이 설정되지 않았습니다. Vault 서버 URL을 설정하세요 (localhost가 아닌 경우 https:// 필수).",
+  "errors.activate.vaultTls": "VAULT_ADDR은 localhost가 아닌 경우 https://를 사용해야 합니다. 현재 값은 TLS로 보호되지 않았습니다.",
+  "errors.activate.vaultToken": "VAULT_TOKEN이 설정되지 않았습니다. Vault 인증(예: vault login) 후 VAULT_TOKEN을 내보내고 활성화하세요.",
+  "errors.activate.generic": "프로바이더 응답: {upstream}"
 }

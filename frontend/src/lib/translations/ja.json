@@ -337,5 +337,15 @@
   "history.op.expand": "値の展開",
   "history.op.update": "更新",
   "history.op.update check": "更新確認",
-  "history.op.agents": "Agent契約"
+  "history.op.agents": "Agent契約",
+  "errors.activateProvider": "{name} を有効化できません: {reason}。先にプロバイダー環境を修正して再試行してください。",
+  "errors.activate.pwsh": "PowerShell SecretManagement モジュールが未インストールです。pwsh -Command \"Install-Module Microsoft.SecretManagement, Microsoft.SecretStore -Scope CurrentUser -Force\" を実行して再試行してください。",
+  "errors.activate.sops": "PATH 上に SOPS 実行ファイルが見つかりません。sops をインストールするか、SOPS_PATH 環境変数で実行ファイルのフルパスを指定してください。",
+  "errors.activate.azure": "AZURE_KEYVAULT_URI が未設定です。Key Vault の URL (例: https://myvault.vault.azure.net) を設定するか、マネージド ID / サービスプリンシパルを構成してください。",
+  "errors.activate.op": "PATH 上に 1Password CLI (op) が見つかりません。op をインストールするか、OP_PATH 環境変数でフルパスを指定してください。",
+  "errors.activate.aws": "AWS_REGION または AWS_DEFAULT_REGION が未設定です。AWS 認証情報とリージョンを構成してから AWS Secrets Manager を有効化してください。",
+  "errors.activate.vaultAddr": "VAULT_ADDR が未設定です。Vault サーバーの URL を設定してください (非 localhost は https:// 必須)。",
+  "errors.activate.vaultTls": "VAULT_ADDR は非 localhost の場合 https:// 必須です。現在の値は TLS で保護されていません。",
+  "errors.activate.vaultToken": "VAULT_TOKEN が未設定です。Vault への認証 (例: vault login) と VAULT_TOKEN のエクスポートを行ってから有効化してください。",
+  "errors.activate.generic": "プロバイダーの応答: {upstream}"
 }

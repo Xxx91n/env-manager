@@ -337,5 +337,15 @@
   "history.op.expand": "Expandir valor",
   "history.op.update": "Actualizar",
   "history.op.update check": "Buscar actualizaciones",
-  "history.op.agents": "Contrato del agente"
+  "history.op.agents": "Contrato del agente",
+  "errors.activateProvider": "No se puede activar {name}: {reason}. Corrija primero el entorno del proveedor y reintente.",
+  "errors.activate.pwsh": "El módulo PowerShell SecretManagement no está instalado. Ejecute: pwsh -Command \"Install-Module Microsoft.SecretManagement, Microsoft.SecretStore -Scope CurrentUser -Force\" y reintente.",
+  "errors.activate.sops": "No se encontro el binario SOPS en PATH. Instale sops o defina la variable SOPS_PATH con la ruta completa al binario.",
+  "errors.activate.azure": "AZURE_KEYVAULT_URI no esta definido. Establezca la URL del Key Vault (ej. https://myvault.vault.azure.net) o configure identidad gestionada / service principal.",
+  "errors.activate.op": "No se encontro el CLI de 1Password (op) en PATH. Instale op o defina OP_PATH con la ruta completa.",
+  "errors.activate.aws": "AWS_REGION o AWS_DEFAULT_REGION no estan definidos. Configure credenciales y region de AWS antes de activar AWS Secrets Manager.",
+  "errors.activate.vaultAddr": "VAULT_ADDR no esta definido. Establezca la URL del servidor Vault (https:// obligatorio para no-localhost).",
+  "errors.activate.vaultTls": "VAULT_ADDR debe usar https:// para no-localhost. El valor actual no esta protegido por TLS.",
+  "errors.activate.vaultToken": "VAULT_TOKEN no esta definido. Autentiquese en Vault (ej. vault login) y exporte VAULT_TOKEN antes de activar.",
+  "errors.activate.generic": "El proveedor respondio: {upstream}"
 }

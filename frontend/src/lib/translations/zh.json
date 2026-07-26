@@ -337,5 +337,15 @@
   "history.op.expand": "展开变量值",
   "history.op.update": "更新",
   "history.op.update check": "检查更新",
-  "history.op.agents": "Agent 契约"
+  "history.op.agents": "Agent 契约",
+  "errors.activateProvider": "无法激活 {name}：{reason}。请先修复该提供者所需的环境再重试。",
+  "errors.activate.pwsh": "PowerShell SecretManagement 模块未安装。请运行：pwsh -Command \"Install-Module Microsoft.SecretManagement, Microsoft.SecretStore -Scope CurrentUser -Force\" 后重试。",
+  "errors.activate.sops": "在 PATH 上找不到 SOPS 可执行文件。请安装 sops 并确保可用，或设置 SOPS_PATH 环境变量指向 sops 的完整路径。",
+  "errors.activate.azure": "AZURE_KEYVAULT_URI 环境变量未设置。请将其设为密钥库 URL（例如 https://myvault.vault.azure.net），或配置托管标识/服务主体凭据。",
+  "errors.activate.op": "在 PATH 上找不到 1Password CLI (op)。请安装 op 并确保可用，或设置 OP_PATH 环境变量指向 op 的完整路径。",
+  "errors.activate.aws": "AWS_REGION 或 AWS_DEFAULT_REGION 未设置。请配置 AWS 凭据与区域（环境变量、共享配置或 IAM 角色）后再激活 AWS Secrets Manager 提供者。",
+  "errors.activate.vaultAddr": "VAULT_ADDR 未设置。请将其设为 Vault 服务地址（非本地地址必须使用 https://）。",
+  "errors.activate.vaultTls": "VAULT_ADDR 必须使用 https://（非本地地址）。当前值未启用 TLS。",
+  "errors.activate.vaultToken": "VAULT_TOKEN 未设置。请先向 Vault 完成身份验证（例如 vault login）并导出 VAULT_TOKEN 后再激活 Vault 提供者。",
+  "errors.activate.generic": "提供者返回：{upstream}"
 }

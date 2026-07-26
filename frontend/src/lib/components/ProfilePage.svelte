@@ -148,6 +148,12 @@
   }
 
   // Map CLI hardcoded error messages to i18n keys for localization
+  // v0.7.6: alias for the existing providerDisplayName() so localizeError
+  // can render the provider-name placeholder in i18n templates. We reuse the
+  // already-defined function instead of duplicating the provider mapping.
+  function providerDisplayNameFn(name: string): string {
+    try { return providerDisplayName(name) } catch { return name }
+  }
   function localizeError(errMsg: string): string {
     // Profile already exists
     if (/already exists/i.test(errMsg) && /profile/i.test(errMsg)) {
@@ -168,7 +174,65 @@
       if (m) return $t('errors.launchTargetInvalidExt', { values: { ext: m[2].trim() } })
     }
     if (/System32 are rejected/i.test(errMsg)) return $t('errors.launchTargetSystem32')
-    // Vault provider errors (VaultKV2Provider)
+    // -------------------------------------------------------------------
+    // v0.7.6: activation errors from SecretProviderManager.SetActiveProvider.
+    // The CLI throws: "Cannot activate provider '<name>': <upstream>.
+    //   Fix the provider environment first (e.g. install pwsh modules,
+    //   set VAULT_ADDR, or configure cloud credentials)."
+    // <upstream> is provider-specific. We split it out and map each provider's
+    //   upstream message to its own i18n key, then assemble a localized error
+    //   using the generic 'errors.activateProvider' template with placeholders
+    //   {name} and {reason}. Falls back to the raw msg if the upstream doesn't
+    //   match any known pattern (defense-in-depth; the user still gets CLI text).
+    // -------------------------------------------------------------------
+    const actMatch = errMsg.match(/^Cannot activate provider '([^']+)':\s*(.+?)\s*\.\s*Fix the provider environment first/i);
+    if (actMatch) {
+      const providerName = actMatch[1];
+      const upstream = actMatch[2];
+      let reasonKey: string | null = null;
+      let reasonValues: Record<string, string> = {};
+      // PowerShell SecretManagement: module missing + Install-Module hint.
+      if (/PowerShell SecretManagement module is not installed/i.test(upstream)) {
+        reasonKey = 'errors.activate.pwsh';
+      }
+      // SOPS: binary not found + SOPS_PATH hint.
+      else if (/sops binary not found/i.test(upstream)) {
+        reasonKey = 'errors.activate.sops';
+      }
+      // Azure Key Vault: AZURE_KEYVAULT_URI not set.
+      else if (/AZURE_KEYVAULT_URI environment variable not set/i.test(upstream)) {
+        reasonKey = 'errors.activate.azure';
+      }
+      // 1Password: op CLI missing.
+      else if (/1Password CLI \(op\) not found/i.test(upstream)) {
+        reasonKey = 'errors.activate.op';
+      }
+      // AWS Secrets Manager: AWS_REGION / AWS_DEFAULT_REGION missing.
+      else if (/AWS_REGION or AWS_DEFAULT_REGION not set/i.test(upstream)) {
+        reasonKey = 'errors.activate.aws';
+      }
+      // Vault: VAULT_ADDR missing or wrong scheme.
+      else if (/VAULT_ADDR environment variable not set/i.test(upstream)) {
+        reasonKey = 'errors.activate.vaultAddr';
+      }
+      else if (/VAULT_ADDR must use https/i.test(upstream)) {
+        reasonKey = 'errors.activate.vaultTls';
+      }
+      else if (/VAULT_TOKEN environment variable not set/i.test(upstream)) {
+        reasonKey = 'errors.activate.vaultToken';
+      }
+      // Generic fallback for any future provider error: surface upstream
+      // as a localized "fix provider environment" hint so the user at least
+      // sees a non-English action rather than the raw CLI text.
+      else {
+        reasonKey = 'errors.activate.generic';
+        reasonValues = { upstream };
+      }
+      const providerDisplayName = providerDisplayNameFn(providerName);
+      const reason = $t(reasonKey, { values: reasonValues });
+      return $t('errors.activateProvider', { values: { name: providerDisplayName, reason } });
+    }
+    // Original Vault errors (non-activation path; e.g. Decrypt at runtime).
     if (/VAULT_ADDR environment variable not set/i.test(errMsg)) return $t('errors.vaultAddrNotSet')
     if (/VAULT_ADDR must use https/i.test(errMsg)) return $t('errors.vaultTlsRequired')
     return errMsg

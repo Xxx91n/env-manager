@@ -337,5 +337,15 @@
   "history.op.expand": "Expand Value",
   "history.op.update": "Update",
   "history.op.update check": "Check for Updates",
-  "history.op.agents": "Agent Contract"
+  "history.op.agents": "Agent Contract",
+  "errors.activateProvider": "Cannot activate {name}: {reason}. Fix the provider environment and retry.",
+  "errors.activate.pwsh": "PowerShell SecretManagement module is not installed. Run: pwsh -Command \"Install-Module Microsoft.SecretManagement, Microsoft.SecretStore -Scope CurrentUser -Force\" then retry.",
+  "errors.activate.sops": "SOPS binary not found on PATH. Install sops and ensure it is reachable, or set the SOPS_PATH env var to the full binary path.",
+  "errors.activate.azure": "AZURE_KEYVAULT_URI environment variable is not set. Set it to your key vault URL (e.g. https://myvault.vault.azure.net), or configure managed identity / service principal credentials.",
+  "errors.activate.op": "1Password CLI (op) was not found on PATH. Install op and make sure it is reachable, or set the OP_PATH env var to the full binary path.",
+  "errors.activate.aws": "AWS_REGION or AWS_DEFAULT_REGION is not set. Configure AWS credentials and region (env vars, shared config, or IAM role) before activating the AWS Secrets Manager provider.",
+  "errors.activate.vaultAddr": "VAULT_ADDR is not set. Set it to your Vault server URL (https:// is required for non-localhost addresses).",
+  "errors.activate.vaultTls": "VAULT_ADDR must use https:// for non-localhost addresses; the current value is not TLS-secured.",
+  "errors.activate.vaultToken": "VAULT_TOKEN is not set. Authenticate to Vault first (e.g. vault login) and export VAULT_TOKEN before activating the Vault provider.",
+  "errors.activate.generic": "The provider reported: {upstream}"
 }
