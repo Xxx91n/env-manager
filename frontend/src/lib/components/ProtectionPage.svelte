@@ -4,6 +4,7 @@
   import { showToast, showModal, refreshTrigger, selectedScope } from '../stores'
   import { listProtection, addProtectedPath, removeProtectedPath, addProtectedVar, removeProtectedVar, listVariablesRaw, listPathEntries } from '../api'
   import type { ProtectionData } from '../api'
+  import CloneCombobox from './CloneCombobox.svelte'
 
   let data: ProtectionData | null = null
   let loading = false
@@ -210,18 +211,15 @@
   {:else if activeTab === 'vars'}
     <!-- Protected Variables Tab -->
     <div class="space-y-4">
-      <!-- Add custom protected var (from existing) — placed ABOVE custom list -->
+      <!-- Add custom protected var (searchable CloneCombobox from existing vars) -->
       <div class="flex gap-2">
-        <select
-          bind:value={selectedVarName}
-          on:keydown={(e) => { if (e.key === 'Enter') handleAddVar() }}
-          class="flex-1 px-3 py-1.5 text-xs border border-gray-300 rounded-md font-mono focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-800 dark:border-gray-600 dark:text-gray-100"
-        >
-          <option value="">-- {$t('protection.selectVar')} --</option>
-          {#each filteredVars as v (v.name + v.scope)}
-            <option value={v.name}>{v.name} ({v.scope})</option>
-          {/each}
-        </select>
+        <div class="flex-1">
+          <CloneCombobox
+            items={filteredVars.map(v => ({ name: v.name, value: v.scope }))}
+            placeholder={$t('protection.selectVar')}
+            on:select={(e) => { selectedVarName = e.detail.name; handleAddVar() }}
+          />
+        </div>
         <button
           on:click={handleAddVar}
           disabled={!selectedVarName.trim()}
@@ -286,18 +284,15 @@
   {:else}
     <!-- Protected PATH Entries Tab -->
     <div class="space-y-4">
-      <!-- Add custom protected path (from existing PATH) — placed ABOVE custom list -->
+      <!-- Add custom protected path (searchable CloneCombobox from existing PATH) -->
       <div class="flex gap-2">
-        <select
-          bind:value={selectedPathEntry}
-          on:keydown={(e) => { if (e.key === 'Enter') handleAddPath() }}
-          class="flex-1 px-3 py-1.5 text-xs border border-gray-300 rounded-md font-mono focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-800 dark:border-gray-600 dark:text-gray-100"
-        >
-          <option value="">-- {$t('protection.selectPath')} --</option>
-          {#each filteredPathEntries as p (p.path)}
-            <option value={p.path}>{p.path} ({p.scope})</option>
-          {/each}
-        </select>
+        <div class="flex-1">
+          <CloneCombobox
+            items={filteredPathEntries.map(p => ({ name: p.path, value: p.scope }))}
+            placeholder={$t('profiles.cloneSearchPlaceholder')}
+            on:select={(e) => { selectedPathEntry = e.detail.name; handleAddPath() }}
+          />
+        </div>
         <button
           on:click={handleAddPath}
           disabled={!selectedPathEntry.trim()}
@@ -306,7 +301,6 @@
           {$t('protection.lockPath')}
         </button>
       </div>
-
       <!-- Built-in protected path entries -->
       <div class="bg-white border border-gray-200 rounded-md overflow-hidden dark:bg-gray-800 dark:border-gray-700">
         <div class="px-4 py-2.5 border-b border-gray-200 bg-gray-50 dark:bg-gray-750 dark:border-gray-700">

@@ -3,6 +3,7 @@
   import { saveProfileOrder as saveStoredOrder, applyStoredOrder as applyStored } from '../profileDrag'
   
   import { t } from 'svelte-i18n'
+  import CloneCombobox from './CloneCombobox.svelte'
   import { profiles, showModal, refreshTrigger } from '../stores'
   import { showToast } from '../stores'
   import {
@@ -14,6 +15,7 @@
     addProfileVar,
     removeProfileVar,
     listVariablesRaw,
+    listPathEntries,
     exportProfile,
     importProfile,
     renameProfile,
@@ -40,16 +42,10 @@
   let newVarValue = ''
   let newVarScope: 'user' | 'system' = 'user'
   let showAddVarPanel = false
-  let cloneSource = ''
-  let cloneSearchQuery = ''
-  let cloneHighlightIndex = -1
-  let cloneDropdownOpen = false
-  $: cloneFilteredVars = cloneSearchQuery.trim()
-    ? allVars.filter(v => v.name.toLowerCase().includes(cloneSearchQuery.toLowerCase()))
-    : allVars
   let allVars: EnvVariable[] = []
   let newPathEntry = ''
   let newPathScope: 'user' | 'system' = 'user'
+  let pathPool: { name: string; value?: string }[] = []
   let newProfileType: 'global' | 'launch' = 'global'
   let newProfileTarget = ''
   let newProfileArgs = ''
@@ -60,8 +56,7 @@
   // v0.8 secret provider state
   let activeProvider = 'dpapi-current-user'
   let availableProviders: string[] = []
-  let showProviderSelector = false
-  // Pointer drag state remains local. Registry/profile persistence is never
+    // Pointer drag state remains local. Registry/profile persistence is never
   // touched by a GUI-only ordering change.
   let dragIndex: number | null = null
   let isDragging = false
@@ -126,12 +121,34 @@
     const requestEpoch = ++profileRefreshEpoch
     loading = true
     try {
-      const [nextProfiles, nextVariables] = await Promise.all([listProfiles(), listVariablesRaw()])
+      const [nextProfiles, nextVariables, nextPathEntriesUser, nextPathEntriesSystem] = await Promise.all([
+        listProfiles(),
+        listVariablesRaw(),
+        listPathEntries('user').catch(() => []),
+        listPathEntries('system').catch(() => []),
+      ])
       if (requestEpoch !== profileRefreshEpoch) return
 
       profileList = applyStored(nextProfiles)
       profiles.set(profileList)
       allVars = nextVariables
+      // Build a searchable pool of existing PATH entries for the add-path
+      // CloneCombobox. Deduplicate by path so entries appearing in both
+      // scopes show once; keep scope as the value preview.
+      const seenPaths = new Set<string>()
+      pathPool = []
+      for (const e of (nextPathEntriesUser || [])) {
+        if (e && e.path && !seenPaths.has(e.path)) {
+          seenPaths.add(e.path)
+          pathPool.push({ name: e.path, value: 'user' })
+        }
+      }
+      for (const e of (nextPathEntriesSystem || [])) {
+        if (e && e.path && !seenPaths.has(e.path)) {
+          seenPaths.add(e.path)
+          pathPool.push({ name: e.path, value: 'system' })
+        }
+      }
       if (selectedProfile) {
         const updated = profileList.find((profile) => profile.name === selectedProfile?.name)
         selectedProfile = updated || null
@@ -312,7 +329,6 @@
   function requestChangeProvider(newProvider: string) {
     if (newProvider === activeProvider) return
     pendingProvider = newProvider
-    showProviderSelector = false
   }
 
   function cancelChangeProvider() {
@@ -465,8 +481,7 @@
       newVarName = ''
       newVarValue = ''
       newVarScope = 'user'
-      cloneSource = ''
-      showAddVarPanel = false
+            showAddVarPanel = false
       await refreshProfiles()
     } catch (err) {
       showMessage(localizeError(err instanceof Error ? err.message : String(err)), 'error')
@@ -475,13 +490,13 @@
     }
   }
 
-  function handleCloneSelect() {
-    if (!cloneSource) return
-    const found = allVars.find((v) => v.name === cloneSource)
-    if (found) {
-      newVarName = found.name
-      newVarValue = found.value
-    }
+  function handleCloneSelectFrom(v: { name: string; value: string }) {
+    // Bug 6/7: CloneCombobox auto-clears its own state on select, so the user can
+    // immediately search again without clicking empty space first. The selected
+    // variable name/value flows into the next-step inputs below; we do NOT echo
+    // the name back into the combobox (bug 7: avoidance of duplicate display).
+    newVarName = v.name
+    newVarValue = v.value
   }
 
   async function handleRemoveVar(varName: string) {
@@ -579,8 +594,7 @@
     showAddVarPanel = false
     newVarName = ''
     newVarValue = ''
-    cloneSource = ''
-  }
+      }
 </script>
 
 <svelte:window
@@ -593,7 +607,7 @@
   <div class="space-y-2">
     <!-- Choose scope of effect before naming the profile. Global writes the user registry;
          Launch applies only to the selected child process. -->
-    <div class="flex items-center gap-2 flex-wrap">
+    <div class="flex items-center gap-2 flex-wrap min-h-[64px]">
       <label class="text-xs font-medium text-gray-600 dark:text-gray-400">
         <input type="radio" bind:group={newProfileType} value="global" class="mr-1" /> {$t('profiles.typeGlobal')}
       </label>
@@ -673,7 +687,7 @@
     <div class="space-y-2" role="list" data-testid="profile-list">
       {#each profileList as profile, i (profile.name)}
         <div
-          class="bg-white rounded-md border border-gray-200 dark:bg-gray-800 dark:border-gray-700 {isDragging && dragIndex === i ? 'opacity-60' : ''}"
+          class="bg-white rounded-md border border-gray-200 dark:bg-gray-800 dark:border-gray-700 transition-all duration-150 hover:shadow-md hover:ring-2 hover:ring-blue-300 {isDragging && dragIndex === i ? 'opacity-80 ring-2 ring-blue-500 shadow-lg' : ''}"
           on:pointerenter={() => handleDragPointerEnter(i)}
           role="listitem"
           data-profile-name={profile.name}
@@ -818,7 +832,14 @@
                       <option value="user">{$t('scope.user')}</option>
                       <option value="system">{$t('scope.system')}</option>
                     </select>
-                    <input bind:value={newPathEntry} disabled={profile.isEnabled} on:keydown={(event) => { if (event.key === 'Enter') handleAddPath() }} class="min-w-0 flex-1 px-2 py-1 text-[10px] font-mono border rounded dark:bg-gray-700 dark:border-gray-600" placeholder={$t('path.entryPlaceholder')} />
+                    <div class="min-w-0 flex-1">
+                      <CloneCombobox
+                        items={pathPool}
+                        placeholder={$t('profiles.cloneSearchPlaceholder')}
+                        on:input={(e) => { newPathEntry = e.detail }}
+                        on:select={(e) => { newPathEntry = e.detail.name }}
+                      />
+                    </div>
                     <button on:click={handleAddPath} disabled={profile.isEnabled || !newPathEntry.trim()} class="px-2 text-[10px] text-blue-600 disabled:opacity-30">{$t('buttons.add')}</button>
                   </div>
                 </div>
@@ -900,51 +921,13 @@
               {:else}
                 <!-- Add variable panel with clone-from-existing dropdown -->
                 <div class="space-y-1.5 pt-2 border-t border-gray-100 dark:border-gray-700">
-                  <!-- Clone from existing variable with searchable filter -->
-                  <div>
-                    <label for="profile-clone-source" class="block text-[10px] font-medium text-gray-500 dark:text-gray-400 mb-0.5">
-                      {$t('profiles.cloneFromExisting')}
-                    </label>
-                    <div class="relative">
-                    <input
-                      type="text"
-                      placeholder={$t('variables.search')}
-                      bind:value={cloneSearchQuery}
-                      on:input={() => { cloneHighlightIndex = -1; cloneDropdownOpen = true }}
-                      on:focus={() => { cloneDropdownOpen = true }}
-                      on:keydown={(e) => {
-                        if (e.key === 'ArrowDown') { e.preventDefault(); if (cloneFilteredVars.length) { cloneDropdownOpen = true; cloneHighlightIndex = Math.min(cloneHighlightIndex + 1, Math.min(cloneFilteredVars.length, 10) - 1) } }
-                        else if (e.key === 'ArrowUp') { e.preventDefault(); cloneHighlightIndex = Math.max(cloneHighlightIndex - 1, 0) }
-                        else if (e.key === 'Enter') { e.preventDefault(); const v = cloneFilteredVars[cloneHighlightIndex >= 0 ? cloneHighlightIndex : 0]; if (v) { cloneSource = v.name; handleCloneSelect(); cloneDropdownOpen = false } }
-                        else if (e.key === 'Escape') { cloneDropdownOpen = false }
-                      }}
-                      on:blur={() => { setTimeout(() => { cloneDropdownOpen = false }, 150) }}
-                      class="w-full px-2 py-1 mb-0.5 text-[10px] border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100"
-                    />
-                    {#if !cloneSource}
-                      <div class="text-[9px] text-gray-400 mb-0.5">-- {$t('profiles.selectVariable')} --</div>
-                    {:else}
-                      <div class="text-[10px] text-gray-600 dark:text-gray-300 mb-0.5 truncate font-mono">{cloneSource}</div>
-                    {/if}
-                    {#if cloneDropdownOpen && cloneFilteredVars.length > 0}
-                      <ul class="absolute z-30 left-0 right-0 mt-0.5 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded shadow-lg max-h-40 overflow-auto">
-                        {#each cloneFilteredVars.slice(0, 10) as v, i (v.name)}
-                          <li
-                            class="px-2 py-1 cursor-pointer text-[10px] flex items-center gap-2 {i === cloneHighlightIndex ? 'bg-blue-100 dark:bg-blue-900/40' : 'hover:bg-gray-100 dark:hover:bg-gray-700'}"
-                            on:mousedown={(e) => { e.preventDefault(); cloneSource = v.name; handleCloneSelect(); cloneDropdownOpen = false; cloneSearchQuery = '' }}
-                            role="option"
-                            aria-selected={i === cloneHighlightIndex}
-                          >
-                            <span class="font-mono text-gray-700 dark:text-gray-200 truncate flex-1">{v.name}</span>
-                            <span class="font-mono text-[9px] text-gray-400 dark:text-gray-500 truncate max-w-[40%]">{v.value}</span>
-                          </li>
-                        {/each}
-                      </ul>
-                    {/if}
-                  </div>
-                  </div>
-
-                  <!-- Scope selector: user vs system -->
+                  <!-- Clone from existing variable (reusable CloneCombobox) -->
+                  <CloneCombobox
+                    items={allVars}
+                    placeholder={$t('profiles.cloneSearchPlaceholder')}
+                    on:select={(e) => { handleCloneSelectFrom(e.detail) }}
+                  />
+                                    <!-- Scope selector: user vs system -->
                   <div class="flex items-center gap-2 mb-1">
                     <label for="profile-var-scope" class="text-[10px] font-medium text-gray-500 dark:text-gray-400">
                       {$t('labels.scope')}
@@ -980,7 +963,7 @@
                       {$t('buttons.save')}
                     </button>
                     <button
-                      on:click={() => { showAddVarPanel = false; newVarName = ''; newVarValue = ''; newVarScope = 'user'; cloneSource = '' }}
+                      on:click={() => { showAddVarPanel = false; newVarName = ''; newVarValue = ''; newVarScope = 'user' }}
                       class="px-2 py-1 text-[10px] text-gray-600 border border-gray-300 rounded hover:bg-gray-50 transition dark:text-gray-300 dark:border-gray-600 dark:hover:bg-gray-700"
                     >
                       {$t('buttons.cancel')}
@@ -993,8 +976,7 @@
                 <!-- v0.8 secret provider indicator -->
                 <div class="flex items-center gap-1.5 mt-2">
                   <span class="text-[9px] text-gray-400 dark:text-gray-500">{$t('secrets.activeProvider')}:</span>
-                  {#if showProviderSelector}
-                    <select
+                      <select
                       class="text-[9px] px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 border border-gray-300 dark:border-gray-600 focus:outline-none focus:ring-1 focus:ring-blue-500"
                       value={activeProvider}
                       on:change={(e) => {
@@ -1009,16 +991,6 @@
                         </option>
                       {/each}
                     </select>
-                  {:else}
-                    <button
-                      type="button"
-                      class="text-[9px] px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
-                      on:click={() => (showProviderSelector = true)}
-                      title={$t('secrets.changeProvider')}
-                    >
-                      {providerDisplayName(activeProvider)}
-                    </button>
-                  {/if}
                 </div>
                 {#if !showAddSecretPanel}
                   <button
