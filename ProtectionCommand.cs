@@ -33,8 +33,8 @@ partial class Program
         if (sub == "add-path" && args.Length > 2)
         {
             string entry = args[2];
-            if (string.IsNullOrWhiteSpace(entry) || entry.Contains('\0'))
-                return ArgError("Error: Invalid PATH entry");
+            if (string.IsNullOrWhiteSpace(entry) || entry.Contains('\0') || entry.Contains(';') || entry.Contains('\r') || entry.Contains('\n'))
+                return ArgError("Error: Invalid PATH entry (must not contain semicolons or control characters)");
             var custom = CustomProtectedPathEntries;
             if (!custom.Any(c => c.TrimEnd('\\', '/').Equals(entry.TrimEnd('\\', '/'), StringComparison.OrdinalIgnoreCase)))
             {
@@ -71,8 +71,8 @@ partial class Program
         if (sub == "add-var" && args.Length > 2)
         {
             string varName = args[2];
-            if (string.IsNullOrWhiteSpace(varName) || varName.Length > 255 || varName.Contains('\0'))
-                return ArgError("Error: Invalid variable name");
+            if (string.IsNullOrWhiteSpace(varName) || varName.Length > 255 || varName.Contains('\0') || varName.Contains('=') || varName.Contains('\r') || varName.Contains('\n') || varName.Contains('\t'))
+                return ArgError("Error: Invalid variable name (must not contain =, null, or control characters)");
 
             // Built-in protected variables cannot be added via custom list
             // (they are already protected; adding would conflict with removable logic)
