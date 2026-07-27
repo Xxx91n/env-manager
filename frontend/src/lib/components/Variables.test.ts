@@ -12,8 +12,11 @@ describe('Variables protection controls', () => {
     isWriteInProgress.set(false)
     render(Variables)
     expect((screen.getByRole('switch') as HTMLButtonElement).disabled).toBe(true)
-    expect((screen.getByLabelText('buttons.edit') as HTMLButtonElement).disabled).toBe(true)
-    expect((screen.getByLabelText('buttons.delete') as HTMLButtonElement).disabled).toBe(true)
+    // v0.7.7.1: setup.ts mock resolves $t('buttons.edit') to the real English
+    // label 'Edit' rather than the raw key, so the harness must query by the
+    // resolved label. This is the regression worthy assertion.
+    expect((screen.getByLabelText('Edit') as HTMLButtonElement).disabled).toBe(true)
+    expect((screen.getByLabelText('Delete') as HTMLButtonElement).disabled).toBe(true)
   })
 
   it('keeps a disabled variable visible and re-enableable', () => {
@@ -28,8 +31,8 @@ describe('Variables protection controls', () => {
     variables.set([{ name: 'SYSTEM_LOCKED', value: 'safe', scope: 'system', isProtected: true, isBuiltinProtected: true }])
     render(Variables)
     expect((screen.getByRole('switch') as HTMLButtonElement).disabled).toBe(true)
-    expect((screen.getByLabelText('buttons.edit') as HTMLButtonElement).disabled).toBe(true)
-    expect((screen.getByLabelText('buttons.delete') as HTMLButtonElement).disabled).toBe(true)
+    expect((screen.getByLabelText('Edit') as HTMLButtonElement).disabled).toBe(true)
+    expect((screen.getByLabelText('Delete') as HTMLButtonElement).disabled).toBe(true)
   })
 
   it('does not invoke the CLI when a protected toggle is clicked programmatically', async () => {
