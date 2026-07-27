@@ -2949,7 +2949,8 @@ partial class Program
         // --summary: brief machine-friendly overview (single line, easy to parse)
         if (summaryOnly)
         {
-            string version = "0.5.0";
+            var ver = System.Reflection.Assembly.GetExecutingAssembly().GetName().Version;
+            string version = $"{ver.Major}.{ver.Minor}.{ver.Build}";
             Console.WriteLine($"env-manager-cli v{version} | Commands: list,get,set,delete,toggle,backup,restore,diff,merge,validate,profile,path,agents,help | Scopes: user,system | Safe: no-credentials,injection-protected,write-serialized | Agents: env-manager-cli agents --json for full spec");
             return 0;
         }
@@ -2957,10 +2958,11 @@ partial class Program
         // --json: structured machine-readable spec for AI agent integration
         if (jsonOutput)
         {
+            var specVer = System.Reflection.Assembly.GetExecutingAssembly().GetName().Version;
             var spec = new
             {
                 name = "env-manager-cli",
-                version = "0.5.0",
+                version = $"{specVer.Major}.{specVer.Minor}.{specVer.Build}",
                 description = "Windows environment variable manager CLI",
                 commands = new[]
                 {
@@ -2978,6 +2980,13 @@ partial class Program
                     new { cmd = "path", desc = "Edit PATH as list", args = "list|add|remove|move-up|move-down|rename", scope = true, @async = false },
                     new { cmd = "agents", desc = "Output AGENTS.md spec", args = "[--path|--json|--summary]", scope = false, @async = true },
                     new { cmd = "help", desc = "Show help", args = "", scope = false, @async = true },
+                    new { cmd = "rename", desc = "Atomically rename variable (verify before delete)", args = "<old> <new>", scope = true, @async = false },
+                    new { cmd = "change-scope", desc = "Move variable user<->system atomically", args = "<name> <new-scope>", scope = true, @async = false },
+                    new { cmd = "history", desc = "Audit log + guarded undo", args = "list|undo|delete|clear", scope = false, @async = true },
+                    new { cmd = "bulk", desc = "Import/export JSON/.env/CSV with --dry-run", args = "import|export <file>", scope = true, @async = false },
+                    new { cmd = "expand", desc = "Resolve nested %VAR% references", args = "<value>", scope = false, @async = true },
+                    new { cmd = "protection", desc = "List/add/remove protected vars and PATH entries", args = "list|add-var|remove-var|add-path|remove-path", scope = false, @async = true },
+                    new { cmd = "update", desc = "Check GitHub releases for newer version", args = "check", scope = false, @async = true },
                 },
                 scopes = new[] { "user", "system" },
                 output = "stdout: JSON or text, stderr: errors/debug, exit 0=success 1=failure",
@@ -3032,7 +3041,8 @@ partial class Program
                 tag = tag.TrimStart('v');
                 string htmlUrl = doc.RootElement.GetProperty("html_url").GetString() ?? "";
 
-                string currentVersion = "0.5.0";
+                var cv = System.Reflection.Assembly.GetExecutingAssembly().GetName().Version;
+                string currentVersion = $"{cv.Major}.{cv.Minor}.{cv.Build}";
                 bool isNewer = VersionIsNewer(tag, currentVersion);
 
                 var result = new
