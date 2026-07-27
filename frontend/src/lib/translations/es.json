@@ -347,5 +347,9 @@
   "errors.activate.vaultAddr": "VAULT_ADDR no esta definido. Establezca la URL del servidor Vault (https:// obligatorio para no-localhost).",
   "errors.activate.vaultTls": "VAULT_ADDR debe usar https:// para no-localhost. El valor actual no esta protegido por TLS.",
   "errors.activate.vaultToken": "VAULT_TOKEN no esta definido. Autentiquese en Vault (ej. vault login) y exporte VAULT_TOKEN antes de activar.",
-  "errors.activate.generic": "El proveedor respondio: {upstream}"
+  "errors.activate.generic": "El proveedor respondio: {upstream}",
+  "errors.globalInheritsLaunch": "Un perfil Global no puede heredar de un perfil Launch porque los perfiles Launch pueden llevar secretos DPAPI que se escribrian como texto cifrado en el registro de usuario.",
+  "errors.launchInheritsSecret": "Un perfil Launch no puede heredar de otro perfil Launch que ya contiene secretos, ya que el secreto heredado no tiene ruta de descifrado en el destino de lanzamiento de este perfil.",
+  "errors.inheritBlocked": "Esta combinacion de herencia esta bloqueada para proteger las variables secretas.",
+  "warnings.profileDisabledAfterInherit": "Perfil desactivado tras el cambio de herencia. Corrija la cadena de herencia antes de reaplicar."
 }

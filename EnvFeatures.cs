@@ -531,14 +531,62 @@ static int ProfileSetInherits(string[] args)
             return ArgError("Error: A profile cannot inherit itself");
         if (HasInheritanceCycle(args[2], requestedParents, profiles))
             return ArgError("Error: Inheritance cycle detected. One of the requested parents already inherits (transitively) from '" + args[2] + "'.");
+        // v0.7.7 hard boundary: a Global profile MUST NOT inherit from a Launch profile.
+        // The Launch profile type carries DPAPI secrets that cannot be put in the user
+        // registry as plaintext, and a Launch-targeted apply would never act on them
+        // in the right scope. This is the same guard as IsProfileApplicable, applied
+        // at set-inherits time so the user sees the rejection immediately instead of
+        // only at apply time. We also forbid a Launch profile from inheriting another
+        // Launch profile that carries secrets -- the inherited secret has no in-process
+        // decrypt path in this profile.
+        bool targetIsGlobal = profile.ProfileType.Equals("global", StringComparison.OrdinalIgnoreCase);
+        bool targetIsLaunch = profile.ProfileType.Equals("launch", StringComparison.OrdinalIgnoreCase);
+        if (targetIsGlobal)
+        {
+            foreach (string parentName in requestedParents)
+            {
+                var parent = FindProfile(profiles, parentName);
+                if (parent != null && parent.ProfileType.Equals("launch", StringComparison.OrdinalIgnoreCase))
+                    return ArgError("Error: A Global profile cannot inherit from a Launch profile. Launch profiles may carry DPAPI secrets that would leak ciphertext to the user registry if inherited.");
+            }
+        }
+        if (targetIsLaunch)
+        {
+            foreach (string parentName in requestedParents)
+            {
+                var parent = FindProfile(profiles, parentName);
+                if (parent != null && parent.ProfileType.Equals("launch", StringComparison.OrdinalIgnoreCase)
+                    && parent.SecretVariables.Count > 0)
+                    return ArgError("Error: A Launch profile cannot inherit from another Launch profile that already carries secrets. The inherited secret has no in-process decrypt path in this profile's launch target.");
+            }
+        }
         bool wasEnabled = profile.IsEnabled;
         if (wasEnabled) UnapplyProfile(profile);
         profile.Inherits = args.Skip(3).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
-        ResolveProfileVariables(profile, profiles);
-        ResolveProfilePaths(profile, profiles);
+        // v0.7.7: if the inheritance chain is somehow already poisoned (e.g. a
+        // hand-edited profiles.json that bypassed CLI validation), ResolveProfile*
+        // throws InvalidDataException. Wrap so set-inherits itself does not brick.
+        try
+        {
+            ResolveProfileVariables(profile, profiles);
+            ResolveProfilePaths(profile, profiles);
+        }
+        catch (InvalidDataException ex)
+        {
+            Console.Error.WriteLine("Error: Resolving the new inheritance chain failed: " + ex.Message + " -- the profiles.json file may have a pre-existing inheritance cycle. Aborting set-inherits without persisting.");
+            return 1;
+        }
         SaveProfiles(profiles);
-        // If the profile was active, re-apply it with the new inheritance chain
-        if (wasEnabled) { ApplyProfile(profile); profile.AppliedAt = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(); SaveProfiles(profiles); }
+        if (wasEnabled)
+        {
+            if (IsProfileApplicable(profile)) { ApplyProfile(profile); profile.AppliedAt = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(); SaveProfiles(profiles); }
+            else
+            {
+                profile.IsEnabled = false;
+                SaveProfiles(profiles);
+                Console.Error.WriteLine("Warning: Profile '" + profile.Name + "' is no longer applicable after the inheritance change (e.g. it now pulls in a secret variable). It has been disabled; fix the inheritance chain before re-applying.");
+            }
+        }
         Console.WriteLine(JsonSerializer.Serialize(new { profile = profile.Name, profile.Inherits }, JsonOpts));
         return 0;
     }

@@ -347,5 +347,9 @@
   "errors.activate.vaultAddr": "VAULT_ADDR is not set. Set it to your Vault server URL (https:// is required for non-localhost addresses).",
   "errors.activate.vaultTls": "VAULT_ADDR must use https:// for non-localhost addresses; the current value is not TLS-secured.",
   "errors.activate.vaultToken": "VAULT_TOKEN is not set. Authenticate to Vault first (e.g. vault login) and export VAULT_TOKEN before activating the Vault provider.",
-  "errors.activate.generic": "The provider reported: {upstream}"
+  "errors.activate.generic": "The provider reported: {upstream}",
+  "errors.globalInheritsLaunch": "A Global profile cannot inherit from a Launch profile because Launch profiles may carry DPAPI secrets that would be written as ciphertext to the user registry.",
+  "errors.launchInheritsSecret": "A Launch profile cannot inherit from another Launch profile that already carries secrets because the inherited secret has no in-process decrypt path for this profile's launch target.",
+  "errors.inheritBlocked": "This inheritance combination is blocked to protect secret variables.",
+  "warnings.profileDisabledAfterInherit": "Profile disabled after inheritance change. Fix the inheritance chain before re-applying."
 }

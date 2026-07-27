@@ -347,5 +347,9 @@
   "errors.activate.vaultAddr": "VAULT_ADDR 未设置。请将其设为 Vault 服务地址（非本地地址必须使用 https://）。",
   "errors.activate.vaultTls": "VAULT_ADDR 必须使用 https://（非本地地址）。当前值未启用 TLS。",
   "errors.activate.vaultToken": "VAULT_TOKEN 未设置。请先向 Vault 完成身份验证（例如 vault login）并导出 VAULT_TOKEN 后再激活 Vault 提供者。",
-  "errors.activate.generic": "提供者返回：{upstream}"
+  "errors.activate.generic": "提供者返回：{upstream}",
+  "errors.globalInheritsLaunch": "全局配置文件不能继承局部(Launch)配置文件，因为局部配置文件可能携带 DPAPI 机密，写入用户注册表时只会留下一堆密文垃圾。",
+  "errors.launchInheritsSecret": "局部(Launch)配置文件不能继承另一个已经携带机密的局部配置文件——继承来的机密在本配置文件的启动目标里没有可解密的路径。",
+  "errors.inheritBlocked": "为保护机密变量，禁止此继承组合。",
+  "warnings.profileDisabledAfterInherit": "修改继承关系后配置文件已停用。请先修复继承链再重新应用。"
 }

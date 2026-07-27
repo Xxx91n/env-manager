@@ -347,5 +347,9 @@
   "errors.activate.vaultAddr": "VAULT_ADDR ist nicht gesetzt. Setzen Sie die Vault-Server-URL (https:// ist fuer Nicht-localhost erforderlich).",
   "errors.activate.vaultTls": "VAULT_ADDR muss https:// verwenden (fuer Nicht-localhost). Der aktuelle Wert ist nicht TLS-gesichert.",
   "errors.activate.vaultToken": "VAULT_TOKEN ist nicht gesetzt. Authentifizieren Sie sich bei Vault (z.B. vault login) und exportieren Sie VAULT_TOKEN, bevor Sie aktivieren.",
-  "errors.activate.generic": "Der Provider meldete: {upstream}"
+  "errors.activate.generic": "Der Provider meldete: {upstream}",
+  "errors.globalInheritsLaunch": "Ein Global-Profil kann kein Launch-Profil erben, da Launch-Profile DPAPI-Geheimnisse enthalten koennen, die als Chiffretext in die Benutzer-Registry geschrieben wuerden.",
+  "errors.launchInheritsSecret": "Ein Launch-Profil kann kein anderes Launch-Profilm erben, das bereits Geheimnisse traegt. Das geerbte Geheimnis hat im Startziel dieses Profils keinen Entschluesselungspfad.",
+  "errors.inheritBlocked": "Diese Vererbungskombination ist gesperrt, um Geheimnisvariablen zu schuetzen.",
+  "warnings.profileDisabledAfterInherit": "Profil nach Vererbungsaenderung deaktiviert. Reparieren Sie die Vererbungskette, bevor Sie erneut anwenden."
 }

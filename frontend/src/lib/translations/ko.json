@@ -347,5 +347,9 @@
   "errors.activate.vaultAddr": "VAULT_ADDR이 설정되지 않았습니다. Vault 서버 URL을 설정하세요 (localhost가 아닌 경우 https:// 필수).",
   "errors.activate.vaultTls": "VAULT_ADDR은 localhost가 아닌 경우 https://를 사용해야 합니다. 현재 값은 TLS로 보호되지 않았습니다.",
   "errors.activate.vaultToken": "VAULT_TOKEN이 설정되지 않았습니다. Vault 인증(예: vault login) 후 VAULT_TOKEN을 내보내고 활성화하세요.",
-  "errors.activate.generic": "프로바이더 응답: {upstream}"
+  "errors.activate.generic": "프로바이더 응답: {upstream}",
+  "errors.globalInheritsLaunch": "Global 프로필은 Launch 프로필을 상속할 수 없습니다. Launch 프로필은 DPAPI 시크릿을 보유할 수 있어, 사용자 레지스트리에 암호문으로 기록되기 때문입니다.",
+  "errors.launchInheritsSecret": "Launch 프로필은 이미 시크릿을 보유한 다른 Launch 프로필을 상속할 수 없습니다. 상속된 시크릿은 이 프로필의 실행 대상에서 해독 경로가 없습니다.",
+  "errors.inheritBlocked": "시크릿 변수를 보호하기 위해 이 상속 조합은 차단됩니다.",
+  "warnings.profileDisabledAfterInherit": "상속 변경 이후 프로필이 비활성화되었습니다. 다시 적용하기 전에 상속 체인을 수정하세요."
 }

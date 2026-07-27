@@ -347,5 +347,9 @@
   "errors.activate.vaultAddr": "VAULT_ADDR غير معين. عين URL لخادم Vault (https:// الزامي لغير localhost).",
   "errors.activate.vaultTls": "يجب استخدام https:// في VAULT_ADDR لغير localhost. القيمة الحالية غير محمية بـ TLS.",
   "errors.activate.vaultToken": "VAULT_TOKEN غير معين. صادق على Vault (مثال vault login) وصدّر VAULT_TOKEN قبل التنشيط.",
-  "errors.activate.generic": "رد المزود: {upstream}"
+  "errors.activate.generic": "رد المزود: {upstream}",
+  "errors.globalInheritsLaunch": "لا يمكن للملف العام (Global) أن يرث ملف إطلاق (Launch) لأن ملفات الإطلاق قد تحوي أسرار DPAPI ستكتب كنص مشفر في سجل المستخدم.",
+  "errors.launchInheritsSecret": "لا يمكن لملف إطلاق أن يرث ملف إطلاق آخر يحوي أسراراً بالفعل، حيث لا يوجد مسار فك تشفير للسر الموروث في هدف إطلاق هذا الملف.",
+  "errors.inheritBlocked": "تم حظر مجموعة الوراثة هذه لحماية المتغيرات السرية.",
+  "warnings.profileDisabledAfterInherit": "تم تعطيل الملف بعد تغيير الوراثة. أصلح سلسلة الوراثة قبل إعادة التطبيق."
 }

@@ -347,5 +347,9 @@
   "errors.activate.vaultAddr": "VAULT_ADDR не задан. Укажите URL сервера Vault (для не-localhost обязателен https://).",
   "errors.activate.vaultTls": "VAULT_ADDR должен использовать https:// для не-localhost. Текущее значение не защищено TLS.",
   "errors.activate.vaultToken": "VAULT_TOKEN не задан. Пройдите аутентификацию в Vault (например vault login) и экспортируйте VAULT_TOKEN перед активацией.",
-  "errors.activate.generic": "Провайдер сообщил: {upstream}"
+  "errors.activate.generic": "Провайдер сообщил: {upstream}",
+  "errors.globalInheritsLaunch": "Global profil Launch profilini nasledovat ne mozhet, poskolku Launch profili mogut soderzhat sekrety DPAPI, kotorye budut zapisany kak shifr-tekst v reestr polzovatelya.",
+  "errors.launchInheritsSecret": "Launch profil ne mozhet nasledovat drugoy Launch profil, uzhe soderzhashchiy sekrety. U nasledovannogo sekreta net puti rasshifrovki v cele zapuska etogo profilya.",
+  "errors.inheritBlocked": "Ehta kombinatsiya nasledovaniya zablokirovana dlya zashchity sekretnykh peremennykh.",
+  "warnings.profileDisabledAfterInherit": "Profil otklyuchen posle izmeneniya nasledovaniya. Ispravte tsepochku nasledovaniya pered povtornym primeneniem."
 }

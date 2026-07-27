@@ -232,6 +232,16 @@
       const reason = $t(reasonKey, { values: reasonValues });
       return $t('errors.activateProvider', { values: { name: providerDisplayName, reason } });
     }
+    // v0.7.7: inheritance boundary errors from ProfileSetInherits.
+    if (/A Global profile cannot inherit from a Launch profile/i.test(errMsg)) {
+      return $t('errors.globalInheritsLaunch')
+    }
+    if (/A Launch profile cannot inherit from another Launch profile that already carries secrets/i.test(errMsg)) {
+      return $t('errors.launchInheritsSecret')
+    }
+    if (/no longer applicable after the inheritance change/i.test(errMsg)) {
+      return $t('warnings.profileDisabledAfterInherit')
+    }
     // Original Vault errors (non-activation path; e.g. Decrypt at runtime).
     if (/VAULT_ADDR environment variable not set/i.test(errMsg)) return $t('errors.vaultAddrNotSet')
     if (/VAULT_ADDR must use https/i.test(errMsg)) return $t('errors.vaultTlsRequired')
@@ -781,9 +791,14 @@
                   <div class="text-[10px] font-medium text-gray-500 mb-1">{$t('profiles.inherits')}</div>
                   <div class="space-y-1 max-h-20 overflow-y-auto">
                     {#each profileList.filter(candidate => candidate.name !== profile.name) as parent (parent.name)}
-                      <label class="flex items-center gap-1.5 text-[10px] text-gray-600 dark:text-gray-300">
-                        <input type="checkbox" checked={profile.inherits?.includes(parent.name)} on:change={(event) => handleInheritance(parent.name, event.currentTarget.checked)} />
-                        <span class="truncate">{parent.name}</span>
+                      {@const inheritBlocked = (profile.profileType === 'global' && parent.profileType === 'launch')
+                        || (profile.profileType === 'launch' && parent.profileType === 'launch' && (parent.secretVariables?.length ?? 0) > 0)}
+                      <label class="flex items-center gap-1.5 text-[10px] text-gray-600 dark:text-gray-300" title={inheritBlocked ? $t('errors.inheritBlocked') : ''}>
+                        <input type="checkbox" checked={profile.inherits?.includes(parent.name)} disabled={inheritBlocked} on:change={(event) => handleInheritance(parent.name, event.currentTarget.checked)} />
+                        <span class="truncate" class:opacity-40={inheritBlocked} class:cursor-not-allowed={inheritBlocked}>{parent.name}</span>
+                        {#if parent.profileType === 'launch'}
+                          <span class="text-[8px] px-0.5 rounded bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300">launch</span>
+                        {/if}
                       </label>
                     {/each}
                   </div>

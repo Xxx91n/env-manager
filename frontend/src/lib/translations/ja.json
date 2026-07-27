@@ -347,5 +347,9 @@
   "errors.activate.vaultAddr": "VAULT_ADDR が未設定です。Vault サーバーの URL を設定してください (非 localhost は https:// 必須)。",
   "errors.activate.vaultTls": "VAULT_ADDR は非 localhost の場合 https:// 必須です。現在の値は TLS で保護されていません。",
   "errors.activate.vaultToken": "VAULT_TOKEN が未設定です。Vault への認証 (例: vault login) と VAULT_TOKEN のエクスポートを行ってから有効化してください。",
-  "errors.activate.generic": "プロバイダーの応答: {upstream}"
+  "errors.activate.generic": "プロバイダーの応答: {upstream}",
+  "errors.globalInheritsLaunch": "Global プロファイルは Launch プロファイルを継承できません。Launch プロファイルは DPAPI シークレットを保持する可能性があり、ユーザレジストリに暗号文ゴミとして書き込まれるためです。",
+  "errors.launchInheritsSecret": "Launch プロファイルは、シークレットをすでに保持する別の Launch プロファイルを継承できません。継承されたシークレットにはこのプロファイルの起動ターゲット内に復号パスがありません。",
+  "errors.inheritBlocked": "シークレット変数を保護するため、この継承の組み合わせはブロックされます。",
+  "warnings.profileDisabledAfterInherit": "継承変更後、プロファイルは無効化されました。再適用前に継承チェーンを修正してください。"
 }
