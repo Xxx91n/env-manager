@@ -3075,7 +3075,9 @@ partial class Program
 
     static int ShowHelp()
     {
-        Console.WriteLine(@"Env Manager v0.5.0
+        var asm = System.Reflection.Assembly.GetExecutingAssembly().GetName();
+        var ver = asm.Version ?? new Version(0, 0, 0);
+        Console.WriteLine($@"Env Manager v{ver.Major}.{ver.Minor}.{ver.Build}
 
 Commands:
   list                       List all variables (JSON)

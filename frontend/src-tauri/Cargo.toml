@@ -1,6 +1,6 @@
 [package]
 name = "env-manager"
-version = "0.7.1"
+version = "0.7.7"
 description = "Windows environment variable manager"
 authors = []
 edition = "2021"
