@@ -518,6 +518,10 @@ fn version_is_newer(remote: &str, local: &str) -> bool {
 fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+            // If a second instance is launched, restore and focus the existing window.
+            restore_window(app);
+        }))
         .plugin({
             // Configure logging to write to a 'logs' directory adjacent to the exe.
             // This ensures portable versions keep logs alongside the executable,

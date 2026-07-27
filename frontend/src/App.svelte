@@ -43,6 +43,20 @@
     }
   }
   onMount(async () => {
+    // Read persisted settings from localStorage (settings are saved there by
+    // SettingsDialog but were never read back on startup, so every restart
+    // reset darkMode/fontScale to defaults. This reads them back before applying.)
+    try {
+      const storedDarkMode = localStorage.getItem('darkMode')
+      if (storedDarkMode === 'true') darkMode = true
+    } catch { /* localStorage unavailable */ }
+    try {
+      const storedFontScale = localStorage.getItem('fontScale')
+      if (storedFontScale) {
+        const parsed = parseFloat(storedFontScale)
+        if (!isNaN(parsed) && parsed > 0) fontScale = parsed
+      }
+    } catch { /* localStorage unavailable */ }
     applyDarkMode(darkMode)
     applyFontScale(fontScale)
 

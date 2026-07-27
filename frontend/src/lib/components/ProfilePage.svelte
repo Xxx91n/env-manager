@@ -797,7 +797,7 @@
                         <input type="checkbox" checked={profile.inherits?.includes(parent.name)} disabled={inheritBlocked} on:change={(event) => handleInheritance(parent.name, event.currentTarget.checked)} />
                         <span class="truncate" class:opacity-40={inheritBlocked} class:cursor-not-allowed={inheritBlocked}>{parent.name}</span>
                         {#if parent.profileType === 'launch'}
-                          <span class="text-[8px] px-0.5 rounded bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300">launch</span>
+                          <span class="text-[8px] px-0.5 rounded bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300">{$t('profiles.typeLaunch')}</span>
                         {/if}
                       </label>
                     {/each}

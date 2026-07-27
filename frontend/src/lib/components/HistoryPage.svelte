@@ -11,18 +11,24 @@
   let scope: 'user' | 'system' | 'profile' | 'all' = 'all'
 
   // i18n helper: map audit command string to localized operation name
-  function getOperationLabel(command: string): string {
+  function getOperationLabel(command: string, tFn: (key: string) => string): string {
     // v0.7.5: try the full command first (e.g. 'path add', 'history undo')
     // and fall back to the leading word if the full key is missing.
     // Previous code sliced entry.command split(' ')[0] upstream and lost the
     // subcommand; this restores 'path add'/'path remove'/'history undo' as
     // distinct labels instead of all collapsing to 'path' / 'history'.
+    //
+    // The translation function is passed explicitly ($t) so that Svelte's
+    // reactive dependency tracker sees $t referenced in the template call
+    // site and re-renders the cell when the locale changes. Without this,
+    // $t inside a function body is NOT tracked by Svelte's static reactivity
+    // analyzer, so the action column never updated on locale switch.
     const fullKey = 'history.op.' + command
-    const fullTranslated = $t(fullKey)
+    const fullTranslated = tFn(fullKey)
     if (fullTranslated !== fullKey) return fullTranslated
     const head = command.split(' ')[0]
     const headKey = 'history.op.' + head
-    const headTranslated = $t(headKey)
+    const headTranslated = tFn(headKey)
     if (headTranslated !== headKey) return headTranslated
     return command
   }
@@ -289,7 +295,7 @@
           {#each filteredHistory as entry (entry.id)}
             <tr class="hover:bg-gray-50 dark:hover:bg-gray-750">
               <td class="px-3 py-2 text-[10px] text-gray-500">{new Date(entry.timestamp).toLocaleString()}</td>
-              <td class="px-3 py-2 text-[10px] font-mono break-all whitespace-normal" title={entry.command}>{getOperationLabel(entry.command)}</td>
+              <td class="px-3 py-2 text-[10px] font-mono break-all whitespace-normal" title={entry.command}>{getOperationLabel(entry.command, $t)}</td>
               <td class="px-3 py-2 text-[10px]">
                 {#if entry.scope === 'profile'}
                   <span class="px-1.5 py-0.5 rounded text-[9px] font-medium bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300">{$t('scope.profile')}</span>
