@@ -400,8 +400,12 @@ fn gui_settings_path() -> Option<PathBuf> {
 }
 
 /// Reads a single key from gui-settings.json. Returns null if file/key missing.
+/// Rejects keys longer than 128 chars or containing control chars (defense-in-depth).
 #[tauri::command]
 fn read_gui_setting(key: String) -> serde_json::Value {
+    if key.len() > 128 || key.chars().any(|c| c.is_control()) {
+        return serde_json::Value::Null;
+    }
     match gui_settings_path() {
         Some(path) => match std::fs::read_to_string(&path) {
             Ok(content) => serde_json::from_str::<serde_json::Value>(&content)
@@ -415,8 +419,12 @@ fn read_gui_setting(key: String) -> serde_json::Value {
 }
 
 /// Writes a single key=value pair into gui-settings.json. Creates file if missing.
+/// Rejects keys > 128 chars or values > 4096 chars or containing control chars.
 #[tauri::command]
 fn write_gui_setting(key: String, value: String) -> bool {
+    if key.len() > 128 || value.len() > 4096 || key.chars().any(|c| c.is_control()) {
+        return false;
+    }
     let path = match gui_settings_path() {
         Some(p) => p,
         None => return false,
