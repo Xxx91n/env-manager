@@ -1,4 +1,4 @@
-import { register, init, getLocaleFromNavigator, addMessages, locale as localeStore } from 'svelte-i18n'
+import { register, init, addMessages, locale as localeStore } from 'svelte-i18n'
 import { getSetting, setSetting } from './settingsStore'
 import enMessages from './translations/en.json'
 
@@ -49,55 +49,52 @@ export function setupI18n(): string {
     initialLocale: defaultLocale,
   })
 
-  // Determine the user's preferred locale.
-  // Try localStorage first (sync, for instant first render).
-  // An async correction from tauri-plugin-store runs after init
-  // to handle cases where localStorage was lost but the store file survived.
-  let stored: string | null = null
-  try {
-    stored = typeof localStorage !== 'undefined' ? localStorage.getItem('locale') : null
-  } catch {
-    // localStorage may be unavailable in some WebView2 contexts
-  }
+ // Determine the user's preferred locale.
+ // Try localStorage first (sync, for instant first render).
+ // An async correction from the Rust IPC gui-settings.json runs after init
+ // to handle cases where localStorage was lost but the file persisted.
+ let stored: string | null = null
+ try {
+   stored = typeof localStorage !== 'undefined' ? localStorage.getItem('locale') : null
+ } catch {
+   // localStorage may be unavailable in some WebView2 contexts
+ }
+ 
+  // Do NOT use navigator locale as a fallback for first resolve. On a Chinese
+  // Windows machine getLocaleFromNavigator() returns 'zh-CN' which overwrites
+  // the user's explicit 'en' choice when localStorage is empty/unflushed. Only
+  // use 'en' (synchronously loaded) as the safe default. The async IPC store
+  // correction below handles persisted user preferences (backed by gui-settings.json via Rust IPC).
+  const resolved = normalizeLocale(stored || defaultLocale)
 
-  const browser = (() => {
-    try {
-      return getLocaleFromNavigator()
-    } catch {
-      return null
-    }
-  })()
+ // Persist the resolved locale.
+ try {
+   if (typeof localStorage !== 'undefined') localStorage.setItem('locale', resolved)
+   void setSetting('locale', resolved)
+ } catch {
+   // Ignore storage errors
+ }
 
-  const resolved = normalizeLocale(stored || browser || defaultLocale)
+ // If the user's locale is not English, switch asynchronously after render.
+ // The page is already visible in English; the switch is seamless.
+ if (resolved !== defaultLocale) {
+   queueMicrotask(() => {
+     localeStore.set(resolved)
+   })
+ }
 
-  // Persist the resolved locale.
-  try {
-    if (typeof localStorage !== 'undefined') localStorage.setItem('locale', resolved)
-    void setSetting('locale', resolved)
-  } catch {
-    // Ignore storage errors
-  }
-
-  // If the user's locale is not English, switch asynchronously after render.
-  // The page is already visible in English; the switch is seamless.
-  if (resolved !== defaultLocale) {
-    queueMicrotask(() => {
-      localeStore.set(resolved)
-    })
-  }
-
-  // Async correction: if the tauri-plugin-store has a different locale
-  // than what localStorage gave us, the store wins (it is more durable).
-  void getSetting('locale').then((storeLocale) => {
-    if (storeLocale && storeLocale !== resolved) {
-      const corrected = normalizeLocale(storeLocale)
-      if (corrected !== resolved) {
-        localeStore.set(corrected)
-        // Also update localStorage so the next sync read is correct
-        try { if (typeof localStorage !== 'undefined') localStorage.setItem('locale', corrected) } catch { /* ignore */ }
-      }
-    }
-  })
+ // Async correction: if the IPC gui-settings.json has a different locale
+ // than what localStorage gave us, the IPC store wins (it is more durable).
+ void getSetting('locale').then((storeLocale) => {
+   if (storeLocale && storeLocale !== resolved) {
+     const corrected = normalizeLocale(storeLocale)
+     if (corrected !== resolved) {
+       localeStore.set(corrected)
+       // Also update localStorage so the next sync read is correct
+       try { if (typeof localStorage !== 'undefined') localStorage.setItem('locale', corrected) } catch { /* ignore */ }
+     }
+   }
+ })
 
   // Apply text direction (RTL for Arabic) immediately and on locale changes.
   applyTextDirection(resolved)

@@ -1,44 +1,25 @@
-// Persistent settings store backed by tauri-plugin-store.
-// localStorage in Tauri WebView2 can be unreliable across restarts because
-// the WebView2 user-data folder may not flush before the process exits.
-// tauri-plugin-store writes to a JSON file in the app-data directory, which
-// is durable and independent of WebView2 lifecycle.
-import { Store } from '@tauri-apps/plugin-store'
-
-let store: Store | null = null
-
-async function getStore(): Promise<Store> {
-  if (!store) {
-    store = await Store.load('gui-settings.json')
-  }
-  return store
-}
+// Persistent settings store backed by Rust IPC commands that read/write
+// %LOCALAPPDATA%\EnvManager\gui-settings.json directly. Same proven path as
+// profiles.json/audit.json. Independent of WebView2 localStorage flush timing.
+import { invoke } from '@tauri-apps/api/core'
 
 export async function getSetting(key: string): Promise<string | null> {
   try {
-    const s = await getStore()
-    return await s.get<string>(key) ?? null
+    const val = await invoke('read_gui_setting', { key })
+    if (val === null || val === undefined) return localStorageFallback(key)
+    return String(val)
   } catch {
-    // Fallback to localStorage if the store plugin is unavailable (e.g. in tests)
-    try {
-      return typeof localStorage !== 'undefined' ? localStorage.getItem(key) : null
-    } catch {
-      return null
-    }
+    return localStorageFallback(key)
   }
 }
 
 export async function setSetting(key: string, value: string): Promise<void> {
-  try {
-    const s = await getStore()
-    await s.set(key, value)
-    await s.save()
-  } catch {
-    // Fallback to localStorage
-    try {
-      if (typeof localStorage !== 'undefined') localStorage.setItem(key, value)
-    } catch {
-      // ignore
-    }
-  }
+  // Also write to localStorage as a sync fallback for instant first render.
+  try { if (typeof localStorage !== 'undefined') localStorage.setItem(key, value) } catch { /* ignore */ }
+  try { await invoke('write_gui_setting', { key, value }) } catch { /* ignore */ }
+}
+
+function localStorageFallback(key: string): string | null {
+  try { return typeof localStorage !== 'undefined' ? localStorage.getItem(key) : null }
+  catch { return null }
 }

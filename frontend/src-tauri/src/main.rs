@@ -393,6 +393,50 @@ fn run_cli(app: tauri::AppHandle, command: String, args: Vec<String>) -> CliResp
     }
 }
 
+/// Returns the path to gui-settings.json in %LOCALAPPDATA%\EnvManager\.
+fn gui_settings_path() -> Option<PathBuf> {
+    let local = std::env::var("LOCALAPPDATA").ok()?;
+    Some(PathBuf::from(local).join("EnvManager").join("gui-settings.json"))
+}
+
+/// Reads a single key from gui-settings.json. Returns null if file/key missing.
+#[tauri::command]
+fn read_gui_setting(key: String) -> serde_json::Value {
+    match gui_settings_path() {
+        Some(path) => match std::fs::read_to_string(&path) {
+            Ok(content) => serde_json::from_str::<serde_json::Value>(&content)
+                .ok()
+                .and_then(|obj| obj.get(&key).cloned())
+                .unwrap_or(serde_json::Value::Null),
+            Err(_) => serde_json::Value::Null,
+        },
+        None => serde_json::Value::Null,
+    }
+}
+
+/// Writes a single key=value pair into gui-settings.json. Creates file if missing.
+#[tauri::command]
+fn write_gui_setting(key: String, value: String) -> bool {
+    let path = match gui_settings_path() {
+        Some(p) => p,
+        None => return false,
+    };
+    let mut obj: serde_json::Value = std::fs::read_to_string(&path)
+        .ok()
+        .and_then(|c| serde_json::from_str(&c).ok())
+        .unwrap_or_else(|| serde_json::json!({}));
+    if let Some(map) = obj.as_object_mut() {
+        map.insert(key, serde_json::Value::String(value));
+    }
+    if let Some(parent) = path.parent() {
+        let _ = std::fs::create_dir_all(parent);
+    }
+    serde_json::to_string_pretty(&obj)
+        .ok()
+        .and_then(|json| std::fs::write(&path, json).ok())
+        .is_some()
+}
+
 #[tauri::command]
 fn cli_diagnostics(app: tauri::AppHandle) -> serde_json::Value {
     let exe_dir = std::env::current_exe()
@@ -520,12 +564,11 @@ fn main() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
             // If a second instance is launched, restore and focus the existing window.
-            restore_window(app);
-        }))
-        .plugin(tauri_plugin_store::Builder::default().build())
-        .plugin({
-            // Configure logging to write to a 'logs' directory adjacent to the exe.
-            // This ensures portable versions keep logs alongside the executable,
+           restore_window(app);
+      }))
+      .plugin({
+          // Configure logging to write to a 'logs' directory adjacent to the exe.
+           // This ensures portable versions keep logs alongside the executable,
             // while MSI installs use the standard app data path (default behavior
             // when the custom directory cannot be created).
             let log_dir = std::env::current_exe()
@@ -603,7 +646,14 @@ fn main() {
                 _ => {}
             }
         })
-        .invoke_handler(tauri::generate_handler![run_cli, cli_diagnostics, update_tray_locale, check_for_updates])
+       .invoke_handler(tauri::generate_handler![
+            run_cli,
+            cli_diagnostics,
+            update_tray_locale,
+            check_for_updates,
+            read_gui_setting,
+            write_gui_setting,
+        ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

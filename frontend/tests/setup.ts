@@ -17,12 +17,21 @@ import { writable, derived, get } from 'svelte/store'
 import enMessages from '../src/lib/translations/en.json'
 import zhMessages from '../src/lib/translations/zh.json'
 
+// In-memory GUI settings store for tests. Keyed by string.
+const guiSettings = new Map<string, string>()
+
 // Mock Tauri invoke - returns a default empty success response.
+// For read_gui_setting/write_gui_setting, route to the in-memory store.
 vi.mock('@tauri-apps/api/core', () => ({
-  invoke: vi.fn().mockResolvedValue({
-    success: true,
-    data: '[]',
-    error: null,
+  invoke: vi.fn(async (cmd: string, args?: Record<string, unknown>) => {
+    if (cmd === 'read_gui_setting' && args?.key) {
+      return guiSettings.get(args.key as string) ?? null
+    }
+    if (cmd === 'write_gui_setting' && args?.key) {
+      guiSettings.set(args.key as string, args.value as string)
+      return true
+    }
+    return { success: true, data: '[]', error: null }
   }),
 }))
 
@@ -76,16 +85,9 @@ beforeEach(() => {
   // state (rather than leaking the previous test's last locale).
   localeStore.set('en')
 })
-// Mock @tauri-apps/plugin-store: use an in-memory Map backed by localStorage
-vi.mock('@tauri-apps/plugin-store', () => {
-  const store = new Map<string, unknown>()
-  return {
-    Store: {
-      load: vi.fn(async () => ({
-        get: vi.fn(async (key: string) => store.get(key) ?? null),
-        set: vi.fn(async (key: string, value: unknown) => { store.set(key, value) }),
-        save: vi.fn(async () => {}),
-      })),
-    },
-  }
+// Reset the in-memory GUI settings store before each test.
+// (The mock invoke in the @tauri-apps/api/core mock above routes
+// read_gui_setting/write_gui_setting to this Map.)
+beforeEach(() => {
+  guiSettings.clear()
 })
