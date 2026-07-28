@@ -4,6 +4,7 @@
   import { locales, defaultLanguage } from '../i18n'
   import { isCliInPath, addCliToPath, removeCliFromPath, listPathEntries, checkForUpdates, bulkImport, bulkExport, pickOpenFile, pickSaveFile } from '../api'
   import { get } from 'svelte/store'
+  import { setSetting } from '../settingsStore'
   import { showToast } from '../stores'
   import { t as tStore } from 'svelte-i18n'
 
@@ -48,7 +49,7 @@
   function switchLocale(newLocale: string) {
     locale.set(newLocale)
     try {
-      localStorage.setItem('locale', newLocale)
+      void setSetting('locale', newLocale)
     } catch {
       // Ignore storage errors
     }
@@ -62,7 +63,7 @@
   function toggleDarkMode() {
     darkMode = !darkMode
     try {
-      localStorage.setItem('darkMode', String(darkMode))
+      void setSetting('darkMode', String(darkMode))
     } catch {
       // Ignore storage errors
     }
@@ -104,7 +105,7 @@
     selectedFontScale = scale
     fontScale = scale
     try {
-      localStorage.setItem('fontScale', String(scale))
+      void setSetting('fontScale', String(scale))
     } catch {
       // Ignore
     }

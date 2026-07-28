@@ -34,7 +34,8 @@
     "vitest": "^4.1.10"
   },
   "dependencies": {
-    "@tauri-apps/plugin-dialog": "^2.7.1"
+    "@tauri-apps/plugin-dialog": "^2.7.1",
+    "@tauri-apps/plugin-store": "^2.4.4"
   },
   "license": "Apache-2.0"
 }

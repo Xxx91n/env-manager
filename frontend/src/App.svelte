@@ -10,6 +10,7 @@
   import ConfirmDialog from './lib/components/ConfirmDialog.svelte'
   import { variables, loading, error, activeView, modal, isWriteInProgress, debugLogs, refreshTrigger, toasts, dismissToast } from './lib/stores'
   import { listVariables, updateTrayLocale } from './lib/api'
+  import { getSetting } from './lib/settingsStore'
   import { defaultLanguage } from './lib/i18n'
   import { get } from 'svelte/store'
   import { t as tStore } from 'svelte-i18n'
@@ -47,16 +48,16 @@
     // SettingsDialog but were never read back on startup, so every restart
     // reset darkMode/fontScale to defaults. This reads them back before applying.)
     try {
-      const storedDarkMode = localStorage.getItem('darkMode')
+      const storedDarkMode = await getSetting('darkMode')
       if (storedDarkMode === 'true') darkMode = true
-    } catch { /* localStorage unavailable */ }
+    } catch { /* best-effort */ }
     try {
-      const storedFontScale = localStorage.getItem('fontScale')
+      const storedFontScale = await getSetting('fontScale')
       if (storedFontScale) {
         const parsed = parseFloat(storedFontScale)
         if (!isNaN(parsed) && parsed > 0) fontScale = parsed
       }
-    } catch { /* localStorage unavailable */ }
+    } catch { /* best-effort */ }
     applyDarkMode(darkMode)
     applyFontScale(fontScale)
 

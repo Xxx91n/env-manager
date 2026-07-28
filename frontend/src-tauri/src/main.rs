@@ -522,6 +522,7 @@ fn main() {
             // If a second instance is launched, restore and focus the existing window.
             restore_window(app);
         }))
+        .plugin(tauri_plugin_store::Builder::default().build())
         .plugin({
             // Configure logging to write to a 'logs' directory adjacent to the exe.
             // This ensures portable versions keep logs alongside the executable,

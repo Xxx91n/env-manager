@@ -76,3 +76,16 @@ beforeEach(() => {
   // state (rather than leaking the previous test's last locale).
   localeStore.set('en')
 })
+// Mock @tauri-apps/plugin-store: use an in-memory Map backed by localStorage
+vi.mock('@tauri-apps/plugin-store', () => {
+  const store = new Map<string, unknown>()
+  return {
+    Store: {
+      load: vi.fn(async () => ({
+        get: vi.fn(async (key: string) => store.get(key) ?? null),
+        set: vi.fn(async (key: string, value: unknown) => { store.set(key, value) }),
+        save: vi.fn(async () => {}),
+      })),
+    },
+  }
+})

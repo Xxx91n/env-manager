@@ -1,4 +1,5 @@
 import { register, init, getLocaleFromNavigator, addMessages, locale as localeStore } from 'svelte-i18n'
+import { getSetting, setSetting } from './settingsStore'
 import enMessages from './translations/en.json'
 
 const defaultLocale = 'en'
@@ -49,6 +50,9 @@ export function setupI18n(): string {
   })
 
   // Determine the user's preferred locale.
+  // Try localStorage first (sync, for instant first render).
+  // An async correction from tauri-plugin-store runs after init
+  // to handle cases where localStorage was lost but the store file survived.
   let stored: string | null = null
   try {
     stored = typeof localStorage !== 'undefined' ? localStorage.getItem('locale') : null
@@ -68,7 +72,8 @@ export function setupI18n(): string {
 
   // Persist the resolved locale.
   try {
-    localStorage.setItem('locale', resolved)
+    if (typeof localStorage !== 'undefined') localStorage.setItem('locale', resolved)
+    void setSetting('locale', resolved)
   } catch {
     // Ignore storage errors
   }
@@ -80,6 +85,19 @@ export function setupI18n(): string {
       localeStore.set(resolved)
     })
   }
+
+  // Async correction: if the tauri-plugin-store has a different locale
+  // than what localStorage gave us, the store wins (it is more durable).
+  void getSetting('locale').then((storeLocale) => {
+    if (storeLocale && storeLocale !== resolved) {
+      const corrected = normalizeLocale(storeLocale)
+      if (corrected !== resolved) {
+        localeStore.set(corrected)
+        // Also update localStorage so the next sync read is correct
+        try { if (typeof localStorage !== 'undefined') localStorage.setItem('locale', corrected) } catch { /* ignore */ }
+      }
+    }
+  })
 
   // Apply text direction (RTL for Arabic) immediately and on locale changes.
   applyTextDirection(resolved)
