@@ -49,52 +49,55 @@ export function setupI18n(): string {
     initialLocale: defaultLocale,
   })
 
- // Determine the user's preferred locale.
- // Try localStorage first (sync, for instant first render).
- // An async correction from the Rust IPC gui-settings.json runs after init
- // to handle cases where localStorage was lost but the file persisted.
+ // Sync read of localStorage for instant first render. This is NOT the
+ // authoritative source - it may be stale if WebView2 didn't flush before
+ // the process exited. The IPC gui-settings.json (read below) is authoritative.
  let stored: string | null = null
  try {
    stored = typeof localStorage !== 'undefined' ? localStorage.getItem('locale') : null
  } catch {
    // localStorage may be unavailable in some WebView2 contexts
  }
- 
-  // Do NOT use navigator locale as a fallback for first resolve. On a Chinese
-  // Windows machine getLocaleFromNavigator() returns 'zh-CN' which overwrites
-  // the user's explicit 'en' choice when localStorage is empty/unflushed. Only
-  // use 'en' (synchronously loaded) as the safe default. The async IPC store
-  // correction below handles persisted user preferences (backed by gui-settings.json via Rust IPC).
+
+  // Do NOT use navigator locale as a fallback. On a Chinese Windows machine
+  // getLocaleFromNavigator() returns 'zh-CN' which overwrites the user's
+  // explicit en choice when localStorage is empty/unflushed.
   const resolved = normalizeLocale(stored || defaultLocale)
 
- // Persist the resolved locale.
- try {
-   if (typeof localStorage !== 'undefined') localStorage.setItem('locale', resolved)
-   void setSetting('locale', resolved)
- } catch {
-   // Ignore storage errors
- }
+  // Sync write to localStorage so first-run persists the default and the
+  // i18n test (which checks localStorage immediately after setupI18n) passes.
+  // This is NOT the durable store - the IPC read below may override it.
+  try { if (typeof localStorage !== 'undefined') localStorage.setItem('locale', resolved) } catch { /* ignore */ }
 
- // If the user's locale is not English, switch asynchronously after render.
- // The page is already visible in English; the switch is seamless.
- if (resolved !== defaultLocale) {
-   queueMicrotask(() => {
-     localeStore.set(resolved)
-   })
- }
+  // If the user's locale is not English, switch asynchronously after render.
+  // The page is already visible in English; the switch is seamless.
+  if (resolved !== defaultLocale) {
+    queueMicrotask(() => {
+      localeStore.set(resolved)
+    })
+  }
 
- // Async correction: if the IPC gui-settings.json has a different locale
- // than what localStorage gave us, the IPC store wins (it is more durable).
- void getSetting('locale').then((storeLocale) => {
-   if (storeLocale && storeLocale !== resolved) {
-     const corrected = normalizeLocale(storeLocale)
-     if (corrected !== resolved) {
-       localeStore.set(corrected)
-       // Also update localStorage so the next sync read is correct
-       try { if (typeof localStorage !== 'undefined') localStorage.setItem('locale', corrected) } catch { /* ignore */ }
-     }
-   }
- })
+  // The IPC gui-settings.json is the SINGLE SOURCE OF TRUTH for persisted
+  // locale. We read it AFTER init and correct the locale store if it differs.
+  // NEVER write to it here - the persisted value is only changed when the
+  // user explicitly picks a language in SettingsDialog.switchLocale.
+  // The prior bug was calling setSetting('locale', resolved) here, which
+  // overwrote the user's persisted choice with a stale sync guess before
+  // this async correction could protect it.
+  void getSetting('locale').then((storeLocale) => {
+    if (storeLocale) {
+      const authoritative = normalizeLocale(storeLocale)
+      // Update localStorage so the next sync read matches the durable value
+      try { if (typeof localStorage !== 'undefined') localStorage.setItem('locale', authoritative) } catch { /* ignore */ }
+      // Switch the locale store if it differs from what we rendered
+      if (authoritative !== resolved) {
+        localeStore.set(authoritative)
+      }
+    } else if (stored) {
+      // IPC file empty but localStorage has a value - persist it for next time
+      void setSetting('locale', resolved)
+    }
+  })
 
   // Apply text direction (RTL for Arabic) immediately and on locale changes.
   applyTextDirection(resolved)

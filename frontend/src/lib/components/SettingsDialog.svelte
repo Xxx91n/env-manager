@@ -119,18 +119,22 @@
     try {
       const version = '0.5.0'
       const info = await checkForUpdates(version)
-      updateAvailable = info.isUpdateAvailable
       latestVersion = info.latestVersion
       releaseUrl = info.releaseUrl
-      if (info.isUpdateAvailable) {
-        showToast($t('update.available', { values: { version: info.latestVersion } }), 'success')
-      } else if (info.error) {
+      if (info.error) {
+        // Check failed: do NOT show "up to date" - only show the error toast
+        updateAvailable = null
         showToast($t('update.error'), 'error')
+      } else if (info.isUpdateAvailable) {
+        updateAvailable = true
+        showToast($t('update.available', { values: { version: info.latestVersion } }), 'success')
       } else {
+        updateAvailable = false
         showToast($t('update.upToDate'), 'info')
       }
     } catch {
-      updateAvailable = false
+      // Network/invoke failure: do NOT show "up to date" - only show error
+      updateAvailable = null
       showToast($t('update.error'), 'error')
     } finally {
       updateChecking = false

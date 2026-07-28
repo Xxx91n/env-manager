@@ -607,7 +607,7 @@
   <div class="space-y-2">
    <!-- Choose scope of effect before naming the profile. Global writes the user registry;
         Launch applies only to the selected child process. -->
-    <div class="flex items-start gap-2 flex-wrap py-1 min-h-[72px]">
+    <div class="flex items-start gap-1.5 flex-wrap py-0.5 min-h-[48px]">
      <label class="text-xs font-medium text-gray-600 dark:text-gray-400">
        <input type="radio" bind:group={newProfileType} value="global" class="mr-1" /> {$t('profiles.typeGlobal')}
       </label>

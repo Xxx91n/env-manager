@@ -271,7 +271,45 @@
     -webkit-text-rendering: optimizeLegibility;
   }
 
-  :global([dir='rtl']) {
-    text-align: right;
+ :global([dir='rtl']) {
+   text-align: right;
+ }
+
+  /* Edge-style auto-hide overlay scrollbar: thin track, thumb hidden when idle,
+     appears on hover or while scrolling. Matches Tauri WebView2/Edge native feel. */
+  :global(*) {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(0, 0, 0, 0) transparent;
+  }
+  :global(*:hover) {
+    scrollbar-color: rgba(0, 0, 0, 0.25) transparent;
+  }
+  :global(*)::-webkit-scrollbar { width: 8px; height: 8px; }
+  :global(*)::-webkit-scrollbar-track { background: transparent; }
+  :global(*)::-webkit-scrollbar-thumb {
+    background-color: rgba(0, 0, 0, 0);
+    border-radius: 8px;
+    transition: background-color 0.15s ease;
+  }
+  :global(*:hover)::-webkit-scrollbar-thumb {
+    background-color: rgba(0, 0, 0, 0.25);
+  }
+  :global(*:active)::-webkit-scrollbar-thumb {
+    background-color: rgba(0, 0, 0, 0.4);
+  }
+  :global(.dark *) {
+    scrollbar-color: rgba(255, 255, 255, 0) transparent;
+  }
+  :global(.dark *:hover) {
+    scrollbar-color: rgba(255, 255, 255, 0.3) transparent;
+  }
+  :global(.dark *)::-webkit-scrollbar-thumb {
+    background-color: rgba(255, 255, 255, 0);
+  }
+  :global(.dark *:hover)::-webkit-scrollbar-thumb {
+    background-color: rgba(255, 255, 255, 0.3);
+  }
+  :global(.dark *:active)::-webkit-scrollbar-thumb {
+    background-color: rgba(255, 255, 255, 0.45);
   }
 </style>
