@@ -72,6 +72,7 @@ env-manager-cli.exe merge old.json new.json --output merged.json
 env-manager-cli.exe validate backup.json
 ```
 
+```bash
 # 配置文件管理
 env-manager-cli.exe profile list
 env-manager-cli.exe profile create dev-profile
@@ -96,6 +97,7 @@ env-manager-cli.exe protection add-var JAVA_HOME
 env-manager-cli.exe protection remove-var JAVA_HOME
 env-manager-cli.exe protection add-path "C:\MyTools\bin"
 env-manager-cli.exe protection remove-path "C:\MyTools\bin"
+```
 
 ### GUI 使用
 
@@ -119,7 +121,7 @@ env-manager-cli.exe protection remove-path "C:\MyTools\bin"
 ```bash
 # 编译 CLI
 dotnet build -c Release
-# 输出：bin/Release/net10.0/env-manager-cli.exe
+# 输出：bin/Release/net10.0-windows/env-manager-cli.exe
 
 # 编译 GUI（开发模式，热重载）
 cd frontend
@@ -130,6 +132,7 @@ npm run tauri-dev
 powershell -ExecutionPolicy Bypass -File scripts/build-all.ps1
 # 输出：
 #   release/portable/  - GUI + CLI 平铺目录，可直接运行
+#   release/cli-only/  - 仅 CLI 包（无 GUI）
 #   release/msi/       - Windows MSI 安装包
 ```
 
@@ -238,6 +241,7 @@ env-manager/
 │       └── build-all.ps1         # 统一构建脚本
 ├── release/                      # 构建产物（已 gitignore）
 │   ├── portable/                 # GUI + CLI 便携版
+│   ├── cli-only/                 # 仅 CLI 包
 │   └── msi/                      # MSI 安装包
 ├── AGENTS.md                     # 项目规范
 └── LICENSE                       # Apache-2.0

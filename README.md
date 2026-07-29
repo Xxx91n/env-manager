@@ -73,12 +73,13 @@ env-manager-cli.exe merge old.json new.json --output merged.json
 env-manager-cli.exe validate backup.json
 ```
 
+```bash
 # Profile management
 env-manager-cli.exe profile list
 env-manager-cli.exe profile create dev-profile
 # Create an isolated profile for one executable
 env-manager-cli.exe profile create tool-run --type launch --target "C:\Tools\tool.exe"
-env-manager-cli.exe profile add-var dev-profile JAVA_HOME "D:\jdk17"env-manager-cli.exe profile add-var dev-profile JAVA_HOME "D:\jdk17"
+env-manager-cli.exe profile add-var dev-profile JAVA_HOME "D:\jdk17"
 # Scope: default user; --scope system routes to HKLM on apply
 env-manager-cli.exe profile add-path dev-profile "C:\Tools\bin" --scope user
 env-manager-cli.exe profile apply dev-profile
@@ -97,6 +98,7 @@ env-manager-cli.exe protection add-var JAVA_HOME
 env-manager-cli.exe protection remove-var JAVA_HOME
 env-manager-cli.exe protection add-path "C:\MyTools\bin"
 env-manager-cli.exe protection remove-path "C:\MyTools\bin"
+```
 
 ### GUI Usage
 
@@ -120,7 +122,7 @@ Launch `env-manager.exe` from the portable package or Start Menu. The GUI commun
 ```bash
 # Build CLI
 dotnet build -c Release
-# Output: bin/Release/net10.0/env-manager-cli.exe
+# Output: bin/Release/net10.0-windows/env-manager-cli.exe
 
 # Build GUI (development with hot reload)
 cd frontend
@@ -131,6 +133,7 @@ npm run tauri-dev
 powershell -ExecutionPolicy Bypass -File scripts/build-all.ps1
 # Output:
 #   release/portable/  - GUI + CLI flat layout, ready to run
+#   release/cli-only/  - CLI-only package (no GUI)
 #   release/msi/       - Windows MSI installer
 ```
 
@@ -239,6 +242,7 @@ env-manager/
 │       └── build-all.ps1         # Consolidated build script
 ├── release/                      # Build output (gitignored)
 │   ├── portable/                 # GUI + CLI flat package
+│   ├── cli-only/                 # CLI-only package (no GUI)
 │   └── msi/                      # MSI installer
 ├── AGENTS.md                     # Project specification
 └── LICENSE                       # Apache-2.0
