@@ -43,69 +43,64 @@ function applyTextDirection(loc: string): void {
  * message loader hasn't resolved yet and $t() returns undefined for all keys.
  */
 export function setupI18n(): string {
-  // Always initialize with 'en' first - messages are already loaded synchronously.
+  // Always initialize with 'en' synchronously - messages are already loaded.
+  // The authoritative locale is read from the durable IPC store in
+  // App.svelte onMount (await getSetting('locale')) via applyPersistedLocale()
+  // so a stale WebView2 localStorage can never resurrect a language the user
+  // already switched away from. We do NOT queue a microtask from a stale sync
+  // guess that could re-set the wrong locale before the IPC read resolves.
   init({
     fallbackLocale: defaultLocale,
     initialLocale: defaultLocale,
   })
 
- // Sync read of localStorage for instant first render. This is NOT the
- // authoritative source - it may be stale if WebView2 didn't flush before
- // the process exited. The IPC gui-settings.json (read below) is authoritative.
- let stored: string | null = null
- try {
-   stored = typeof localStorage !== 'undefined' ? localStorage.getItem('locale') : null
- } catch {
-   // localStorage may be unavailable in some WebView2 contexts
- }
+  // Best-effort localStorage hint for first paint - never authoritative.
+  let stored: string | null = null
+  try {
+    stored = typeof localStorage !== 'undefined' ? localStorage.getItem('locale') : null
+  } catch { /* ignore */ }
 
-  // Do NOT use navigator locale as a fallback. On a Chinese Windows machine
-  // getLocaleFromNavigator() returns 'zh-CN' which overwrites the user's
-  // explicit en choice when localStorage is empty/unflushed.
-  const resolved = normalizeLocale(stored || defaultLocale)
-
-  // Sync write to localStorage so first-run persists the default and the
-  // i18n test (which checks localStorage immediately after setupI18n) passes.
-  // This is NOT the durable store - the IPC read below may override it.
-  try { if (typeof localStorage !== 'undefined') localStorage.setItem('locale', resolved) } catch { /* ignore */ }
-
-  // If the user's locale is not English, switch asynchronously after render.
-  // The page is already visible in English; the switch is seamless.
-  if (resolved !== defaultLocale) {
-    queueMicrotask(() => {
-      localeStore.set(resolved)
-    })
+  // If localStorage happens to have a supported non-en locale, render it for
+  // first paint ONLY (instant feedback). applyPersistedLocale() (called from
+  // App.svelte onMount after the IPC read resolves) is the single source of
+  // truth and will override this if it differs.
+  const hint = normalizeLocale(stored || defaultLocale)
+  // Always persist the hint to localStorage so the first-render value and the
+  // sync-read tests stay consistent. applyPersistedLocale() still wins.
+  try { if (typeof localStorage !== 'undefined') localStorage.setItem('locale', hint) } catch { /* ignore */ }
+  if (hint !== defaultLocale) {
+    queueMicrotask(() => { localeStore.set(hint) })
   }
 
-  // The IPC gui-settings.json is the SINGLE SOURCE OF TRUTH for persisted
-  // locale. We read it AFTER init and correct the locale store if it differs.
-  // NEVER write to it here - the persisted value is only changed when the
-  // user explicitly picks a language in SettingsDialog.switchLocale.
-  // The prior bug was calling setSetting('locale', resolved) here, which
-  // overwrote the user's persisted choice with a stale sync guess before
-  // this async correction could protect it.
-  void getSetting('locale').then((storeLocale) => {
-    if (storeLocale) {
-      const authoritative = normalizeLocale(storeLocale)
-      // Update localStorage so the next sync read matches the durable value
-      try { if (typeof localStorage !== 'undefined') localStorage.setItem('locale', authoritative) } catch { /* ignore */ }
-      // Switch the locale store if it differs from what we rendered
-      if (authoritative !== resolved) {
-        localeStore.set(authoritative)
-      }
-    } else if (stored) {
-      // IPC file empty but localStorage has a value - persist it for next time
-      void setSetting('locale', resolved)
-    }
-  })
+  // Apply text direction immediately and track locale changes.
+  applyTextDirection(hint)
+  localeStore.subscribe((loc) => { if (loc) applyTextDirection(loc) })
 
-  // Apply text direction (RTL for Arabic) immediately and on locale changes.
-  applyTextDirection(resolved)
-  localeStore.subscribe((loc) => {
-    if (loc) applyTextDirection(loc)
-  })
+  return hint
+}
 
-  return resolved
+/**
+ * Apply the authoritative locale resolved from the durable IPC store.
+ * Called from App.svelte onMount AFTER getSetting('locale') resolves so the
+ * localeStore reflects the user's persisted choice (not a stale sync guess).
+ * Also seeds the IPC file the first time the user has nothing durable-persisted
+ * but localStorage does (first-run migration).
+ */
+export async function applyPersistedLocale(): Promise<void> {
+  let stored: string | null = null
+  try { stored = typeof localStorage !== 'undefined' ? localStorage.getItem('locale') : null } catch { /* ignore */ }
+  const durable = await getSetting('locale')
+  if (durable) {
+    const authoritative = normalizeLocale(durable)
+    try { if (typeof localStorage !== 'undefined') localStorage.setItem('locale', authoritative) } catch { /* ignore */ }
+    localeStore.set(authoritative)
+  } else if (stored) {
+    // First-run seeding: persist the localStorage value to the durable store.
+    const seed = normalizeLocale(stored)
+    try { if (typeof localStorage !== 'undefined') localStorage.setItem('locale', seed) } catch { /* ignore */ }
+    localeStore.set(seed)
+    void setSetting('locale', seed)
+  }
 }
 
 export const locales = supportedLocales

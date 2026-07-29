@@ -32,7 +32,6 @@
     secretProviderSet,
   } from '../api'
   import type { ProfileData, EnvVariable } from '../api'
-
   let profileList: ProfileData[] = []
   let selectedProfile: ProfileData | null = null
   let loading = false
@@ -61,12 +60,10 @@
   let dragIndex: number | null = null
   let isDragging = false
   let pointerId: number | null = null
-
   onMount(() => {
     void refreshProfiles()
     void loadProviderInfo()
   })
-
   // Map provider name to i18n key
   function providerDisplayName(name: string): string {
     const map: Record<string, string> = {
@@ -81,7 +78,6 @@
     }
     return map[name] ?? name
   }
-
   async function loadProviderInfo() {
     try {
       const result = await secretProviderList()
@@ -108,15 +104,12 @@
       // keep defaults
     }
   }
-
   // Watch refreshTrigger from App.svelte: refresh profiles when header
   // refresh button is clicked, regardless of active view.
   $: if ($refreshTrigger > 0) {
     refreshProfiles()
   }
-
   let profileRefreshEpoch = 0
-
   async function refreshProfiles() {
     const requestEpoch = ++profileRefreshEpoch
     loading = true
@@ -128,7 +121,6 @@
         listPathEntries('system').catch(() => []),
       ])
       if (requestEpoch !== profileRefreshEpoch) return
-
       profileList = applyStored(nextProfiles)
       profiles.set(profileList)
       allVars = nextVariables
@@ -159,11 +151,9 @@
       if (requestEpoch === profileRefreshEpoch) loading = false
     }
   }
-
   function showMessage(msg: string, type: string) {
     showToast(msg, type === 'success' ? 'success' : type === 'error' ? 'error' : 'info')
   }
-
   // Map CLI hardcoded error messages to i18n keys for localization
   // v0.7.6: alias for the existing providerDisplayName() so localizeError
   // can render the provider-name placeholder in i18n templates. We reuse the
@@ -216,6 +206,11 @@
       else if (/sops binary not found/i.test(upstream)) {
         reasonKey = 'errors.activate.sops';
       }
+      // SOPS: encryption failed because no key configuration was provided
+      // (.sops.yaml missing and no key provider env vars set).
+      else if (/sops encryption failed/i.test(upstream) && /config file not found|no keys provided/i.test(upstream)) {
+        reasonKey = 'errors.activate.sopsConfig';
+      }
       // Azure Key Vault: AZURE_KEYVAULT_URI not set.
       else if (/AZURE_KEYVAULT_URI environment variable not set/i.test(upstream)) {
         reasonKey = 'errors.activate.azure';
@@ -223,6 +218,13 @@
       // 1Password: op CLI missing.
       else if (/1Password CLI \(op\) not found/i.test(upstream)) {
         reasonKey = 'errors.activate.op';
+      }
+      // 1Password: op CLI present but no account configured (desktop app,
+      // 'op account add', or OP_SERVICE_ACCOUNT_TOKEN env var).
+      else if (/No accounts configured for use with 1Password CLI/i.test(upstream) ||
+               /1Password CLI .*No accounts configured/i.test(upstream) ||
+               /1Password CLI .*failed.*No accounts configured/i.test(upstream)) {
+        reasonKey = 'errors.activate.opAccounts';
       }
       // AWS Secrets Manager: AWS_REGION / AWS_DEFAULT_REGION missing.
       else if (/AWS_REGION or AWS_DEFAULT_REGION not set/i.test(upstream)) {
@@ -264,7 +266,6 @@
     if (/VAULT_ADDR must use https/i.test(errMsg)) return $t('errors.vaultTlsRequired')
     return errMsg
   }
-
   async function handleCreate() {
     const name = newProfileName.trim()
     if (!name) return
@@ -287,12 +288,13 @@
       await refreshProfiles()
       showMessage($t('messages.profileCreated'), 'success')
     } catch (err) {
-      showMessage(localizeError(err instanceof Error ? err.message : String(err)), 'error')
+      const msg_ = localizeError(err instanceof Error ? err.message : String(err))
+      providerErrorMessage = msg_
+      showMessage(msg_, 'error')
     } finally {
       actionLoading = false
     }
   }
-
   async function handleBrowseTarget() {
     try {
       const picked = await pickExecutableFile($t('profiles.selectExecutable'))
@@ -301,7 +303,6 @@
       showMessage(err instanceof Error ? err.message : String(err), 'error')
     }
   }
-
   async function handleLaunchProfile(profile: ProfileData) {
     if (profile.profileType !== 'launch' || !profile.targetExecutable) {
       showMessage($t('messages.profileNotLaunch'), 'error')
@@ -317,7 +318,6 @@
       actionLoading = false
     }
   }
-
   // v0.7.4: switching the active secret provider used to silently succeed and
   // leave all pre-existing secrets still encrypted with the OLD provider. The user
   // got no warning and could not recover the olds if the old provider was removed
@@ -325,16 +325,17 @@
   // modal: the user must acknowledge that existing secrets are NOT auto-migrated
   // and that they should run "Rotate all secrets" afterwards.
   let pendingProvider: string | null = null
-
+  // Inline provider activation error (displayed under the selector, not as modal toast)
+  let providerErrorMessage: string | null = null
   function requestChangeProvider(newProvider: string) {
     if (newProvider === activeProvider) return
     pendingProvider = newProvider
+    providerErrorMessage = null
   }
-
   function cancelChangeProvider() {
     pendingProvider = null
+    providerErrorMessage = null
   }
-
   async function confirmChangeProvider() {
     if (!pendingProvider) return
     const target = pendingProvider
@@ -347,11 +348,9 @@
       showMessage(localizeError(err instanceof Error ? err.message : String(err)), 'error')
     }
   }
-
   async function handleChangeProvider(newProvider: string) {
     requestChangeProvider(newProvider)
   }
-
   async function handleAddSecret() {
     if (!selectedProfile) return
     const name = newSecretName.trim()
@@ -370,7 +369,6 @@
       actionLoading = false
     }
   }
-
   async function handleRemoveSecret(varName: string) {
     if (!selectedProfile) return
     actionLoading = true
@@ -384,7 +382,6 @@
       actionLoading = false
     }
   }
-
   async function handleExport(profile: ProfileData) {
     const defaultPath = `${profile.name}.json`
     const fileName = await pickSaveFile($t('profiles.exportFilePrompt'), defaultPath)
@@ -399,7 +396,6 @@
       actionLoading = false
     }
   }
-
   async function handleImport() {
     const fileName = await pickOpenFile($t('profiles.importFilePrompt'), '')
     if (!fileName) return
@@ -414,7 +410,6 @@
       actionLoading = false
     }
   }
-
   async function handleRename(profile: ProfileData) {
     const newName = prompt($t('profiles.renamePrompt'), profile.name)
     if (!newName || newName === profile.name) return
@@ -429,7 +424,6 @@
       actionLoading = false
     }
   }
-
   function handleDelete(profile: ProfileData) {
     showModal({
       title: $t('dialogs.deleteConfirm'),
@@ -452,7 +446,6 @@
       }
     })
   }
-
   async function handleToggleProfile(profile: ProfileData) {
     actionLoading = true
     try {
@@ -470,7 +463,6 @@
       actionLoading = false
     }
   }
-
   async function handleAddVar() {
     if (!selectedProfile || !newVarName.trim()) return
     const nameErr = validateVarNameInput(newVarName.trim())
@@ -489,7 +481,6 @@
       actionLoading = false
     }
   }
-
   function handleCloneSelectFrom(v: { name: string; value: string }) {
     // Bug 6/7: CloneCombobox auto-clears its own state on select, so the user can
     // immediately search again without clicking empty space first. The selected
@@ -498,7 +489,6 @@
     newVarName = v.name
     newVarValue = v.value
   }
-
   async function handleRemoveVar(varName: string) {
     if (!selectedProfile) return
     actionLoading = true
@@ -511,10 +501,8 @@
       actionLoading = false
     }
   }
-
   // Instant swap approach: on pointerenter, immediately swap the dragged item
   // with the target item. No animation, no placeholder, no bounce-back.
-
   function handleDragPointerEnter(index: number): void {
     if (!isDragging || dragIndex === null || dragIndex === index) return
     // Instant swap: exchange the two items in the list
@@ -527,7 +515,6 @@
     // The dragged item is now at the new index
     dragIndex = index
   }
-
   function beginPointerDrag(event: PointerEvent, index: number): void {
     if (event.button !== 0) return
     event.preventDefault()
@@ -535,7 +522,6 @@
     isDragging = true
     pointerId = event.pointerId
   }
-
   function finishPointerDrag(event?: PointerEvent): void {
     if (!isDragging || dragIndex === null) {
       cancelPointerDrag()
@@ -545,13 +531,11 @@
     saveStoredOrder(profileList.map((profile) => profile.name))
     cancelPointerDrag()
   }
-
   function cancelPointerDrag(): void {
     dragIndex = null
     isDragging = false
     pointerId = null
   }
-
   async function handleInheritance(parent: string, enabled: boolean) {
     if (!selectedProfile) return
     const parents = enabled
@@ -564,7 +548,6 @@
       showMessage(localizeError(err instanceof Error ? err.message : String(err)), 'error')
     }
   }
-
   async function handleAddPath() {
     if (!selectedProfile || !newPathEntry.trim()) return
     const pathErr = validatePathInput(newPathEntry.trim())
@@ -578,7 +561,6 @@
       showMessage(localizeError(err instanceof Error ? err.message : String(err)), 'error')
     }
   }
-
   async function handleRemovePath(path: string) {
     if (!selectedProfile) return
     await removeProfilePath(selectedProfile.name, path)
@@ -596,22 +578,20 @@
     newVarValue = ''
       }
 </script>
-
 <svelte:window
   on:pointerup={finishPointerDrag}
   on:pointercancel={cancelPointerDrag}
 />
-
 <div class="space-y-3">
   <!-- Create profile bar -->
   <div class="space-y-2">
    <!-- Choose scope of effect before naming the profile. Global writes the user registry;
         Launch applies only to the selected child process. -->
-    <div class="flex items-start gap-1.5 flex-wrap py-0.5 min-h-[48px]">
-     <label class="text-xs font-medium text-gray-600 dark:text-gray-400">
+    <div class="flex items-start gap-1 flex-wrap py-0.5 min-h-[36px]">
+     <label class="text-[11px] font-medium text-gray-600 dark:text-gray-400">
        <input type="radio" bind:group={newProfileType} value="global" class="mr-1" /> {$t('profiles.typeGlobal')}
       </label>
-      <label class="text-xs font-medium text-gray-600 dark:text-gray-400">
+      <label class="text-[11px] font-medium text-gray-600 dark:text-gray-400">
         <input type="radio" bind:group={newProfileType} value="launch" class="mr-1" /> {$t('profiles.typeLocal')}
       </label>
       {#if newProfileType === 'launch'}
@@ -673,7 +653,6 @@
       </button>
     </div>
   </div>
-
   {#if loading}
     <div class="flex justify-center py-8">
       <div class="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-600"></div>
@@ -729,7 +708,6 @@
                 </span>
               {/if}
             </button>
-
             <div class="flex items-center gap-3">
               <!-- Toggle switch -->
               <button
@@ -742,7 +720,6 @@
               >
                 <span class="inline-block h-3 w-3 transform rounded-full bg-white shadow transition {profile.isEnabled ? 'translate-x-3.5' : 'translate-x-0.5'}"></span>
               </button>
-
               {#if profile.profileType === 'launch' && profile.targetExecutable}
                 <!-- Launch button (Launch profiles only) -->
                 <button
@@ -796,7 +773,6 @@
               </button>
             </div>
           </div>
-
           <!-- Expanded detail panel -->
           {#if selectedProfile?.name === profile.name}
             <div class="border-t border-gray-100 px-4 py-3 dark:border-gray-700">
@@ -906,7 +882,6 @@
                   </div>
                 {/if}
               {/if}
-
               <!-- Add variable button -->
               {#if !showAddVarPanel}
                 <button
@@ -941,7 +916,6 @@
                       <option value="system">{$t('scope.system')}</option>
                     </select>
                   </div>
-
                   <input
                     type="text"
                     placeholder={$t('labels.name')}
@@ -971,7 +945,6 @@
                   </div>
                 </div>
               {/if}
-
               {#if profile.profileType === 'launch' && !profile.isEnabled}
                 <!-- v0.8 secret provider indicator -->
                 <div class="flex items-center gap-1.5 mt-2">
@@ -991,6 +964,12 @@
                         </option>
                       {/each}
                     </select>
+                    {#if providerErrorMessage}
+                      <div class="mt-1 p-1.5 rounded-md bg-amber-50 border border-amber-200 text-[10px] text-amber-700 dark:bg-amber-900/20 dark:border-amber-700 dark:text-amber-300">
+                        <span class="font-medium">{$t('secrets.activeProvider')}:</span> {providerErrorMessage}
+                        <button type="button" class="ml-1 underline text-amber-600 dark:text-amber-400" on:click={() => providerErrorMessage = null}>{$t('buttons.close')}</button>
+                      </div>
+                    {/if}
                 </div>
                 {#if !showAddSecretPanel}
                   <button
@@ -1041,7 +1020,6 @@
       {/each}
     </div>
   {/if}
-
   {#if pendingProvider}
     <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/40" role="dialog" aria-modal="true">
       <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-sm w-full mx-4 p-4">

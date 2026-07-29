@@ -11,7 +11,7 @@
   import { variables, loading, error, activeView, modal, isWriteInProgress, debugLogs, refreshTrigger, toasts, dismissToast } from './lib/stores'
   import { listVariables, updateTrayLocale } from './lib/api'
   import { getSetting } from './lib/settingsStore'
-  import { defaultLanguage } from './lib/i18n'
+  import { defaultLanguage, applyPersistedLocale } from './lib/i18n'
   import { get } from 'svelte/store'
   import { t as tStore } from 'svelte-i18n'
 
@@ -57,7 +57,12 @@
         const parsed = parseFloat(storedFontScale)
         if (!isNaN(parsed) && parsed > 0) fontScale = parsed
       }
-    } catch { /* best-effort */ }
+    } catch { /* best-effort */     }
+    // Read authoritative locale from the durable IPC store and switch the
+    // svelte-i18n locale store. This is the single source of truth for locale;
+    // a stale WebView2 localStorage can no longer resurrect a switched-away
+    // language on restart.
+    try { await applyPersistedLocale() } catch { /* best-effort */ }
     applyDarkMode(darkMode)
     applyFontScale(fontScale)
 
@@ -275,8 +280,12 @@
    text-align: right;
  }
 
-  /* Edge-style auto-hide overlay scrollbar: thin track, thumb hidden when idle,
-     appears on hover or while scrolling. Matches Tauri WebView2/Edge native feel. */
+  /* Edge-style true-overlay auto-hide scrollbar: thumb hidden when idle,
+     transient overlay on hover/scroll. Reserves ZERO layout space by NOT pinning
+     ::-webkit-scrollbar width — Chromium native overlay floats over content,
+     matching Edge/VS Code. scrollbar-color is the Firefox fallback (thin,
+     auto-hide). scrollbar-gutter left at browser default (auto) so no space
+     is reserved. */
   :global(*) {
     scrollbar-width: thin;
     scrollbar-color: rgba(0, 0, 0, 0) transparent;
@@ -284,7 +293,11 @@
   :global(*:hover) {
     scrollbar-color: rgba(0, 0, 0, 0.25) transparent;
   }
-  :global(*)::-webkit-scrollbar { width: 8px; height: 8px; }
+  /* Width intentionally NOT set on ::-webkit-scrollbar: pinning it to 8px
+     would reserve a dedicated 8px track, contradicting the true-overlay goal.
+     Chromium renders a transient overlay that does not shift layout. We style
+     only the thumb so the thin overlay stays visually consistent when visible. */
+  :global(*)::-webkit-scrollbar { background: transparent; }
   :global(*)::-webkit-scrollbar-track { background: transparent; }
   :global(*)::-webkit-scrollbar-thumb {
     background-color: rgba(0, 0, 0, 0);
