@@ -1,7 +1,7 @@
 // Hide the console window in release builds on Windows.
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-use log::{info, warn};
+use log::{info, warn, error, debug};
 use serde::Serialize;
 use std::path::PathBuf;
 use std::process::Command;
@@ -439,11 +439,79 @@ fn write_gui_setting(key: String, value: String) -> bool {
     if let Some(parent) = path.parent() {
         let _ = std::fs::create_dir_all(parent);
     }
-    serde_json::to_string_pretty(&obj)
-        .ok()
-        .and_then(|json| std::fs::write(&path, json).ok())
-        .is_some()
+    let json = match serde_json::to_string_pretty(&obj) {
+        Ok(j) => j,
+        Err(_) => return false,
+    };
+    // Atomic + durable write: temp file in same dir, fsync, rename onto target.
+    // The previous direct std::fs::write truncated then chunked; if the app was
+    // killed mid-write the durable gui-settings.json could be torn,
+    // read_gui_setting then parsed null, and the frontend fell back to stale
+    // localStorage (the locale-reverts-to-zh-on-restart symptom).
+    // Temp+fsync+rename guarantees the file is either fully old or fully new.
+    write_atomic(&path, &json)
 }
+
+/// Atomic + durable filesystem write used by write_gui_setting so GUI settings
+/// persistence cannot be torn by a mid-write kill. Writes to a sibling .tmp file
+/// with the current pid, fsyncs it, then atomically renames onto the target.
+/// Rename within the same filesystem is atomic on NTFS and POSIX.
+fn write_atomic(path: &std::path::Path, data: &str) -> bool {
+    use std::fs::File;
+    use std::io::Write;
+    let parent = match path.parent() {
+        Some(p) if !p.as_os_str().is_empty() => p,
+        _ => std::path::Path::new("."),
+    };
+    let _ = std::fs::create_dir_all(parent);
+    let stem = path.file_stem().and_then(|s| s.to_str()).unwrap_or("state");
+    let pid = std::process::id();
+    let tmp_path = parent.join(format!("{}.{}.tmp", stem, pid));
+    let mut f = match File::create(&tmp_path) {
+        Ok(f) => f,
+        Err(_) => return false,
+    };
+    if f.write_all(data.as_bytes()).is_err() {
+        let _ = std::fs::remove_file(&tmp_path);
+        return false;
+    }
+    // fsync before rename so the renamed content is persistent across power loss,
+    // not just in the FS page cache. Without this a crash after rename could lose
+    // the temp file content and resurrect the stale-state bug this fixes.
+    if f.sync_all().is_err() {
+        let _ = std::fs::remove_file(&tmp_path);
+        return false;
+    }
+    let ok = std::fs::rename(&tmp_path, path).is_ok();
+    if !ok {
+        let _ = std::fs::remove_file(&tmp_path);
+    }
+    ok
+}
+
+/// Emit a frontend log line into the same env-manager.log file used by
+/// tauri-plugin-log. Keeps all GUI locale / settings decisions traceable in
+/// the single log the user already knows from .mo. The level is one of
+/// "info" / "warn" / "error" / "debug"; anything else is treated as "info".
+/// A bounded message length prevents log bloat; secrets/values are never
+/// stringified by the frontend caller.
+#[tauri::command]
+fn frontend_log(level: String, message: String) -> () {
+    let bounded: String = if message.len() > 2048 {
+        let mut s = message.chars().take(2048).collect::<String>();
+        s.push_str("...");
+        s
+    } else {
+        message
+    };
+    match level.as_str() {
+        "error" => error!("[gui] {}", bounded),
+        "warn" => warn!("[gui] {}", bounded),
+        "debug" => debug!("[gui] {}", bounded),
+        _ => info!("[gui] {}", bounded),
+    }
+}
+
 
 #[tauri::command]
 fn cli_diagnostics(app: tauri::AppHandle) -> serde_json::Value {
@@ -661,6 +729,7 @@ fn main() {
             check_for_updates,
             read_gui_setting,
             write_gui_setting,
+            frontend_log,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

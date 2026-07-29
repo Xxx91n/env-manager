@@ -4,7 +4,7 @@
   import { locales, defaultLanguage } from '../i18n'
   import { isCliInPath, addCliToPath, removeCliFromPath, listPathEntries, checkForUpdates, bulkImport, bulkExport, pickOpenFile, pickSaveFile } from '../api'
   import { get } from 'svelte/store'
-  import { setSetting } from '../settingsStore'
+  import { setSetting, frontendLog } from '../settingsStore'
   import { showToast } from '../stores'
   import { t as tStore } from 'svelte-i18n'
 
@@ -48,10 +48,11 @@
 
   function switchLocale(newLocale: string) {
     locale.set(newLocale)
+    void frontendLog('info', 'switchLocale: setting locale=' + newLocale).catch(() => {})
     try {
       void setSetting('locale', newLocale)
     } catch {
-      // Ignore storage errors
+      void frontendLog('error', 'switchLocale: setSetting threw for locale=' + newLocale).catch(() => {})
     }
     // Tray i18n is now reactively synced in App.svelte whenever $locale
     // changes. Previously this used setTimeout(200ms) here, which could race

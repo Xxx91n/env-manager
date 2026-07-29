@@ -10,7 +10,7 @@
   import ConfirmDialog from './lib/components/ConfirmDialog.svelte'
   import { variables, loading, error, activeView, modal, isWriteInProgress, debugLogs, refreshTrigger, toasts, dismissToast } from './lib/stores'
   import { listVariables, updateTrayLocale } from './lib/api'
-  import { getSetting } from './lib/settingsStore'
+  import { getSetting, frontendLog } from './lib/settingsStore'
   import { defaultLanguage, applyPersistedLocale } from './lib/i18n'
   import { get } from 'svelte/store'
   import { t as tStore } from 'svelte-i18n'
@@ -62,7 +62,11 @@
     // svelte-i18n locale store. This is the single source of truth for locale;
     // a stale WebView2 localStorage can no longer resurrect a switched-away
     // language on restart.
-    try { await applyPersistedLocale() } catch { /* best-effort */ }
+    try {
+      await applyPersistedLocale()
+    } catch (err) {
+      void frontendLog('error', 'App onMount: applyPersistedLocale threw').catch(() => {})
+    }
     applyDarkMode(darkMode)
     applyFontScale(fontScale)
 
