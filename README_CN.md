@@ -15,6 +15,7 @@
 - **启动型配置文件**：GUI 与 CLI 都可在一次事务中直接创建 Global 或 Launch 配置。Launch 以隔离环境块（`env_clear` + 注入）启动指定程序，永不写注册表、永不广播 `WM_SETTINGCHANGE`。所有配置文件名称全局唯一，避免按名称调用 CLI 时产生歧义。
 - **v0.6.0 PATH 健康检测**：`path health [--fix] [--dry-run]` 一次性检测重复 AND 失效（不存在的）PATH 条目；`--fix` 仅删非保护项，受保护项永远保留。
 - **v0.7.0 DPAPI 密钥**：`profile add-secret`/`edit-secret`/`remove-secret`/`reveal-secret` —— 为配置文件中的变量值加密（Windows DPAPI 当前用户）。明文仅驻存在进程内存；`profile launch` 启动时解子进程注入；`reveal-secret` 是唯一输出明文到 stdout 的路径。审计仅记录名，绝不记录值。
+- **机密提供者**：8 个后端（DPAPI 当前用户、Windows 凭据管理器、PowerShell SecretManagement、HashiCorp Vault KV v2、SOPS、Azure Key Vault、1Password CLI、AWS Secrets Manager）。各提供者的前置条件、一次性配置、激活错误信息与精确的修复步骤见 [docs/secret-providers-guide.md](docs/secret-providers-guide.md)。提供者激活错误会在配置文件编辑器中提供者选择器下方以内联琥珀色横幅直接显示。
 - **v0.7.0 GUI**：PATH 健康徽章（healthy/dead/duplicate/duplicate+dead）+ 一键移除失效项；Launch 配置文件类型徽章 + 启动按钮 + 创建栏类型选择 + 原生文件选择器；变量搜索高亮 + `%VAR%` 展开预览；设置中的 `.env`/CSV 批量导入导出（原生文件选择器）。
 - 用户和系统作用域支持
 - JSON 备份与恢复、差异对比、合并、变更历史和安全撤销

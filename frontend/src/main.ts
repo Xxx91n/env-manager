@@ -1,5 +1,5 @@
 import App from './App.svelte'
-import { setupI18n } from './lib/i18n'
+import { setupI18n, applyPersistedLocale } from './lib/i18n'
 
 // Global error handler - catches uncaught errors and promise rejections.
 // In production under Tauri's custom protocol, these would otherwise be silent.
@@ -39,9 +39,19 @@ window.addEventListener('unhandledrejection', (e) => {
   logError('Unhandled promise rejection', e.reason)
 })
 
-// Initialize i18n before rendering. Always starts with 'en' synchronously.
+// Initialize i18n before rendering. setupI18n sets the default 'en' locale
+// synchronously (messages already loaded), then applyPersistedLocale reads the
+// durable IPC store (gui-settings.json) and flips the svelte-i18n locale
+// store to the user's persisted choice BEFORE the App component mounts. This
+// eliminates the first-paint English flash that happened when applyPersistedLocale
+// ran later inside App.svelte onMount and re-rendered the whole tree with the
+// user's locale. The IPC read is a local file read, typically <50ms.
 try {
   setupI18n()
+  // Top-level await: Vite target=es2021 supports it. Blocks App mount until
+  // the durable locale resolves so the very first Svelte render uses the
+  // user's persisted locale rather than the synchronous default 'en'.
+  await applyPersistedLocale()
 } catch (err) {
   logError('i18n initialization failed', err)
 }

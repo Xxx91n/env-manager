@@ -33,7 +33,7 @@ The EnvManager vault is auto-registered as `Register-SecretVault -Name EnvManage
 
 ### Activation error and fix
 
-Error: `Cannot activate provider powershell-secretmanagement: PowerShell SecretManagement module is not installed. Run: pwsh -Command "Install-Module Microsoft.SecretManagement, Microsoft.SecretStore -Scope CurrentUser -Force" then retry. (Vault: EnvManager).`
+Error: `Cannot activate provider 'powershell-secretmanagement': PowerShell SecretManagement module is not installed. Run: pwsh -Command "Install-Module Microsoft.PowerShell.SecretManagement, Microsoft.PowerShell.SecretStore -Scope CurrentUser -Force" then retry. (Vault: EnvManager). Fix the provider environment first (e.g. install pwsh modules, set VAULT_ADDR, or configure cloud credentials).`
 
 Fix: install the two modules (command above), then in Env Manager re-select the provider.
 
@@ -58,13 +58,13 @@ vault secrets enable -path=secret kv-v2
 
 ### Activation error and fix
 
-Error (missing address): `Cannot activate provider vault-kv2: VAULT_ADDR is not set.`
+Error (missing address): `Cannot activate provider 'vault-kv2': VAULT_ADDR environment variable not set.`
 
-Fix: set `VAULT_ADDR` and `VAULT_TOKEN` in your shell, restart Env Manager, then re-select.
+Fix: set `VAULT_ADDR` (and `VAULT_TOKEN`) in your shell, restart Env Manager, then re-select the provider.
 
 Error (TLS): `Cannot activate provider vault-kv2: VAULT_ADDR must use https:// for non-localhost addresses.`
 
-Fix: use `https://` for any non-localhost Vault, or tunnel via `127.0.0.1`.
+Fix: use `https://` for any non-localhost Vault, or tunnel through `127.0.0.1` / `localhost` / `[::1]` where `http://` is permitted.
 
 Error (token): `Cannot activate provider vault-kv2: VAULT_TOKEN is not set.`
 
@@ -113,11 +113,11 @@ creation_rules:
 
 ### Activation error and fix
 
-Error (binary missing): lCannot activate provider sops: SOPS binary not found on PATH.`
+Error (binary missing): `Cannot activate provider 'sops': sops binary not found. Install sops and ensure it is on PATH, or set SOPS_PATH env var..`
 
 Fix: install sops (winget/choco) or set `SOPS_PATH` to the full binary, then retry.
 
-Error (no keys): `Cannot activate provider sops: sops encryption failed (exit 1): config file not found and no keys provided through command line options.`
+Error (no keys): `Cannot activate provider 'sops': sops encryption failed (exit 1): config file not found and no keys provided through command line options.`
 
 Fix: create `.sops.yaml` with at least one creation rule pointing to a key, or set the corresponding SOPS provider env vars (e.g. `SOPS_AGE_KEY_FILE`), then retry.
 
@@ -134,9 +134,9 @@ Fix: create `.sops.yaml` with at least one creation rule pointing to a key, or s
 
 ### Activation error and fix
 
-Error (URI missing): `Cannot activate provider azure-keyvault: AZURE_KEYVAULT_URI environment variable not set (e.g. https://myvault.vault.azure.net).`
+Error (URI missing): `Cannot activate provider 'azure-keyvault': AZURE_KEYVAULT_URI environment variable not set (e.g. https://myvault.vault.azure.net).`
 
-Fix: `set AZURE_KEYVAULT_URI=https://<your-vault>.vault.azure.net` and configure either managed identity or `AZURE_CLIENT_ID`/`AZURE_CLIENT_SECRET`/`AZURE_TENANT_ID`.` then restart Env Manager and re-select the provider.
+Fix: `setx AZURE_KEYVAULT_URI "https://<your-vault>.vault.azure.net"` then configure either managed identity (default on Azure VMs / via IMDS at 169.254.169.254) or service principal env vars `AZURE_CLIENT_ID` / `AZURE_CLIENT_SECRET` / `AZURE_TENANT_ID`. Restart Env Manager and re-select the provider.
 
 ---
 
@@ -165,7 +165,7 @@ op account add  # interactive
 
 Error (binary missing): `Cannot activate provider 1password: 1Password CLI (op) not found. Install op and ensure it is on PATH, or set OP_PATH env var.`
 
-Fix: install the `op` CLI or set `OP_PATH5�, then retry.
+Fix: install the `op` CLI (`winget install AgileBits.1Password.CLI`) or set `OP_PATH` to the full binary path, then retry.
 
 Error (no accounts): `Cannot activate provider 1password: 1Password CLI create failed (exit 1): No accounts configured for use with 1Password CLI.`
 
@@ -195,7 +195,7 @@ Refresh env vars (restart the shell / Env Manager), then re-select the provider.
 
 ### Activation error and fix
 
-Error: `Cannot activate provider aws-secretsmanager: AWS_REGION or AWS_DEFAULT_REGION is not set.`
+Error: `Cannot activate provider 'aws-secretsmanager': AWS_REGION or AWS_DEFAULT_REGION not set.`
 
 Fix: set `AWS_REGION` (and credentials) env vars, restart Env Manager, then retry.
 

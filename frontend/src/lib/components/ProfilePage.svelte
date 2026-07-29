@@ -343,9 +343,14 @@
     try {
       await secretProviderSet(target)
       activeProvider = target
+      providerErrorMessage = null
       showMessage($t('secrets.providerChanged'), 'success')
     } catch (err) {
-      showMessage(localizeError(err instanceof Error ? err.message : String(err)), 'error')
+      // v0.7.10: show provider activation errors as an inline amber banner
+      // directly under the selector (providerErrorMessage) instead of a
+      // transient toast, so the user can read the full actionable fix without
+      // copy-pasting from a fading toast.
+      providerErrorMessage = localizeError(err instanceof Error ? err.message : String(err))
     }
   }
   async function handleChangeProvider(newProvider: string) {
@@ -364,7 +369,10 @@
       await refreshProfiles()
       showMessage($t('messages.secretAdded'), 'success')
     } catch (err) {
-      showMessage(err instanceof Error ? err.message : String(err), 'error')
+      // v0.7.10: surface secret-add errors (provider activation failures,
+      // CLIXML probes, upstream provider issues) as an inline banner under
+      // the selector so the actionable fix is visible without a fading toast.
+      providerErrorMessage = localizeError(err instanceof Error ? err.message : String(err))
     } finally {
       actionLoading = false
     }
@@ -781,15 +789,15 @@
                   <div class="text-[10px] font-medium text-gray-500 mb-1">{$t('profiles.inherits')}</div>
                   <div class="space-y-1 max-h-20 overflow-y-auto">
                     {#each profileList.filter(candidate => candidate.name !== profile.name) as parent (parent.name)}
-                      {@const inheritBlocked = (profile.profileType === 'global' && parent.profileType === 'launch')
-                        || (profile.profileType === 'launch' && parent.profileType === 'launch' && (parent.secretVariables?.length ?? 0) > 0)}
-                      <label class="flex items-center gap-1.5 text-[10px] text-gray-600 dark:text-gray-300" title={inheritBlocked ? $t('errors.inheritBlocked') : ''}>
-                        <input type="checkbox" checked={profile.inherits?.includes(parent.name)} disabled={inheritBlocked} on:change={(event) => handleInheritance(parent.name, event.currentTarget.checked)} />
+                    {@const inheritBlocked = (profile.profileType === 'global' && parent.profileType === 'launch')
+                      || (profile.profileType === 'launch' && parent.profileType === 'launch' && (parent.secretVariables?.length ?? 0) > 0)}
+                      <div class="flex items-center gap-1.5 text-[10px] text-gray-600 dark:text-gray-300" title={inheritBlocked ? $t('errors.inheritBlocked') : ''}>
+                        <input type="checkbox" class="cursor-pointer" checked={profile.inherits?.includes(parent.name)} disabled={inheritBlocked} on:change={(event) => handleInheritance(parent.name, event.currentTarget.checked)} />
                         <span class="truncate" class:opacity-40={inheritBlocked} class:cursor-not-allowed={inheritBlocked}>{parent.name}</span>
                         {#if parent.profileType === 'launch'}
                           <span class="text-[8px] px-0.5 rounded bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300">{$t('profiles.typeLaunch')}</span>
                         {/if}
-                      </label>
+                      </div>
                     {/each}
                   </div>
                 </div>

@@ -8,7 +8,11 @@ export default defineConfig({
   build: {
     outDir: '../dist',
     emptyOutDir: true,
-    target: 'es2021',
+    // v0.7.10: es2022 is the minimum that enables top-level await (used by
+    // main.ts to await applyPersistedLocale before mounting App, eliminating
+    // the first-paint English flash). WebView2 (Chromium-based, preinstalled
+    // on Windows 11, available on Windows 10 21H2+) supports es2022 fully.
+    target: 'es2022',
     assetsDir: 'assets',
   },
   server: {

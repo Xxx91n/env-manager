@@ -418,13 +418,20 @@ internal sealed class PowerShellSecretManagementProvider : ISecretProvider
     {
         string probe =
             "$ErrorActionPreference='Stop'; " +
-            "$m = Get-Module -ListAvailable Microsoft.SecretManagement; " +
+            // v0.7.10: use a wildcard pattern so we match BOTH the historical
+            // short name 'Microsoft.SecretManagement' and the canonical package
+            // name 'Microsoft.PowerShell.SecretManagement' published on the
+            // PowerShell Gallery. The prior literal probe returned zero even
+            // when the module was correctly installed, so every activation
+            // threw a false 'PowerShell SecretManagement module is not
+            // installed' error even on a correctly-provisioned host.
+            "$m = Get-Module -ListAvailable *SecretManagement*; " +
             "if ($null -eq $m) { Write-Output 'MISSING_MODULE' } else { Write-Output 'OK' }";
         string moduleCheck = RunPowerShell(probe);
         if (!moduleCheck.Contains("OK"))
             throw new InvalidOperationException(
                 "PowerShell SecretManagement module is not installed. " +
-                "Run: pwsh -Command \"Install-Module Microsoft.SecretManagement, Microsoft.SecretStore -Scope CurrentUser -Force\" " +
+                "Run: pwsh -Command \"Install-Module Microsoft.PowerShell.SecretManagement, Microsoft.PowerShell.SecretStore -Scope CurrentUser -Force\" " +
                 "then retry. (Vault: " + VaultName + ")");
     }
 
