@@ -72,3 +72,9 @@ coverage/
 
 # === Screenshots ===
 screenshot.png
+
+.keys/
+.vault.err
+.vault.log
+*.vault*
+.codex-tmp-pwm*

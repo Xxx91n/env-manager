@@ -29,6 +29,24 @@ Open pwsh and run:
 Install-Module Microsoft.PowerShell.SecretManagement, Microsoft.PowerShell.SecretStore -Scope CurrentUser -Force
 ```
 
+### SecretStore no-password bootstrap (required for headless activation)
+
+The `Microsoft.PowerShell.SecretStore` vault defaults to an interactive password
+prompt on every read/write. The Env Manager activation probe runs headless
+(no terminal to type a password into), so a fresh SecretStore will hang the
+probe until the 30s timeout and report a `Set-Secret is not recognized` /
+`CLIXML` failure. Configure the store for no interactive password once before
+activating the provider:
+
+```powershell
+Set-SecretStoreConfiguration -Scope CurrentUser -Authentication None `
+  -Password (ConvertTo-SecureString -String 'none' -AsPlainText -Force) -Confirm:$false
+```
+
+This disables the password prompt (acceptable if your Windows profile is
+already access-controlled). If you require an interactive password, configure
+it once in a real terminal, then activation will use the cached vault.
+
 The EnvManager vault is auto-registered as `Register-SecretVault -Name EnvManager -ModuleName Microsoft.PowerShell.SecretStore -AllowClobber` on the first `Set-Secret`/`Get-Secret` call, so you do not need to register it manually.
 
 ### Activation error and fix
@@ -207,3 +225,4 @@ Fix: set `AWS_REGION` (and credentials) env vars, restart Env Manager, then retr
 - If the inline banner under the provider selector still shows the error after the env is fixed, click the Close button on the banner and re-select the provider to re-run the activation probe.
 - The CLI command `env-manager-cli profile secret-provider list` lists available providers with the active one marked `(active)`.
 - Audit entries for Rotation / Export / Import never log plaintext or ciphertext; only provider name and counts.
+- Provider activation errors are emitted to `logs/env-manager.log` with a truncated, scrubbed `stderr_hint` line (any `Bearer`, `token=`, `password=`, `setx`, `VAULT_TOKEN=`, `AWS_SECRET_ACCESS_KEY=`, `AWS_SESSION_TOKEN=`, or `OP_SERVICE_ACCOUNT_TOKEN=` segment is masked to `<redacted>`). The log records the error message shape, never a secret value. If the inline banner disappears, the `logs/env-manager.log` line still shows the upstream error to copy into a support request.

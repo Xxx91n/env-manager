@@ -449,8 +449,16 @@ internal sealed class PowerShellSecretManagementProvider : ISecretProvider
         {
             string register =
                 "$ErrorActionPreference='Stop'; " +
+                // v0.7.11: use the canonical PowerShell Gallery module name
+                // Microsoft.PowerShell.SecretStore. The prior short form
+                // 'Microsoft.SecretStore' fails with "Could not load and
+                // retrieve module information ... The specified module
+                // 'Microsoft.SecretStore' was not loaded because no valid module
+                // file was found in any module directory." even after the
+                // documented Install-Module command has been run, because the
+                // actual installed module name is 'Microsoft.PowerShell.SecretStore'.
                 "Register-SecretVault -Name '" + EscapeForPowerShell(VaultName) + "' " +
-                "-ModuleName Microsoft.SecretStore -DefaultVault -AllowClobber; " +
+                "-ModuleName Microsoft.PowerShell.SecretStore -DefaultVault -AllowClobber; " +
                 "Write-Output 'OK'";
             string reg = RunPowerShell(register);
             if (!reg.Contains("OK"))
@@ -803,8 +811,11 @@ internal sealed class SopsProvider : ISecretProvider
         try
         {
             // Write JSON: { "value": "<plaintext>" }
+            // v0.7.11: write UTF-8 WITHOUT BOM. Encoding.UTF8 emits a BOM (0xEF 0xBB 0xBF)
+            // and sops >= 3.x rejects BOM-prefixed JSON with "invalid character 'ï'
+            // looking for beginning of value" when unmarshalling, failing activation.
             string jsonContent = "{\"value\":\"" + JsonEscape(plaintext ?? "") + "\"}";
-            File.WriteAllText(plainFile, jsonContent, Encoding.UTF8);
+            File.WriteAllText(plainFile, jsonContent, new UTF8Encoding(false));
 
             // Run: sops -e --output <enc> <plain>
             var psi = new System.Diagnostics.ProcessStartInfo
@@ -820,7 +831,15 @@ internal sealed class SopsProvider : ISecretProvider
             };
 
             // Pass through sops env vars for encryption key providers
-            string[] sopsEnvVars = { "SOPS_AGE_RECIPIENT", "SOPS_AGE_KEY_FILE", "SOPS_PGP_FP",
+            // v0.7.11: env var names verified against official SOPS age docs
+            // (https://getsops.io/docs/usage/identities/age/). The recipient list env
+            // var is SOPS_AGE_RECIPIENTS (plural; 'S' required) - the prior singular
+            // 'SOPS_AGE_RECIPIENT' is NOT recognized by sops and activation failed with
+            // 'config file not found and no keys provided through command line options'
+            // even with the env var set. SOPS_AGE_KEY_FILE / SOPS_AGE_KEY / SOPS_AGE_KEY_CMD
+            // override the private-key file lookup; only SOPS_AGE_KEY_FILE is forwarded
+            // here because it is the only one a normal desktop user would set.
+            string[] sopsEnvVars = { "SOPS_AGE_RECIPIENTS", "SOPS_AGE_KEY_FILE", "SOPS_PGP_FP",
                 "SOPS_KMS_ARN", "SOPS_KMS_CONTEXT", "SOPS_AZURE_KV",
                 "SOPS_GCP_KMS", "SOPS_HCVAULT_ADDR", "SOPS_HCVAULT_TOKEN",
                 "AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_REGION",
@@ -883,7 +902,8 @@ internal sealed class SopsProvider : ISecretProvider
 
         try
         {
-            File.WriteAllText(encFile, parsed.Ciphertext, Encoding.UTF8);
+            // v0.7.11: no BOM (sops >= 3.x rejects BOM-prefixed JSON).
+            File.WriteAllText(encFile, parsed.Ciphertext, new UTF8Encoding(false));
 
             // Run: sops -d --output <plain> <enc>
             var psi = new System.Diagnostics.ProcessStartInfo
@@ -898,7 +918,10 @@ internal sealed class SopsProvider : ISecretProvider
                 StandardErrorEncoding = Encoding.UTF8
             };
 
-            string[] sopsEnvVars = { "SOPS_AGE_KEY_FILE", "SOPS_AGE_SECRET_KEY",
+            // v0.7.11: decrypt env var names verified against official SOPS age
+            // docs. SOPS_AGE_SECRET_KEY is NOT an official env var (official: KEY_FILE,
+            // KEY, KEY_CMD); add SOPS_AGE_KEY as a convenient alternative.
+            string[] sopsEnvVars = { "SOPS_AGE_KEY_FILE", "SOPS_AGE_KEY",
                 "GNUPGHOME", "AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY",
                 "AWS_REGION", "AZURE_TENANT_ID", "AZURE_CLIENT_ID", "AZURE_CLIENT_SECRET" };
             foreach (var envVar in sopsEnvVars)
@@ -1535,11 +1558,17 @@ internal sealed class AwsSecretsManagerProvider : ISecretProvider
         using var client = new System.Net.Http.HttpClient();
         client.Timeout = Timeout;
         var content = new System.Net.Http.StringContent(body, Encoding.UTF8, "application/x-amz-json-1.1");
-        content.Headers.Add("X-Amz-Target", target);
-        content.Headers.Add("X-Amz-Date", amzDate);
-        content.Headers.Add("Authorization", auth);
-        if (!string.IsNullOrEmpty(sessionToken)) content.Headers.Add("X-Amz-Security-Token", sessionToken);
-        return client.PostAsync("https://" + host + "/", content).GetAwaiter().GetResult();
+        // Per AWS SigV4: Authorization, X-Amz-Target, X-Amz-Date, X-Amz-Security-Token
+        // are REQUEST headers, not content headers. Adding "Authorization" to
+        // HttpContent throws "Misused header name, 'Authorization'" because the
+        // .NET dispatcher treats it as a content header.
+        var request = new System.Net.Http.HttpRequestMessage(System.Net.Http.HttpMethod.Post, "https://" + host + "/");
+        request.Content = content;
+        request.Headers.Add("X-Amz-Target", target);
+        request.Headers.Add("X-Amz-Date", amzDate);
+        request.Headers.Add("Authorization", auth);
+        if (!string.IsNullOrEmpty(sessionToken)) request.Headers.Add("X-Amz-Security-Token", sessionToken);
+        return client.SendAsync(request).GetAwaiter().GetResult();
     }
 
     private static string HexSHA256(string s)

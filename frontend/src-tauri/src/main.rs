@@ -300,6 +300,26 @@ fn validate_cli_input(command: &str, args: &[String]) -> Result<(), String> {
 
 #[tauri::command]
 fn run_cli(app: tauri::AppHandle, command: String, args: Vec<String>) -> CliResponse {
+/// Truncates stderr to 512 chars and masks common secret-bearing patterns
+/// so provider-activation failures are traceable in env-manager.log without
+/// leaking credentials. Bounded + best-effort scrub; logs the error message
+/// shape, never a secret value.
+fn scrub_stderr(s: &str) -> String {
+    let mut out: String = s.chars().take(512).collect();
+    for pat in ["Bearer ", "token=", "Token=", "password=", "Password=",
+                "setx ", "OP_SERVICE_ACCOUNT_TOKEN=", "VAULT_TOKEN=",
+                "AWS_SECRET_ACCESS_KEY=", "AWS_SESSION_TOKEN="] {
+        if let Some(i) = out.find(pat) {
+            let start = i + pat.len();
+            let tail: String = out.chars().skip(start).take(8).collect();
+            if !tail.is_empty() {
+                out.replace_range(start..start + tail.len(), "<redacted>");
+            }
+        }
+    }
+    out
+}
+
     info!("[run_cli] command={}, argument_count={}", command, args.len());
 
     // Validate input before doing anything
@@ -361,6 +381,10 @@ fn run_cli(app: tauri::AppHandle, command: String, args: Vec<String>) -> CliResp
 
             if !stderr.is_empty() {
                 info!("[run_cli] stderr_present=true, stderr_len={}", stderr.len());
+            }
+
+            if !output.status.success() && !stderr.trim().is_empty() {
+                warn!("[run_cli] non-zero exit stderr_hint: {}", scrub_stderr(&stderr));
             }
 
             if output.status.success() {
