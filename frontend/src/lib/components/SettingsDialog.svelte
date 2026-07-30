@@ -75,25 +75,40 @@
     if (cliToggleLoading) return
     cliToggleLoading = true
     try {
-      if (cliInPath) {
-        const result = await removeCliFromPath()
-        cliInPath = await isCliInPath()
-        if (result.removed || !cliInPath) {
+     if (cliInPath) {
+        // Fail-fast: if the IPC hangs (CLI subprocess wedged) surface a clear
+        // error rather than leaving the toggle greyed forever. Wrap with a
+        // 30s timeout so the user always sees success or a typed failure.
+        const result = await withCliTimeout(removeCliFromPath(), get(tStore)('settings.cliAddFailed'))
+       cliInPath = await isCliInPath()
+       if (result.removed || !cliInPath) {
           showToast(get(tStore)('settings.cliRemoved'), 'success')
         } else {
           showToast(get(tStore)('settings.cliRemoveFailed') + ': ' + result.message, 'error')
         }
-      } else {
-        const result = await addCliToPath()
-        // Force refresh PATH cache to see the new entry
-        await listPathEntries('user', true)
-        cliInPath = await isCliInPath()
-        if (result.added || cliInPath) {
+     } else {
+        const result = await withCliTimeout(addCliToPath(), get(tStore)('settings.cliAddFailed'))
+       // Force refresh PATH cache to see the new entry
+       await listPathEntries('user', true)
+       cliInPath = await isCliInPath()
+       if (result.added || cliInPath) {
           showToast(get(tStore)('settings.cliAdded'), 'success')
           dispatch('refresh')
         } else {
           showToast(get(tStore)('settings.cliAddFailed') + ': ' + result.message, 'error')
-        }
+ }
+
+  /** 30s race: any IPC call here MUST resolve within 30s, otherwise throw
+   *  with the provided failure label + timeout suffix. Mirrors the GUI's
+   *  protection-page withTimeout pattern; keeps the toggle from going
+   *  permanently grey when the CLI subprocess wedges (cov with AGENTS.md's
+   *  fail-loud mandate). */
+  function withCliTimeout<T>(p: Promise<T>, label: string): Promise<T> {
+    return new Promise<T>((resolve, reject) => {
+      const t = setTimeout(() => reject(new Error(label + ' (timeout after 30s)')), 30000)
+      p.then((v) => { clearTimeout(t); resolve(v) }).catch((e) => { clearTimeout(t); reject(e) })
+    })
+  }
       }
     } catch (err) {
       showToast(get(tStore)('settings.cliAddFailed') + ': ' + (err instanceof Error ? err.message : String(err)), 'error')
@@ -221,31 +236,31 @@
       <div class="flex items-center justify-between">
         <span class="text-xs font-medium text-gray-600 dark:text-gray-400">{$t('settings.darkMode')}</span>
         <button
-          on:click={toggleDarkMode}
-          class="relative inline-flex h-5 w-9 items-center rounded-full transition {darkMode ? 'bg-blue-600' : 'bg-gray-300'}"
-          role="switch"
-          aria-checked={darkMode}
-          aria-label={$t('settings.darkMode')}
-        >
-          <span
-            class="inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition {darkMode ? 'translate-x-4' : 'translate-x-0.5'}"
-          ></span>
-        </button>
+         on:click={toggleDarkMode}
+          class="relative inline-flex h-5 w-8 items-center rounded-full transition {darkMode ? 'bg-blue-600' : 'bg-gray-300'}"
+         role="switch"
+         aria-checked={darkMode}
+         aria-label={$t('settings.darkMode')}
+       >
+         <span
+            class="inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition {darkMode ? 'translate-x-3.5' : 'translate-x-0.5'}"
+         ></span>
+       </button>
       </div>
 
       <div class="flex items-center justify-between">
         <span class="text-xs font-medium text-gray-600 dark:text-gray-400">{$t('settings.addCliToPath')}</span>
         <button
-          on:click={toggleCliInPath}
-          disabled={cliToggleLoading}
-          class="relative inline-flex h-5 w-9 items-center rounded-full transition {cliInPath ? 'bg-blue-600' : 'bg-gray-300'} disabled:opacity-50"
-          role="switch"
-          aria-checked={cliInPath}
-          aria-label={$t('settings.addCliToPath')}
-        >
-          <span
-            class="inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition {cliInPath ? 'translate-x-4' : 'translate-x-0.5'}"
-          ></span>
+         on:click={toggleCliInPath}
+         disabled={cliToggleLoading}
+          class="relative inline-flex h-5 w-8 items-center rounded-full transition {cliInPath ? 'bg-blue-600' : 'bg-gray-300'} disabled:opacity-50"
+         role="switch"
+         aria-checked={cliInPath}
+         aria-label={$t('settings.addCliToPath')}
+       >
+         <span
+            class="inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition {cliInPath ? 'translate-x-3.5' : 'translate-x-0.5'}"
+         ></span>
         </button>
       </div>
       <div>

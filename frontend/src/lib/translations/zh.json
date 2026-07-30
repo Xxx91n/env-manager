@@ -354,5 +354,10 @@
   "errors.globalInheritsLaunch": "全局配置文件不能继承局部(Launch)配置文件，因为局部配置文件可能携带 DPAPI 机密，写入用户注册表时只会留下一堆密文垃圾。",
   "errors.launchInheritsSecret": "局部(Launch)配置文件不能继承另一个已经携带机密的局部配置文件——继承来的机密在本配置文件的启动目标里没有可解密的路径。",
   "errors.inheritBlocked": "为保护机密变量，禁止此继承组合。",
-  "warnings.profileDisabledAfterInherit": "修改继承关系后配置文件已停用。请先修复继承链再重新应用。"
+  "warnings.profileDisabledAfterInherit": "修改继承关系后配置文件已停用。请先修复继承链再重新应用。",
+  "path.stagedActive": "有未保存的顺序更改；点击应用以提交到注册表。",
+  "path.applyMoves": "应用移动",
+  "messages.pathOrderApplied": "PATH 顺序已应用",
+  "history.op.profile reveal-secret": "揭示密钥",
+  "history.op.profile secret-provider set": "设置机密提供者"
 }

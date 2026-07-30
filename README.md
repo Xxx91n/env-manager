@@ -4,6 +4,8 @@ Modern, lightweight Windows environment variable manager with CLI and GUI dual-m
 
 **[简体中文](README_CN.md)** | **English**
 
+**Supported GUI languages** (Settings dialog dropdown, persisted across restarts): English, 简体中文, 日本語, 한국어, Deutsch, Français, Español, Português, Русский, العربية.
+
 ---
 
 ## Features

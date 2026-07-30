@@ -354,5 +354,10 @@
   "errors.globalInheritsLaunch": "A Global profile cannot inherit from a Launch profile because Launch profiles may carry DPAPI secrets that would be written as ciphertext to the user registry.",
   "errors.launchInheritsSecret": "A Launch profile cannot inherit from another Launch profile that already carries secrets because the inherited secret has no in-process decrypt path for this profile's launch target.",
   "errors.inheritBlocked": "This inheritance combination is blocked to protect secret variables.",
-  "warnings.profileDisabledAfterInherit": "Profile disabled after inheritance change. Fix the inheritance chain before re-applying."
+  "warnings.profileDisabledAfterInherit": "Profile disabled after inheritance change. Fix the inheritance chain before re-applying.",
+  "path.stagedActive": "You have unsaved order changes; press Apply to commit them to the registry.",
+  "path.applyMoves": "Apply Moves",
+  "messages.pathOrderApplied": "PATH order applied",
+  "history.op.profile reveal-secret": "Reveal Secret",
+  "history.op.profile secret-provider set": "Set Secret Provider"
 }

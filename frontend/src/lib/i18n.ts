@@ -106,10 +106,21 @@ export async function applyPersistedLocale(): Promise<void> {
   // is traceable from the single env-manager.log file (per AGENTS.md).
   void frontendLog('debug', 'applyPersistedLocale: durable=' + JSON.stringify(durable) + ' localStorage=' + JSON.stringify(stored)).catch(() => {})
   if (durable && durable !== 'null' && durable !== 'undefined') {
-    const authoritative = normalizeLocale(durable)
-    try { if (typeof localStorage !== 'undefined') localStorage.setItem('locale', authoritative) } catch { /* ignore */ }
-    localeStore.set(authoritative)
-    void frontendLog('info', 'applyPersistedLocale: authoritative=' + authoritative + ' (durable path taken)').catch(() => {})
+   const authoritative = normalizeLocale(durable)
+    // Pre-load the locale's messages BEFORE localeStore.set so any reactive
+    // listener that synchronously reads messages (notably the App.svelte tray
+    // i18n updater calling get(tStore)('tray.show')) sees translated strings
+    // rather than fallback 'en' keys. This fixes the tray-stays-English-on-
+    // Chinese-startup race where the lazy svelte-i18n dynamic import had not
+    // resolved by the time the tray reactive handler read $t().
+    try {
+      if (authoritative !== defaultLocale) await loadLocaleMessages(authoritative)
+    } catch (e) {
+      void frontendLog('warn', 'applyPersistedLocale: pre-load failed for ' + authoritative + ': ' + (e as Error).message).catch(() => {})
+    }
+   try { if (typeof localStorage !== 'undefined') localStorage.setItem('locale', authoritative) } catch { /* ignore */ }
+   localeStore.set(authoritative)
+   void frontendLog('info', 'applyPersistedLocale: authoritative=' + authoritative + ' (durable path taken)').catch(() => {})
   } else {
     // Do NOT seed from localStorage. The portable WebView2 localStorage is
     // unreliable across restarts (an observed real bug: a stale 'zh' persisted
@@ -129,3 +140,15 @@ export async function applyPersistedLocale(): Promise<void> {
 
 export const locales = supportedLocales
 export const defaultLanguage = defaultLocale
+
+/**
+ * Loads the messages for a locale via the same dynamic import svelte-i18n's
+ * register() uses, then hands them straight to addMessages() so set() below
+ * has them synchronously ready. Falls back to svelte-i18n's lazy registry if
+ * anything throws; callers MUST treat failure as soft (the lazy loader will
+ * still resolve on its own schedule).
+ */
+async function loadLocaleMessages(loc: string): Promise<void> {
+  const mod = await import('./translations/' + loc + '.json')
+  addMessages(loc, (mod as { default: Record<string, string> }).default)
+}

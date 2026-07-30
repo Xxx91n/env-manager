@@ -354,5 +354,10 @@
   "errors.globalInheritsLaunch": "لا يمكن للملف العام (Global) أن يرث ملف إطلاق (Launch) لأن ملفات الإطلاق قد تحوي أسرار DPAPI ستكتب كنص مشفر في سجل المستخدم.",
   "errors.launchInheritsSecret": "لا يمكن لملف إطلاق أن يرث ملف إطلاق آخر يحوي أسراراً بالفعل، حيث لا يوجد مسار فك تشفير للسر الموروث في هدف إطلاق هذا الملف.",
   "errors.inheritBlocked": "تم حظر مجموعة الوراثة هذه لحماية المتغيرات السرية.",
-  "warnings.profileDisabledAfterInherit": "تم تعطيل الملف بعد تغيير الوراثة. أصلح سلسلة الوراثة قبل إعادة التطبيق."
+  "warnings.profileDisabledAfterInherit": "تم تعطيل الملف بعد تغيير الوراثة. أصلح سلسلة الوراثة قبل إعادة التطبيق.",
+  "path.stagedActive": "لديك تغييرات ترتيب غير محفوظة؛ اضغط تطبيق لتثبيتها في السجل.",
+  "path.applyMoves": "تطبيق النقل",
+  "messages.pathOrderApplied": "تم تطبيق ترتيب PATH",
+  "history.op.profile reveal-secret": "إظهار السر",
+  "history.op.profile secret-provider set": "تعيين مزود الأسرار"
 }

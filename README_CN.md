@@ -4,6 +4,8 @@
 
 **[简体中文](README_CN.md)** | **[English](README.md)**
 
+**支持的 GUI 语言**（在设置下拉框中切换，重启后保留）：简体中文、English、日本語、한국어、Deutsch、Français、Español、Português、Русский、العربية。
+
 ---
 
 ## 功能特性

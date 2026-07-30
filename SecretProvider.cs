@@ -500,11 +500,26 @@ internal sealed class PowerShellSecretManagementProvider : ISecretProvider
 
         using var proc = System.Diagnostics.Process.Start(psi);
         if (proc == null) throw new InvalidOperationException("Failed to start pwsh process");
+        // Per .NET guidance (MS docs: "WaitForExit" + multiple redirected
+        // streams): synchronously ReadToEnd after WaitForExit can deadlock when
+        // either pipe fills before we read from it, which is the real cause of
+        // the "pwsh window hang" -- pwsh blocks writing to a full stdout/stderr
+        // pipe while we wait for it to exit. Drain both pipes async-first so
+        // the child process never blocks on pipe backpressure, then wait.
+        var stdoutBuf = new System.Text.StringBuilder();
+        var stderrBuf = new System.Text.StringBuilder();
+        proc.OutputDataReceived += (_, e) => { if (e.Data != null) { stdoutBuf.AppendLine(e.Data); } };
+        proc.ErrorDataReceived += (_, e) => { if (e.Data != null) { stderrBuf.AppendLine(e.Data); } };
+        proc.BeginOutputReadLine();
+        proc.BeginErrorReadLine();
         proc.WaitForExit(30000); // 30s timeout
-        if (!proc.HasExited) { proc.Kill(); throw new InvalidOperationException("pwsh timed out"); }
-
-        string stdout = proc.StandardOutput.ReadToEnd();
-        string stderr = proc.StandardError.ReadToEnd();
+        if (!proc.HasExited) { try { proc.Kill(); } catch { } throw new InvalidOperationException("pwsh timed out after 30s"); }
+        // For async-redirected streams WaitForExit(int) may return while the
+        // async drains are still flushing: call WaitForExit() (no timeout) to
+        // guarantee both async readers have delivered all data before we read.
+        proc.WaitForExit();
+        string stdout = stdoutBuf.ToString();
+        string stderr = stderrBuf.ToString();
         if (proc.ExitCode != 0)
             throw new InvalidOperationException("pwsh exited " + proc.ExitCode + ": " + StripClixml(stderr));
         return stdout;

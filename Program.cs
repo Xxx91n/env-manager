@@ -1176,7 +1176,14 @@ partial class Program
         }
         try
         {
-            Console.Out.Write(SecretProviderManager.Decrypt(v.Value, profileName + "\\" + varName));
+            var plaintext = SecretProviderManager.Decrypt(v.Value, profileName + "\\" + varName);
+            // Audit BEFORE printing plaintext so the audit trail records the
+            // fact that a secret was revealed (for security forensics) but
+            // never the value itself. Marked <redacted> twice over.
+            RecordProfileAudit("profile reveal-secret", profileName,
+                JsonSerializer.Serialize(new { name = varName, value = "<redacted>" }),
+                JsonSerializer.Serialize(new { name = varName, value = "<revealed>" }));
+            Console.Out.Write(plaintext);
             return 0;
         }
         catch (Exception ex)
@@ -1221,6 +1228,13 @@ partial class Program
                 try
                 {
                     SecretProviderManager.SetActiveProvider(args[3]);
+                    // v0.7.12: audit the active-provider switch. Even though
+                    // this is a config-only change (no secret data is mutated),
+                    // recording it lets users see this atomic security-significant
+                    // transaction in the history view (per item 7 mandate) and
+                    // detect silent provider swaps.
+                    RecordProfileAudit("profile secret-provider set", "(all)",
+                        null, JsonSerializer.Serialize(new { provider = args[3] }));
                     Console.WriteLine($"Active secret provider set to: {args[3]}");
                     Console.WriteLine("Note: existing secrets encrypted with the previous provider will still decrypt correctly (fail-closed on unknown provider).");
                     return 0;

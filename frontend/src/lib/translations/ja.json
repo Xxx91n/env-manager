@@ -354,5 +354,10 @@
   "errors.globalInheritsLaunch": "Global プロファイルは Launch プロファイルを継承できません。Launch プロファイルは DPAPI シークレットを保持する可能性があり、ユーザレジストリに暗号文ゴミとして書き込まれるためです。",
   "errors.launchInheritsSecret": "Launch プロファイルは、シークレットをすでに保持する別の Launch プロファイルを継承できません。継承されたシークレットにはこのプロファイルの起動ターゲット内に復号パスがありません。",
   "errors.inheritBlocked": "シークレット変数を保護するため、この継承の組み合わせはブロックされます。",
-  "warnings.profileDisabledAfterInherit": "継承変更後、プロファイルは無効化されました。再適用前に継承チェーンを修正してください。"
+  "warnings.profileDisabledAfterInherit": "継承変更後、プロファイルは無効化されました。再適用前に継承チェーンを修正してください。",
+  "path.stagedActive": "未保存の順序変更があります。「適用」を押すとレジストリに反映されます。",
+  "path.applyMoves": "移動を適用",
+  "messages.pathOrderApplied": "PATH の順序を適用しました",
+  "history.op.profile reveal-secret": "シークレット表示",
+  "history.op.profile secret-provider set": "シークレットプロバイダー設定"
 }

@@ -18,11 +18,29 @@
   import type { PathEntry } from '../api'
   import type { PathHealthEntry } from '../api'
 
-  let entries: PathEntry[] = []
-  let scope: 'user' | 'system' = 'user'
-  let loading = false
-  let actionLoading = false
-  let newEntry = ''
+ let entries: PathEntry[] = []
+ let scope: 'user' | 'system' = 'user'
+ let loading = false
+ let actionLoading = false
+ let newEntry = ''
+
+  // v0.7.12 staged-move state: matches the Windows PowerToys env-var editor
+  // pattern where pressing up/down only reorders locally and an Apply button
+  // commits all moves at once. This lets the user click up/down many times
+  // rapidly without serial IPC per click (which was slow and felt laggy).
+  // stagedEntries holds the in-flight visual order (with .index left intact,
+  // so we still identify each entry by its original registry position);
+  // stagedActive is true while the user is mid-edit; stagedApplyLoading gates
+  // the confirm button. Cancel restores from `entries` (last committed snapshot).
+  let stagedEntries: PathEntry[] = []
+  let stagedActive = false
+ let stagedApplyLoading = false
+  // Visible order: when staged moves are active we show the in-flight order;
+  // otherwise the last-committed one. The #each renders this, and move buttons
+  // operate on the visual position `pos` (NOT entry.index, which is the
+  // original registry index used as the stable key).
+  $: displayEntries = stagedActive ? stagedEntries : entries
+  // get $t-stable variant via store directly (Avoid reactive retriggers): N/A.
 
   // Inline rename state
   let editingIndex: number | null = null
@@ -48,6 +66,12 @@
     healthSummary = null
     try {
       entries = await listPathEntries(scope)
+      // Drop any in-flight staged move when entries are re-loaded from the
+      // registry (refresh / scope change / external mutation); the staged
+      // order would otherwise drift relative to the new baseline.
+      stagedEntries = []
+      stagedActive = false
+      stagedApplyLoading = false
     } catch (err) {
       showMessage(err instanceof Error ? err.message : String(err), 'error')
     } finally {
@@ -217,29 +241,89 @@
     })
   }
 
-  async function handleMoveUp(index: number) {
+  // v0.7.12 staged-move handlers. Local-only swap on `stagedEntries`; no IPC
+  // per click. The Apply button runs `applyStagedMoves()` to commit the whole
+  // ordered sequence to the registry in one guided pass. `pos` is the visual
+  // position in displayEntries (0-based), not the registry index.
+  function ensureStagedActive() {
     cancelEdit()
-    actionLoading = true
-    try {
-      await movePathEntryUp(index, scope)
-      await refresh()
-    } catch (err) {
-      showMessage(err instanceof Error ? err.message : String(err), 'error')
-    } finally {
-      actionLoading = false
+    if (!stagedActive) {
+      stagedEntries = entries.slice()
+      stagedActive = true
     }
   }
 
-  async function handleMoveDown(index: number) {
-    cancelEdit()
-    actionLoading = true
+  function handleMoveUp(pos: number) {
+    if (pos <= 0) return
+    ensureStagedActive()
+    const arr = stagedEntries
+    if (arr[pos].isProtected) return
+    const tmp = arr[pos - 1]
+    arr[pos - 1] = arr[pos]
+    arr[pos] = tmp
+    stagedEntries = arr
+    stagedEntries = stagedEntries // reactivity poke
+  }
+
+  function handleMoveDown(pos: number) {
+    if (pos >= stagedEntries.length - 1) return
+    ensureStagedActive()
+    const arr = stagedEntries
+    if (arr[pos].isProtected) return
+    const tmp = arr[pos + 1]
+    arr[pos + 1] = arr[pos]
+    arr[pos] = tmp
+    stagedEntries = arr
+    stagedEntries = stagedEntries // reactivity poke
+  }
+
+  function cancelStagedMoves() {
+    stagedEntries = []
+    stagedActive = false
+    stagedApplyLoading = false
+  }
+
+  // Commit the staged visual order to the registry using the minimum number
+  // of move-up/move-down IPCs. For each target position i (left to right),
+  // locate the live registry position of the entry whose original `.index`
+  // equals stagedEntries[i].index, then move it left (move-up) until it sits
+  // at position i. We re-localize after every move because each move-up/down
+  // shifts the live indices of the entries it crosses. O(n^2) in PATH entry
+  // count — fine since N is small (<200) in practice.
+  async function applyStagedMoves() {
+    if (!stagedActive || stagedApplyLoading) return
+    stagedApplyLoading = true
     try {
-      await movePathEntryDown(index, scope)
+      const target = stagedEntries
+      // Re-read live order so we map original .index -> current real position
+      // fresh; the registry may have drifted from the snapshot we staged on.
+      let live = await listPathEntries(scope)
+      for (let i = 0; i < target.length; i++) {
+        const wantOrigIdx = target[i].index
+        let realPos = live.findIndex((e) => e.index === wantOrigIdx)
+        if (realPos < 0) {
+          // Entry vanished from the registry mid-stage; abort to avoid a
+          // poison sequence that silently reorders other entries.
+          throw new Error(`PATH entry at original index ${wantOrigIdx} no longer exists; staged move aborted`)
+        }
+        while (realPos > i) {
+          await movePathEntryUp(realPos, scope)
+          realPos--
+        }
+        // If realPos < i it means a prior loop misordered; since we only ever
+        // move entries left, that should not happen when target was built by
+        // adjacent swaps. Refresh live state defensively.
+        live = await listPathEntries(scope)
+      }
+      stagedActive = false
+      stagedEntries = []
       await refresh()
+      showMessage($t('messages.pathOrderApplied'), 'success')
     } catch (err) {
       showMessage(err instanceof Error ? err.message : String(err), 'error')
+      // On failure, keep staged order visible so the user can retry or cancel.
     } finally {
-      actionLoading = false
+      stagedApplyLoading = false
     }
   }
 
@@ -428,7 +512,33 @@
     <div class="px-4 py-8 text-center text-gray-400 text-xs dark:text-gray-500">
       {$t('path.empty')}
     </div>
-  {:else}
+ {:else}
+    {#if stagedActive}
+      <div class="flex items-center justify-between gap-2 px-3 py-2 mb-2 rounded-md bg-blue-50 border border-blue-200 dark:bg-blue-900/20 dark:border-blue-700">
+        <span class="text-[11px] text-blue-700 dark:text-blue-200">{$t('path.stagedActive')}</span>
+        <div class="flex items-center gap-2">
+          <button
+            on:click={applyStagedMoves}
+            disabled={stagedApplyLoading}
+            class="inline-flex items-center gap-1 px-2.5 py-1 text-[11px] font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-md transition disabled:opacity-50"
+            title={$t('path.applyMoves')}
+            aria-label={$t('path.applyMoves')}
+          >
+            {#if stagedApplyLoading}<svg class="w-3 h-3 animate-spin" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3" stroke-dasharray="40 60" /></svg>{/if}
+            {$t('path.applyMoves')}
+          </button>
+          <button
+            on:click={cancelStagedMoves}
+            disabled={stagedApplyLoading}
+            class="inline-flex items-center px-2.5 py-1 text-[11px] text-gray-600 hover:bg-gray-100 rounded-md transition disabled:opacity-50 dark:text-gray-300 dark:hover:bg-gray-700"
+            title={$t('buttons.cancel')}
+            aria-label={$t('buttons.cancel')}
+          >
+            {$t('buttons.cancel')}
+          </button>
+        </div>
+      </div>
+    {/if}
     <div class="overflow-x-auto bg-white rounded-md border border-gray-200 dark:bg-gray-800 dark:border-gray-700">
       <table class="w-full">
         <thead class="bg-gray-50 border-b border-gray-200 dark:bg-gray-750 dark:border-gray-600">
@@ -439,7 +549,7 @@
           </tr>
         </thead>
         <tbody class="divide-y divide-gray-100 dark:divide-gray-700">
-          {#each entries as entry (entry.index)}
+          {#each displayEntries as entry, pos (entry.index)}
             <tr class="hover:bg-gray-50 transition dark:hover:bg-gray-750 {entry.isDuplicate ? 'bg-amber-50/60 dark:bg-amber-900/10' : ''} {!entry.exists ? 'bg-red-50/60 dark:bg-red-900/10' : ''} {entry.isProtected ? 'bg-gray-100/60 dark:bg-gray-800/60' : ''}">
               <td class="px-2 py-1.5 text-[10px] text-gray-400 dark:text-gray-500 align-top">{entry.index}</td>
               <td class="px-2 py-1.5 align-top">
@@ -545,7 +655,7 @@
                   </button>
                   <button
                     on:click={() => handleMoveUp(entry.index)}
-                    disabled={actionLoading || entry.index === 0 || entry.isProtected}
+                    disabled={actionLoading || pos === 0 || entry.isProtected}
                     class="inline-flex p-1 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded transition disabled:opacity-30 dark:hover:text-blue-400 dark:hover:bg-blue-900/30"
                     title={$t('path.moveUp')}
                     aria-label={$t('path.moveUp')}
@@ -556,7 +666,7 @@
                   </button>
                   <button
                     on:click={() => handleMoveDown(entry.index)}
-                    disabled={actionLoading || entry.index === entries.length - 1 || entry.isProtected}
+                    disabled={actionLoading || pos === displayEntries.length - 1 || entry.isProtected}
                     class="inline-flex p-1 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded transition disabled:opacity-30 dark:hover:text-blue-400 dark:hover:bg-blue-900/30"
                     title={$t('path.moveDown')}
                     aria-label={$t('path.moveDown')}

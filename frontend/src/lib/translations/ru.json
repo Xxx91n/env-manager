@@ -354,5 +354,10 @@
   "errors.globalInheritsLaunch": "Global profil Launch profilini nasledovat ne mozhet, poskolku Launch profili mogut soderzhat sekrety DPAPI, kotorye budut zapisany kak shifr-tekst v reestr polzovatelya.",
   "errors.launchInheritsSecret": "Launch profil ne mozhet nasledovat drugoy Launch profil, uzhe soderzhashchiy sekrety. U nasledovannogo sekreta net puti rasshifrovki v cele zapuska etogo profilya.",
   "errors.inheritBlocked": "Ehta kombinatsiya nasledovaniya zablokirovana dlya zashchity sekretnykh peremennykh.",
-  "warnings.profileDisabledAfterInherit": "Profil otklyuchen posle izmeneniya nasledovaniya. Ispravte tsepochku nasledovaniya pered povtornym primeneniem."
+  "warnings.profileDisabledAfterInherit": "Profil otklyuchen posle izmeneniya nasledovaniya. Ispravte tsepochku nasledovaniya pered povtornym primeneniem.",
+  "path.stagedActive": "Есть несохранённые изменения порядка. Нажмите Применить, чтобы сохранить их в реестре.",
+  "path.applyMoves": "Применить перемещения",
+  "messages.pathOrderApplied": "Порядок PATH применён",
+  "history.op.profile reveal-secret": "Показать секрет",
+  "history.op.profile secret-provider set": "Установить поставщика секретов"
 }

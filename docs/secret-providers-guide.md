@@ -1,5 +1,7 @@
 # Secret Providers Setup Guide
 
+> **Official upstream docs**: this guide mirrors vendor-canonical configuration. Per-provider primary references are linked inline at each section: [Microsoft.PowerShell.SecretManagement](https://www.powershellgallery.com/packages/Microsoft.PowerShell.SecretManagement) + [SecretStore](https://www.powershellgallery.com/packages/Microsoft.PowerShell.SecretStore); [HashiCorp Vault KV v2](https://developer.hashicorp.com/vault/docs/secrets/kv/kv-v2); [Mozilla SOPS](https://getsops.io/) and [age](https://github.com/FiloSottile/age); [Azure Key Vault REST API](https://learn.microsoft.com/en-us/rest/api/keyvault/) and [az CLI managed identity / SP](https://learn.microsoft.com/en-us/azure/key-vault/general/authentication); [1Password CLI](https://developer.1password.com/docs/cli/getting-started); [AWS Secrets Manager REST API + SigV4](https://docs.aws.amazon.com/secretsmanager/latest/userguide/).
+
 Env Manager supports 8 secret-store providers. Secrets are scoped to "Launch (local)" (per-process) profiles only; Global profiles cannot hold secrets. The active provider is selected in the Profile editor > Active provider dropdown. The activation probe runs once at selection time; if your environment is not configured, the selection is rejected with an inline error under the dropdown plus a toast -- you must fix the environment and retry.
 
 Three providers work offline with no setup:
@@ -12,6 +14,8 @@ The six external providers below require host-side setup. Each section lists the
 ---
 
 ## PowerShell SecretManagement
+
+Official docs: [Microsoft.PowerShell.SecretManagement (Gallery)](https://www.powershellgallery.com/packages/Microsoft.PowerShell.SecretManagement) · [Microsoft.PowerShell.SecretStore (Gallery)](https://www.powershellgallery.com/packages/Microsoft.PowerShell.SecretStore) · [SecretManagement module guide (learn.microsoft.com)](https://learn.microsoft.com/powershell/module/microsoft.powershell.secretmanagement/).
 
 Vault name used by Env Manager: `EnvManager` (auto-registered on first use).
 
@@ -59,6 +63,8 @@ Fix: install the two modules (command above), then in Env Manager re-select the 
 
 ## HashiCorp Vault (KV v2)
 
+Official docs: [Vault KV v2 secrets engine](https://developer.hashicorp.com/vault/docs/secrets/kv/kv-v2) · [Vault HTTP API](https://developer.hashicorp.com/vault/api-docs) · [Vault CLI](https://developer.hashicorp.com/vault/docs/commands).
+
 ### Prerequisites
 
 - A reachable Vault server with the KV v2 secrets engine mounted (e.g. `vault secrets enable -path=secret kv-v2`).
@@ -91,6 +97,8 @@ Fix: `vault login` (interactive) or `export VAULT_TOKEN=<token>` then retry.
 ---
 
 ## SOPS (Mozilla SOPS / getsops)
+
+Official docs: [SOP homepage + age provider](https://getsops.io/) · [SOP age provider config (.sops.yaml)](https://getsops.io/docs/usage/identities/age/) · [age keygen / recipient docs](https://github.com/FiloSottile/age).
 
 ### Prerequisites
 
@@ -143,6 +151,8 @@ Fix: create `.sops.yaml` with at least one creation rule pointing to a key, or s
 
 ## Azure Key Vault
 
+Official docs: [Key Vault REST API](https://learn.microsoft.com/en-us/rest/api/keyvault/) · [Key Vault authentication (managed identity / SP)](https://learn.microsoft.com/en-us/azure/key-vault/general/authentication) · [az CLI (az keyvault / az role assignment)](https://learn.microsoft.com/en-us/cli/azure/keyvault).
+
 ### Prerequisites
 
 - An Azure Key Vault created in your subscription. Note its URI, e.g. `https://myvault.vault.azure.net`.
@@ -159,6 +169,8 @@ Fix: `setx AZURE_KEYVAULT_URI "https://<your-vault>.vault.azure.net"` then confi
 ---
 
 ## 1Password (op CLI)
+
+Official docs: [1Password CLI getting started](https://developer.1password.com/docs/cli/getting-started) · [op account add / sign in](https://developer.1password.com/docs/cli/signin) · [desktop app integration](https://developer.1password.com/docs/cli/app-integration) · [service accounts](https://developer.1password.com/docs/service-accounts) · [Connect server](https://developer.1password.com/docs/connect).
 
 ### Prerequisites
 
@@ -192,6 +204,8 @@ Fix: either turn on the desktop app integration, run `op account add`, or set `O
 ---
 
 ## AWS Secrets Manager
+
+Official docs: [Secrets Manager REST API](https://docs.aws.amazon.com/secretsmanager/latest/userguide/) · [SigV4 signing process](https://docs.aws.amazon.com/general/latest/gr/sigv4_signing.html) · [IAM credentials / STS assume-role](https://docs.aws.amazon.com/IAM/latest/UserGuide/security-creds.html).
 
 ### Prerequisites
 

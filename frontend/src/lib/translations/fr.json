@@ -354,5 +354,10 @@
   "errors.globalInheritsLaunch": "Un profil Global ne peut pas heriter d'un profil Launch car les profils Launch peuvent contenir des secrets DPAPI qui seraient ecrits comme texte chiffre dans le registre utilisateur.",
   "errors.launchInheritsSecret": "Un profil Launch ne peut pas heriter d'un autre profil Launch contenant deja des secrets, car le secret herite n'a pas de chemin de decryptage dans la cible de lancement de ce profil.",
   "errors.inheritBlocked": "Cette combinaison d'heritage est bloque pour proteger les variables secretes.",
-  "warnings.profileDisabledAfterInherit": "Profil desactive apres changement d'heritage. Corrigez la chaine d'heritage avant de reappliquer."
+  "warnings.profileDisabledAfterInherit": "Profil desactive apres changement d'heritage. Corrigez la chaine d'heritage avant de reappliquer.",
+  "path.stagedActive": "Vous avez des changements d’ordre non enregistrés. Cliquez sur Appliquer pour les valider dans le registre.",
+  "path.applyMoves": "Appliquer les déplacements",
+  "messages.pathOrderApplied": "Ordre PATH appliqué",
+  "history.op.profile reveal-secret": "Révéler secret",
+  "history.op.profile secret-provider set": "Définir fournisseur de secrets"
 }

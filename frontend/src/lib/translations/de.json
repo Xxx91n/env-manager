@@ -354,5 +354,10 @@
   "errors.globalInheritsLaunch": "Ein Global-Profil kann kein Launch-Profil erben, da Launch-Profile DPAPI-Geheimnisse enthalten koennen, die als Chiffretext in die Benutzer-Registry geschrieben wuerden.",
   "errors.launchInheritsSecret": "Ein Launch-Profil kann kein anderes Launch-Profilm erben, das bereits Geheimnisse traegt. Das geerbte Geheimnis hat im Startziel dieses Profils keinen Entschluesselungspfad.",
   "errors.inheritBlocked": "Diese Vererbungskombination ist gesperrt, um Geheimnisvariablen zu schuetzen.",
-  "warnings.profileDisabledAfterInherit": "Profil nach Vererbungsaenderung deaktiviert. Reparieren Sie die Vererbungskette, bevor Sie erneut anwenden."
+  "warnings.profileDisabledAfterInherit": "Profil nach Vererbungsaenderung deaktiviert. Reparieren Sie die Vererbungskette, bevor Sie erneut anwenden.",
+  "path.stagedActive": "Es gibt ungespeicherte Sortierungsänderungen. Klicken Sie auf Anwenden, um sie in die Registry zu übernehmen.",
+  "path.applyMoves": "Verschiebungen anwenden",
+  "messages.pathOrderApplied": "PATH-Reihenfolge angewendet",
+  "history.op.profile reveal-secret": "Secret anzeigen",
+  "history.op.profile secret-provider set": "Secret-Anbieter festlegen"
 }
