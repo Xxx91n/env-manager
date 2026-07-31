@@ -495,7 +495,7 @@ partial class Program
         var profile = FindProfile(profiles, name);
         if (profile == null) return ArgError("Error: Profile not found");
         var variables = ResolveProfileVariables(profile, profiles).Select(v => new { v.Name, v.Value, currentValue = GetVariableValue(v.Name, "user"), conflict = GetVariableValue(v.Name, "user") != null }).ToList();
-        var paths = ResolveProfilePaths(profile, profiles).Select(path => new { path, expandedPath = Environment.ExpandEnvironmentVariables(path), exists = Directory.Exists(Environment.ExpandEnvironmentVariables(path)) }).ToList();
+        var paths = ResolveProfilePaths(profile, profiles).Select(path => new { path, expandedPath = Environment.ExpandEnvironmentVariables(path), exists = FastDirectoryExists(Environment.ExpandEnvironmentVariables(path)) }).ToList();
         Console.WriteLine(JsonSerializer.Serialize(new { profile = name, profile.Inherits, variables, pathEntries = paths }, JsonOptsIndented));
         return 0;
     }

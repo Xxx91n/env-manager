@@ -2303,7 +2303,7 @@ partial class Program
             bool isDead = false;
             string expandedPath = Environment.ExpandEnvironmentVariables(entry);
             string fullPath = StripVerbatimPrefix(Path.IsPathRooted(expandedPath) ? expandedPath : Path.GetFullPath(Path.Combine(Environment.CurrentDirectory, expandedPath)));
-            try { isDead = !Directory.Exists(fullPath); }
+            try { isDead = !FastDirectoryExists(fullPath); }
             catch { isDead = true; }
 
             string status = isDup || isDead

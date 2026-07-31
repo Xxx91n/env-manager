@@ -132,7 +132,7 @@ fn is_read_only(command: &str, args: &[String]) -> bool {
                 _ => false, // add, remove, move-up, move-down
             }
         }
-        "history" => !matches!(args.first().map(|s| s.as_str()), Some("undo")),
+        "history" => !matches!(args.first().map(|s| s.as_str()), Some("undo") | Some("delete")),
         "bulk" => !matches!(args.first().map(|s| s.as_str()), Some("import")) || args.iter().any(|arg| arg == "--dry-run"),
         "protection" => matches!(args.first().map(|s| s.as_str()), Some("list")),
         _ => false,
