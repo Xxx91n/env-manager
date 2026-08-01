@@ -40,9 +40,11 @@
       <Component Id="AgentGuide" Guid="*" Win64="$(var.Win64)">
         <File Id="AgentGuideFile" Source="$(var.SourceDir)\AGENTS.cli.md" KeyPath="yes" />
       </Component>
+      <?if "$(var.WebViewLoaderPresent)" = "1" ?>
       <Component Id="WebViewLoader" Guid="*" Win64="$(var.Win64)">
         <File Id="WebViewLoaderFile" Source="$(var.SourceDir)\WebView2Loader.dll" KeyPath="yes" />
       </Component>
+      <?endif ?>
     </DirectoryRef>
 
     <DirectoryRef Id="ApplicationProgramsFolder">
@@ -62,7 +64,9 @@
       <ComponentRef Id="CliDeps" />
       <ComponentRef Id="CliRuntime" />
       <ComponentRef Id="AgentGuide" />
+      <?if "$(var.WebViewLoaderPresent)" = "1" ?>
       <ComponentRef Id="WebViewLoader" />
+      <?endif ?>
       <ComponentRef Id="StartMenuShortcut" />
     </Feature>
   </Product>

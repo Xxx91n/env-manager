@@ -89,7 +89,12 @@ function run(cmd, args, opts = {}) {
 function findCliOutput() {
   const releaseBase = join(projectRoot, 'bin', 'Release')
   if (!existsSync(releaseBase)) return null
+  // ponytail: prefer the TargetFramework-matching dir; stale legacy dirs (e.g. net10.0 from v0.3.0) can linger and fool the scan
+  const preferred = 'net10.0-windows'
+  const preferredDir = join(releaseBase, preferred)
+  if (existsSync(join(preferredDir, 'env-manager-cli.dll'))) return preferredDir
   for (const dir of readdirSync(releaseBase)) {
+    if (dir === preferred) continue
     const candidate = join(releaseBase, dir)
     try {
       if (existsSync(join(candidate, 'env-manager-cli.dll'))) return candidate
@@ -214,7 +219,9 @@ if (!skipMsi && process.platform === 'win32') {
     const msiPath = join(msiDir, 'Env Manager_' + version + '_' + targetArch + '.msi')
     const win64Val = targetArch === 'x86' ? 'no' : 'yes'
     try {
-      const candleResult = spawnSync(candle, ['-nologo', '-arch', wixArch, '-dVersion=' + version, '-dSourceDir=' + portableDir, '-dWin64=' + win64Val, '-out', wixObject, wixSource], { stdio: 'inherit' })
+      const webviewLoaderPath = join(portableDir, 'WebView2Loader.dll')
+      const webviewPresent = existsSync(webviewLoaderPath) ? '1' : '0'
+      const candleResult = spawnSync(candle, ['-nologo', '-arch', wixArch, '-dVersion=' + version, '-dSourceDir=' + portableDir, '-dWin64=' + win64Val, '-dWebViewLoaderPresent=' + webviewPresent, '-out', wixObject, wixSource], { stdio: 'inherit' })
       if (candleResult.status !== 0) throw new Error('WiX candle failed (exit ' + candleResult.status + ')')
       const lightResult = spawnSync(light, ['-nologo', '-spdb', '-out', msiPath, wixObject], { stdio: 'inherit' })
       if (lightResult.status !== 0) throw new Error('WiX light failed (exit ' + lightResult.status + ')')
