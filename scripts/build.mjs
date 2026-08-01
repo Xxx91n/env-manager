@@ -20,7 +20,7 @@ import {
 } from 'node:fs'
 import { resolve, join, dirname, basename } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { arch } from 'node:os'
+import { arch, tmpdir } from 'node:os'
 import archiver from 'archiver'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
@@ -209,9 +209,8 @@ if (!skipMsi && process.platform === 'win32') {
   const candle = join(wixRoot, 'candle.exe')
   const light = join(wixRoot, 'light.exe')
   if (existsSync(candle) && existsSync(light)) {
-    const wixSource = join(__dirname, 'installer.wxs')
-    const os = require('node:os')
-    const wixObject = join(os.tmpdir(), 'env-manager-' + Date.now() + '.wixobj')
+    const wixSource = join(projectRoot, 'frontend', 'scripts', 'installer.wxs')
+    const wixObject = join(tmpdir(), 'env-manager-' + Date.now() + '.wixobj')
     const msiPath = join(msiDir, 'Env Manager_' + version + '_' + targetArch + '.msi')
     const win64Val = targetArch === 'x86' ? 'no' : 'yes'
     try {
