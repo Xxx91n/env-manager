@@ -173,6 +173,23 @@ const cliDir = findCliOutput()
 if (!cliDir) throw new Error('CLI output directory not found under bin/Release')
 console.log('[build] CLI output: ' + cliDir)
 
+// ponytail: verify the deployed CLI matches the project version. A stale
+// bin/Release/net10.0 dir from a prior TargetFramework can fool findCliOutput
+// into shipping a v0.3.0 binary with v0.7.x code — this guard catches that.
+{
+  const cliExe = join(cliDir, 'env-manager-cli.exe')
+  const probe = spawnSync(cliExe, [], { encoding: 'utf8', timeout: 10000, cwd: cliDir })
+  if (probe.status !== 0) {
+    throw new Error('CLI probe failed (exit ' + probe.status + '): ' + probe.stderr)
+  }
+  const m = probe.stdout.match(/v(\d+\.\d+\.\d+)/)
+  const cliVer = m ? m[1] : 'unknown'
+  if (cliVer !== version) {
+    throw new Error('CLI version mismatch: expected v' + version + ' got v' + cliVer + '. The build output dir (' + cliDir + ') contains a stale binary. Run dotnet build --no-incremental or clean bin/Release/.')
+  }
+  console.log('[build] CLI version verified: v' + cliVer)
+}
+
 // --- Step 2: Build Tauri GUI ---
 if (!skipGui) {
   console.log('[build] Step 2: Build Tauri GUI')
