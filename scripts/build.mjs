@@ -11,6 +11,7 @@
 //   node scripts/build.mjs --skip-cli
 //   node scripts/build.mjs --skip-gui
 //   node scripts/build.mjs --skip-msi
+//   node scripts/build.mjs --append       # Don't clean release/ (for multi-arch builds)
 
 import { execSync, spawnSync } from 'node:child_process'
 import {
@@ -122,22 +123,36 @@ function copyDir(src, dst) {
 }
 
 function makeZip(sourceDir, zipPath) {
+  // Remove existing ZIP to prevent recursive packaging (a residual .zip in the dir would be re-archived)
+  if (existsSync(zipPath)) rmSync(zipPath, { force: true })
   return new Promise((resolveP, reject) => {
     const output = createWriteStream(zipPath)
-    const archive = archiver('zip', { zlib: { level: 9 } })
+    const archive = archiver('zip', { zlib: { level: 6 } })
     output.on('close', () => {
       console.log('[build] ZIP created: ' + zipPath + ' (' + archive.pointer() + ' bytes)')
       resolveP()
     })
     archive.on('error', reject)
     archive.pipe(output)
-    archive.directory(sourceDir, false)
+    // Exclude .zip files from packaging to prevent recursive nesting
+    const entries = readdirSync(sourceDir, { withFileTypes: true })
+    for (const entry of entries) {
+      if (entry.name.endsWith('.zip')) continue
+      const fullPath = join(sourceDir, entry.name)
+      if (entry.isDirectory()) archive.directory(fullPath, entry.name)
+      else archive.file(fullPath, { name: entry.name })
+    }
     archive.finalize()
   })
 }
 
 // --- clean ---
-if (existsSync(releaseDir)) rmSync(releaseDir, { recursive: true, force: true })
+// Only clean the release dirs if this is a fresh build (no --append flag).
+// With --append, other archs' output in the same dirs are preserved.
+const appendMode = getFlag('--append')
+if (!appendMode) {
+  if (existsSync(releaseDir)) rmSync(releaseDir, { recursive: true, force: true })
+}
 mkdirSync(portableDir, { recursive: true })
 mkdirSync(msiDir, { recursive: true })
 mkdirSync(cliOnlyDir, { recursive: true })
@@ -145,7 +160,8 @@ mkdirSync(cliOnlyDir, { recursive: true })
 // --- Step 1: Build C# CLI ---
 if (!skipCli) {
   console.log('[build] Step 1: Build C# CLI')
-  run('dotnet', ['build', '-c', 'Release', '-r', rid, '--no-self-contained'], { cwd: projectRoot })
+  // Framework-dependent build: no RID needed (CLI runs on any arch with .NET 10 runtime)
+run('dotnet', ['build', '-c', 'Release'], { cwd: projectRoot })
 }
 
 const cliDir = findCliOutput()
@@ -216,10 +232,11 @@ if (!skipMsi && process.platform === 'win32') {
   console.log('[build] Step 4: MSI build skipped (not on Windows)')
 }
 
-// --- Step 5: Create ZIP archives ---
+// --- Step 5: Create ZIP archives (inside each arch-specific subdirectory) ---
+// Layout: release/{portable,cli-only}/*.zip  (not release/*.zip)
 console.log('[build] Step 5: Create ZIP archives')
-const portableZip = join(releaseDir, 'Env-Manager_portable_' + version + '_' + targetArch + '.zip')
-const cliOnlyZip = join(releaseDir, 'Env-Manager_cli-only_' + version + '_' + targetArch + '.zip')
+const portableZip = join(portableDir, 'Env-Manager_portable_' + version + '_' + targetArch + '.zip')
+const cliOnlyZip = join(cliOnlyDir, 'Env-Manager_cli-only_' + version + '_' + targetArch + '.zip')
 await makeZip(portableDir, portableZip)
 await makeZip(cliOnlyDir, cliOnlyZip)
 
@@ -229,6 +246,7 @@ console.log('[build] Done. Output:')
 console.log('  Portable (dir):', portableDir)
 for (const f of readdirSync(portableDir)) console.log('    ', f)
 console.log('  Portable (zip):', portableZip)
+console.log('    (inside release/portable/, not release/ root)')
 console.log('  CLI-only (dir):', cliOnlyDir)
 for (const f of readdirSync(cliOnlyDir)) console.log('    ', f)
 console.log('  CLI-only (zip):', cliOnlyZip)

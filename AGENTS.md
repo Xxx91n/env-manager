@@ -244,7 +244,7 @@ node scripts/build.mjs --arch x64
 # Skip stages: --skip-gui, --skip-msi, --skip-cli
 ```
 
-Verify: `release/portable/env-manager.exe`, `release/portable/env-manager-cli.exe`, `release/cli-only/env-manager-cli.exe`, `release/Env-Manager_portable_X.Y.Z_x64.zip`, `release/Env-Manager_cli-only_X.Y.Z_x64.zip`, `release/msi/Env Manager_X.Y.Z_x64.msi` (no locale suffix). The `release/` directory is gitignored - artifacts are for local testing only, not committed to git.
+Verify: `release/portable/env-manager.exe`, `release/portable/env-manager-cli.exe`, `release/cli-only/env-manager-cli.exe`, `release/portable/Env-Manager_portable_X.Y.Z_x64.zip`, `release/cli-only/Env-Manager_cli-only_X.Y.Z_x64.zip`, `release/msi/Env Manager_X.Y.Z_x64.msi` (no locale suffix). The `release/` directory is gitignored - artifacts are for local testing only, not committed to git.
 
 ## Mandatory Git Push After Code Changes (Provenance)
 

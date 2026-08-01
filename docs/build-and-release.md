@@ -57,8 +57,8 @@ Output layout (all under `release/`):
 - `release/portable/` - env-manager.exe + env-manager-cli.exe + DLLs (flat, no install needed)
 - `release/cli-only/` - env-manager-cli.exe + DLLs + AGENTS.cli.md (no GUI, standalone CLI)
 - `release/msi/` - Env Manager_X.Y.Z_<arch>.msi (Windows only, requires WiX)
-- `release/Env-Manager_portable_X.Y.Z_<arch>.zip` - portable ZIP archive
-- `release/Env-Manager_cli-only_X.Y.Z_<arch>.zip` - CLI-only ZIP archive
+- `release/portable/Env-Manager_portable_X.Y.Z_<arch>.zip` - portable ZIP archive (inside portable/ subdir)
+- `release/cli-only/Env-Manager_cli-only_X.Y.Z_<arch>.zip` - CLI-only ZIP archive (inside cli-only/ subdir)
 
 Architecture naming: `x64` (not amd64), `x86` (not x32), `arm64`. These map to .NET RIDs (`win-x64`/`win-x86`/`win-arm64`) and Rust triples (`x86_64-pc-windows-msvc`/`i686-pc-windows-msvc`/`aarch64-pc-windows-msvc`).
 

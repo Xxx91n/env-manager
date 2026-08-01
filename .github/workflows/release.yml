@@ -69,7 +69,7 @@ jobs:
         with:
           name: portable-${{ matrix.label }}
           path: |
-            release/Env-Manager_portable_*.zip
+            release/portable/Env-Manager_portable_*.zip
             release/portable/*
           if-no-files-found: error
 
@@ -78,7 +78,7 @@ jobs:
         with:
           name: cli-only-${{ matrix.label }}
           path: |
-            release/Env-Manager_cli-only_*.zip
+            release/cli-only/Env-Manager_cli-only_*.zip
             release/cli-only/*
           if-no-files-found: error
 
@@ -109,8 +109,8 @@ jobs:
           body: |
             ## Env Manager Downloads
 
-            - Portable: Env-Manager_portable_version_arch.zip (x64/x86/arm64)
-            - CLI-only: Env-Manager_cli-only_version_arch.zip (x64/x86/arm64)
+            - Portable: release/portable/Env-Manager_portable_version_arch.zip (x64/x86/arm64)
+            - CLI-only: release/cli-only/Env-Manager_cli-only_version_arch.zip (x64/x86/arm64)
             - MSI: Env Manager_version_arch.msi (x64/x86/arm64)
           files: |
             artifacts/Env-Manager_portable_*.zip

@@ -128,8 +128,8 @@ jobs:
           if (-not (Test-Path 'release/portable/env-manager-cli.exe')) { throw 'CLI executable missing' }
           if (-not (Test-Path 'release/portable/AGENTS.cli.md')) { throw 'CLI agent guide missing' }
           if (-not (Test-Path 'release/cli-only/env-manager-cli.exe')) { throw 'CLI-only exe missing' }
-          if (-not (Test-Path 'release/Env-Manager_portable_*_x64.zip')) { throw 'Portable ZIP missing' }
-          if (-not (Test-Path 'release/Env-Manager_cli-only_*_x64.zip')) { throw 'CLI-only ZIP missing' }
+          if (-not (Test-Path 'release/portable/Env-Manager_portable_*_x64.zip')) { throw 'Portable ZIP missing' }
+          if (-not (Test-Path 'release/cli-only/Env-Manager_cli-only_*_x64.zip')) { throw 'CLI-only ZIP missing' }
           $msi = Get-ChildItem 'release/msi/*.msi'
           if ($msi.Count -ne 1) { throw 'Expected exactly one MSI' }
           if ($msi.Name -match '_[a-zA-Z]{2}-[a-zA-Z]{2,3}\.msi
@@ -139,7 +139,7 @@ jobs:
           name: env-manager-portable
           path: |
             release/portable/*
-            release/Env-Manager_portable_*_x64.zip
+            release/portable/Env-Manager_portable_*_x64.zip
           if-no-files-found: error
 
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
@@ -147,7 +147,7 @@ jobs:
           name: env-manager-cli-only
           path: |
             release/cli-only/*
-            release/Env-Manager_cli-only_*_x64.zip
+            release/cli-only/Env-Manager_cli-only_*_x64.zip
           if-no-files-found: error
 
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
