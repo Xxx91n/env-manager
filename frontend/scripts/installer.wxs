@@ -7,40 +7,46 @@
     <MediaTemplate EmbedCab="yes" />
 
     <Directory Id="TARGETDIR" Name="SourceDir">
-      <Directory Id="ProgramFiles64Folder">
-        <Directory Id="INSTALLDIR" Name="Env Manager" />
-      </Directory>
+      <?if $(var.Win64) = "yes" ?>
+        <Directory Id="ProgramFiles64Folder">
+          <Directory Id="INSTALLDIR" Name="Env Manager" />
+        </Directory>
+      <?else ?>
+        <Directory Id="ProgramFilesFolder">
+          <Directory Id="INSTALLDIR" Name="Env Manager" />
+        </Directory>
+      <?endif ?>
       <Directory Id="ProgramMenuFolder">
         <Directory Id="ApplicationProgramsFolder" Name="Env Manager" />
       </Directory>
     </Directory>
 
     <DirectoryRef Id="INSTALLDIR">
-      <Component Id="GuiExecutable" Guid="*" Win64="yes">
+      <Component Id="GuiExecutable" Guid="*" Win64="$(var.Win64)">
         <File Id="GuiFile" Source="$(var.SourceDir)\env-manager.exe" KeyPath="yes" />
       </Component>
-      <Component Id="CliExecutable" Guid="*" Win64="yes">
+      <Component Id="CliExecutable" Guid="*" Win64="$(var.Win64)">
         <File Id="CliFile" Source="$(var.SourceDir)\env-manager-cli.exe" KeyPath="yes" />
       </Component>
-      <Component Id="CliLibrary" Guid="*" Win64="yes">
+      <Component Id="CliLibrary" Guid="*" Win64="$(var.Win64)">
         <File Id="CliLibraryFile" Source="$(var.SourceDir)\env-manager-cli.dll" KeyPath="yes" />
       </Component>
-      <Component Id="CliDeps" Guid="*" Win64="yes">
+      <Component Id="CliDeps" Guid="*" Win64="$(var.Win64)">
         <File Id="CliDepsFile" Source="$(var.SourceDir)\env-manager-cli.deps.json" KeyPath="yes" />
       </Component>
-      <Component Id="CliRuntime" Guid="*" Win64="yes">
+      <Component Id="CliRuntime" Guid="*" Win64="$(var.Win64)">
         <File Id="CliRuntimeFile" Source="$(var.SourceDir)\env-manager-cli.runtimeconfig.json" KeyPath="yes" />
       </Component>
-      <Component Id="AgentGuide" Guid="*" Win64="yes">
+      <Component Id="AgentGuide" Guid="*" Win64="$(var.Win64)">
         <File Id="AgentGuideFile" Source="$(var.SourceDir)\AGENTS.cli.md" KeyPath="yes" />
       </Component>
-      <Component Id="WebViewLoader" Guid="*" Win64="yes">
+      <Component Id="WebViewLoader" Guid="*" Win64="$(var.Win64)">
         <File Id="WebViewLoaderFile" Source="$(var.SourceDir)\WebView2Loader.dll" KeyPath="yes" />
       </Component>
     </DirectoryRef>
 
     <DirectoryRef Id="ApplicationProgramsFolder">
-      <Component Id="StartMenuShortcut" Guid="*" Win64="yes">
+      <Component Id="StartMenuShortcut" Guid="*" Win64="$(var.Win64)">
         <Shortcut Id="ApplicationShortcut" Name="Env Manager" Target="[INSTALLDIR]env-manager.exe"
                   WorkingDirectory="INSTALLDIR" />
         <RemoveFolder Id="ApplicationProgramsFolder" On="uninstall" />

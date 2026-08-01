@@ -34,16 +34,35 @@ npm run tauri-build
 #   frontend/src-tauri/target/<triple>/release/bundle/msi/*.msi
 ```
 
-## Build everything (consolidated output)
+## Build everything (cross-platform, multi-architecture)
 
-```powershell
-cd frontend
-powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build-all.ps1
-# Output:
-#   release/portable/  - env-manager.exe + env-manager-cli.exe + DLLs (flat)
-#   release/cli-only/  - env-manager-cli.exe + DLLs + AGENTS.cli.md (no GUI)
-#   release/msi/       - Env Manager_X.Y.Z_x64.msi
+The primary build orchestrator is `scripts/build.mjs` - a Node.js ESM script that works on Windows, Linux, and macOS with no hardcoded paths. It auto-discovers the project root relative to its own location.
+
+```bash
+# Build for host architecture (auto-detected)
+node scripts/build.mjs
+
+# Build for specific architecture
+node scripts/build.mjs --arch x64    # x64 (amd64)
+node scripts/build.mjs --arch x86    # x86 (32-bit)
+node scripts/build.mjs --arch arm64  # ARM64
+
+# Skip specific stages
+node scripts/build.mjs --skip-cli    # Skip C# CLI build
+node scripts/build.mjs --skip-gui   # Skip Tauri GUI build
+node scripts/build.mjs --skip-msi    # Skip MSI installer build
 ```
+
+Output layout (all under `release/`):
+- `release/portable/` - env-manager.exe + env-manager-cli.exe + DLLs (flat, no install needed)
+- `release/cli-only/` - env-manager-cli.exe + DLLs + AGENTS.cli.md (no GUI, standalone CLI)
+- `release/msi/` - Env Manager_X.Y.Z_<arch>.msi (Windows only, requires WiX)
+- `release/Env-Manager_portable_X.Y.Z_<arch>.zip` - portable ZIP archive
+- `release/Env-Manager_cli-only_X.Y.Z_<arch>.zip` - CLI-only ZIP archive
+
+Architecture naming: `x64` (not amd64), `x86` (not x32), `arm64`. These map to .NET RIDs (`win-x64`/`win-x86`/`win-arm64`) and Rust triples (`x86_64-pc-windows-msvc`/`i686-pc-windows-msvc`/`aarch64-pc-windows-msvc`).
+
+The legacy `frontend/scripts/build-all.ps1` is preserved as a backward-compatible wrapper that delegates to `scripts/build.mjs`.
 
 ## Intermediate Build Artifacts
 
@@ -51,7 +70,7 @@ The `bin/Release/` directory (specifically `bin/Release/net10.0-windows/`) is an
 
 1. `dotnet build -c Release` produces CLI DLLs and exe here
 2. `frontend/scripts/prebuild.mjs` copies from here to `frontend/src-tauri/bin/` for Tauri resource bundling
-3. `frontend/scripts/build-all.ps1` copies from here to `release/portable/` for the portable distribution
+3. `scripts/build.mjs` copies from here to `release/portable/` and `release/cli-only/` for the portable and CLI-only distributions
 
 This directory is gitignored and should not be manually distributed. It is regenerated on every build. The TFM output path may be `net10.0` or `net10.0-windows` depending on the .NET SDK version; the build scripts auto-detect which exists.
 
@@ -69,18 +88,23 @@ The MSI filename is `Env Manager_X.Y.Z_x64.msi` - no locale suffix. Verify after
 
 **Every commit that modifies CLI, GUI, or build code MUST produce compiled artifacts in `release/` before pushing.**
 
-Run the consolidated build after any code change:
+Run the cross-platform build after any code change:
 
-```powershell
-cd frontend
-powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build-all.ps1
+```bash
+# From project root - build for host arch (default x64)
+node scripts/build.mjs --arch x64
+
+# Or via the legacy wrapper (Windows PowerShell only)
+powershell -NoProfile -ExecutionPolicy Bypass -File frontend/scripts/build-all.ps1
 ```
 
 Verify the output:
 - `release/portable/env-manager.exe` - GUI executable
 - `release/portable/env-manager-cli.exe` - CLI backend
 - `release/cli-only/env-manager-cli.exe` - standalone CLI
-- `release/msi/Env Manager_X.Y.Z_x64.msi` - MSI installer (no locale suffix)
+- `release/Env-Manager_portable_X.Y.Z_x64.zip` - portable ZIP
+- `release/Env-Manager_cli-only_X.Y.Z_x64.zip` - CLI-only ZIP
+- `release/msi/Env Manager_X.Y.Z_x64.msi` - MSI installer (no locale suffix, Windows only)
 
 A commit that does not produce working `release/` artifacts is considered incomplete. The `release/` directory is gitignored - artifacts are for local testing only, not committed to git.
 
@@ -105,7 +129,7 @@ The harness uses an exact transaction: it snapshots all HKCU values plus accessi
 1. Update version in `env-manager.csproj`, `frontend/package.json`, `frontend/src-tauri/tauri.conf.json`, `frontend/src-tauri/Cargo.toml`
 2. Update `README.md` and `README_CN.md` if features changed
 3. Update `AGENTS.md` if structure or commands changed
-4. Run `powershell -NoProfile -ExecutionPolicy Bypass -File frontend/scripts/build-all.ps1`
+4. Run `node scripts/build.mjs --arch x64` (or per-arch: `--arch x86`, `--arch arm64`)
 5. Verify `release/portable/env-manager.exe` launches and shows variables
 6. Verify MSI installs and the app works
 7. Commit: `chore: release vX.Y.Z`
@@ -135,6 +159,7 @@ The harness uses an exact transaction: it snapshots all HKCU values plus accessi
 | jsdom 25.x | DOM environment for tests |
 | @testing-library/svelte 5.x | Svelte component testing utilities |
 | @playwright/test 1.x | E2E browser testing |
+| archiver 7.x | ZIP archive creation for portable/CLI-only builds |
 
 ### Cargo (Rust)
 
@@ -154,6 +179,19 @@ The project uses [CodeGraph](https://github.com/nicholasgriffintn/codegraph) for
 - The index enables fast symbol lookup, reference finding, and dependency analysis
 - Agents should use `codegraph` for code navigation when available, but it is not required for development
 - The index is machine-local and never committed to git
+
+## CI/CD Workflows
+
+### build.yml (CI verification)
+Runs on push to main and pull requests. Verifies code quality (tests, lint, build) and builds x64 packages to verify the build pipeline.
+
+### release.yml (Manual release)
+Triggered manually via GitHub Actions `workflow_dispatch` with a version input. Builds x64, x86, and arm64 packages in parallel, then creates a GitHub Release with all artifacts:
+- Portable ZIPs (per arch)
+- CLI-only ZIPs (per arch)
+- MSI installers (per arch, Windows only)
+
+The release workflow does NOT auto-trigger on tags or pushes - it must be manually dispatched.
 
 ## Performance Targets
 

@@ -118,20 +118,63 @@ jobs:
         working-directory: frontend
         run: npm ci
 
-      - name: Build portable and MSI distributions
-        working-directory: frontend
-        shell: powershell
-        run: ./scripts/build-all.ps1
+      - name: Build portable, CLI-only, and MSI distributions
+        run: node scripts/build.mjs --arch x64
 
-      - name: Verify package layout and MSI naming
+      - name: Verify package layout, ZIPs, and MSI naming
         shell: powershell
         run: |
           if (-not (Test-Path 'release/portable/env-manager.exe')) { throw 'GUI executable missing' }
           if (-not (Test-Path 'release/portable/env-manager-cli.exe')) { throw 'CLI executable missing' }
           if (-not (Test-Path 'release/portable/AGENTS.cli.md')) { throw 'CLI agent guide missing' }
+          if (-not (Test-Path 'release/cli-only/env-manager-cli.exe')) { throw 'CLI-only exe missing' }
+          if (-not (Test-Path 'release/Env-Manager_portable_*_x64.zip')) { throw 'Portable ZIP missing' }
+          if (-not (Test-Path 'release/Env-Manager_cli-only_*_x64.zip')) { throw 'CLI-only ZIP missing' }
           $msi = Get-ChildItem 'release/msi/*.msi'
           if ($msi.Count -ne 1) { throw 'Expected exactly one MSI' }
-          if ($msi.Name -match '_[a-zA-Z]{2}-[a-zA-Z]{2,3}\.msi$') { throw 'Localized MSI suffix is forbidden' }
+          if ($msi.Name -match '_[a-zA-Z]{2}-[a-zA-Z]{2,3}\.msi
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: env-manager-portable
+          path: |
+            release/portable/*
+            release/Env-Manager_portable_*_x64.zip
+          if-no-files-found: error
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: env-manager-cli-only
+          path: |
+            release/cli-only/*
+            release/Env-Manager_cli-only_*_x64.zip
+          if-no-files-found: error
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: env-manager-msi
+          path: release/msi/*.msi
+          if-no-files-found: error
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: windows-latest
+    needs: package
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          pattern: env-manager-*
+          merge-multiple: true
+          path: artifacts
+
+      - uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65
+        with:
+          files: artifacts/*
+          draft: true
+          generate_release_notes: true
+) { throw 'Localized MSI suffix is forbidden' }
 
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:

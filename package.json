@@ -1,0 +1,11 @@
+{
+  "devDependencies": {
+    "archiver": "^7.0.1"
+  },
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "build:x64": "node scripts/build.mjs --arch x64",
+    "build:x86": "node scripts/build.mjs --arch x86",
+    "build:arm64": "node scripts/build.mjs --arch arm64"
+  }
+}

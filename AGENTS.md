@@ -207,6 +207,7 @@ These invariants must never be violated by any code change:
 - **Per-session host snapshot (hard boundary after incident)**: before any local dev session that touches the CLI or build, run `powershell -NoProfile -ExecutionPolicy Bypass -File scripts/snapshot-host-env.ps1` once. It exports `HKCU\Environment` and `HKLM\...\Environment` to `.env_bak/<UTC-timestamp>/` and copies Env Manager's internal configs from `%LOCALAPPDATA%\EnvManager\` (profiles.json, audit.json, protected-vars.json, protected-paths.json, builtin-protected-vars.json, builtin-protected-paths.json) into `.env_bak/<UTC-timestamp>/internal-configs/`. `.env_bak/` is gitignored and NOT auto-cleaned. This is the per-session forensic complement to `test-with-restore.ps1` (which does per-run backup+restore). The prior incident (test harness only backed up HKCU, so a RunSet regression clobbered the user system PATH) motivated both guards.
 
 - **v0.7.1 Incident: CommonProgramW6432 disabled via toggle (2026-07-22)**: `CommonProgramW6432` was a built-in Windows REG_EXPAND_SZ system variable (value `C:\Program Files\Common Files`) but was missing from `protection.defaults.json`, so the `toggle` command could rename it to `CommonProgramW6432_EnvManager_disabled` and delete the original. The user noticed `opencode` and `npm` broke because system PATH resolution depends on this family of variables. Root cause: `protection.defaults.json` listed `CommonProgramFiles` and `CommonProgramFiles(x86)` but omitted `CommonProgramW6432` and `ProgramW6432`. Recovery: wrote `CommonProgramW6432` back to HKLM with the exact original value and REG_EXPAND_SZ kind, verified, deleted the `_EnvManager_disabled` backup, broadcast WM_SETTINGCHANGE. Post-incident fix: added `COMMONPROGRAMW6432` and `PROGRAMW6432` to `protection.defaults.json` and re-seeded `%LOCALAPPDATA%\EnvManager\builtin-protected-vars.json`. All future built-in Windows variables that the OS derives from `ProgramFilesDir`/`ProgramFilesDir(x86)`/`CommonProgramFilesDir`/`CommonW6432` must be added to the protection list before any toggle/delete/set/rename/change-scope path can touch them.
+- **v0.7.14 Cross-platform build orchestrator (hard boundary)**: `scripts/build.mjs` is the canonical build orchestrator. It is a Node.js ESM script that runs on Windows, Linux, and macOS with no hardcoded paths (auto-discovers project root via `resolve(__dirname, '..')`). It supports `--arch x64|x86|arm64` for multi-architecture builds, mapping to .NET RIDs (`win-x64`/`win-x86`/`win-arm64`) and Rust triples (`x86_64-pc-windows-msvc`/`i686-pc-windows-msvc`/`aarch64-pc-windows-msvc`). Output: `release/portable/` (dir + ZIP), `release/cli-only/` (dir + ZIP), `release/msi/` (Windows only). The `frontend/scripts/build-all.ps1` is a backward-compatible wrapper that delegates to `build.mjs`. The `frontend/scripts/prebuild.mjs` accepts `--arch` to pass `-r <rid>` to dotnet build. The `frontend/scripts/tauri-build.mjs` accepts `--arch` to override the Rust target triple. The `frontend/scripts/installer.wxs` uses `$(var.Win64)` conditional (`yes` for x64/arm64, `no` for x86) passed via `-dWin64=<val>` to WiX candle. The CI release workflow (`.github/workflows/release.yml`) is `workflow_dispatch` only (manual trigger, no auto-trigger on tags/pushes) and builds x64/x86/arm64 in parallel. Never re-introduce hardcoded paths in build scripts. Never re-add `Win64="yes"` as a literal in installer.wxs. Architecture naming: `x64` (not amd64), `x86` (not x32).
 - **Logs never record environment values** - CLI/Rust log command names and argument counts only. Values may contain credentials.
 
 ### Agent Safety Guidelines
@@ -236,92 +237,14 @@ Default locale (en) loads synchronously via `addMessages()` so the UI renders un
 
 Frontend unit tests use Vitest with jsdom. Tests live alongside source as `*.test.ts`. Setup at `frontend/tests/setup.ts` mocks `@tauri-apps/api/core` `invoke` and `svelte-i18n`.
 
-```powershell
-cd frontend
-npx vitest run          # Run all tests once
-npm run test:ui         # Interactive test UI
-npm run test:coverage   # With coverage report
-npm run test:e2e        # Playwright E2E tests
+```bash
+Get-Process -Name 'env-manager*' -ErrorAction SilentlyContinue | Stop-Process - Force
+node scripts/build.mjs --arch x64
+# Or per-architecture: --arch x86, --arch arm64
+# Skip stages: --skip-gui, --skip-msi, --skip-cli
 ```
 
-Mandatory rules:
-1. **Before every commit**: `npx vitest run` from `frontend/`, all tests must pass.
-2. **New feature = new tests**: new CLI command, GUI component, store, API function, or i18n key must add unit test coverage in the same commit.
-3. **i18n key completeness**: `src/lib/translations.test.ts` validates every `en.json` key exists in all 9 non-English files with non-empty values.
-4. **Build verification after code changes**: run `powershell -NoProfile -ExecutionPolicy Bypass -File frontend/scripts/build-all.ps1` and verify `release/portable/env-manager.exe` launches. Do not commit code that breaks the build. See [docs/build-and-release.md](docs/build-and-release.md).
-5. **No emoji in tests** - same no-emoji rule as the rest of the project.
-6. **Live CLI test harness (two-pronged gate)**: when validating the published CLI in `release/cli-only/`, run `powershell -NoProfile -ExecutionPolicy Bypass -File scripts/test-with-restore.ps1`. This script backs up `HKCU\Environment` to a `.reg` file before tests, runs a smoke suite that touches only `EM_TEST_`-prefixed user variables and profiles, then verifies registry drift is zero (leftover `EM_TEST_` keys or modified pre-existing keys trigger restore). On any failure (test fails OR registry drift detected), it restores from the backup, broadcasts `WM_SETTINGCHANGE`, and exits non-zero while keeping the backup for forensics. On a clean run the backup is auto-deleted. Never run live CLI smoke tests against the real registry without this script (it is the only guard that prevents test-time mutation of the host machine).
-
-Test file inventory:
-
-| File | Coverage |
-|------|----------|
-| `src/App.test.ts` | Root component rendering, navigation |
-| `src/lib/stores.test.ts` | Svelte stores (variables, loading, error, scope, search, settings) |
-| `src/lib/api.test.ts` | Tauri IPC bridge, CLI command invocations, response parsing |
-| `src/lib/i18n.test.ts` | Locale registration, default locale, localStorage persistence |
-| `src/lib/translations.test.ts` | Translation key completeness across all 10 locales |
-| `src/lib/race.test.ts` | CLI/GUI race condition prevention, toggle safety, rapid toggle serialization |
-| `src/lib/sync.test.ts` | CLI/GUI state synchronization, mutation triggers refresh, error store lifecycle |
-| `src/lib/debug.test.ts` | Debug logging, 200-entry cap, isWriteInProgress tracking |
-| `src/lib/profile-drag.test.ts` | Pointer reorder, localStorage persistence, stale/duplicate order recovery, and large-list preservation |
-| `src/lib/multi-profile.test.ts` | Single-profile policy, backup/restore, protected variable rejection |
-| `src/lib/change-scope-protection-profile.test.ts` | change-scope CLI args, protected-variable rejection, profile audit record + undo |
-| `src/lib/path-dedupe.test.ts` | dedupePathEntries CLI args (dry-run, scope), result shape, failure propagation |
-| `src/lib/review-regressions.test.ts` | Code-review invariants: EditDialog ordering, protected-variable guards, PATH dedupe isolation, ambiguous scope rejection, profile audit fail-loud, transactional PATH writes, argv recovery, harness rollback verification, safe startup fallback, and console-free update checks |
-| `src/lib/quoting.test.ts` | GUI argv safety: trailing-backslash/quote values stay independent array elements (no merging with --scope/--index/--overwrite) |
-| `src/lib/v0.6-launch-health.test.ts` | v0.6.0 profileSetLaunch/profileLaunch/pathHealth API arg construction, fix/dry-run routing, read vs write classification |
-| `src/lib/v0.7-secrets.test.ts` | v0.7 profileAddSecret/EditSecret/RemoveSecret/RevealSecret CLI args (path, write classification), secretVariables type surface, design invariants |
-| `src/lib/path-badge-exclusivity.test.ts` | PathEditor badge exclusivity after health check (single duplicate badge regression, all boolean combinations) |
-| `src/lib/components/Variables.test.ts` | Protected variable controls are disabled and cannot dispatch a toggle IPC call |
-| `src/lib/history-col-resize.test.ts` | HistoryPage column resize persistence, defaults, corrupt-storage fallback, clamp range |
-| `scripts/test-with-restore.ps1` | Live CLI smoke harness: exact HKCU plus accessible HKLM snapshots, disabled-variable raw-value/RegistryValueKind recovery, raw trailing-backslash command-line regression, exact drift verification, and transactional reconciliation on failure. |
-| `frontend/src/lib/inheritance-protection.test.ts` | v0.7.7 setProfileInheritance IPC contract: `args` contains `set-inherits`, profile name, and forwarded parent name(s); empty parents list forwards silently; empty profile name is forwarded as-is |
-| `scripts/test-inheritance-protection.ps1` | Live CLI integration harness for v0.7.7 Inheritance chain secret propagation + Global<-Launch / Launch<-Launch-secret / self-inheritance hard boundaries. Backs up profiles.json, creates four `EM_INHERIT_TEST_*` profiles, verifies CLI rejection messages, restores profiles.json. Does NOT mutate the registry. |
-| `scripts/snapshot-host-env.ps1` | Per-session forensic snapshot: export HKCU+HKLM Environment hives + copy EnvManager internal configs to `.env_bak/<timestamp>/` (not auto-cleaned) |
-
-## Coding Standards
-
-- **C#**: 4-space indent, 120 char max line, `using` for Registry keys, catch specific exceptions (no empty catch), explicit types on public API, `var` for locals.
-- **TypeScript/Svelte**: 2-space indent, strict mode, no implicit any, JSDoc on exports, `$:` reactive syntax, props validation.
-- **Rust**: 4-space indent, `log` crate macros for diagnostics, `#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]` to hide the release console. Every Windows-native child process spawned by the Tauri shell must apply `CREATE_NO_WINDOW`, including CLI execution, `where`, and update checks.
-- **No emoji** in source, tests, docs, or commit messages.
-- **Font size scaling**: 6 presets (85%-160%) in Settings, applied via `document.documentElement.style.fontSize = 13 * scale + px`, CSS rem units throughout, persisted as `fontScale` in localStorage.
-- **Add CLI to PATH**: Settings dialog one-click button. Calls `cli_diagnostics` to resolve CLI path (no hardcoding), extracts dir, checks for duplicates in user PATH, adds via `path add`. Implemented as `addCliToPath()` in `api.ts`.
-
-## File encoding
-
-- All files: UTF-8 without BOM.
-- Line endings: enforced by `.gitattributes` at repo root. Default text: LF on disk and in index. Windows-native scripts (`.bat`, `.ps1`, `.cmd`): CRLF. Binary assets (`png`, `ico`, `exe`, `dll`, `msi`, etc.): marked `binary`, never normalized.
-- `core.autocrlf` is `false` at the repo level. Do not re-enable it.
-- `frontend/node_modules/` is gitignored; never tracked. If tracked files appear: `git rm -r --cached frontend/node_modules` and commit.
-- After any `.gitattributes` change: `git add --renormalize .` and commit the line-ending-only diff.
-- `apply_patch` does byte-exact matching. If a patch fails for context that looks identical, suspect CRLF/LF mismatch on disk and re-inspect the target region before retrying. Never write a file with mixed line endings.
-
-## Commit Convention
-
-Conventional Commits:
-
-```
-<type>(<scope>): <subject>
-
-<body>
-```
-
-Types: `feat`, `fix`, `docs`, `refactor`, `test`, `perf`, `chore`
-Scopes: `cli`, `gui`, `backup`, `registry`, `i18n`, `docs`, `build`
-
-## Mandatory Build After Code Changes
-
-Every commit that modifies CLI, GUI, or build code MUST produce compiled artifacts in `release/` before pushing. See [docs/build-and-release.md](docs/build-and-release.md) for the full build procedure, prerequisites, output layout, and release steps.
-
-```powershell
-Get-Process -Name 'env-manager*' -ErrorAction SilentlyContinue | Stop-Process -Force
-cd frontend
-powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build-all.ps1
-```
-
-Verify: `release/portable/env-manager.exe`, `release/portable/env-manager-cli.exe`, `release/cli-only/env-manager-cli.exe`, `release/msi/Env Manager_X.Y.Z_x64.msi` (no locale suffix). The `release/` directory is gitignored - artifacts are for local testing only, not committed to git.
+Verify: `release/portable/env-manager.exe`, `release/portable/env-manager-cli.exe`, `release/cli-only/env-manager-cli.exe`, `release/Env-Manager_portable_X.Y.Z_x64.zip`, `release/Env-Manager_cli-only_X.Y.Z_x64.zip`, `release/msi/Env Manager_X.Y.Z_x64.msi` (no locale suffix). The `release/` directory is gitignored - artifacts are for local testing only, not committed to git.
 
 ## Mandatory Git Push After Code Changes (Provenance)
 
