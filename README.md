@@ -20,6 +20,10 @@ Modern, lightweight Windows environment variable manager with CLI and GUI dual-m
 - **Secret providers**: 8 backends (DPAPI CurrentUser, Windows Credential Manager, PowerShell SecretManagement, HashiCorp Vault KV v2, SOPS, Azure Key Vault, 1Password CLI, AWS Secrets Manager). See [docs/secret-providers-guide.md](docs/secret-providers-guide.md) for per-provider prerequisites, one-time setup, activation errors, and the exact fix steps. Provider activation errors surface as an inline amber banner directly under the provider selector in the Profile editor.
 - **v0.7.0 GUI**: PATH health badges (healthy/dead/duplicate/duplicate+dead) + Remove Dead bulk action; Launch profile type badge + Launch button + Create bar type selector + native file picker; variable search highlight + `%VAR%` expansion preview; `.env`/CSV bulk import/export in Settings (native file picker).
 - **v0.7.0 PATH health GUI**: one-click health check shows per-row color-coded status; `--fix` remove-dead is gated behind a confirmation modal (protected entries never removed).
+- **v0.8.0 SecretMount schema v2**: secret variables reference a `SecretMount` entry in a separate `secretMount.json` file. Atomic write ordering (mount-first, profile-second) with fsync eliminates torn-write corruption. One-shot migration from inline envelopes to mount references.
+- **v0.9.0 env-manager-service**: a standalone Rust service binary (`env-manager-service.exe`) managing secret mount lifecycle via named pipe IPC. RuntimeMode (Service/Background/Cli) resolved from `--mode` argv. Reconcile loop with 300s periodic full-scan, idempotent per-item handler. Anti-squatting pipe flag prevents pipe hijacking. GUI service control panel in Settings (Ping/Reload/Shutdown + mount health list).
+- **v0.9.5 Phase D cert bootstrap**: Vault AppRole and Azure SP certificate-based authentication eliminates long-lived tokens (`VAULT_TOKEN`, `AZURE_CLIENT_SECRET`). Short-lived tokens cached in-memory only.
+- **v1.0.0 Phase E audit ledger**: append-only hash-chained audit ledger (`audit-ledger.jsonl`) with 100MB rotation, tamper detection, and DPAPI-encrypted survival kit export. Migration script converts legacy `audit.json` to ledger format.
 - User and System scope support
 - JSON backup/restore with diff/merge, audited history and guarded undo
 - Bulk `.env`, CSV, and JSON import/export with dry-run conflict previews
@@ -323,6 +327,16 @@ Apache-2.0 - Use freely for personal and commercial projects. See [LICENSE](LICE
 
 ---
 
+### v0.9.0
+
+- **SecretMount schema v2**: secret variables now reference a separate `secretMount.json` file with atomic write ordering (mount-first, profile-second) and fsync. One-shot migration from inline envelopes.
+- **env-manager-service**: standalone Rust service binary for secret mount lifecycle management via named pipe IPC. RuntimeMode (Service/Background/Cli), reconcile loop (300s periodic scan), anti-squatting pipe flag. GUI service control panel in Settings.
+- **Phase D cert bootstrap**: Vault AppRole and Azure SP certificate-based auth, eliminating long-lived tokens.
+- **Phase E audit ledger**: append-only hash-chained ledger with rotation, tamper detection, and DPAPI-encrypted survival kit export.
+- **MSI installer**: WiX ServiceInstall for the env-manager-service, ProgramData directory for machine-level secret mount files.
+- **Build pipeline**: cross-platform `scripts/build.mjs` orchestrator with multi-architecture support (x64/x86/arm64), CLI version verification to prevent stale-binary deployment.
+- **Security**: path validation for audit encrypt-file (50MB cap + system directory block), audit command in Rust ALLOWED_COMMANDS, read/write classification for audit list/encrypt-file.
+
 ### v0.7.1
 
 - Fixed a Windows argv tokenizer hazard where a quoted PATH value ending with a trailing backslash (e.g. `"C:\Program Files\PowerShell\7\"`) swallowed the following `--scope` argument. The CLI now detects this signature and re-tokenizes lazily; clean argv from the GUI/Tauri path is never touched.
@@ -335,7 +349,7 @@ Open source project. For issues, feature requests, or pull requests, visit the [
 
 ---
 
-**Version**: 0.7.1 | **License**: Apache-2.0 | **Status**: Active Development
+**Version**: 0.9.0 | **License**: Apache-2.0 | **Status**: Active Development
 
 
 ### Safety and Performance
