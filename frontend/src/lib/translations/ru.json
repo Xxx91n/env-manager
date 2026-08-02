@@ -366,5 +366,26 @@
   "history.op.service refresh": "Обновить монтирование",
   "history.op.service rotate": "Ротация монтирования",
   "history.op.service reload": "Перезагрузить конфиг",
-  "history.op.service shutdown": "Остановить сервис"
+  "history.op.service shutdown": "Остановить сервис",
+  "settings": {
+    "service": {
+      "title": "Управление службой",
+      "running": "Работает",
+      "stopped": "Остановлена",
+      "checking": "Проверка...",
+      "ping": "Ping",
+      "reload": "Перезагрузить",
+      "shutdown": "Остановить",
+      "healthy": "Исправен",
+      "unhealthy": "Неисправен",
+      "refreshBtn": "Обновить",
+      "rotateBtn": "Ротация"
+    },
+    "audit": {
+      "title": "История аудита",
+      "description": "Недавние операции с переменными окружения",
+      "loading": "Загрузка...",
+      "empty": "Записи аудита не найдены"
+    }
+  }
 }

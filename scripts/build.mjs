@@ -117,6 +117,19 @@ function findGuiExe() {
   return null
 }
 
+function findServiceExe() {
+  // Service crate builds into its own target/ directory (separate from Tauri).
+  const serviceTarget = join(projectRoot, 'service', 'target')
+  if (!existsSync(serviceTarget)) return null
+  const releasePath = join(serviceTarget, 'release', 'env-manager-service.exe')
+  if (existsSync(releasePath)) return releasePath
+  for (const dir of readdirSync(serviceTarget)) {
+    const candidate = join(serviceTarget, dir, 'release', 'env-manager-service.exe')
+    if (existsSync(candidate)) return candidate
+  }
+  return null
+}
+
 function copyDir(src, dst) {
   mkdirSync(dst, { recursive: true })
   for (const entry of readdirSync(src, { withFileTypes: true })) {
@@ -201,6 +214,17 @@ const guiExe = findGuiExe()
 if (!guiExe) throw new Error('GUI exe not found under frontend/src-tauri/target for ' + triple)
 console.log('[build] GUI exe: ' + guiExe)
 
+// --- Step 2b: Build Rust service binary (env-manager-service) ---
+console.log('[build] Step 2b: Build env-manager-service (Rust)')
+run('cargo', ['build', '--release', '--manifest-path', join(projectRoot, 'service', 'Cargo.toml')], { cwd: projectRoot })
+
+const serviceExe = findServiceExe()
+if (serviceExe) {
+  console.log('[build] Service exe: ' + serviceExe)
+} else {
+  console.log('[build] Warning: env-manager-service.exe not found — service binary will not be included in the release.')
+}
+
 // --- Step 3: Assemble portable package ---
 console.log('[build] Step 3: Assemble portable package')
 copyFileSync(guiExe, join(portableDir, 'env-manager.exe'))
@@ -209,6 +233,7 @@ for (const f of readdirSync(cliDir)) {
     copyFileSync(join(cliDir, f), join(portableDir, f))
   }
 }
+if (serviceExe) copyFileSync(serviceExe, join(portableDir, 'env-manager-service.exe'))
 const agentsMd = join(projectRoot, 'AGENTS.cli.md')
 if (existsSync(agentsMd)) copyFileSync(agentsMd, join(portableDir, 'AGENTS.cli.md'))
 const guiDir2 = dirname(guiExe)
@@ -222,6 +247,7 @@ for (const f of readdirSync(cliDir)) {
     copyFileSync(join(cliDir, f), join(cliOnlyDir, f))
   }
 }
+if (serviceExe) copyFileSync(serviceExe, join(cliOnlyDir, 'env-manager-service.exe'))
 if (existsSync(agentsMd)) copyFileSync(agentsMd, join(cliOnlyDir, 'AGENTS.cli.md'))
 
 // --- Step 4: Build MSI installer ---

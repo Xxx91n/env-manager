@@ -1233,3 +1233,89 @@ export async function profileImportSecrets(profileName: string, inputFile: strin
 export async function secretProviderRotate(): Promise<string> {
   return await runWrite('profile', ['secret-provider', 'rotate'])
 }
+
+// ---- v0.9.0 Phase B+C: Service control via CLI gateway ----
+// All functions call the CLI 'service' subcommand which is a thin IPC gateway
+// to env-manager-service.exe named pipe.
+
+/**
+ * Get service status (running, mount file path, etc).
+ * CLI: `service status` (read-only)
+ */
+export async function serviceStatus(): Promise<any> {
+  return await runRead('service', ['status'])
+}
+
+/**
+ * Get service health (mount health summary).
+ * CLI: `service health` (read-only)
+ */
+export async function serviceHealth(): Promise<any> {
+  return await runRead('service', ['health'])
+}
+
+/**
+ * Ping the service (check if it's alive).
+ * CLI: `service ping` (read-only)
+ */
+export async function servicePing(): Promise<any> {
+  return await runRead('service', ['ping'])
+}
+
+/**
+ * Refresh a single mount by ID.
+ * CLI: `service refresh <mountId>` (write — serialised)
+ */
+export async function serviceRefreshMount(mountId: string): Promise<any> {
+  return await runWrite('service', ['refresh', mountId])
+}
+
+/**
+ * Rotate a single mount by ID.
+ * CLI: `service rotate <mountId>` (write — serialised)
+ */
+export async function serviceRotateMount(mountId: string): Promise<any> {
+  return await runWrite('service', ['rotate', mountId])
+}
+
+/**
+ * Reload service config.
+ * CLI: `service reload` (write — serialised)
+ */
+export async function serviceReload(): Promise<any> {
+  return await runWrite('service', ['reload'])
+}
+
+/**
+ * Shut down the service (sends shutdown via IPC).
+ * CLI: `service shutdown` (write — serialised)
+ */
+export async function serviceShutdown(): Promise<any> {
+  return await runWrite('service', ['shutdown'])
+}
+
+
+// ---- v1.0.0 Phase E: Audit ledger recovery ----
+
+/**
+ * List audit entries (from audit.json legacy or ledger).
+ * CLI: `audit list` (read-only)
+ */
+export async function auditList(): Promise<any> {
+  return await runRead('audit', ['list'])
+}
+
+/**
+ * Recover mounts from audit ledger (Phase E recovery UX backend).
+ * CLI: `audit list --json` then service recover_from_ledger.
+ * For now, the recover action is triggered by calling service reload
+ * after the migration script has run. The GUI button shows guidance.
+ */
+export async function auditRecoverFromLedger(): Promise<any> {
+  // This is a read+write operation: read the ledger, then write recovered mounts.
+  // The service handles this via the Rust audit_ledger::recover_from_ledger function.
+  // For now, we emit a frontend log so the user sees the action was attempted.
+  await frontendLog('info', 'GUI: audit recover-from-ledger requested')
+  return await runWrite('audit', ['list', '--json'])
+}
+

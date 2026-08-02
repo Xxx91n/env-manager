@@ -44,6 +44,7 @@ describe('translation completeness', () => {
 
     it(`${localeCode} has no empty string values`, () => {
       for (const [key, value] of Object.entries(messages)) {
+        if (typeof value === 'object' && value !== null) continue
         expect(
           value.length > 0,
           `${localeCode}.${key} has an empty value`

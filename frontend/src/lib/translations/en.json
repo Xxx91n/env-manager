@@ -366,5 +366,26 @@
   "history.op.service refresh": "Refresh Mount",
   "history.op.service rotate": "Rotate Mount",
   "history.op.service reload": "Reload Config",
-  "history.op.service shutdown": "Shutdown Service"
+  "history.op.service shutdown": "Shutdown Service",
+  "settings": {
+    "service": {
+      "title": "Service Control",
+      "running": "Running",
+      "stopped": "Stopped",
+      "checking": "Checking...",
+      "ping": "Ping",
+      "reload": "Reload",
+      "shutdown": "Shutdown",
+      "healthy": "Healthy",
+      "unhealthy": "Unhealthy",
+      "refreshBtn": "Refresh",
+      "rotateBtn": "Rotate"
+    },
+    "audit": {
+      "title": "Audit History",
+      "description": "Recent environment variable operations",
+      "loading": "Loading...",
+      "empty": "No audit entries found"
+    }
+  }
 }

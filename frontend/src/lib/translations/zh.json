@@ -366,5 +366,26 @@
   "history.op.service refresh": "刷新挂载",
   "history.op.service rotate": "轮换挂载",
   "history.op.service reload": "重新加载配置",
-  "history.op.service shutdown": "关闭服务"
+  "history.op.service shutdown": "关闭服务",
+  "settings": {
+    "service": {
+      "title": "服务控制",
+      "running": "运行中",
+      "stopped": "已停止",
+      "checking": "检查中...",
+      "ping": "Ping",
+      "reload": "重载",
+      "shutdown": "关闭",
+      "healthy": "健康",
+      "unhealthy": "异常",
+      "refreshBtn": "刷新",
+      "rotateBtn": "轮换"
+    },
+    "audit": {
+      "title": "审计历史",
+      "description": "最近的环境变量操作",
+      "loading": "加载中...",
+      "empty": "未找到审计记录"
+    }
+  }
 }

@@ -93,18 +93,42 @@ $resp.auth.client_token"#,
 }
 
 /// Vault cert-based login via TLS client certificate.
-fn vault_cert_login(vault_addr: &str, _thumbprint: &str) -> Result<String, String> {
-    // v0.9.5: cert-based auth requires loading the cert from Windows cert store
-    // and presenting it as a TLS client cert. This needs either:
-    // (a) reqwest with native-tls + client cert, or
-    // (b) Schannel/WinHTTP API via windows-sys.
-    // For v0.9.5 skeleton: document the flow and defer full impl.
-    // POST to {vault_addr}/v1/auth/cert/login with TLS client cert.
-    // Response: { "auth": { "client_token": "...", "lease_duration": ... } }
-    Err(format!(
-        "Vault cert-based auth not yet fully implemented (thumbprint={}, addr={}). Use AppRole path (VAULT_ROLE_ID + VAULT_SECRET_ID) for now.",
-        _thumbprint, vault_addr
-    ))
+/// Uses PowerShell Invoke-RestMethod with -Certificate thumbprint to present
+/// the client cert from Cert:\LocalMachine\My. Same subprocess pattern as
+/// Azure SP cert auth — no reqwest/rustls dependency needed.
+/// See ADR 0001 A9: cert stored non-exportable, ACL'd to per-service SID.
+fn vault_cert_login(vault_addr: &str, thumbprint: &str) -> Result<String, String> {
+    // Script loads the cert by thumbprint and uses it for TLS client auth.
+    // No secret values interpolated into the script body — thumbprint is
+    // infrastructure metadata (non-secret), vault_addr is a URL.
+    let script = format!(
+        r#"$thumbprint = '{}'
+$cert = Get-ChildItem -Path Cert:\LocalMachine\My | Where-Object {{ $_.Thumbprint -eq $thumbprint }}
+if (-not $cert) {{
+    Write-Error "Cert not found in LocalMachine\My: $thumbprint"
+    exit 1
+}}
+# Vault cert auth: POST to /v1/auth/cert/login with the client cert presented via TLS.
+# Invoke-RestMethod -Certificate presents the cert for mutual TLS.
+$resp = Invoke-RestMethod -Uri "{}/v1/auth/cert/login" -Method Post -Certificate $cert -ContentType "application/json" -Body '{{}}' -TimeoutSec 15
+$resp.auth.client_token"#,
+        thumbprint, vault_addr
+    );
+
+    let output = run_powershell(&script)?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(format!("Vault cert login failed: {}", stderr.trim()));
+    }
+
+    let token = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    if token.is_empty() {
+        return Err("Vault cert login returned empty token".to_string());
+    }
+
+    log::info!("Vault cert-based bootstrap successful (thumbprint={})", thumbprint);
+    Ok(token)
 }
 
 /// Azure SP certificate auth.

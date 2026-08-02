@@ -8,6 +8,7 @@
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use std::time::Duration;
+use std::io::Write;
 use chrono::{DateTime, Utc};
 
 /// SecretMount mirror of the C# SecretMount class.
@@ -55,9 +56,11 @@ pub struct MountHealth {
 /// Domain 10: defer first tick 30s to avoid SCM timeout on boot.
 pub async fn reconcile_loop() {
     tokio::time::sleep(Duration::from_secs(30)).await;
-    let interval = Duration::from_secs(300);
+    let mut interval = tokio::time::interval(Duration::from_secs(300));
+    // First tick fires immediately after warmup, then every 300s.
+    interval.tick().await; // consume the immediate first tick
     loop {
-        tokio::time::sleep(interval).await;
+        interval.tick().await;
         if let Err(e) = run_reconcile_tick().await {
             log::error!("reconcile tick failed: {}", e);
         }
@@ -280,7 +283,8 @@ fn load_mounts(path: &PathBuf) -> Vec<SecretMount> {
     }
 }
 
-/// Save mounts atomically (temp + rename). Matches C# AtomicWriteProfiles pattern (A3).
+/// Save mounts atomically (temp + fsync + rename). Matches C# AtomicWriteProfiles pattern (A3).
+/// A3 hard boundary: fsync BEFORE rename for crash-safety (same as Rust write_atomic in main.rs).
 fn save_mounts(path: &PathBuf, mounts: &[SecretMount]) -> Result<(), String> {
     let json = serde_json::to_string_pretty(mounts)
         .map_err(|e| format!("serialize error: {}", e))?;
@@ -288,16 +292,31 @@ fn save_mounts(path: &PathBuf, mounts: &[SecretMount]) -> Result<(), String> {
     let pid = std::process::id();
     let tmp = path.with_extension(format!("tmp.{}", pid));
 
-    std::fs::write(&tmp, json.as_bytes())
+    // Write temp file, fsync, then atomic rename. Domain 6: crash-safety.
+    let mut file = std::fs::File::create(&tmp)
         .map_err(|e| format!("write tmp error: {}", e))?;
+    file.write_all(json.as_bytes())
+        .map_err(|e| format!("write tmp error: {}", e))?;
+    file.sync_all()
+        .map_err(|e| format!("fsync tmp error: {}", e))?;
+    drop(file);
 
+    // Remove destination if exists (Windows rename doesn't overwrite by default).
     if path.exists() {
-        let bak = path.with_extension("json.bak");
-        let _ = std::fs::rename(path, &bak);
+       let bak = path.with_extension("json.bak");
+       let _ = std::fs::rename(path, &bak);
+        let _ = std::fs::remove_file(path);
     }
 
     std::fs::rename(&tmp, path)
         .map_err(|e| format!("rename error: {}", e))?;
+
+    // fsync the directory to persist the rename.
+    if let Some(parent) = path.parent() {
+        if let Ok(dir) = std::fs::File::open(parent) {
+            let _ = dir.sync_all();
+        }
+    }
 
     Ok(())
 }

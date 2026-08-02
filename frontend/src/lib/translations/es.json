@@ -366,5 +366,26 @@
   "history.op.service refresh": "Actualizar montaje",
   "history.op.service rotate": "Rotar montaje",
   "history.op.service reload": "Recargar config",
-  "history.op.service shutdown": "Detener servicio"
+  "history.op.service shutdown": "Detener servicio",
+  "settings": {
+    "service": {
+      "title": "Control del servicio",
+      "running": "En ejecución",
+      "stopped": "Detenido",
+      "checking": "Comprobando...",
+      "ping": "Ping",
+      "reload": "Recargar",
+      "shutdown": "Apagar",
+      "healthy": "Saludable",
+      "unhealthy": "Defectuoso",
+      "refreshBtn": "Actualizar",
+      "rotateBtn": "Rotar"
+    },
+    "audit": {
+      "title": "Historial de auditoría",
+      "description": "Operaciones de variables de entorno recientes",
+      "loading": "Cargando...",
+      "empty": "No se encontraron entradas de auditoría"
+    }
+  }
 }

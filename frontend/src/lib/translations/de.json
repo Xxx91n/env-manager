@@ -366,5 +366,26 @@
   "history.op.service refresh": "Mount aktualisieren",
   "history.op.service rotate": "Mount rotieren",
   "history.op.service reload": "Konfig neu laden",
-  "history.op.service shutdown": "Service beenden"
+  "history.op.service shutdown": "Service beenden",
+  "settings": {
+    "service": {
+      "title": "Dienststeuerung",
+      "running": "Läuft",
+      "stopped": "Gestoppt",
+      "checking": "Überprüfen...",
+      "ping": "Ping",
+      "reload": "Neu laden",
+      "shutdown": "Herunterfahren",
+      "healthy": "Gesund",
+      "unhealthy": "Fehlerhaft",
+      "refreshBtn": "Aktualisieren",
+      "rotateBtn": "Rotieren"
+    },
+    "audit": {
+      "title": "Audit-Verlauf",
+      "description": "Letzte Umgebungsvariablen-Vorgänge",
+      "loading": "Laden...",
+      "empty": "Keine Audit-Einträge gefunden"
+    }
+  }
 }

@@ -134,6 +134,7 @@ fn is_read_only(command: &str, args: &[String]) -> bool {
             }
         }
         "history" => !matches!(args.first().map(|s| s.as_str()), Some("undo") | Some("delete")),
+        "audit" => matches!(args.first().map(|s| s.as_str()), Some("list")),
         "bulk" => !matches!(args.first().map(|s| s.as_str()), Some("import")) || args.iter().any(|arg| arg == "--dry-run"),
         "protection" => matches!(args.first().map(|s| s.as_str()), Some("list")),
         _ => false,

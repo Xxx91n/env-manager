@@ -171,7 +171,7 @@ partial class Program
     static readonly HashSet<string> ValidCommands = new(StringComparer.OrdinalIgnoreCase)
     {
         "list", "get", "set", "rename", "change-scope", "delete", "toggle", "backup", "restore", "diff", "merge",
-        "validate", "help", "profile", "path", "agents", "history", "bulk", "expand", "protection", "update", "service"
+        "validate", "help", "profile", "path", "agents", "history", "bulk", "expand", "protection", "update", "service", "audit"
     };
 
     static readonly JsonSerializerOptions JsonOpts = new()
@@ -280,6 +280,7 @@ partial class Program
                 "protection" => RunProtectionCommand(args),
                 "update" => RunUpdate(args),
                 "service" => RunServiceCommand(args),
+                "audit" => RunAuditCommand(args),
                 "help" => ShowHelp(),
                 _ => 1
             };
@@ -3171,6 +3172,88 @@ partial class Program
         {
             Console.Error.WriteLine($"Error: failed to connect to service: {ex.Message}");
             return 1;
+        }
+    }
+
+
+    /// <summary>
+    /// v1.0.0 Phase E: Audit ledger commands.
+    /// "audit encrypt-file --input <path> --output <path>": DPAPI-encrypts a file
+    /// (used by the service's export_survival_kit to create machine+user-bound archives).
+    /// "audit list": lists audit ledger events (read-only).
+    /// </summary>
+    static int RunAuditCommand(string[] args)
+    {
+        if (args.Length < 2)
+        {
+            Console.Error.WriteLine("Usage: env-manager audit <subcommand> [options]");
+            Console.Error.WriteLine("Subcommands:");
+            Console.Error.WriteLine("  encrypt-file --input <file> --output <file>  DPAPI-encrypt a file");
+            Console.Error.WriteLine("  list [--mount <id>]                        List audit ledger events");
+            return 1;
+        }
+
+        string sub = args[1].ToLowerInvariant();
+
+        switch (sub)
+        {
+            case "encrypt-file":
+                {
+                    string? inputPath = null;
+                    string? outputPath = null;
+                    for (int i = 2; i < args.Length - 1; i++)
+                    {
+                        if (args[i] == "--input" && i + 1 < args.Length) inputPath = args[++i];
+                        else if (args[i] == "--output" && i + 1 < args.Length) outputPath = args[++i];
+                    }
+                    if (inputPath == null || outputPath == null)
+                    {
+                        Console.Error.WriteLine("Error: --input and --output required");
+                        return 1;
+                    }
+                    if (!File.Exists(inputPath))
+                    {
+                        Console.Error.WriteLine("Error: input file not found: " + inputPath);
+                        return 1;
+                    }
+                    string plainText = File.ReadAllText(inputPath);
+                    string cipherBase64 = SecretProviderManager.Encrypt(plainText, "audit-survival-kit");
+                    File.WriteAllText(outputPath, cipherBase64);
+                    Console.WriteLine("Encrypted: " + outputPath + " (" + cipherBase64.Length + " chars)");
+                    return 0;
+                }
+
+            case "list":
+                {
+                    // List audit.json entries (existing audit system).
+                    // The ledger migration from audit.json to audit-ledger.jsonl
+                    // happens in v1.0.0; for now, list the existing audit entries.
+                    string auditPath = Path.Combine(
+                        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                        "EnvManager", "audit.json");
+                    if (!File.Exists(auditPath))
+                    {
+                        Console.WriteLine("[]");
+                        return 0;
+                    }
+                    if (args.Contains("--json"))
+                    {
+                        Console.WriteLine(File.ReadAllText(auditPath));
+                    }
+                    else
+                    {
+                        var entries = JsonSerializer.Deserialize<List<JsonElement>>(File.ReadAllText(auditPath)) ?? new();
+                        foreach (var e in entries)
+                        {
+                            Console.WriteLine($"{e.GetProperty("timestamp")} | {e.GetProperty("command")} | {(e.TryGetProperty("scope", out var s) ? s.GetString() : "")}");
+                        }
+                    }
+                    return 0;
+                }
+
+            default:
+                Console.Error.WriteLine("Unknown audit subcommand: " + sub);
+                return 1;
         }
     }
 

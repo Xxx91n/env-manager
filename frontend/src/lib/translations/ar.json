@@ -366,5 +366,26 @@
   "history.op.service refresh": "تحديث التحميل",
   "history.op.service rotate": "تدوير التحميل",
   "history.op.service reload": "إعادة تحميل التكوين",
-  "history.op.service shutdown": "إيقاف الخدمة"
+  "history.op.service shutdown": "إيقاف الخدمة",
+  "settings": {
+    "service": {
+      "title": "التحكم في الخدمة",
+      "running": "قيد التشغيل",
+      "stopped": "متوقف",
+      "checking": "جارٍ الفحص...",
+      "ping": "Ping",
+      "reload": "إعادة تحميل",
+      "shutdown": "إيقاف",
+      "healthy": "سليم",
+      "unhealthy": "معطل",
+      "refreshBtn": "تحديث",
+      "rotateBtn": "تدوير"
+    },
+    "audit": {
+      "title": "سجل التدقيق",
+      "description": "عمليات متغيرات البيئة الأخيرة",
+      "loading": "جارٍ التحميل...",
+      "empty": "لم يتم العثور على سجلات تدقيق"
+    }
+  }
 }

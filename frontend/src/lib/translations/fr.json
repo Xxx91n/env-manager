@@ -366,5 +366,26 @@
   "history.op.service refresh": "Actualiser le montage",
   "history.op.service rotate": "Faire pivoter le montage",
   "history.op.service reload": "Recharger la config",
-  "history.op.service shutdown": "Arrêter le service"
+  "history.op.service shutdown": "Arrêter le service",
+  "settings": {
+    "service": {
+      "title": "Contrôle du service",
+      "running": "En cours",
+      "stopped": "Arrêté",
+      "checking": "Vérification...",
+      "ping": "Ping",
+      "reload": "Recharger",
+      "shutdown": "Arrêter",
+      "healthy": "Sain",
+      "unhealthy": "Défaillant",
+      "refreshBtn": "Rafraîchir",
+      "rotateBtn": "Pivoter"
+    },
+    "audit": {
+      "title": "Historique d'audit",
+      "description": "Opérations de variables d'environnement récentes",
+      "loading": "Chargement...",
+      "empty": "Aucune entrée d'audit trouvée"
+    }
+  }
 }

@@ -197,25 +197,55 @@ pub fn export_survival_kit(mount_id: Option<&str>) -> Result<PathBuf, String> {
         return Err("no events found for the given mount".to_string());
     }
 
-    // v1.0.0 skeleton: full AES-GCM encryption requires a key derived from
-    // user-interactive Windows Hello or DPAPI. For now, create a JSON archive
-    // that can be encrypted by the CLI's existing DPAPI infrastructure.
+    // v1.0.0: Build the survival kit JSON archive, then encrypt it via the
+    // CLI's DPAPI-CurrentUser infrastructure (same proven path as profile
+    // export-secrets). The kit is machine+user-bound: only the same Windows
+    // user on the same machine can decrypt it. A10 replacement for wrap-key escrow.
     let kit = serde_json::json!({
         "mountId": mount_id,
         "events": events,
         "exportedAt": chrono::Utc::now().to_rfc3339(),
-        "note": "This kit should be AES-GCM encrypted with a machine+user bound key before storage.",
+        "schemaVersion": 1,
     });
 
-    let export_path = ledger_path()
-        .parent()
-        .unwrap_or(&PathBuf::from("."))
-        .join("mount-survival-kit.json");
+    let kit_json = serde_json::to_string_pretty(&kit)
+        .map_err(|e| format!("serialize kit error: {}", e))?;
 
-    fs::write(&export_path, serde_json::to_string_pretty(&kit).unwrap_or_default())
-        .map_err(|e| format!("failed to write survival kit: {}", e))?;
+    // Write plaintext to a temp file, then encrypt via CLI subprocess.
+    let ledger_path_val = ledger_path();
+    let ledger_dir = match ledger_path_val.parent() {
+        Some(p) => p.to_path_buf(),
+        None => PathBuf::from("."),
+    };
+    let tmp_plain = ledger_dir.join("mount-survival-kit.tmp.json");
+    fs::write(&tmp_plain, &kit_json)
+        .map_err(|e| format!("failed to write temp kit: {}", e))?;
 
-    log::info!("survival kit exported to {:?}", export_path);
+    // The export path is a .dpapi file (DPAPI-encrypted).
+    let export_path = ledger_dir.join("mount-survival-kit.dpapi");
+
+    // Call the CLI to encrypt: the CLI reads the temp file, DPAPI-encrypts
+    // its contents, and writes to the export path. This reuses the existing
+    // proven DPAPI code path — no new crypto dependency in the Rust crate.
+    // ponytail: reuse existing DPAPI rather than adding aes-gcm crate.
+    let cli_exe = find_cli_exe_for_audit();
+    let output = std::process::Command::new(&cli_exe)
+        .args(["audit", "encrypt-file", "--input"])
+        .arg(&tmp_plain)
+        .arg("--output")
+        .arg(&export_path)
+        .output()
+        .map_err(|e| format!("failed to run CLI encrypt: {}", e))?;
+
+    // Clean up temp plaintext regardless of success/failure.
+    let _ = fs::remove_file(&tmp_plain);
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(format!("CLI encrypt-file failed: {}", stderr.trim()));
+    }
+
+    log::info!("survival kit encrypted and exported to {:?}", export_path);
     Ok(export_path)
 }
 
@@ -271,10 +301,13 @@ pub fn recover_from_ledger() -> Result<(), String> {
     log::info!("recovery: {} mounts reconstructed from ledger", recovered_mounts.len());
 
     // Write recovered mounts to a recovery file for GUI to pick up.
-    let recovery_path = ledger_path()
-        .parent()
-        .unwrap_or(&PathBuf::from("."))
-        .join("recovered-mounts.json");
+    let recovery_path = {
+        let lp = ledger_path();
+        match lp.parent() {
+            Some(p) => p.join("recovered-mounts.json"),
+            None => PathBuf::from(".").join("recovered-mounts.json"),
+        }
+    };
 
     fs::write(
         &recovery_path,
@@ -335,4 +368,25 @@ fn rotate_ledger(path: &PathBuf) -> Result<(), String> {
 
     log::info!("ledger rotated to {:?}", rotated);
     Ok(())
+}
+
+/// Find the env-manager-cli.exe for DPAPI encryption of the survival kit.
+fn find_cli_exe_for_audit() -> String {
+    if let Ok(exe_path) = std::env::current_exe() {
+        if let Some(parent) = exe_path.parent() {
+            let candidate = parent.join("env-manager-cli.exe");
+            if candidate.exists() {
+                return candidate.to_string_lossy().to_string();
+            }
+        }
+    }
+    if let Ok(local_app) = std::env::var("LOCALAPPDATA") {
+        let candidate = PathBuf::from(local_app)
+            .join("EnvManager")
+            .join("env-manager-cli.exe");
+        if candidate.exists() {
+            return candidate.to_string_lossy().to_string();
+        }
+    }
+    "env-manager-cli.exe".to_string()
 }
