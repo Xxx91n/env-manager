@@ -1176,7 +1176,9 @@ partial class Program
         }
         try
         {
-            var plaintext = SecretProviderManager.Decrypt(v.Value, profileName + "\\" + varName);
+            // v0.8.0: resolve mount reference if the value is a "mount:" prefixed ID.
+            var envelope = ResolveSecretMount(v.Value) ?? v.Value;
+            var plaintext = SecretProviderManager.Decrypt(envelope, profileName + "\\" + varName);
             // Audit BEFORE printing plaintext so the audit trail records the
             // fact that a secret was revealed (for security forensics) but
             // never the value itself. Marked <redacted> twice over.
@@ -1645,13 +1647,15 @@ partial class Program
             // value is a base64-encoded DPAPI ciphertext (CurrentUser scope). Decrypt here so
             // the child process receives plaintext in its env block. Plaintext lives only in
             // this launcher process memory; never written to disk, the registry, or logs.
-            string valueToInject = v.Value ?? string.Empty;
-            if (profile.SecretVariables.Contains(v.Name, StringComparer.OrdinalIgnoreCase))
-            {
-                try
-                {
-                    valueToInject = SecretProviderManager.Decrypt(valueToInject, profile.Name + "\\" + v.Name);
-                }
+           string valueToInject = v.Value ?? string.Empty;
+           if (profile.SecretVariables.Contains(v.Name, StringComparer.OrdinalIgnoreCase))
+           {
+               try
+               {
+                    // v0.8.0: resolve mount reference if the value is a "mount:" prefixed ID.
+                    valueToInject = ResolveSecretMount(valueToInject) ?? valueToInject;
+                   valueToInject = SecretProviderManager.Decrypt(valueToInject, profile.Name + "\\" + v.Name);
+               }
                 catch (Exception)
                 {
                     // Decryption failed: refuse to inject. Silent injection of garbage or
@@ -1887,11 +1891,12 @@ partial class Program
         return 0;
     }
 
-    static string TryDecryptSafe(string ciphertext)
-    {
-        try { return SecretProviderManager.Decrypt(ciphertext); }
-        catch { return "<decryption-failed>"; }
-    }
+   static string TryDecryptSafe(string ciphertext)
+   {
+        // v0.8.0: resolve mount reference if the value is a "mount:" prefixed ID.
+        try { return SecretProviderManager.Decrypt(ResolveSecretMount(ciphertext) ?? ciphertext); }
+       catch { return "<decryption-failed>"; }
+   }
 
     static int ProfileApply(string name)
     {

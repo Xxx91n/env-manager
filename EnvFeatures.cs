@@ -188,12 +188,18 @@ partial class Program
         return JsonSerializer.Deserialize<List<AuditEntry>>(File.ReadAllText(AuditFilePath), JsonOpts) ?? new();
     }
 
-    static void AtomicWriteJson<T>(string path, T value)
+static void AtomicWriteJson<T>(string path, T value)
+{
+    string temp = path + ".tmp." + Environment.ProcessId;
+    // v0.8.0 A3: fsync before rename to match Rust write_atomic.
+    using (var fs = File.Create(temp))
     {
-        string temp = path + ".tmp." + Environment.ProcessId;
-        File.WriteAllText(temp, JsonSerializer.Serialize(value, JsonOptsIndented), new UTF8Encoding(false));
-        File.Move(temp, path, true);
+        byte[] bytes = JsonSerializer.SerializeToUtf8Bytes(value, JsonOptsIndented);
+        fs.Write(bytes, 0, bytes.Length);
+        fs.Flush(flushToDisk: true); // fsync
     }
+    File.Move(temp, path, true);
+}
 
     static int RunHistoryCommand(string[] args)
    {

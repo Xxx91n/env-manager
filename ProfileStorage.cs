@@ -18,7 +18,7 @@ partial class Program
         {
             var recovered = ReadProfilesFile(ProfilesBackupPath);
             AtomicWriteProfiles(recovered, createBackup: false);
-            return recovered;
+        return recovered;
         }
     }
 
@@ -33,6 +33,9 @@ partial class Program
             profile.PathEntries ??= new();
             profile.Variables ??= new();
         }
+        // v0.8.0 Phase A: one-shot migration of secret envelopes to secretMount.json.
+        // Runs only once (skips if secretMount.json already has entries).
+        MigrateSecretsToMounts(profiles);
         return profiles;
     }
 
@@ -42,13 +45,21 @@ partial class Program
         AtomicWriteProfiles(profiles, createBackup: true);
     }
 
-    static void AtomicWriteProfiles(List<ProfileData> profiles, bool createBackup)
+static void AtomicWriteProfiles(List<ProfileData> profiles, bool createBackup)
+{
+    string temp = ProfilesFilePath + ".tmp." + Environment.ProcessId;
+    // v0.8.0 A3: fsync before rename to match Rust write_atomic (sync_all before rename).
+    // Without this a crash after rename could lose temp content and resurrect
+    // stale state - the same bug class that motivated the Rust-side guard.
+    using (var fs = File.Create(temp))
     {
-        string temp = ProfilesFilePath + ".tmp." + Environment.ProcessId;
-        File.WriteAllText(temp, JsonSerializer.Serialize(profiles, JsonOptsIndented), new UTF8Encoding(false));
-        if (createBackup && File.Exists(ProfilesFilePath)) File.Copy(ProfilesFilePath, ProfilesBackupPath, true);
-        File.Move(temp, ProfilesFilePath, true);
+        byte[] bytes = JsonSerializer.SerializeToUtf8Bytes(profiles, JsonOptsIndented);
+        fs.Write(bytes, 0, bytes.Length);
+        fs.Flush(flushToDisk: true); // fsync
     }
+    if (createBackup && File.Exists(ProfilesFilePath)) File.Copy(ProfilesFilePath, ProfilesBackupPath, true);
+    File.Move(temp, ProfilesFilePath, true);
+}
 
     static void ValidateProfiles(List<ProfileData> profiles)
     {
