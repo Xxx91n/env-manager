@@ -61,6 +61,13 @@ All commands follow: `env-manager-cli <command> [arguments] [--flags]`
 | `protection add-var` | `protection add-var <name>` | Lock a variable (add to custom protected vars) |
 | `protection remove-var` | `protection remove-var <name>` | Unlock a variable (remove from custom protected vars) |
 | `update check` | `update check` | Check for latest version via GitHub Releases API |
+| `service status` | `service status` | Query env-manager-service status via named pipe IPC (read-only) |
+| `service health` | `service health` | Query env-manager-service health (mount count, uptime) via IPC |
+| `service ping` | `service ping` | Ping the env-manager-service named pipe (read-only) |
+| `service refresh` | `service refresh` | Trigger a reconcile tick on env-manager-service (write - service refreshes all eligible mounts) |
+| `service rotate` | `service rotate` | Trigger secret-provider rotation on env-manager-service (write) |
+| `service reload` | `service reload` | Tell env-manager-service to reload secretMount.json (write) |
+| `service shutdown` | `service shutdown` | Tell env-manager-service to stop its IPC server and reconcile loop (write) |
 
 ## Scope
 
