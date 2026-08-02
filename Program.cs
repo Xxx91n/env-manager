@@ -3211,14 +3211,34 @@ partial class Program
                         Console.Error.WriteLine("Error: --input and --output required");
                         return 1;
                     }
-                    if (!File.Exists(inputPath))
+                   if (!File.Exists(inputPath))
+                   {
+                       Console.Error.WriteLine("Error: input file not found: " + inputPath);
+                       return 1;
+                   }
+                    // Path validation: reject system directories and enforce 50MB cap (same as backup validation)
+                    string inputFull = Path.GetFullPath(inputPath);
+                    string outputFull = Path.GetFullPath(outputPath);
+                    string root = Path.GetPathRoot(outputFull) ?? "";
+                    string[] blockedDirs = { "Windows", "Program Files", "Program Files (x86)" };
+                    foreach (var blocked in blockedDirs)
                     {
-                        Console.Error.WriteLine("Error: input file not found: " + inputPath);
+                        string blockedPath = Path.Combine(root, blocked);
+                        if (outputFull.StartsWith(blockedPath, StringComparison.OrdinalIgnoreCase))
+                        {
+                            Console.Error.WriteLine("Error: cannot write to system directory: " + blockedPath);
+                            return 1;
+                        }
+                    }
+                    var inputInfo = new FileInfo(inputFull);
+                    if (inputInfo.Length > 50 * 1024 * 1024)
+                    {
+                        Console.Error.WriteLine("Error: input file exceeds 50 MB limit");
                         return 1;
                     }
-                    string plainText = File.ReadAllText(inputPath);
-                    string cipherBase64 = SecretProviderManager.Encrypt(plainText, "audit-survival-kit");
-                    File.WriteAllText(outputPath, cipherBase64);
+                   string plainText = File.ReadAllText(inputPath);
+                   string cipherBase64 = SecretProviderManager.Encrypt(plainText, "audit-survival-kit");
+                   File.WriteAllText(outputPath, cipherBase64);
                     Console.WriteLine("Encrypted: " + outputPath + " (" + cipherBase64.Length + " chars)");
                     return 0;
                 }
