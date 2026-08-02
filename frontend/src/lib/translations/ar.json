@@ -359,5 +359,12 @@
   "path.applyMoves": "تطبيق النقل",
   "messages.pathOrderApplied": "تم تطبيق ترتيب PATH",
   "history.op.profile reveal-secret": "إظهار السر",
-  "history.op.profile secret-provider set": "تعيين مزود الأسرار"
+  "history.op.profile secret-provider set": "تعيين مزود الأسرار",
+  "history.op.service": "الخدمة",
+  "history.op.service status": "حالة الخدمة",
+  "history.op.service health": "صحة الخدمة",
+  "history.op.service refresh": "تحديث التحميل",
+  "history.op.service rotate": "تدوير التحميل",
+  "history.op.service reload": "إعادة تحميل التكوين",
+  "history.op.service shutdown": "إيقاف الخدمة"
 }

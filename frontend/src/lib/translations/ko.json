@@ -359,5 +359,12 @@
   "path.applyMoves": "이동 적용",
   "messages.pathOrderApplied": "PATH 순서가 적용되었습니다",
   "history.op.profile reveal-secret": "비밀 표시",
-  "history.op.profile secret-provider set": "비밀 제공자 설정"
+  "history.op.profile secret-provider set": "비밀 제공자 설정",
+  "history.op.service": "서비스",
+  "history.op.service status": "서비스 상태",
+  "history.op.service health": "서비스 상태 확인",
+  "history.op.service refresh": "마운트 새로고침",
+  "history.op.service rotate": "마운트 교체",
+  "history.op.service reload": "설정 다시 로드",
+  "history.op.service shutdown": "서비스 종료"
 }

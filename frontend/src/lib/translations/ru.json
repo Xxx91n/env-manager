@@ -359,5 +359,12 @@
   "path.applyMoves": "Применить перемещения",
   "messages.pathOrderApplied": "Порядок PATH применён",
   "history.op.profile reveal-secret": "Показать секрет",
-  "history.op.profile secret-provider set": "Установить поставщика секретов"
+  "history.op.profile secret-provider set": "Установить поставщика секретов",
+  "history.op.service": "Сервис",
+  "history.op.service status": "Статус сервиса",
+  "history.op.service health": "Состояние сервиса",
+  "history.op.service refresh": "Обновить монтирование",
+  "history.op.service rotate": "Ротация монтирования",
+  "history.op.service reload": "Перезагрузить конфиг",
+  "history.op.service shutdown": "Остановить сервис"
 }

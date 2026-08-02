@@ -359,5 +359,12 @@
   "path.applyMoves": "应用移动",
   "messages.pathOrderApplied": "PATH 顺序已应用",
   "history.op.profile reveal-secret": "揭示密钥",
-  "history.op.profile secret-provider set": "设置机密提供者"
+  "history.op.profile secret-provider set": "设置机密提供者",
+  "history.op.service": "服务",
+  "history.op.service status": "服务状态",
+  "history.op.service health": "服务健康",
+  "history.op.service refresh": "刷新挂载",
+  "history.op.service rotate": "轮换挂载",
+  "history.op.service reload": "重新加载配置",
+  "history.op.service shutdown": "关闭服务"
 }

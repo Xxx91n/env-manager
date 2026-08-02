@@ -359,5 +359,12 @@
   "path.applyMoves": "Verschiebungen anwenden",
   "messages.pathOrderApplied": "PATH-Reihenfolge angewendet",
   "history.op.profile reveal-secret": "Secret anzeigen",
-  "history.op.profile secret-provider set": "Secret-Anbieter festlegen"
+  "history.op.profile secret-provider set": "Secret-Anbieter festlegen",
+  "history.op.service": "Service",
+  "history.op.service status": "Service-Status",
+  "history.op.service health": "Service-Gesundheit",
+  "history.op.service refresh": "Mount aktualisieren",
+  "history.op.service rotate": "Mount rotieren",
+  "history.op.service reload": "Konfig neu laden",
+  "history.op.service shutdown": "Service beenden"
 }

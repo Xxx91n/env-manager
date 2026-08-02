@@ -61,10 +61,16 @@ fn main() {
         log::info!("Background mode started by user (no --mode flag). This is acceptable for foreground GUI testing.");
     }
 
-    let rt = tokio::runtime::Builder::new_multi_thread()
+    let rt = match tokio::runtime::Builder::new_multi_thread()
         .enable_all()
         .build()
-        .expect("failed to create tokio runtime");
+    {
+        Ok(rt) => rt,
+        Err(e) => {
+            log::error!("failed to create tokio runtime: {}", e);
+            std::process::exit(1);
+        }
+    };
 
     rt.block_on(async {
         match mode {

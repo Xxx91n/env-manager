@@ -36,6 +36,7 @@ struct CliResponse {
 
 /// Commands the IPC layer is allowed to forward to the CLI.
 const ALLOWED_COMMANDS: &[&str] = &[
+    "service",
     "list",
     "get",
     "set",

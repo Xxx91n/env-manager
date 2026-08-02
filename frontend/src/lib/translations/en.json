@@ -359,5 +359,12 @@
   "path.applyMoves": "Apply Moves",
   "messages.pathOrderApplied": "PATH order applied",
   "history.op.profile reveal-secret": "Reveal Secret",
-  "history.op.profile secret-provider set": "Set Secret Provider"
+  "history.op.profile secret-provider set": "Set Secret Provider",
+  "history.op.service": "Service",
+  "history.op.service status": "Service Status",
+  "history.op.service health": "Service Health",
+  "history.op.service refresh": "Refresh Mount",
+  "history.op.service rotate": "Rotate Mount",
+  "history.op.service reload": "Reload Config",
+  "history.op.service shutdown": "Shutdown Service"
 }

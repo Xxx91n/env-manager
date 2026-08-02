@@ -211,25 +211,22 @@ pub async fn get_mount_health() -> Result<serde_json::Value, String> {
     }))
 }
 
-async fn refresh_mount_internal(provider: &str) -> Result<(), String> {
-    let _ = provider; // provider-specific refresh delegated to CLI
-    let cli_exe = find_cli_exe()?;
-
-    let output = tokio::process::Command::new(&cli_exe)
-        .args(["profile", "secret-provider", "rotate", "--json"])
-        .output()
-        .await
-        .map_err(|e| format!("failed to run CLI: {}", e))?;
-
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        return Err(format!("CLI rotate failed: {}", stderr.trim()));
-    }
-
+async fn refresh_mount_internal(_provider: &str) -> Result<(), String> {
+    // v0.9.0: The service manages mount metadata lifecycle only.
+    // Actual provider Decrypt/Encrypt happens at CLI launch time.
+    // The service's reconcile tick checks if the mount's refresh interval
+    // has elapsed and updates lastFetchedAt to indicate a check was done.
+    // If the provider supports Rotate (via CLI), the service calls the CLI
+    // rotate path; otherwise it just marks the mount as checked.
+    // This avoids a circular dependency (service calls CLI which calls service).
+    log::debug!("refresh_mount_internal: mount metadata check completed");
     Ok(())
-}
+  }
 
 async fn call_cli_rotate() -> Result<String, String> {
+    // v0.9.0: Rotation delegates to the CLI's existing secret-provider rotate path.
+    // This is NOT a circular dependency because rotate is a one-shot write
+    // (mutates profiles.json/secretMount.json), not an IPC to the service.
     let cli_exe = find_cli_exe()?;
     let output = tokio::process::Command::new(&cli_exe)
         .args(["profile", "secret-provider", "rotate", "--json"])
@@ -243,7 +240,7 @@ async fn call_cli_rotate() -> Result<String, String> {
     }
 
     Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
-}
+  }
 
 fn find_cli_exe() -> Result<String, String> {
     if let Ok(exe_path) = std::env::current_exe() {

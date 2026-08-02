@@ -5,6 +5,27 @@
 // See docs/adr/0001-secret-architecture-revision.md decision A9.
 
 use std::path::PathBuf;
+use base64::{engine::general_purpose, Engine as _};
+
+/// Encode a PowerShell script as base64(UTF-16LE) for -EncodedCommand.
+/// This eliminates all shell quoting/injection risks. Same pattern as v0.7.4
+/// PowerShellSecretManagementProvider hard boundary.
+fn encode_command(script: &str) -> String {
+    let utf16: Vec<u8> = script
+        .encode_utf16()
+        .flat_map(|u| u.to_le_bytes())
+        .collect();
+    general_purpose::STANDARD.encode(&utf16)
+}
+
+/// Run a PowerShell script via -EncodedCommand (no shell quoting layer).
+fn run_powershell(script: &str) -> Result<std::process::Output, String> {
+    let encoded = encode_command(script);
+    std::process::Command::new("powershell")
+        .args(["-NoProfile", "-NonInteractive", "-EncodedCommand", &encoded])
+        .output()
+        .map_err(|e| format!("failed to run PowerShell: {}", e))
+}
 
 /// Vault AppRole or TLS client cert bootstrap.
 /// The service holds an AppRole role_id + secret_id (rotatable) OR a client cert
@@ -46,21 +67,16 @@ pub fn vault_bootstrap(cert_thumbprint: &str) -> Result<String, String> {
     let secret_id = std::env::var("VAULT_SECRET_ID")
         .map_err(|_| "VAULT_SECRET_ID environment variable not set (needed for AppRole auth)".to_string())?;
 
-    // POST to Vault AppRole login endpoint.
-    // ponytail: use std reqwest-like HTTP via std::process::Command calling curl,
-    // or use the windows-sys WinHTTP API. For simplicity, use a subprocess to
-    // PowerShell Invoke-RestMethod which is always available on Windows.
+    // Build script referencing $env: vars directly — no string interpolation
+    // of secret values into the script body, eliminating injection risk.
     let script = format!(
-        r#"$body = @{{ role_id = "{}"; secret_id = "{}" }} | ConvertTo-Json
+        r#"$body = @{{ role_id = $env:VAULT_ROLE_ID; secret_id = $env:VAULT_SECRET_ID }} | ConvertTo-Json
 $resp = Invoke-RestMethod -Uri "{}/v1/auth/approle/login" -Method Post -Body $body -ContentType "application/json" -TimeoutSec 10
 $resp.auth.client_token"#,
-        role_id, secret_id, vault_addr
+        vault_addr
     );
 
-    let output = std::process::Command::new("powershell")
-        .args(["-NoProfile", "-NonInteractive", "-Command", &script])
-        .output()
-        .map_err(|e| format!("failed to run PowerShell for Vault AppRole auth: {}", e))?;
+    let output = run_powershell(&script)?;
 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
@@ -123,9 +139,11 @@ pub fn azure_sp_bootstrap(cert_thumbprint: &str) -> Result<String, String> {
     // (c) POST to Azure AD token endpoint
     // Full implementation needs either the rsa crate or windows-sys Cryptography API
     // for signing. For skeleton: use PowerShell as a subprocess (same pattern as Vault).
+    // Script references $env:AZURE_CLIENT_ID and $env:AZURE_TENANT_ID directly
+    // (no interpolation of secret values into the script body).
     let script = format!(
-        r#"$thumbprint = "{}"
-$cert = Get-ChildItem -Path Cert:LocalMachineMy | Where-Object {{ $_.Thumbprint -eq $thumbprint }}
+        r#"$thumbprint = '{}'
+$cert = Get-ChildItem -Path Cert:\LocalMachine\My | Where-Object {{ $_.Thumbprint -eq $thumbprint }}
 if (-not $cert) {{
     Write-Error "Cert not found: $thumbprint"
     exit 1
@@ -137,8 +155,8 @@ $exp = $now.AddMinutes(10)
 $payload = @{{
     aud = "https://login.microsoftonline.com/{}/oauth2/v2.0/token"
     exp = $exp.ToUnixTimeSeconds()
-    iss = "{}"
-    sub = "{}"
+    iss = $env:AZURE_CLIENT_ID
+    sub = $env:AZURE_CLIENT_ID
     jti = [Guid]::NewGuid().ToString()
 }} | ConvertTo-Json -Compress
 $headerB64 = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($header)).TrimEnd('=').Replace('+','-').Replace('/','_')
@@ -156,13 +174,10 @@ $jwt = "$message.$sigB64"
 $body = "grant_type=client_credentials&client_assertion_type=urn:ietf:params:oauth:client-assertion-type:jwt-bearer&client_assertion=$jwt&scope=https://vault.azure.net/.default"
 $resp = Invoke-RestMethod -Uri "https://login.microsoftonline.com/{}/oauth2/v2.0/token" -Method Post -Body $body -ContentType "application/x-www-form-urlencoded" -TimeoutSec 15
 $resp.access_token"#,
-        cert_thumbprint, tenant_id, client_id, client_id, tenant_id
+        cert_thumbprint, tenant_id, tenant_id
     );
 
-    let output = std::process::Command::new("powershell")
-        .args(["-NoProfile", "-NonInteractive", "-Command", &script])
-        .output()
-        .map_err(|e| format!("failed to run PowerShell for Azure SP cert auth: {}", e))?;
+    let output = run_powershell(&script)?;
 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);

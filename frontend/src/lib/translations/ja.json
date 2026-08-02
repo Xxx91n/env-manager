@@ -359,5 +359,12 @@
   "path.applyMoves": "移動を適用",
   "messages.pathOrderApplied": "PATH の順序を適用しました",
   "history.op.profile reveal-secret": "シークレット表示",
-  "history.op.profile secret-provider set": "シークレットプロバイダー設定"
+  "history.op.profile secret-provider set": "シークレットプロバイダー設定",
+  "history.op.service": "サービス",
+  "history.op.service status": "サービスステータス",
+  "history.op.service health": "サービス健全性",
+  "history.op.service refresh": "マウント更新",
+  "history.op.service rotate": "マウントローテーション",
+  "history.op.service reload": "設定リロード",
+  "history.op.service shutdown": "サービス停止"
 }

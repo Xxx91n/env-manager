@@ -359,5 +359,12 @@
   "path.applyMoves": "Aplicar movimientos",
   "messages.pathOrderApplied": "Orden de PATH aplicado",
   "history.op.profile reveal-secret": "Mostrar secreto",
-  "history.op.profile secret-provider set": "Establecer proveedor de secretos"
+  "history.op.profile secret-provider set": "Establecer proveedor de secretos",
+  "history.op.service": "Servicio",
+  "history.op.service status": "Estado del servicio",
+  "history.op.service health": "Salud del servicio",
+  "history.op.service refresh": "Actualizar montaje",
+  "history.op.service rotate": "Rotar montaje",
+  "history.op.service reload": "Recargar config",
+  "history.op.service shutdown": "Detener servicio"
 }
