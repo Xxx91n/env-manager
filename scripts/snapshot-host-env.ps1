@@ -79,6 +79,7 @@ $null = Export-Hive -Key 'HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\
 # Internal configs
 Write-Host '--- internal configs ---'
 Copy-InternalConfig 'profiles.json'
+Copy-InternalConfig 'secretMount.json'
 Copy-InternalConfig 'audit.json'
 Copy-InternalConfig 'protected-vars.json'
 Copy-InternalConfig 'protected-paths.json'

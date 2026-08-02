@@ -22,6 +22,7 @@ $SystemEnvKey = "HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\Environme
 $TestPrefix = "EM_TEST_"
 $InternalConfigNames = @(
   "profiles.json",
+  "secretMount.json",
   "audit.json",
   "protected-vars.json",
   "protected-paths.json",
