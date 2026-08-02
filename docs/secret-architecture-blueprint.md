@@ -158,6 +158,58 @@ Rejected alternative: command-string allow-list. Already what AGENTS.md document
 
 ---
 
+## Phased roadmap — SUPERSEDED
+
+> **This section is superseded by ADR 0001 and the Decision Summary.**
+> The grill-with-docs session on 2026-08-02 revised four of the five phases after external research and codebase cross-validation. The authoritative decisions now live in:
+>
+> - **ADR**: [docs/adr/0001-secret-architecture-revision.md](adr/0001-secret-architecture-revision.md)
+> - **Decision Summary**: [docs/secret-architecture-decision-summary.md](secret-architecture-decision-summary.md)
+> - **Full interview context + risk matrix**: [CONTEXT.md](../CONTEXT.md)
+
+### What changed and why
+
+The original Phase A-E roadmap below assumed an `secrets-agent.exe` reconcile process, a passkey/Windows Hello identity layer, and a wrap-key escrow recovery mechanism. The grill session proved each of these assumptions does not match the project's actual constraints (single-machine standalone Win11, single-user developer release, 20-100 mount workload, no central operator, session-0 service cannot surface biometric UI). The revised four-version cadence is:
+
+| Version | Phase | Ship criteria |
+| --- | --- | --- |
+| v0.8.0 | A | SecretMount schema v2 + one-shot migration + C# fsync + new nullable fields (refreshPolicy, refreshIntervalSeconds, bootstrapCertThumbprint). audit.json unchanged. |
+| v0.9.0 | B+C merged | env-manager-service.exe Rust binary, NT SERVICE\EnvManagerService, Named Pipe IPC, CLI service gateway subcommand, periodic full-scan reconcile, GUI as control panel, three-level capability whitelist. |
+| v0.9.5 | D | Cert bootstrap: Vault AppRole/client cert, Azure SP cert. AWS Roles Anywhere documented but deferred. Env-var fallback retained. |
+| v1.0.0 | E | Unified audit-ledger.jsonl (append-only, hash-chained, 100MB rotation), Mount survival kit export, GUI recover-from-ledger, audit.json retired after migration. |
+
+### Key reversals from the original blueprint
+
+- **Phase C**: the original `secrets-agent.exe` standalone process is rejected. It is now a Windows system service (`env-manager-service.exe` with `--mode=service`) under `NT SERVICE\EnvManagerService` virtual service account. In-process tokio task inside the GUI is also rejected (GUI close = reconcile stops). See ADR 0001 A5/A6/A7/A8.
+- **Phase D**: the original passkey/Windows Hello identity layer is rejected. Session 0 service cannot show biometric UI. It is replaced by certificate-based bootstrap at `Cert:\LocalMachine\My` with non-exportable private key ACL'd to per-service SID. See ADR 0001 A9.
+- **Phase E**: the original wrap-key escrow is rejected. The escrow solved a recovery problem that A5/A6/A8 proved empty (for cloud providers the backend IS the recovery source; for user-bound providers loss is by-design). It is replaced by unified audit-ledger + Mount survival kit export + GUI recover-from-ledger UX. See ADR 0001 A10.
+- **Phase B and Phase C merged into a single v0.9.0 release** (user chose Option 2). See ADR 0001 A11.
+
+### Release-gate risk matrix (11 domains)
+
+The original blueprint had an anti-rejection checklist as a per-phase gate. The revised roadmap replaces it with an 11-domain release-gate risk matrix:
+
+1. Windows service lifecycle (SCM timeout, boot ordering, stop-during-reconcile)
+2. Named pipe IPC security (DACL, impersonation, squatting, stale connection)
+3. Periodic reconcile loop (lease TTL < tick, 429 throttle, clock skew, thundering herd, partial tick)
+4. Certificate lifecycle (expiry, ACL reset by GPO, Mimikatz CNG export, Windows-upgrade loss)
+5. Audit ledger tamper-resistance (hash-chain, unauthorized actor, rollover race, replay)
+6. Schema migration (crash orphan, rollback script completeness, service race, per-user)
+7. Existing codebase regressions (DPAPI `_EnvManager_disabled` orphan, mutex vs write_atomic race, frontend cache staleness)
+8. Cert-enroll cancellation mid-flight (3 sub-states, temp dir cleanup, cloud revoke path)
+9. MSI major-upgrade outage (child survives, schema mismatch, mid-write profiles.json)
+10. Memory pressure / startup timeout (SCM event 7009/7000, OOM-by-mount skipping, deferred cold-start full scan)
+11. IPC endpoint name (Global\pipe\ scope, RDP per-session CLI routing, machine rename no-op, locale no-op)
+
+Detailed failure modes + regression tests for each domain live in [CONTEXT.md](../CONTEXT.md) Risk Matrix.
+
+### Original phase descriptions (historical, for reference only)
+
+The text below this paragraph preserved the original Phase A-E descriptions for historical reference. They are NOT the current plan. Do not implement against them. Follow ADR 0001 instead.
+
+<details>
+<summary>Original Phase A-E (collapsed — superseded by ADR 0001)</summary>
+
 ## Phased roadmap
 
 The phases are commensurate with the current v0.7.5 baseline. Each phase is shippable on its own. No phase breaks backward compatibility with the prior one without a documented in-place migration.
@@ -245,6 +297,8 @@ Phase E: Schema v3 unified audit ledger + wrapping-key escrow                   
 
 ---
 
+
+</details>
 ## Risks and counter-decisions
 
 Risk-aware record of the dangerous calls we considered and rejected, so future maintainers know why the proposed structure was chosen.
