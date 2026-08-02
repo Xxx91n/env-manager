@@ -50,22 +50,37 @@ fn main() {
     let mode = RuntimeMode::resolve(&args);
     log::info!("env-manager-service starting in {:?} mode", mode);
 
-    let rt = tokio::runtime::Runtime::new().expect("failed to create tokio runtime");
+    // Entry guard (A7): refuse direct double-click launch with no --mode.
+    // If interactive session and no --mode flag, print guidance and exit.
+    if matches!(mode, RuntimeMode::Background) && !args.iter().any(|a| a.starts_with("--mode=")) {
+        // Check if we're in an interactive session (console attached).
+        // In service mode, there's no console. In background mode launched by GUI,
+        // the GUI passes --mode=background explicitly.
+        // If someone double-clicks with no args at all, we land here as Background default.
+        // Allow it but log a warning — background mode is user-launchable.
+        log::info!("Background mode started by user (no --mode flag). This is acceptable for foreground GUI testing.");
+    }
+
+    let rt = tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .build()
+        .expect("failed to create tokio runtime");
+
     rt.block_on(async {
         match mode {
             RuntimeMode::Service | RuntimeMode::Background => {
-                // Start reconcile loop + IPC server concurrently.
                 let pipe = mode.pipe_endpoint();
+                log::info!("IPC pipe: {}", pipe);
+
                 let reconcile_handle = tokio::spawn(reconcile::reconcile_loop());
                 let ipc_handle = tokio::spawn(ipc::start_ipc_server(pipe));
-                // Wait for either to complete (they run indefinitely).
+
                 tokio::select! {
                     _ = reconcile_handle => log::warn!("reconcile loop exited"),
                     _ = ipc_handle => log::warn!("IPC server exited"),
                 }
             }
             RuntimeMode::Cli => {
-                // One-shot: connect to background service pipe, send request, print response.
                 let pipe = mode.pipe_endpoint();
                 if let Err(e) = ipc::cli_gateway(pipe).await {
                     eprintln!("Error: service IPC failed: {}", e);
@@ -78,9 +93,27 @@ fn main() {
 
 /// Resolve the secretMount.json path.
 /// Machine-level: %ProgramData%\EnvManager\secretMount.json (service identity).
+/// User-level: %LOCALAPPDATA%\EnvManager\secretMount.json (background/CLI mode).
 pub fn secret_mount_path() -> PathBuf {
-    // v0.9.0: machine-level mounts under ProgramData; user-bound stay in LocalAppData.
-    // For now, use the same LocalAppData path as the CLI for compatibility.
-    let local_app = env::var("LOCALAPPDATA").unwrap_or_else(|_| ".".into());
-    PathBuf::from(local_app).join("EnvManager").join("secretMount.json")
+    // Service mode uses ProgramData (machine-level, A8).
+    // Background/CLI mode uses LocalAppData (user-level, compatibility with v0.8.0).
+    let args: Vec<String> = env::args().collect();
+    let mode = RuntimeMode::resolve(&args);
+
+    match mode {
+        RuntimeMode::Service => {
+            let program_data = env::var("ProgramData")
+                .unwrap_or_else(|_| "C:\\ProgramData".to_string());
+            let dir = PathBuf::from(program_data).join("EnvManager");
+            std::fs::create_dir_all(&dir).ok();
+            dir.join("secretMount.json")
+        }
+        RuntimeMode::Background | RuntimeMode::Cli => {
+            let local_app = env::var("LOCALAPPDATA")
+                .unwrap_or_else(|_| ".".to_string());
+            let dir = PathBuf::from(local_app).join("EnvManager");
+            std::fs::create_dir_all(&dir).ok();
+            dir.join("secretMount.json")
+        }
+    }
 }

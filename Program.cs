@@ -171,7 +171,7 @@ partial class Program
     static readonly HashSet<string> ValidCommands = new(StringComparer.OrdinalIgnoreCase)
     {
         "list", "get", "set", "rename", "change-scope", "delete", "toggle", "backup", "restore", "diff", "merge",
-        "validate", "help", "profile", "path", "agents", "history", "bulk", "expand", "protection", "update"
+        "validate", "help", "profile", "path", "agents", "history", "bulk", "expand", "protection", "update", "service"
     };
 
     static readonly JsonSerializerOptions JsonOpts = new()
@@ -279,6 +279,7 @@ partial class Program
                 "expand" => args.Length < 2 ? ArgError("Usage: env-manager expand <value>") : RunExpand(args[1]),
                 "protection" => RunProtectionCommand(args),
                 "update" => RunUpdate(args),
+                "service" => RunServiceCommand(args),
                 "help" => ShowHelp(),
                 _ => 1
             };
@@ -3102,6 +3103,97 @@ partial class Program
         return false;
     }
 
+    // v0.9.0 Phase B+C: CLI service subcommand - thin IPC gateway to env-manager-service.exe.
+    // Sends a JSON request to the named pipe and prints the JSON response.
+    // See docs/adr/0001-secret-architecture-revision.md decision A7.
+    static int RunServiceCommand(string[] args)
+    {
+        if (args.Length < 2)
+        {
+            Console.Error.WriteLine("Usage: env-manager service <status|health|refresh <id>|rotate <id>|reload|shutdown>");
+            return 1;
+        }
+
+        string subcommand = args[1].ToLowerInvariant();
+        string pipeName = @"\\.\pipe\EnvManager.Background";
+        if (args.Any(a => a == "--service-pipe"))
+            pipeName = @"\\.\pipe\EnvManager.Service";
+
+        string requestJson = subcommand switch
+        {
+            "status" => "{\"method\":\"status\"}",
+            "health" => "{\"method\":\"health\"}",
+            "refresh" => args.Length < 3
+                ? $"{{\"error\":\"refresh requires mountId\"}}"
+                : $"{{\"method\":\"refresh\",\"mountId\":\"{EscapeJsonLocal(args[2])}\"}}",
+            "rotate" => args.Length < 3
+                ? $"{{\"error\":\"rotate requires mountId\"}}"
+                : $"{{\"method\":\"rotate\",\"mountId\":\"{EscapeJsonLocal(args[2])}\"}}",
+            "reload" => "{\"method\":\"reload\"}",
+            "shutdown" => "{\"method\":\"shutdown\"}",
+            "ping" => "{\"method\":\"ping\"}",
+            _ => $"{{\"error\":\"unknown subcommand: {EscapeJsonLocal(subcommand)}\"}}"
+        };
+
+        if (requestJson.Contains("\"error\""))
+        {
+            Console.Error.WriteLine(requestJson);
+            return 1;
+        }
+
+        try
+        {
+            string pipePath = pipeName.Replace(@"\\.\pipe\", "");
+            using var client = new System.IO.Pipes.NamedPipeClientStream(
+                ".", pipePath,
+                System.IO.Pipes.PipeDirection.InOut,
+                System.IO.Pipes.PipeOptions.None);
+            client.Connect(5000);
+
+            using var writer = new System.IO.StreamWriter(client) { AutoFlush = true };
+            writer.WriteLine(requestJson);
+
+            using var reader = new System.IO.StreamReader(client);
+            string response = reader.ReadLine() ?? "";
+
+            Console.WriteLine(response);
+
+            if (response.Contains("\"ok\":true") || response.Contains("\"ok\": true"))
+                return 0;
+            return 1;
+        }
+        catch (System.TimeoutException)
+        {
+            Console.Error.WriteLine($"Error: service not responding at {pipeName}. Is env-manager-service running?");
+            return 1;
+        }
+        catch (System.IO.IOException ex)
+        {
+            Console.Error.WriteLine($"Error: failed to connect to service: {ex.Message}");
+            return 1;
+        }
+    }
+
+    static string EscapeJsonLocal(string s)
+    {
+        if (string.IsNullOrEmpty(s)) return "";
+        var sb = new System.Text.StringBuilder();
+        foreach (char c in s)
+        {
+            switch (c)
+            {
+                case '"': sb.Append("\\\""); break;
+                case '\\': sb.Append("\\\\"); break;
+                case '\n': sb.Append("\\n"); break;
+                case '\r': sb.Append("\\r"); break;
+                case '\t': sb.Append("\\t"); break;
+                default: sb.Append(c); break;
+            }
+        }
+        return sb.ToString();
+    }
+
+
     static int ShowHelp()
     {
         var asm = System.Reflection.Assembly.GetExecutingAssembly().GetName();
@@ -3130,7 +3222,8 @@ Commands:
   agents [--path|--json|--summary] Output CLI spec. --path: file only. --json: machine-readable. --summary: brief
   help                       Show help
   update check                Check for latest version
+  service status|health|refresh <id>|rotate <id>  Interact with the secret lifecycle service
   --debug                    Enable verbose stderr logging");
-        return 0;
+       return 0;
     }
 }
