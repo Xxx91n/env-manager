@@ -56,8 +56,9 @@ const ALLOWED_COMMANDS: &[&str] = &[
     "bulk",
     "expand",
     "help",
-    "protection",
-    "update",
+   "protection",
+   "update",
+    "audit",
 ];
 
 /// Read-only commands that can run concurrently with each other.
