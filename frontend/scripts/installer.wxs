@@ -1,6 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi"
-     xmlns:util="http://schemas.microsoft.com/wix/2006/Wi/util">
+<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
   <Product Id="*" Name="Env Manager" Language="1033" Version="$(var.Version)"
            Manufacturer="Env Manager" UpgradeCode="349fb993-98bf-5bf6-984a-dae0cc68cbbb">
     <Package InstallerVersion="450" Compressed="yes" InstallScope="perMachine" />
@@ -51,11 +50,9 @@
         <ServiceInstall Id="EnvManagerService" Name="EnvManagerService" Type="ownProcess"
                         Start="auto" ErrorControl="normal" Description="Env Manager secret mount lifecycle service"
                         Arguments="--mode=service">
-          <ServiceConfig DelayedAutoStart="yes" />
         </ServiceInstall>
         <ServiceControl Id="EnvManagerServiceControl" Name="EnvManagerService"
                         Start="install" Stop="both" Remove="uninstall" Wait="yes" />
-        <util:PermissionEx User="NT SERVICE\EnvManagerService" GenericRead="yes" GenericWrite="yes" GenericExecute="yes" />
       </Component>
       <?if "$(var.WebViewLoaderPresent)" = "1" ?>
       <Component Id="WebViewLoader" Guid="*" Win64="$(var.Win64)">
@@ -76,12 +73,9 @@
 
     <DirectoryRef Id="EnvManagerDataDir">
       <Component Id="EnvManagerDataComponent" Guid="*" Win64="$(var.Win64)">
-        <CreateFolder>
-          <util:PermissionEx User="NT SERVICE\EnvManagerService" GenericRead="yes" GenericWrite="yes" GenericExecute="yes" />
-          <util:PermissionEx User="[WIX_ACCOUNT_LOCALSYSTEM]" GenericAll="yes" />
-        </CreateFolder>
-        <!-- placeholder file so the directory is not empty (WiX requires at least one keypath) -->
-        <File Id="DataDirReadme" Source="$(var.SourceDir)\AGENTS.cli.md" KeyPath="yes" />
+        <CreateFolder />
+        <RegistryValue Root="HKLM" Key="Software\EnvManager" Name="DataDir"
+                       Type="integer" Value="1" KeyPath="yes" />
       </Component>
     </DirectoryRef>
 
