@@ -387,5 +387,24 @@
       "loading": "جارٍ التحميل...",
       "empty": "لم يتم العثور على سجلات تدقيق"
     }
-  }
+  },
+  "history.allProfiles": "كل الملفات الشخصية",
+  "settings.service.title": "تحكم الخدمة",
+  "settings.service.running": "يعمل",
+  "settings.service.stopped": "متوقف",
+  "settings.service.checking": "جارٍ الفحص...",
+  "settings.service.ping": "Ping",
+  "settings.service.reload": "إعادة تحميل",
+  "settings.service.reloaded": "تمت إعادة تحميل الخدمة",
+  "settings.service.shutdown": "إيقاف",
+  "settings.service.healthy": "سليم",
+  "settings.service.unhealthy": "غير سليم",
+  "settings.service.refreshBtn": "تحديث",
+  "settings.service.rotated": "تم تدوير التحميل",
+  "settings.service.rotateBtn": "تدوير",
+  "settings.service.notRunningHint": "الخدمة لا تعمل. Ping للتحقق أو ابدأ عبر CLI: env-manager service status",
+  "settings.audit.title": "سجل التدقيق",
+  "settings.audit.description": "عمليات متغيرات البيئة الأخيرة",
+  "settings.audit.loading": "جارٍ تحميل سجلات التدقيق...",
+  "settings.audit.empty": "لم يتم العثور على سجلات تدقيق"
 }

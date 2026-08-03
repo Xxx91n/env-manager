@@ -387,5 +387,24 @@
       "loading": "Carregando...",
       "empty": "Nenhuma entrada de auditoria encontrada"
     }
-  }
+  },
+  "history.allProfiles": "Todos os perfis",
+  "settings.service.title": "Controle do serviço",
+  "settings.service.running": "Em execução",
+  "settings.service.stopped": "Parado",
+  "settings.service.checking": "Verificando...",
+  "settings.service.ping": "Ping",
+  "settings.service.reload": "Recarregar",
+  "settings.service.reloaded": "Serviço recarregado",
+  "settings.service.shutdown": "Desligar",
+  "settings.service.healthy": "Saudável",
+  "settings.service.unhealthy": "Com problemas",
+  "settings.service.refreshBtn": "Atualizar",
+  "settings.service.rotated": "Montagem rotacionada",
+  "settings.service.rotateBtn": "Rotacionar",
+  "settings.service.notRunningHint": "Serviço não está em execução. Ping para verificar, ou iniciar via CLI: env-manager service status",
+  "settings.audit.title": "Histórico de auditoria",
+  "settings.audit.description": "Operações recentes de variáveis de ambiente",
+  "settings.audit.loading": "Carregando entradas de auditoria...",
+  "settings.audit.empty": "Nenhum registro de auditoria encontrado"
 }

@@ -387,5 +387,24 @@
       "loading": "Laden...",
       "empty": "Keine Audit-Einträge gefunden"
     }
-  }
+  },
+  "history.allProfiles": "Alle Profile",
+  "settings.service.title": "Dienststeuerung",
+  "settings.service.running": "Läuft",
+  "settings.service.stopped": "Gestoppt",
+  "settings.service.checking": "Überprüfen...",
+  "settings.service.ping": "Ping",
+  "settings.service.reload": "Neu laden",
+  "settings.service.reloaded": "Dienst neu geladen",
+  "settings.service.shutdown": "Herunterfahren",
+  "settings.service.healthy": "Gesund",
+  "settings.service.unhealthy": "Fehlerhaft",
+  "settings.service.refreshBtn": "Aktualisieren",
+  "settings.service.rotated": "Mount rotiert",
+  "settings.service.rotateBtn": "Rotieren",
+  "settings.service.notRunningHint": "Dienst läuft nicht. Ping zum Prüfen oder über CLI starten: env-manager service status",
+  "settings.audit.title": "Audit-Verlauf",
+  "settings.audit.description": "Letzte Umgebungsvariablen-Vorgänge",
+  "settings.audit.loading": "Audit-Einträge werden geladen...",
+  "settings.audit.empty": "Keine Audit-Einträge gefunden"
 }

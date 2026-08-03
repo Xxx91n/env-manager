@@ -387,5 +387,24 @@
       "loading": "加载中...",
       "empty": "未找到审计记录"
     }
-  }
+  },
+  "history.allProfiles": "所有配置文件",
+  "settings.service.title": "服务控制",
+  "settings.service.running": "运行中",
+  "settings.service.stopped": "已停止",
+  "settings.service.checking": "检查中...",
+  "settings.service.ping": "Ping",
+  "settings.service.reload": "重载",
+  "settings.service.reloaded": "服务已重载",
+  "settings.service.shutdown": "关机",
+  "settings.service.healthy": "健康",
+  "settings.service.unhealthy": "不健康",
+  "settings.service.refreshBtn": "刷新",
+  "settings.service.rotated": "挂载已轮换",
+  "settings.service.rotateBtn": "轮换",
+  "settings.service.notRunningHint": "服务未运行。点击Ping检查，或通过CLI启动: env-manager service status",
+  "settings.audit.title": "审计历史",
+  "settings.audit.description": "最近的环境变量操作",
+  "settings.audit.loading": "加载审计记录中...",
+  "settings.audit.empty": "未找到审计记录"
 }

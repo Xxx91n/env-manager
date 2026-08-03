@@ -387,5 +387,24 @@
       "loading": "Загрузка...",
       "empty": "Записи аудита не найдены"
     }
-  }
+  },
+  "history.allProfiles": "Все профили",
+  "settings.service.title": "Управление службой",
+  "settings.service.running": "Запущено",
+  "settings.service.stopped": "Остановлено",
+  "settings.service.checking": "Проверка...",
+  "settings.service.ping": "Пинг",
+  "settings.service.reload": "Перезагрузить",
+  "settings.service.reloaded": "Служба перезагружена",
+  "settings.service.shutdown": "Завершить",
+  "settings.service.healthy": "Здоров",
+  "settings.service.unhealthy": "Нездоров",
+  "settings.service.refreshBtn": "Обновить",
+  "settings.service.rotated": "Маунт обновлен",
+  "settings.service.rotateBtn": "Обновить",
+  "settings.service.notRunningHint": "Служба не запущена. Ping для проверки, или запустите через CLI: env-manager service status",
+  "settings.audit.title": "История аудита",
+  "settings.audit.description": "Недавние операции с переменными среды",
+  "settings.audit.loading": "Загрузка записей аудита...",
+  "settings.audit.empty": "Записи аудита не найдены"
 }

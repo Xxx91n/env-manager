@@ -303,7 +303,7 @@
                   <span class="px-1.5 py-0.5 rounded text-[9px] font-medium {entry.scope === 'user' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300' : 'bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300'}">{entry.scope === 'user' ? $t('scope.user') : $t('scope.system')}</span>
                 {/if}
               </td>
-              <td class="px-3 py-2 text-xs font-mono truncate" title={entry.name}>{entry.name}</td>
+              <td class="px-3 py-2 text-xs font-mono truncate" title={entry.name === '(all)' ? $t('history.allProfiles') : entry.name}>{entry.name === '(all)' ? $t('history.allProfiles') : entry.name}</td>
               <td class="px-3 py-2 text-[10px] font-mono text-gray-500 truncate" title={`${entry.oldValue ?? 'null'} -> ${entry.newValue ?? 'null'}`}>{entry.oldValue ?? 'null'} -> {entry.newValue ?? 'null'}</td>
               <td class="px-3 py-2 text-right whitespace-nowrap">
                 <button on:click={() => handleUndo(entry)} class="text-[10px] text-blue-600 hover:underline mr-2">{$t('history.undo')}</button>

@@ -55,6 +55,7 @@
     // Check real system PATH on mount
     cliInPath = await isCliInPath()
     void refreshServiceStatus()
+    void loadAudit()
   })
 
   function switchLocale(newLocale: string) {
@@ -204,6 +205,18 @@
       }
     } catch {
       serviceRunning = false
+    }
+  }
+
+  async function loadAudit() {
+    auditLoading = true
+    try {
+      const result = await auditList()
+      auditEntries = Array.isArray(result) ? result : (result?.entries ?? [])
+    } catch {
+      auditEntries = []
+    } finally {
+      auditLoading = false
     }
   }
   async function handleCheckUpdate() {
@@ -484,8 +497,10 @@
           {$t('settings.service.shutdown')}
         </button>
       </div>
-      {#if serviceError}
+      {#if serviceError && serviceRunning}
         <p class="text-xs text-amber-600 dark:text-amber-400">{serviceError}</p>
+      {:else if serviceError && !serviceRunning}
+        <p class="text-xs text-amber-600 dark:text-amber-400">{$t('settings.service.notRunningHint')}</p>
       {/if}
       {#if serviceHealthData?.mounts?.length > 0}
         <div class="mt-2 space-y-1 max-h-40 overflow-y-auto">

@@ -387,5 +387,24 @@
       "loading": "Loading...",
       "empty": "No audit entries found"
     }
-  }
+  },
+  "history.allProfiles": "All Profiles",
+  "settings.service.title": "Service Control",
+  "settings.service.running": "Running",
+  "settings.service.stopped": "Stopped",
+  "settings.service.checking": "Checking...",
+  "settings.service.ping": "Ping",
+  "settings.service.reload": "Reload",
+  "settings.service.reloaded": "Service reloaded",
+  "settings.service.shutdown": "Shutdown",
+  "settings.service.healthy": "Healthy",
+  "settings.service.unhealthy": "Unhealthy",
+  "settings.service.refreshBtn": "Refresh",
+  "settings.service.rotated": "Mount rotated",
+  "settings.service.rotateBtn": "Rotate",
+  "settings.service.notRunningHint": "Service is not running. Ping to check, or start it via CLI: env-manager service status",
+  "settings.audit.title": "Audit History",
+  "settings.audit.description": "Recent environment variable operations",
+  "settings.audit.loading": "Loading audit entries...",
+  "settings.audit.empty": "No audit records found"
 }

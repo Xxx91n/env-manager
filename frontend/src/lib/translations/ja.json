@@ -387,5 +387,24 @@
       "loading": "読み込み中...",
       "empty": "監査エントリが見つかりません"
     }
-  }
+  },
+  "history.allProfiles": "すべてのプロファイル",
+  "settings.service.title": "サービス制御",
+  "settings.service.running": "実行中",
+  "settings.service.stopped": "停止",
+  "settings.service.checking": "確認中...",
+  "settings.service.ping": "Ping",
+  "settings.service.reload": "リロード",
+  "settings.service.reloaded": "サービスがリロードされました",
+  "settings.service.shutdown": "シャットダウン",
+  "settings.service.healthy": "正常",
+  "settings.service.unhealthy": "異常",
+  "settings.service.refreshBtn": "更新",
+  "settings.service.rotated": "マウントがローテートされました",
+  "settings.service.rotateBtn": "ローテート",
+  "settings.service.notRunningHint": "サービスが実行されていません。Pingで確認するか、CLIで開始: env-manager service status",
+  "settings.audit.title": "監査履歴",
+  "settings.audit.description": "最近の環境変数操作",
+  "settings.audit.loading": "監査エントリを読み込み中...",
+  "settings.audit.empty": "監査レコードが見つかりません"
 }
