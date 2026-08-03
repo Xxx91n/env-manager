@@ -137,7 +137,7 @@ npm install
 npm run tauri-dev
 
 # Build everything for distribution
-powershell -ExecutionPolicy Bypass -File scripts/build-all.ps1
+node scripts/build.mjs --arch x64
 # Output:
 #   release/portable/  - GUI + CLI flat layout, ready to run
 #   release/cli-only/  - CLI-only package (no GUI)
@@ -246,7 +246,7 @@ env-manager/
 │   │   └── Cargo.toml            # Rust dependencies
 │   └── scripts/
 │       ├── prebuild.mjs          # Builds CLI, copies to src-tauri/bin/
-│       └── build-all.ps1         # Consolidated build script
+│       └── build.mjs             # Consolidated build script (cross-platform, --arch x64|x86|arm64)
 ├── release/                      # Build output (gitignored)
 │   ├── portable/                 # GUI + CLI flat package
 │   ├── cli-only/                 # CLI-only package (no GUI)

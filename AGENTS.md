@@ -48,14 +48,15 @@ CodeGraph is the project's indexed code intelligence layer. The index lives at `
 
 ## Architecture
 
-Three layers:
+Four layers:
 1. **CLI backend** (`Program.cs`) - C# .NET 10 console app, reads/writes Windows Registry directly, compiles to `env-manager-cli.exe`.
 2. **Tauri shell** (`frontend/src-tauri/`) - Rust app, embeds CLI as bundled resource, spawns CLI subprocesses, returns JSON via Tauri IPC.
 3. **Svelte frontend** (`frontend/src/`) - TypeScript + Svelte 4 + TailwindCSS in WebView2. Talks to Rust only via `invoke('run_cli', ...)`.
+4. **Service crate** (`service/`) - Rust standalone binary (`env-manager-service.exe`), manages secret mount lifecycle via named pipe IPC. Optional: runs as Windows service (`--mode=service`) or background process (`--mode=background`). The CLI `service` subcommand is a thin IPC gateway to this binary. See ADR 0001 and `docs/secret-architecture-blueprint.md` for the grill-with-docs roadmap.
 
 The GUI has NO local web server. Dev: Vite at `localhost:5173`. Production: Tauri embeds static assets via its `tauri://` custom protocol.
 
-See [docs/architecture.md](docs/architecture.md) for IPC bridge, race condition prevention, system tray, toast, caching, auto-update, security hardening, modal dialog system, rename/change-scope contracts, profile audit history, and the GUI/CLI alignment table.
+See [docs/architecture.md](docs/architecture.md) for IPC bridge, race condition prevention, system tray, toast, caching, auto-update, security hardening, modal dialog system, rename/change-scope contracts, profile audit history, and the GUI/CLI alignment table. See [docs/secret-architecture-decision-summary.md](docs/secret-architecture-decision-summary.md) for the Phase A-E secret architecture roadmap and ADR 0001.
 
 ## Project Structure
 
@@ -66,7 +67,10 @@ env-manager/
 +- AGENTS.md                   # This file (project-level operating instructions)
 +- AGENTS.cli.md               # CLI-level agent guide (distributed with CLI binary)
 +- README.md / README_CN.md    # English / Chinese documentation
-+- docs/                       # Detailed reference (cli-commands, architecture, build-and-release, backup-and-profiles)
++- CONTEXT.md                  # Grill-with-docs session decisions (A1-A11 + Risk Matrix)
++- docs/                       # Detailed reference (cli-commands, architecture, build-and-release, backup-and-profiles, secret-architecture-blueprint, secret-providers-guide, adr/)
++- scripts/                    # Build orchestrator (build.mjs), test harness, migration scripts, snapshot scripts
++- service/                    # Rust service crate (env-manager-service.exe, named pipe IPC, reconcile loop, audit ledger)
 +- frontend/                   # Tauri GUI application (src/, src-tauri/, tests/)
 +- release/                    # Build output (gitignored): portable/, cli-only/, msi/
 +- bin/ obj/ dist/             # Intermediate build output (gitignored)
@@ -76,9 +80,9 @@ env-manager/
 
 Full table, scope, debug, error handling, profiles, toggle, path editor, path resolution: see [docs/cli-commands.md](docs/cli-commands.md).
 
-Read-only (concurrent-safe, read-locked): `list`, `get`, `backup`, `diff`, `validate`, `agents`, `profile list/show/status, launch`, `path list, path health (no --fix)`, `path dedupe --dry-run`, `history list`, `bulk export`, `expand`, `protection list`, `update check`, `service status/health/ping`.
+Read-only (concurrent-safe, read-locked): `list`, `get`, `backup`, `diff`, `validate`, `agents`, `profile list/show/status, launch, secret-provider list, export-secrets, reveal-secret`, `path list, path health (no --fix)`, `path dedupe --dry-run`, `history list`, `bulk export`, `expand`, `protection list`, `audit list`, `update check`, `service status/health/ping`.
 
-Write (serialized, write-locked): `set`, `rename`, `change-scope`, `delete`, `toggle`, `restore`, `merge`, `profile create/delete/apply/unapply/add-var/remove-var/edit-var/rename, set-launch, add-secret/edit-secret/remove-secret`, `path add/remove/move-up/move-down/rename/dedupe, path health --fix`, `history undo/delete`, `bulk import`, `protection add-path/remove-path/add-var/remove-var`, `service refresh/rotate/reload/shutdown`.
+Write (serialized, write-locked): `set`, `rename`, `change-scope`, `delete`, `toggle`, `restore`, `merge`, `profile create/delete/apply/unapply/add-var/remove-var/edit-var/rename, set-launch, add-secret/edit-secret/remove-secret, secret-provider set/rotate, import-secrets`, `path add/remove/move-up/move-down/rename/dedupe, path health --fix`, `history undo/delete`, `bulk import`, `audit encrypt-file`, `protection add-path/remove-path/add-var/remove-var`, `service refresh/rotate/reload/shutdown`.
 
 All commands: `env-manager-cli <command> [arguments] [--flags]`. `--debug`/`-d` anywhere enables verbose stderr. `--scope user|system` (default user). Exit 0/1.
 
@@ -273,7 +277,7 @@ Every commit that modifies CLI, GUI, build code, or documentation MUST also `git
 
 The mandate numbers two paths:
 
-1. **Path A (preferred): remote push succeeds** -- after `build-all.ps1`, `git add`, `git commit`, then `git push origin main`. The PAT pattern at the bottom of this file is used, then the PAT is immediately cleared from the remote URL.
+1. **Path A (preferred): remote push succeeds** -- after `node scripts/build.mjs --arch x64`, `git add`, `git commit`, then `git push origin main`. The PAT pattern at the bottom of this file is used, then the PAT is immediately cleared from the remote URL.
 2. **Path B (fallback): remote push fails** -- if the remote is unreachable or the PAT is exhausted, the local commit is STILL authoritative and the push is retried at the next opportunity. The local branch MUST be left in a pushable state (clean tree, fast-forwardable). Never use `git reset --hard` to "clean up" a failed-push commit; that erases the local provenance trail. Document the failed push in the commit message body if applicable.
 
 Nothing in this section weakens the live-test harness mandate or the mandatory build-after-code-changes mandate; it complements them with a remote-provenance guarantee.
@@ -293,7 +297,7 @@ When the project changes, update files in the same commit:
 | Build change | AGENTS.md, docs/build-and-release.md, README.md, README_CN.md |
 | Directory structure change | AGENTS.md |
 | CodeGraph index change | docs/build-and-release.md (CodeGraph section) |
-| Code change (any) | Run build-all.ps1, verify release/ artifacts |
+| Code change (any) | Run `node scripts/build.mjs --arch x64`, verify release/ artifacts |
 | New test file | AGENTS.md (test inventory), docs if it documents new behavior |
 | Architecture/IPC/security change | docs/architecture.md, docs/backup-and-profiles.md, AGENTS.md hard boundaries |
 
@@ -312,7 +316,7 @@ A commit that does not update AGENTS.md (and the relevant `docs/` file) when the
 9. Add i18n strings to all 10 translation files.
 10. Update the alignment table in [docs/architecture.md](docs/architecture.md).
 11. Add test coverage.
-12. Run `build-all.ps1` and verify release artifacts.
+12. Run `node scripts/build.mjs --arch x64` and verify release artifacts.
 
 ## Detailed Reference Index
 
@@ -325,5 +329,6 @@ A commit that does not update AGENTS.md (and the relevant `docs/` file) when the
 | CLI-level agent guide (distributed with CLI binary) | [AGENTS.cli.md](AGENTS.cli.md) |
 | Secrets architecture blueprint: current capabilities, limitations, v0.8-v1.0 phased roadmap, anti-rejection checklist, risk counter-decisions | [docs/secret-architecture-blueprint.md](docs/secret-architecture-blueprint.md) |
 | Secret providers user-facing setup guide: prerequisites, one-time install, activation errors and fixes for all 8 providers (DPAPI, Credential Manager, PowerShell SecretManagement, Vault KV v2, SOPS, Azure Key Vault, 1Password CLI, AWS Secrets Manager) | [docs/secret-providers-guide.md](docs/secret-providers-guide.md) |
-| [ADR 0001: Secret Architecture Revision](docs/adr/0001-secret-architecture-revision.md) - decisions A1-A11, Phase A-E roadmap |
-| [Secret Architecture Blueprint](docs/secret-architecture-blueprint.md) - current state, v0.8-v1.0 phased plan |
+| ADR 0001: Secret architecture revision decisions A1-A11, Phase A-E roadmap | [docs/adr/0001-secret-architecture-revision.md](docs/adr/0001-secret-architecture-revision.md) |
+| Secret architecture decision summary (single-page distillation of grill-with-docs) | [docs/secret-architecture-decision-summary.md](docs/secret-architecture-decision-summary.md) |
+| Grill-with-docs full interview context + risk matrix | [CONTEXT.md](CONTEXT.md) |

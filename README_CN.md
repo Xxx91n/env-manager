@@ -136,7 +136,7 @@ npm install
 npm run tauri-dev
 
 # 一键构建所有发行版
-powershell -ExecutionPolicy Bypass -File scripts/build-all.ps1
+node scripts/build.mjs --arch x64
 # 输出：
 #   release/portable/  - GUI + CLI 平铺目录，可直接运行
 #   release/cli-only/  - 仅 CLI 包（无 GUI）
@@ -245,7 +245,7 @@ env-manager/
 │   │   └── Cargo.toml            # Rust 依赖
 │   └── scripts/
 │       ├── prebuild.mjs          # 编译 CLI 并复制到 src-tauri/bin/
-│       └── build-all.ps1         # 统一构建脚本
+│       └── build.mjs             # 统一构建脚本（跨平台，--arch x64|x86|arm64）
 ├── release/                      # 构建产物（已 gitignore）
 │   ├── portable/                 # GUI + CLI 便携版
 │   ├── cli-only/                 # 仅 CLI 包

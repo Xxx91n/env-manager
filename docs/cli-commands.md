@@ -68,6 +68,8 @@ All commands follow: `env-manager-cli <command> [arguments] [--flags]`
 | `service rotate` | `service rotate` | Trigger secret-provider rotation on env-manager-service (write) |
 | `service reload` | `service reload` | Tell env-manager-service to reload secretMount.json (write) |
 | `service shutdown` | `service shutdown` | Tell env-manager-service to stop its IPC server and reconcile loop (write) |
+| `audit list` | `audit list [--json]` | List audit ledger events (read-only). With `--json`, output raw JSON |
+| `audit encrypt-file` | `audit encrypt-file --input <file> --output <file>` | DPAPI-encrypt a file (write). Used by service export_survival_kit. 50MB cap, system dirs blocked |
 
 ## Scope
 

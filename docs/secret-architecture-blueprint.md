@@ -316,6 +316,6 @@ Protocol to amend this blueprint
 1. Edit this file (precise diff) in the same commit that ships the phase A/B/C/D/E code.
 2. Cite the phase exit criteria met.
 3. Update AGENTS.md hard-boundary ledger for any new invariant introduced.
-4. Re-run the full CI test suite + `build-all.ps1` before merging the phase commit.
+4. Re-run the full CI test suite + `node scripts/build.mjs --arch x64` before merging the phase commit.
 
 This blueprint is not a contract; it is a map. Any future contributor who finds the map no longer matches the territory should amend the map, not the territory.

@@ -95,7 +95,7 @@ Run the cross-platform build after any code change:
 node scripts/build.mjs --arch x64
 
 # Or via the legacy wrapper (Windows PowerShell only)
-powershell -NoProfile -ExecutionPolicy Bypass -File frontend/scripts/build-all.ps1
+node scripts/build.mjs --arch x64
 ```
 
 Verify the output:
@@ -116,7 +116,7 @@ When validating the published CLI binary, run the registry-safe live test harnes
 > The harness captures exact registry state (all value names, unexpanded values, and registry value kinds) for HKCU plus any accessible HKLM system hive, and snapshots test-owned Env Manager internal configuration. On a test failure or any detected drift it reconciles the exact pre-test state, including removal of values introduced during testing, then verifies both registry hives and internal configuration before broadcasting `WM_SETTINGCHANGE`. Backups are cleaned up on a clean run, retained with `-KeepBackup`, and always kept on failure for forensics in `.test-backups/`. Never run raw `env-manager-cli set ... --scope system` against the real registry without this wrapper - this is a project hard boundary (see AGENTS.md).
 
 ```powershell
-# After build-all.ps1 has produced release/cli-only/env-manager-cli.exe:
+# After build.mjs has produced release/cli-only/env-manager-cli.exe:
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts/test-with-restore.ps1
 ```
 
