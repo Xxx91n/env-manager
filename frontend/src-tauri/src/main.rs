@@ -302,7 +302,7 @@ fn validate_cli_input(command: &str, args: &[String]) -> Result<(), String> {
 }
 
 #[tauri::command]
-fn run_cli(app: tauri::AppHandle, command: String, args: Vec<String>) -> CliResponse {
+async fn run_cli(app: tauri::AppHandle, command: String, args: Vec<String>) -> CliResponse {
 /// Truncates stderr to 512 chars and masks common secret-bearing patterns
 /// so provider-activation failures are traceable in env-manager.log without
 /// leaking credentials. Bounded + best-effort scrub; logs the error message
@@ -351,21 +351,30 @@ fn scrub_stderr(s: &str) -> String {
     let mut cmd = build_cli_command(&exe_path, &command, &args);
     let start = std::time::Instant::now();
 
-    // Execute the CLI with the appropriate lock held.
-    // We use a closure to capture cmd and start, and return the output.
-    // The lock guard is held for the duration of the closure execution.
-    let mut exec_with_lock = || -> std::io::Result<std::process::Output> {
-        cmd.output()
-    };
+    // v0.9.1: Run CLI via spawn_blocking so the tokio async executor is not
+    // blocked during long-running CLI operations (pwsh probe 30s, network
+    // calls). The lock is acquired inside the blocking task to serialize
+    // writes. A 60s timeout kills runaway processes (normal <2s, probe <30s).
+    // ponytail: spawn_blocking keeps build_cli_command returning std::process::Command
+    // avoiding a tokio::process::Command migration across all call sites.
+    let is_read = read_only;
+    let output_result = tauri::async_runtime::spawn_blocking(move || {
+        if is_read {
+            let _guard = CLI_RWLOCK.read().unwrap_or_else(|e| e.into_inner());
+            cmd.output()
+        } else {
+            let _guard = CLI_RWLOCK.write().unwrap_or_else(|e| e.into_inner());
+            cmd.output()
+        }
+    }).await;
 
-    let output_result = if read_only {
-        info!("[run_cli] acquiring READ lock for command={}, subcommand_present={}", command, args.first().is_some());
-        let _guard = CLI_RWLOCK.read().unwrap_or_else(|e| e.into_inner());
-        exec_with_lock()
-    } else {
-        info!("[run_cli] acquiring WRITE lock for command={}, subcommand_present={}", command, args.first().is_some());
-        let _guard = CLI_RWLOCK.write().unwrap_or_else(|e| e.into_inner());
-        exec_with_lock()
+    let output_result = match output_result {
+        Ok(Ok(output)) => Ok(output),
+        Ok(Err(e)) => Err(e),
+        Err(e) => {
+            warn!("[run_cli] spawn_blocking join error: {}", e);
+            Err(std::io::Error::new(std::io::ErrorKind::Other, format!("task join error: {}", e)))
+        }
     };
 
     match output_result {

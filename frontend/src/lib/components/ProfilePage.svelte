@@ -327,6 +327,7 @@
   let pendingProvider: string | null = null
   // Inline provider activation error (displayed under the selector, not as modal toast)
   let providerErrorMessage: string | null = null
+  let providerChanging = false
   function requestChangeProvider(newProvider: string) {
     if (newProvider === activeProvider) return
     pendingProvider = newProvider
@@ -337,9 +338,10 @@
     providerErrorMessage = null
   }
   async function confirmChangeProvider() {
-    if (!pendingProvider) return
+    if (!pendingProvider || providerChanging) return
     const target = pendingProvider
     pendingProvider = null
+    providerChanging = true
     try {
       await secretProviderSet(target)
       activeProvider = target
@@ -351,6 +353,8 @@
       // transient toast, so the user can read the full actionable fix without
       // copy-pasting from a fading toast.
       providerErrorMessage = localizeError(err instanceof Error ? err.message : String(err))
+    } finally {
+      providerChanging = false
     }
   }
   async function handleChangeProvider(newProvider: string) {
@@ -1044,9 +1048,15 @@
           <button
             type="button"
             on:click={confirmChangeProvider}
-            class="px-3 py-1 text-[11px] font-medium text-white bg-amber-600 rounded hover:bg-amber-700 transition dark:bg-amber-500 dark:hover:bg-amber-600"
+            disabled={providerChanging}
+            class="px-3 py-1 text-[11px] font-medium text-white bg-amber-600 rounded hover:bg-amber-700 transition dark:bg-amber-500 dark:hover:bg-amber-600 disabled:opacity-50 disabled:cursor-wait"
           >
-            {$t('secrets.confirmChange')}
+            {#if providerChanging}
+              <svg class="animate-spin inline-block w-3 h-3 mr-1" viewBox="0 0 24 24" fill="none"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>
+              {$t('secrets.confirmChange')}...
+            {:else}
+              {$t('secrets.confirmChange')}
+            {/if}
           </button>
         </div>
       </div>

@@ -45,9 +45,43 @@ impl RuntimeMode {
 }
 
 fn main() {
-    env_logger::init();
+    // Resolve mode FIRST so we know where to put the log file.
     let args: Vec<String> = env::args().collect();
     let mode = RuntimeMode::resolve(&args);
+
+    // v0.9.1: Write service logs to a file so Session 0 service output is
+    // not lost (stderr goes nowhere in Session 0). In Background mode, write
+    // to %LOCALAPPDATA% alongside env-manager.log; in Service mode, write to
+    // %ProgramData% alongside secretMount.json/audit-ledger.jsonl.
+    let log_dir = match mode {
+        RuntimeMode::Service => {
+            let pd = std::env::var("ProgramData").unwrap_or_else(|_| "C:\\ProgramData".to_string());
+            std::path::PathBuf::from(pd).join("EnvManager")
+        }
+        _ => {
+            let la = std::env::var("LOCALAPPDATA").unwrap_or_else(|_| ".".to_string());
+            std::path::PathBuf::from(la).join("EnvManager")
+        }
+    };
+    let _ = std::fs::create_dir_all(&log_dir);
+    let log_file = log_dir.join("env-manager-service.log");
+    // ponytail: best-effort file open; if it fails, fall back to stderr only.
+    match std::fs::OpenOptions::new().create(true).append(true).open(&log_file) {
+        Ok(f) => {
+            env_logger::Builder::from_default_env()
+                .format_timestamp_millis()
+                .target(env_logger::Target::Pipe(Box::new(f)))
+                .filter_level(log::LevelFilter::Info)
+                .init();
+        }
+        Err(e) => {
+            eprintln!("Warning: cannot open log file {:?}: {}, falling back to stderr", log_file, e);
+            env_logger::Builder::from_default_env()
+                .format_timestamp_millis()
+                .filter_level(log::LevelFilter::Info)
+                .init();
+        }
+    }
     log::info!("env-manager-service starting in {:?} mode", mode);
 
     // Entry guard (A7): refuse direct double-click launch with no --mode.
