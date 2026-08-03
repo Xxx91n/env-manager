@@ -172,7 +172,7 @@
     try {
       await serviceStart()
       // Give the service a moment to start up before checking status
-      await new Promise(r => setTimeout(r, 1000))
+      await new Promise(r => setTimeout(r, 3000))
       await refreshServiceStatus()
       if (serviceRunning) {
         showToast(get(tStore)('settings.service.started'), 'success')

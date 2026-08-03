@@ -8,8 +8,10 @@
 use serde::{Deserialize, Serialize};
 use std::io;
 use std::time::Duration;
+use std::sync::Arc;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::windows::named_pipe::NamedPipeServer;
+use tokio_util::sync::CancellationToken;
 
 /// IPC request from CLI/GUI to the service.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -44,11 +46,16 @@ impl IpcResponse {
 
 /// Start the IPC named pipe server. Runs indefinitely.
 /// Anti-squatting: first creation uses first_pipe_instance(true).
-pub async fn start_ipc_server(pipe_name: &str) {
+pub async fn start_ipc_server(pipe_name: &str, shutdown: Arc<CancellationToken>) {
     log::info!("IPC server listening on {}", pipe_name);
 
     let mut first = true;
     loop {
+        // Check shutdown before creating next pipe instance
+        if shutdown.is_cancelled() {
+            log::info!("IPC server cancelled, exiting");
+            return;
+        }
         let server = if first {
             match tokio::net::windows::named_pipe::ServerOptions::new()
                 .first_pipe_instance(true)
@@ -56,15 +63,29 @@ pub async fn start_ipc_server(pipe_name: &str) {
             {
                 Ok(s) => {
                     first = false;
-                    log::info!("First pipe instance created (anti-squatting check passed)");
-                    s
+                   log::info!("First pipe instance created (anti-squatting check passed)");
+                   s
+               }
+               Err(e) => {
+                   log::warn!("Pipe creation failed on first attempt: {}. Retrying in 1s...", e);
+                   tokio::time::sleep(Duration::from_secs(1)).await;
+                    match tokio::net::windows::named_pipe::ServerOptions::new()
+                        .first_pipe_instance(true)
+                        .create(pipe_name)
+                    {
+                        Ok(s) => {
+                            first = false;
+                            log::info!("First pipe instance created on retry (stale pipe cleared)");
+                            s
+                        }
+                        Err(e2) => {
+                            log::error!("Pipe creation failed after retry: {}. Service cannot start safely.", e2);
+                            return;
+                        }
+                    }
                 }
-                Err(e) => {
-                    log::error!("Pipe squatting or creation failed: {}. Service cannot start safely.", e);
-                    return;
-                }
-            }
-        } else {
+           }
+       } else {
             match tokio::net::windows::named_pipe::ServerOptions::new()
                 .create(pipe_name)
             {
@@ -77,16 +98,25 @@ pub async fn start_ipc_server(pipe_name: &str) {
             }
         };
 
-        match server.connect().await {
-            Ok(()) => {}
-            Err(e) => {
-                log::warn!("Client connect failed: {}", e);
-                continue;
+        tokio::select! {
+            result = server.connect() => {
+                match result {
+                    Ok(()) => {}
+                    Err(e) => {
+                        log::warn!("Client connect failed: {}", e);
+                        continue;
+                    }
+                }
+            }
+            _ = shutdown.cancelled() => {
+                log::info!("IPC server cancelled during connect, exiting");
+                return;
             }
         }
 
+        let conn_token = shutdown.clone();
         tokio::spawn(async move {
-            if let Err(e) = handle_connection(server).await {
+            if let Err(e) = handle_connection(server, conn_token).await {
                 log::warn!("Connection handler error: {}", e);
             }
         });
@@ -94,7 +124,8 @@ pub async fn start_ipc_server(pipe_name: &str) {
 }
 
 /// Handle a single client connection: read one request line, process, write one response line.
-async fn handle_connection(mut server: NamedPipeServer) -> io::Result<()> {
+async fn handle_connection(mut server: NamedPipeServer, _shutdown: Arc<CancellationToken>) -> io::Result<()> {
+    log::info!("IPC connection accepted");
     let mut buf = Vec::with_capacity(4096);
     let mut byte = [0u8; 1];
     loop {
@@ -104,6 +135,7 @@ async fn handle_connection(mut server: NamedPipeServer) -> io::Result<()> {
                 if byte[0] == b'\n' { break; }
                 buf.push(byte[0]);
                 if buf.len() > 65536 {
+                    log::warn!("IPC request too large ({} bytes), rejecting", buf.len());
                     return Err(io::Error::new(io::ErrorKind::InvalidInput, "request too large"));
                 }
             }
@@ -114,6 +146,7 @@ async fn handle_connection(mut server: NamedPipeServer) -> io::Result<()> {
     let request: IpcRequest = match serde_json::from_slice(&buf) {
         Ok(r) => r,
         Err(e) => {
+            log::warn!("IPC invalid request: {}", e);
             let resp = IpcResponse::err(&format!("invalid request: {}", e));
             let line = serde_json::to_string(&resp).unwrap_or_default();
             server.write_all((line + "\n").as_bytes()).await?;
@@ -121,15 +154,16 @@ async fn handle_connection(mut server: NamedPipeServer) -> io::Result<()> {
         }
     };
 
-    let response = process_request(&request).await;
+    let response = process_request(&request, &_shutdown).await;
+    log::info!("IPC response: ok={} method={}", response.ok, request.method);
     let line = serde_json::to_string(&response).unwrap_or_default();
     server.write_all((line + "\n").as_bytes()).await?;
     server.flush().await?;
     Ok(())
 }
 
-async fn process_request(req: &IpcRequest) -> IpcResponse {
-    log::debug!("IPC request: method={}", req.method);
+async fn process_request(req: &IpcRequest, shutdown: &Arc<CancellationToken>) -> IpcResponse {
+    log::info!("IPC request: method={}", req.method);
     match req.method.as_str() {
         "ping" => IpcResponse::ok(serde_json::json!({"pong": true})),
         "status" => {
@@ -172,7 +206,8 @@ async fn process_request(req: &IpcRequest) -> IpcResponse {
             IpcResponse::ok(serde_json::json!({"reloaded": true}))
         }
         "shutdown" => {
-            log::info!("Shutdown requested via IPC");
+            log::info!("Shutdown requested via IPC — cancelling all tasks");
+            shutdown.cancel();
             IpcResponse::ok(serde_json::json!({"shuttingDown": true}))
         }
         _ => IpcResponse::err(&format!("unknown method: {}", req.method)),

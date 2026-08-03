@@ -3158,13 +3158,19 @@ partial class Program
                 System.IO.Pipes.PipeOptions.None);
             client.Connect(5000);
 
-            using var writer = new System.IO.StreamWriter(client) { AutoFlush = true };
+            // No `using var` — Dispose on pipe-close races with the service closing
+            // its end. Manage lifetime manually, swallow all IOExceptions from cleanup
+            // so the CLI exit code reflects the response, not the teardown noise.
+            var writer = new System.IO.StreamWriter(client, leaveOpen: true) { AutoFlush = true };
             writer.WriteLine(requestJson);
 
-            using var reader = new System.IO.StreamReader(client);
+            var reader = new System.IO.StreamReader(client, leaveOpen: true);
             string response = reader.ReadLine() ?? "";
-
             Console.WriteLine(response);
+
+            try { writer.Dispose(); } catch { }
+            try { reader.Dispose(); } catch { }
+            try { client.Dispose(); } catch { }
 
             if (response.Contains("\"ok\":true") || response.Contains("\"ok\": true"))
                 return 0;

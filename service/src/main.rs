@@ -4,6 +4,8 @@
 
 use std::env;
 use std::path::PathBuf;
+use tokio_util::sync::CancellationToken;
+use std::sync::Arc;
 
 mod reconcile;
 mod ipc;
@@ -112,13 +114,21 @@ fn main() {
                 let pipe = mode.pipe_endpoint();
                 log::info!("IPC pipe: {}", pipe);
 
-                let reconcile_handle = tokio::spawn(reconcile::reconcile_loop());
-                let ipc_handle = tokio::spawn(ipc::start_ipc_server(pipe));
+                // CancellationToken for graceful shutdown — shared between IPC server
+                // and reconcile loop. When IPC receives "shutdown", it cancels the token,
+                // which signals both tasks to exit cleanly.
+                let shutdown_token = Arc::new(CancellationToken::new());
+                let ipc_token = shutdown_token.clone();
+                let reconcile_token = shutdown_token.clone();
+
+                let reconcile_handle = tokio::spawn(reconcile::reconcile_loop(reconcile_token));
+                let ipc_handle = tokio::spawn(ipc::start_ipc_server(pipe, ipc_token));
 
                 tokio::select! {
                     _ = reconcile_handle => log::warn!("reconcile loop exited"),
                     _ = ipc_handle => log::warn!("IPC server exited"),
                 }
+                log::info!("service shutting down (all tasks exited)");
             }
             RuntimeMode::Cli => {
                 let pipe = mode.pipe_endpoint();

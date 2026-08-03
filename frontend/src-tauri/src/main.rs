@@ -556,6 +556,7 @@ fn resolve_service_path(app: &tauri::AppHandle) -> Option<PathBuf> {
     if let Some(cli) = resolve_cli_path(app) {
         let p = cli.with_file_name("env-manager-service.exe");
         if p.exists() {
+            info!("[start_service] service binary found adjacent to CLI: {}", p.display());
             return Some(p);
         }
     }
@@ -563,15 +564,17 @@ fn resolve_service_path(app: &tauri::AppHandle) -> Option<PathBuf> {
     if let Ok(cwd) = std::env::current_dir() {
         let dev_path = cwd.join("service/target/release/env-manager-service.exe");
         if dev_path.exists() {
+            info!("[start_service] service binary found in dev tree: {}", dev_path.display());
             return Some(dev_path);
         }
     }
+    warn!("[start_service] service binary not found by any method");
     None
 }
 
 /// Starts the env-manager-service.exe in background mode (detached child process).
 /// The service listens on \\.\pipe\EnvManager.Background for IPC.
-/// Returns true if the process was spawned successfully.
+/// Returns true if the process was spawned and survived its first 2 seconds.
 #[tauri::command]
 fn start_service(app: tauri::AppHandle) -> Result<bool, String> {
     let service_exe = match resolve_service_path(&app) {
@@ -579,24 +582,78 @@ fn start_service(app: tauri::AppHandle) -> Result<bool, String> {
         None => return Err("Service binary not found — cannot locate env-manager-service.exe".to_string()),
     };
 
+    info!("[start_service] spawning: {} --mode=background", service_exe.display());
+   info!(r"[start_service] pipe: \\.\pipe\EnvManager.Background, flags: CREATE_NO_WINDOW|DETACHED_PROCESS");
+
     let mut cmd = Command::new(&service_exe);
     cmd.arg("--mode=background");
+    // Critical: give the child independent stdio handles so it does NOT inherit
+    // the Tauri parent's stdin/stdout/stderr pipe handles. When the parent
+    // closes its end of an inherited handle, the child gets a broken pipe and
+    // may exit. Stdio::null gives the child its own NUL device handles that
+    // survive parent exit. This is the standard Rust pattern for daemon spawning.
+    cmd.stdin(std::process::Stdio::null());
+    cmd.stdout(std::process::Stdio::null());
+    cmd.stderr(std::process::Stdio::null());
     #[cfg(windows)]
     {
         // CREATE_NO_WINDOW | DETACHED_PROCESS — ensures the child survives parent exit
         cmd.creation_flags(0x08000008);
     }
 
-    match cmd.spawn() {
-        Ok(child) => {
-            info!("[start_service] spawned env-manager-service --mode=background");
-            // Detach: forget the Child handle so Rust does not kill it on drop
-            std::mem::forget(child);
-            Ok(true)
+    let mut child = match cmd.spawn() {
+        Ok(c) => {
+            info!("[start_service] spawn ok, pid={}", c.id());
+            c
         }
         Err(e) => {
             error!("[start_service] failed to spawn service: {}", e);
-            Err(format!("Failed to start service: {}", e))
+            return Err(format!("Failed to start service: {}", e));
+        }
+    };
+
+    // Wait up to 2s to detect immediate exit (pipe conflict, missing DLL, etc.)
+    // If the child survives 2s, it's healthy enough to serve IPC.
+    match child.try_wait() {
+        Ok(None) => {
+            // Still running after instant check — wait 2s more
+            std::thread::sleep(std::time::Duration::from_millis(2000));
+            match child.try_wait() {
+                Ok(None) => {
+                    // Child survived 2s — healthy, detach it
+                    info!("[start_service] service pid={} survived 2s, detaching", child.id());
+                    std::mem::forget(child);
+                    Ok(true)
+                }
+                Ok(Some(status)) => {
+                    let code = status.code().unwrap_or(-1);
+                    error!("[start_service] service exited after 2s with code={}", code);
+                    // Try to read service log for diagnostic
+                    if let Ok(la) = std::env::var("LOCALAPPDATA") {
+                        let log_path = std::path::PathBuf::from(la)
+                            .join("EnvManager")
+                            .join("env-manager-service.log");
+                        if let Ok(log) = std::fs::read_to_string(&log_path) {
+                            let last_lines: String = log.lines().rev().take(10).collect::<Vec<_>>().join("\n");
+                            error!("[start_service] service log tail:\n{}", last_lines);
+                        }
+                    }
+                    Err(format!("Service started but exited immediately (code={}). Check env-manager-service.log for details.", code))
+                }
+                Err(e) => {
+                    error!("[start_service] error waiting for service: {}", e);
+                    Err(format!("Service wait failed: {}", e))
+                }
+            }
+        }
+        Ok(Some(status)) => {
+            let code = status.code().unwrap_or(-1);
+            error!("[start_service] service exited immediately with code={}", code);
+            Err(format!("Service exited immediately (code={}). Check env-manager-service.log for details.", code))
+        }
+        Err(e) => {
+            error!("[start_service] try_wait error: {}", e);
+            Err(format!("Service spawn check failed: {}", e))
         }
     }
 }

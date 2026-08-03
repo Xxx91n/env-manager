@@ -10,6 +10,8 @@ use std::path::PathBuf;
 use std::time::Duration;
 use std::io::Write;
 use chrono::{DateTime, Utc};
+use tokio_util::sync::CancellationToken;
+use std::sync::Arc;
 
 /// SecretMount mirror of the C# SecretMount class.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -54,26 +56,44 @@ pub struct MountHealth {
 
 /// Main reconcile loop. Runs indefinitely (300s interval).
 /// Domain 10: defer first tick 30s to avoid SCM timeout on boot.
-pub async fn reconcile_loop() {
-    tokio::time::sleep(Duration::from_secs(30)).await;
+pub async fn reconcile_loop(shutdown: Arc<CancellationToken>) {
+    log::info!("reconcile loop starting (30s warmup, 300s interval)");
+    tokio::select! {
+        _ = tokio::time::sleep(Duration::from_secs(30)) => {}
+        _ = shutdown.cancelled() => {
+            log::info!("reconcile loop cancelled during warmup, exiting");
+            return;
+        }
+    }
+    if shutdown.is_cancelled() {
+        log::info!("reconcile loop cancelled, exiting");
+        return;
+    }
     let mut interval = tokio::time::interval(Duration::from_secs(300));
-    // First tick fires immediately after warmup, then every 300s.
     interval.tick().await; // consume the immediate first tick
     loop {
-        interval.tick().await;
-        if let Err(e) = run_reconcile_tick().await {
-            log::error!("reconcile tick failed: {}", e);
+        tokio::select! {
+            _ = interval.tick() => {
+                if let Err(e) = run_reconcile_tick().await {
+                    log::error!("reconcile tick failed: {}", e);
+                }
+            }
+            _ = shutdown.cancelled() => {
+                log::info!("reconcile loop cancelled, exiting gracefully");
+                return;
+            }
         }
     }
 }
 
 async fn run_reconcile_tick() -> Result<(), String> {
-    log::debug!("reconcile tick: scanning secretMount.json");
+    log::info!("reconcile tick: scanning secretMount.json");
 
     let path = crate::secret_mount_path();
     let mut mounts = load_mounts(&path);
 
     if mounts.is_empty() {
+        log::info!("reconcile tick: no mounts found, skipping");
         return Ok(());
     }
 
@@ -105,13 +125,13 @@ async fn run_reconcile_tick() -> Result<(), String> {
 
         match refresh_mount_internal(&mount.provider).await {
             Ok(()) => {
-                log::info!("refreshed mount {} (provider={})", mount.id, mount.provider);
+                log::info!("reconcile: refreshed mount {} (provider={})", mount.id, mount.provider);
                 mount.lastFetchedAt = Some(now.to_rfc3339());
                 refreshed_count += 1;
                 changed = true;
             }
             Err(e) => {
-                log::warn!("failed to refresh mount {}: {}", mount.id, e);
+                log::warn!("reconcile: failed to refresh mount {}: {}", mount.id, e);
                 failed_count += 1;
             }
         }
@@ -122,7 +142,7 @@ async fn run_reconcile_tick() -> Result<(), String> {
     }
 
     log::info!(
-        "reconcile tick: {} refreshed, {} failed, {} skipped",
+        "reconcile tick complete: {} refreshed, {} failed, {} skipped",
         refreshed_count, failed_count, skipped_count
     );
     Ok(())
@@ -301,15 +321,14 @@ fn save_mounts(path: &PathBuf, mounts: &[SecretMount]) -> Result<(), String> {
         .map_err(|e| format!("fsync tmp error: {}", e))?;
     drop(file);
 
-    // Remove destination if exists (Windows rename doesn't overwrite by default).
-    if path.exists() {
-       let bak = path.with_extension("json.bak");
-       let _ = std::fs::rename(path, &bak);
-        let _ = std::fs::remove_file(path);
-    }
-
+    // std::fs::rename on Windows uses MoveFileExW with MOVEFILE_REPLACE_EXISTING,
+    // so it atomically overwrites the destination if it exists. No .bak needed.
     std::fs::rename(&tmp, path)
-        .map_err(|e| format!("rename error: {}", e))?;
+        .map_err(|e| {
+            // If rename failed, clean up the temp file so it doesn't leak
+            let _ = std::fs::remove_file(&tmp);
+            format!("rename error: {}", e)
+        })?;
 
     // fsync the directory to persist the rename.
     if let Some(parent) = path.parent() {
