@@ -960,23 +960,26 @@
               {#if profile.profileType === 'launch' && !profile.isEnabled}
                 <!-- v0.8 secret provider indicator -->
                 <div class="flex items-center gap-1.5 mt-2">
-                  <span class="text-[9px] text-gray-400 dark:text-gray-500">{$t('secrets.activeProvider')}:</span>
-                      <select
-                      class="text-[9px] px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 border border-gray-300 dark:border-gray-600 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                      value={activeProvider}
-                      on:change={(e) => {
-                        const next = e.currentTarget.value;
-                        e.currentTarget.value = activeProvider;
-                        requestChangeProvider(next);
-                      }}
-                    >
-                      {#each availableProviders as prov}
-                        <option value={prov} selected={prov === activeProvider}>
-                          {providerDisplayName(prov)}{prov === activeProvider ? ' (active)' : ''}
-                        </option>
-                      {/each}
-                    </select>
-                    {#if providerErrorMessage}
+                 <span class="text-[9px] text-gray-400 dark:text-gray-500">{$t('secrets.activeProvider')}:</span>
+                     <select
+                     class="text-[9px] px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 border border-gray-300 dark:border-gray-600 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                     value={activeProvider}
+                     on:change={(e) => {
+                       const next = e.currentTarget.value;
+                       e.currentTarget.value = activeProvider;
+                       requestChangeProvider(next);
+                     }}
+                   >
+                     {#each availableProviders as prov}
+                       <option value={prov} selected={prov === activeProvider}>
+                         {providerDisplayName(prov)}{prov === activeProvider ? ' (active)' : ''}
+                       </option>
+                     {/each}
+                   </select>
+                    {#if providerChanging}
+                      <svg class="animate-spin inline-block w-3 h-3" viewBox="0 0 24 24" fill="none"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>
+                    {/if}
+                   {#if providerErrorMessage}
                       <div class="mt-1 p-1.5 rounded-md bg-amber-50 border border-amber-200 text-[10px] text-amber-700 dark:bg-amber-900/20 dark:border-amber-700 dark:text-amber-300">
                         <span class="font-medium">{$t('secrets.activeProvider')}:</span> {providerErrorMessage}
                         <button type="button" class="ml-1 underline text-amber-600 dark:text-amber-400" on:click={() => providerErrorMessage = null}>{$t('buttons.close')}</button>

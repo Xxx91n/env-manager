@@ -54,6 +54,7 @@
   onMount(async () => {
     // Check real system PATH on mount
     cliInPath = await isCliInPath()
+    void refreshServiceStatus()
   })
 
   function switchLocale(newLocale: string) {
@@ -85,40 +86,24 @@
     if (cliToggleLoading) return
     cliToggleLoading = true
     try {
-     if (cliInPath) {
-        // Fail-fast: if the IPC hangs (CLI subprocess wedged) surface a clear
-        // error rather than leaving the toggle greyed forever. Wrap with a
-        // 30s timeout so the user always sees success or a typed failure.
+      if (cliInPath) {
         const result = await withCliTimeout(removeCliFromPath(), get(tStore)('settings.cliAddFailed'))
-       cliInPath = await isCliInPath()
-       if (result.removed || !cliInPath) {
+        cliInPath = await isCliInPath()
+        if (result.removed || !cliInPath) {
           showToast(get(tStore)('settings.cliRemoved'), 'success')
         } else {
           showToast(get(tStore)('settings.cliRemoveFailed') + ': ' + result.message, 'error')
         }
-     } else {
+      } else {
         const result = await withCliTimeout(addCliToPath(), get(tStore)('settings.cliAddFailed'))
-       // Force refresh PATH cache to see the new entry
-       await listPathEntries('user', true)
-       cliInPath = await isCliInPath()
-       if (result.added || cliInPath) {
+        await listPathEntries('user', true)
+        cliInPath = await isCliInPath()
+        if (result.added || cliInPath) {
           showToast(get(tStore)('settings.cliAdded'), 'success')
           dispatch('refresh')
         } else {
           showToast(get(tStore)('settings.cliAddFailed') + ': ' + result.message, 'error')
- }
-
-  /** 30s race: any IPC call here MUST resolve within 30s, otherwise throw
-   *  with the provided failure label + timeout suffix. Mirrors the GUI's
-   *  protection-page withTimeout pattern; keeps the toggle from going
-   *  permanently grey when the CLI subprocess wedges (cov with AGENTS.md's
-   *  fail-loud mandate). */
-  function withCliTimeout<T>(p: Promise<T>, label: string): Promise<T> {
-    return new Promise<T>((resolve, reject) => {
-      const t = setTimeout(() => reject(new Error(label + ' (timeout after 30s)')), 30000)
-      p.then((v) => { clearTimeout(t); resolve(v) }).catch((e) => { clearTimeout(t); reject(e) })
-    })
-  }
+        }
       }
     } catch (err) {
       showToast(get(tStore)('settings.cliAddFailed') + ': ' + (err instanceof Error ? err.message : String(err)), 'error')
@@ -127,17 +112,100 @@
     }
   }
 
-  function changeFontScale(scale: number) {
-    selectedFontScale = scale
-    fontScale = scale
-    try {
-      void setSetting('fontScale', String(scale))
-    } catch {
-      // Ignore
-    }
-    dispatch('fontScaleChange', scale)
+  /** 30s race: any IPC call here MUST resolve within 30s, otherwise throw
+   *  with the provided failure label + timeout suffix. Mirrors the GUI's
+   *  protection-page withTimeout pattern; keeps the toggle from going
+   *  permanently grey when the CLI subprocess wedges. */
+  function withCliTimeout<T>(p: Promise<T>, label: string): Promise<T> {
+    return new Promise<T>((resolve, reject) => {
+      const t = setTimeout(() => reject(new Error(label + ' (timeout after 30s)')), 30000)
+      p.then((v) => { clearTimeout(t); resolve(v) }).catch((e) => { clearTimeout(t); reject(e) })
+    })
   }
 
+  // v0.9.0 Phase B+C: Service control panel handlers
+  async function handleServicePing() {
+    if (serviceLoading) return
+    serviceLoading = true
+    serviceError = null
+    try {
+      await servicePing()
+      await refreshServiceStatus()
+    } catch (err) {
+      serviceError = err instanceof Error ? err.message : String(err)
+    } finally {
+      serviceLoading = false
+    }
+  }
+
+  async function handleServiceReload() {
+    if (serviceLoading || !serviceRunning) return
+    serviceLoading = true
+    serviceError = null
+    try {
+      await serviceReload()
+      await refreshServiceStatus()
+      showToast(get(tStore)('settings.service.reloaded'), 'success')
+    } catch (err) {
+      serviceError = err instanceof Error ? err.message : String(err)
+    } finally {
+      serviceLoading = false
+    }
+  }
+
+  async function handleServiceShutdown() {
+    if (serviceLoading || !serviceRunning) return
+    serviceLoading = true
+    serviceError = null
+    try {
+      await serviceShutdown()
+      await refreshServiceStatus()
+      showToast(get(tStore)('settings.service.shutdown'), 'success')
+    } catch (err) {
+      serviceError = err instanceof Error ? err.message : String(err)
+    } finally {
+      serviceLoading = false
+    }
+  }
+
+  async function handleMountRefresh(mountId: string) {
+    if (serviceLoading) return
+    serviceLoading = true
+    try {
+      await serviceRefreshMount(mountId)
+      await refreshServiceStatus()
+    } catch (err) {
+      serviceError = err instanceof Error ? err.message : String(err)
+    } finally {
+      serviceLoading = false
+    }
+  }
+
+  async function handleMountRotate(mountId: string) {
+    if (serviceLoading) return
+    serviceLoading = true
+    try {
+      await serviceRotateMount(mountId)
+      await refreshServiceStatus()
+      showToast(get(tStore)('settings.service.rotated'), 'success')
+    } catch (err) {
+      serviceError = err instanceof Error ? err.message : String(err)
+    } finally {
+      serviceLoading = false
+    }
+  }
+
+  async function refreshServiceStatus() {
+    try {
+      const status = await serviceStatus()
+      serviceRunning = status?.running ?? false
+      if (serviceRunning) {
+        serviceHealthData = await serviceHealth()
+      }
+    } catch {
+      serviceRunning = false
+    }
+  }
   async function handleCheckUpdate() {
     if (updateChecking) return
     updateChecking = true
@@ -148,7 +216,6 @@
       latestVersion = info.latestVersion
       releaseUrl = info.releaseUrl
       if (info.error) {
-        // Check failed: do NOT show "up to date" - only show the error toast
         updateAvailable = null
         showToast($t('update.error'), 'error')
       } else if (info.isUpdateAvailable) {
@@ -159,13 +226,13 @@
         showToast($t('update.upToDate'), 'info')
       }
     } catch {
-      // Network/invoke failure: do NOT show "up to date" - only show error
       updateAvailable = null
       showToast($t('update.error'), 'error')
     } finally {
       updateChecking = false
     }
   }
+
 
   function openReleasePage() {
     if (releaseUrl) {
@@ -208,6 +275,17 @@
     } finally {
       bulkLoading = false
     }
+  }
+
+  function changeFontScale(scale: number) {
+    selectedFontScale = scale
+    fontScale = scale
+    try {
+      void setSetting('fontScale', String(scale))
+    } catch {
+      // Ignore
+    }
+    dispatch('fontScaleChange', scale)
   }
 
   function handleClose() {

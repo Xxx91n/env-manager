@@ -1237,7 +1237,7 @@ partial class Program
                     // recording it lets users see this atomic security-significant
                     // transaction in the history view (per item 7 mandate) and
                     // detect silent provider swaps.
-                    RecordProfileAudit("profile secret-provider set", "(all)",
+                    RecordProfileAudit("profile secret-provider set", args[3],
                         null, JsonSerializer.Serialize(new { provider = args[3] }));
                     Console.WriteLine($"Active secret provider set to: {args[3]}");
                     Console.WriteLine("Note: existing secrets encrypted with the previous provider will still decrypt correctly (fail-closed on unknown provider).");

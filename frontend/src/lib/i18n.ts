@@ -148,7 +148,7 @@ export const defaultLanguage = defaultLocale
  * anything throws; callers MUST treat failure as soft (the lazy loader will
  * still resolve on its own schedule).
  */
-async function loadLocaleMessages(loc: string): Promise<void> {
+export async function loadLocaleMessages(loc: string): Promise<void> {
   const mod = await import('./translations/' + loc + '.json')
   addMessages(loc, (mod as { default: Record<string, string> }).default)
 }

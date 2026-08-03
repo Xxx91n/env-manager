@@ -11,8 +11,9 @@
   import { variables, loading, error, activeView, modal, isWriteInProgress, debugLogs, refreshTrigger, toasts, dismissToast } from './lib/stores'
   import { listVariables, updateTrayLocale } from './lib/api'
   import { getSetting, frontendLog } from './lib/settingsStore'
-  import { defaultLanguage, applyPersistedLocale } from './lib/i18n'
-  import { get } from 'svelte/store'
+ import { defaultLanguage, applyPersistedLocale } from './lib/i18n'
+  import { loadLocaleMessages } from './lib/i18n'
+ import { get } from 'svelte/store'
   import { t as tStore } from 'svelte-i18n'
 
   let currentLocale: string = defaultLanguage
@@ -31,10 +32,22 @@
   // the tray from inside onMount BEFORE i18n loaded the saved locale, causing the
   // tray to permanently show English ("Show" / "Quit") even when the user had
   // chosen a different language.
-  let lastSyncedTrayLocale = ''
-  $: if ($locale && $locale !== lastSyncedTrayLocale) {
-    lastSyncedTrayLocale = $locale
+ let lastSyncedTrayLocale = ''
+  let trayLocaleSyncing = false
+ $: if ($locale && $locale !== lastSyncedTrayLocale) {
+   lastSyncedTrayLocale = $locale
+    void syncTrayLocale($locale)
+  }
+
+  async function syncTrayLocale(loc: string) {
     try {
+      // Ensure locale messages are loaded BEFORE reading translated strings.
+      // Without this, get(tStore)('tray.show') returns the raw key (English)
+      // when the locale store has changed but the async dynamic import of the
+      // translation JSON has not yet resolved. This was the root cause of the
+      // tray intermittently showing English "Show"/"Quit" during hangs or fast
+      // locale switches.
+      await loadLocaleMessages(loc)
       const showText = get(tStore)('tray.show')
       const quitText = get(tStore)('tray.quit')
       const tooltip = get(tStore)('tray.tooltip')
@@ -42,7 +55,7 @@
     } catch {
       // best-effort; ignore
     }
-  }
+ }
   onMount(async () => {
     // Read persisted settings from localStorage (settings are saved there by
     // SettingsDialog but were never read back on startup, so every restart
