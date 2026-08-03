@@ -196,13 +196,28 @@
     e.preventDefault()
   }
 
+  // rAF-batched resize: mousemove only computes the new width and schedules
+  // a single DOM write per animation frame. This avoids layout thrashing
+  // when the browser fires mousemove events faster than 60fps. The
+  // `pendingFrame` flag prevents redundant rAF scheduling.
+  let pendingFrame = false
+  let pendingWidth = 0
+
   function onResizeMove(e: MouseEvent) {
     if (!resizing) return
     const dx = e.clientX - resizing.startX
-    const newW = Math.max(60, Math.min(800, resizing.startW + dx))
-    colWidths[resizing.col] = newW
-    const root = document.querySelector('.history-table-root') as HTMLElement | null
-    if (root) root.style.setProperty(`--col-${resizing.col}`, `${newW}px`)
+    pendingWidth = Math.max(60, Math.min(800, resizing.startW + dx))
+    if (!pendingFrame) {
+      pendingFrame = true
+      requestAnimationFrame(() => {
+        if (resizing) {
+          colWidths[resizing.col] = pendingWidth
+          const root = document.querySelector('.history-table-root') as HTMLElement | null
+          if (root) root.style.setProperty(`--col-${resizing.col}`, `${pendingWidth}px`)
+        }
+        pendingFrame = false
+      })
+    }
   }
 
   function endResize() {
@@ -219,8 +234,12 @@
 </script>
 
 <style>
-  .history-table-root { max-height: 70vh; }
-  .history-table-root th.resize { position: relative; }
+ .history-table-root { max-height: 70vh; }
+ /* table-layout:fixed prevents the browser from recalculating ALL column
+    widths on every cell width change — only the changed column reflows.
+    Combined with rAF-batched writes, this gives smooth 60fps drag. */
+ .history-table-root table { table-layout: fixed; }
+ .history-table-root th.resize { position: relative; }
   .history-table-root th.resize::after {
     content: '';
     position: absolute;

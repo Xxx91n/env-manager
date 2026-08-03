@@ -13,10 +13,8 @@
   import { listVariables, updateTrayLocale } from './lib/api'
   import { getSetting, frontendLog } from './lib/settingsStore'
  import { defaultLanguage, applyPersistedLocale } from './lib/i18n'
-  import { loadLocaleMessages } from './lib/i18n'
- import { get } from 'svelte/store'
-  import { t as tStore } from 'svelte-i18n'
-
+ 
+   
   let currentLocale: string = defaultLanguage
   let initError: string | null = null
   let showSettings = false
@@ -37,26 +35,32 @@
   let trayLocaleSyncing = false
  $: if ($locale && $locale !== lastSyncedTrayLocale) {
    lastSyncedTrayLocale = $locale
-    void syncTrayLocale($locale)
+    syncTrayLocale($locale)
   }
 
-  async function syncTrayLocale(loc: string) {
-    try {
-      // Ensure locale messages are loaded BEFORE reading translated strings.
-      // Without this, get(tStore)('tray.show') returns the raw key (English)
-      // when the locale store has changed but the async dynamic import of the
-      // translation JSON has not yet resolved. This was the root cause of the
-      // tray intermittently showing English "Show"/"Quit" during hangs or fast
-      // locale switches.
-      await loadLocaleMessages(loc)
-      const showText = get(tStore)('tray.show')
-      const quitText = get(tStore)('tray.quit')
-      const tooltip = get(tStore)('tray.tooltip')
-      updateTrayLocale(showText, quitText, tooltip)
-    } catch {
-      // best-effort; ignore
-    }
- }
+  // Synchronous tray translation map — avoids the svelte-i18n lazy loader
+  // race entirely. The tray only needs 3 keys (show/quit/tooltip), so we inline
+  // them rather than depending on the async dynamic import to have resolved.
+  // This is the pattern recommended by pwm research on Tauri tray i18n (2025):
+  // don't pipe tray strings through an async i18n layer; inline a sync lookup
+  // so the tray update is fire-and-forget from the reactive Svelte handler.
+  const trayI18n: Record<string, { show: string; quit: string; tooltip: string }> = {
+    en: { show: 'Show', quit: 'Quit', tooltip: 'Env Manager' },
+    zh: { show: '显示', quit: '退出', tooltip: '环境变量管理器' },
+    ja: { show: '表示', quit: '終了', tooltip: '環境変数マネージャー' },
+    ko: { show: '표시', quit: '종료', tooltip: '환경변수 관리자' },
+    de: { show: 'Anzeigen', quit: 'Beenden', tooltip: 'Umgebungsvariablen-Verwaltung' },
+    fr: { show: 'Afficher', quit: 'Quitter', tooltip: "Gestionnaire de variables d'environnement" },
+    es: { show: 'Mostrar', quit: 'Salir', tooltip: 'Gestor de variables de entorno' },
+    pt: { show: 'Exibir', quit: 'Sair', tooltip: 'Gerenciador de variáveis de ambiente' },
+    ru: { show: 'Показать', quit: 'Выход', tooltip: 'Менеджер переменных среды' },
+    ar: { show: 'إظهار', quit: 'خروج', tooltip: 'مدير متغيرات البيئة' },
+  }
+
+  function syncTrayLocale(loc: string) {
+    const t = trayI18n[loc] ?? trayI18n.en
+    updateTrayLocale(t.show, t.quit, t.tooltip)
+  }
   onMount(async () => {
     // Read persisted settings from localStorage (settings are saved there by
     // SettingsDialog but were never read back on startup, so every restart
