@@ -406,5 +406,8 @@
   "settings.audit.title": "审计历史",
   "settings.audit.description": "最近的环境变量操作",
   "settings.audit.loading": "加载审计记录中...",
-  "settings.audit.empty": "未找到审计记录"
+  "settings.audit.empty": "未找到审计记录",
+  "settings.service.start": "启动",
+  "settings.service.started": "服务已启动",
+  "settings.service.startFailed": "服务启动失败 — 请检查日志"
 }

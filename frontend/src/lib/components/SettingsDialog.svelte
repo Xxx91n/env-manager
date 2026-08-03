@@ -2,7 +2,7 @@
   import { createEventDispatcher, onMount } from 'svelte'
   import { t, locale } from 'svelte-i18n'
   import { locales, defaultLanguage } from '../i18n'
-  import { isCliInPath, addCliToPath, removeCliFromPath, listPathEntries, checkForUpdates, bulkImport, bulkExport, pickOpenFile, pickSaveFile, serviceStatus, serviceHealth, servicePing, serviceRefreshMount, serviceRotateMount, serviceShutdown, serviceReload, auditList } from '../api'
+  import { isCliInPath, addCliToPath, removeCliFromPath, listPathEntries, checkForUpdates, bulkImport, bulkExport, pickOpenFile, pickSaveFile, serviceStatus, serviceHealth, servicePing, serviceRefreshMount, serviceRotateMount, serviceShutdown, serviceReload, serviceStart, auditList } from '../api'
   import { get } from 'svelte/store'
   import { setSetting, frontendLog } from '../settingsStore'
   import { showToast } from '../stores'
@@ -168,6 +168,28 @@
       serviceLoading = false
     }
   }
+
+  async function handleServiceStart() {
+    if (serviceLoading) return
+    serviceLoading = true
+    serviceError = null
+    try {
+      await serviceStart()
+      // Give the service a moment to start up before checking status
+      await new Promise(r => setTimeout(r, 1000))
+      await refreshServiceStatus()
+      if (serviceRunning) {
+        showToast(get(tStore)('settings.service.started'), 'success')
+      } else {
+        serviceError = get(tStore)('settings.service.startFailed')
+      }
+    } catch (err) {
+      serviceError = err instanceof Error ? err.message : String(err)
+    } finally {
+      serviceLoading = false
+    }
+  }
+
 
   async function handleMountRefresh(mountId: string) {
     if (serviceLoading) return
@@ -495,6 +517,11 @@
         <button on:click={handleServiceShutdown} disabled={serviceLoading || !serviceRunning}
           class="px-2 py-0.5 text-xs font-medium text-red-600 border border-red-300 rounded-md hover:bg-red-50 transition disabled:opacity-50 dark:text-red-300 dark:border-red-700 dark:hover:bg-red-900">
           {$t('settings.service.shutdown')}
+        </button>
+
+        <button on:click={handleServiceStart} disabled={serviceLoading || serviceRunning}
+          class="px-2 py-0.5 text-xs font-medium text-green-600 border border-green-300 rounded-md hover:bg-green-50 transition disabled:opacity-50 dark:text-green-300 dark:border-green-700 dark:hover:bg-green-900">
+          {$t('settings.service.start')}
         </button>
       </div>
       {#if serviceError && serviceRunning}

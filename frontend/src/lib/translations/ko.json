@@ -406,5 +406,8 @@
   "settings.audit.title": "감사 기록",
   "settings.audit.description": "최근 환경 변수 작업",
   "settings.audit.loading": "감사 항목 로딩 중...",
-  "settings.audit.empty": "감사 기록을 찾을 수 없습니다"
+  "settings.audit.empty": "감사 기록을 찾을 수 없습니다",
+  "settings.service.start": "시작",
+  "settings.service.started": "서비스가 시작되었습니다",
+  "settings.service.startFailed": "서비스 시작 실패 — 로그를 확인하세요"
 }

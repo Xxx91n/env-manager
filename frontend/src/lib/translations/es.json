@@ -406,5 +406,8 @@
   "settings.audit.title": "Historial de auditoría",
   "settings.audit.description": "Operaciones recientes de variables de entorno",
   "settings.audit.loading": "Cargando entradas de auditoría...",
-  "settings.audit.empty": "No se encontraron registros de auditoría"
+  "settings.audit.empty": "No se encontraron registros de auditoría",
+  "settings.service.start": "Iniciar",
+  "settings.service.started": "Servicio iniciado",
+  "settings.service.startFailed": "Error al iniciar el servicio — revisar logs"
 }

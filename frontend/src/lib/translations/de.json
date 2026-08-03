@@ -406,5 +406,8 @@
   "settings.audit.title": "Audit-Verlauf",
   "settings.audit.description": "Letzte Umgebungsvariablen-Vorgänge",
   "settings.audit.loading": "Audit-Einträge werden geladen...",
-  "settings.audit.empty": "Keine Audit-Einträge gefunden"
+  "settings.audit.empty": "Keine Audit-Einträge gefunden",
+  "settings.service.start": "Starten",
+  "settings.service.started": "Dienst gestartet",
+  "settings.service.startFailed": "Dienst konnte nicht starten — Logs prüfen"
 }

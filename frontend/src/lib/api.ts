@@ -1294,6 +1294,15 @@ export async function serviceShutdown(): Promise<any> {
   return await runWrite('service', ['shutdown'])
 }
 
+/**
+ * Start the env-manager-service in background mode.
+ * IPC: invoke('start_service') — Rust spawns the service binary.
+ */
+export async function serviceStart(): Promise<boolean> {
+  return await invoke('start_service')
+}
+
+
 
 // ---- v1.0.0 Phase E: Audit ledger recovery ----
 

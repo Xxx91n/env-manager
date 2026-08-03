@@ -406,5 +406,8 @@
   "settings.audit.title": "監査履歴",
   "settings.audit.description": "最近の環境変数操作",
   "settings.audit.loading": "監査エントリを読み込み中...",
-  "settings.audit.empty": "監査レコードが見つかりません"
+  "settings.audit.empty": "監査レコードが見つかりません",
+  "settings.service.start": "開始",
+  "settings.service.started": "サービスが開始されました",
+  "settings.service.startFailed": "サービスの開始に失敗 — ログを確認"
 }

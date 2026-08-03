@@ -406,5 +406,8 @@
   "settings.audit.title": "سجل التدقيق",
   "settings.audit.description": "عمليات متغيرات البيئة الأخيرة",
   "settings.audit.loading": "جارٍ تحميل سجلات التدقيق...",
-  "settings.audit.empty": "لم يتم العثور على سجلات تدقيق"
+  "settings.audit.empty": "لم يتم العثور على سجلات تدقيق",
+  "settings.service.start": "بدء",
+  "settings.service.started": "تم بدء الخدمة",
+  "settings.service.startFailed": "فشل بدء الخدمة — تحقق من السجلات"
 }

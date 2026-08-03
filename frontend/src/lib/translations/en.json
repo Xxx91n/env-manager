@@ -406,5 +406,8 @@
   "settings.audit.title": "Audit History",
   "settings.audit.description": "Recent environment variable operations",
   "settings.audit.loading": "Loading audit entries...",
-  "settings.audit.empty": "No audit records found"
+  "settings.audit.empty": "No audit records found",
+  "settings.service.start": "Start",
+  "settings.service.started": "Service started",
+  "settings.service.startFailed": "Service failed to start — check logs"
 }

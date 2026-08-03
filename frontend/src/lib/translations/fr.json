@@ -406,5 +406,8 @@
   "settings.audit.title": "Historique d'audit",
   "settings.audit.description": "Opérations de variables d'environnement récentes",
   "settings.audit.loading": "Chargement des entrées d'audit...",
-  "settings.audit.empty": "Aucun enregistrement d'audit trouvé"
+  "settings.audit.empty": "Aucun enregistrement d'audit trouvé",
+  "settings.service.start": "Démarrer",
+  "settings.service.started": "Service démarré",
+  "settings.service.startFailed": "Échec du démarrage du service — vérifier les logs"
 }

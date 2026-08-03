@@ -406,5 +406,8 @@
   "settings.audit.title": "История аудита",
   "settings.audit.description": "Недавние операции с переменными среды",
   "settings.audit.loading": "Загрузка записей аудита...",
-  "settings.audit.empty": "Записи аудита не найдены"
+  "settings.audit.empty": "Записи аудита не найдены",
+  "settings.service.start": "Запустить",
+  "settings.service.started": "Служба запущена",
+  "settings.service.startFailed": "Служба не запустилась — проверьте логи"
 }

@@ -548,6 +548,41 @@ fn frontend_log(level: String, message: String) -> () {
     }
 }
 
+/// Starts the env-manager-service.exe in background mode (detached child process).
+/// The service listens on \\.\pipe\EnvManager.Background for IPC.
+/// Returns true if the process was spawned successfully.
+#[tauri::command]
+fn start_service(app: tauri::AppHandle) -> Result<bool, String> {
+    // Reuse CLI path resolution — service exe is in the same directory
+    let cli_path = match resolve_cli_path(&app) {
+        Some(p) => p,
+        None => return Err("CLI path not found — cannot locate service binary".to_string()),
+    };
+    let service_exe = cli_path.with_file_name("env-manager-service.exe");
+    if !service_exe.exists() {
+        return Err(format!("Service binary not found: {}", service_exe.display()));
+    }
+
+    let mut cmd = Command::new(&service_exe);
+    cmd.arg("--mode=background");
+    #[cfg(windows)]
+    {
+        cmd.creation_flags(CREATE_NO_WINDOW);
+    }
+
+    match cmd.spawn() {
+        Ok(_) => {
+            info!("[start_service] spawned env-manager-service --mode=background");
+            Ok(true)
+        }
+        Err(e) => {
+            error!("[start_service] failed to spawn service: {}", e);
+            Err(format!("Failed to start service: {}", e))
+        }
+    }
+}
+
+
 
 #[tauri::command]
 fn cli_diagnostics(app: tauri::AppHandle) -> serde_json::Value {
@@ -766,6 +801,7 @@ fn main() {
             read_gui_setting,
             write_gui_setting,
             frontend_log,
+             start_service,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
