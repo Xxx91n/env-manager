@@ -409,5 +409,12 @@
   "settings.audit.empty": "未找到审计记录",
   "settings.service.start": "启动",
   "settings.service.started": "服务已启动",
-  "settings.service.startFailed": "服务启动失败 — 请检查日志"
+  "settings.service.startFailed": "服务启动失败 — 请检查日志",
+  "nav.audit": "审计日志",
+  "audit.description": "服务级哈希链审计账本 (Phase E)",
+  "audit.vsHistory": "这是服务级审计账本（哈希链，只追加）。历史与导入标签页显示的是 CLI 级操作审计。",
+  "audit.loading": "正在加载审计记录...",
+  "audit.refresh": "刷新",
+  "audit.empty": "未找到审计记录",
+  "audit.entries": "条记录"
 }

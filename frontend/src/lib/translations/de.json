@@ -409,5 +409,12 @@
   "settings.audit.empty": "Keine Audit-Einträge gefunden",
   "settings.service.start": "Starten",
   "settings.service.started": "Dienst gestartet",
-  "settings.service.startFailed": "Dienst konnte nicht starten — Logs prüfen"
+  "settings.service.startFailed": "Dienst konnte nicht starten — Logs prüfen",
+  "nav.audit": "Audit-Protokoll",
+  "audit.description": "Service-Level Hash-Chain Audit-Ledger (Phase E)",
+  "audit.vsHistory": "Dies ist das Service-Level Audit-Ledger (Hash-Chain, nur-Anhängen). Der Verlauf-Tab zeigt CLI-Level Vorgangs-Audit.",
+  "audit.loading": "Audit-Einträge werden geladen...",
+  "audit.refresh": "Aktualisieren",
+  "audit.empty": "Keine Audit-Einträge gefunden",
+  "audit.entries": "Einträge"
 }

@@ -548,31 +548,50 @@ fn frontend_log(level: String, message: String) -> () {
     }
 }
 
+/// Resolves the env-manager-service.exe path with dev-mode fallback.
+/// 1. Same directory as CLI exe (portable build)
+/// 2. service/target/release/ relative to CWD (dev mode)
+fn resolve_service_path(app: &tauri::AppHandle) -> Option<PathBuf> {
+    // 1. Same directory as CLI (portable build)
+    if let Some(cli) = resolve_cli_path(app) {
+        let p = cli.with_file_name("env-manager-service.exe");
+        if p.exists() {
+            return Some(p);
+        }
+    }
+    // 2. Dev mode: service/target/release/env-manager-service.exe
+    if let Ok(cwd) = std::env::current_dir() {
+        let dev_path = cwd.join("service/target/release/env-manager-service.exe");
+        if dev_path.exists() {
+            return Some(dev_path);
+        }
+    }
+    None
+}
+
 /// Starts the env-manager-service.exe in background mode (detached child process).
 /// The service listens on \\.\pipe\EnvManager.Background for IPC.
 /// Returns true if the process was spawned successfully.
 #[tauri::command]
 fn start_service(app: tauri::AppHandle) -> Result<bool, String> {
-    // Reuse CLI path resolution — service exe is in the same directory
-    let cli_path = match resolve_cli_path(&app) {
+    let service_exe = match resolve_service_path(&app) {
         Some(p) => p,
-        None => return Err("CLI path not found — cannot locate service binary".to_string()),
+        None => return Err("Service binary not found — cannot locate env-manager-service.exe".to_string()),
     };
-    let service_exe = cli_path.with_file_name("env-manager-service.exe");
-    if !service_exe.exists() {
-        return Err(format!("Service binary not found: {}", service_exe.display()));
-    }
 
     let mut cmd = Command::new(&service_exe);
     cmd.arg("--mode=background");
     #[cfg(windows)]
     {
-        cmd.creation_flags(CREATE_NO_WINDOW);
+        // CREATE_NO_WINDOW | DETACHED_PROCESS — ensures the child survives parent exit
+        cmd.creation_flags(0x08000008);
     }
 
     match cmd.spawn() {
-        Ok(_) => {
+        Ok(child) => {
             info!("[start_service] spawned env-manager-service --mode=background");
+            // Detach: forget the Child handle so Rust does not kill it on drop
+            std::mem::forget(child);
             Ok(true)
         }
         Err(e) => {

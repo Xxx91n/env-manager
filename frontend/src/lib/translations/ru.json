@@ -409,5 +409,12 @@
   "settings.audit.empty": "Записи аудита не найдены",
   "settings.service.start": "Запустить",
   "settings.service.started": "Служба запущена",
-  "settings.service.startFailed": "Служба не запустилась — проверьте логи"
+  "settings.service.startFailed": "Служба не запустилась — проверьте логи",
+  "nav.audit": "Журнал аудита",
+  "audit.description": "Реестр аудита с хеш-цепочкой на уровне службы (Phase E)",
+  "audit.vsHistory": "Это реестр аудита на уровне службы (хеш-цепочка, только добавление). Вкладка История показывает аудит операций на уровне CLI.",
+  "audit.loading": "Загрузка записей аудита...",
+  "audit.refresh": "Обновить",
+  "audit.empty": "Записи аудита не найдены",
+  "audit.entries": "записей"
 }

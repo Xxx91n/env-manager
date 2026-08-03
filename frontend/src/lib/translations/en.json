@@ -409,5 +409,12 @@
   "settings.audit.empty": "No audit records found",
   "settings.service.start": "Start",
   "settings.service.started": "Service started",
-  "settings.service.startFailed": "Service failed to start — check logs"
+  "settings.service.startFailed": "Service failed to start — check logs",
+  "nav.audit": "Audit Ledger",
+  "audit.description": "Service-level hash-chained audit ledger (Phase E)",
+  "audit.vsHistory": "This is the service-level audit ledger (hash-chained, append-only). The History tab shows CLI-level operation audit.",
+  "audit.loading": "Loading audit entries...",
+  "audit.refresh": "Refresh",
+  "audit.empty": "No audit records found",
+  "audit.entries": "entries"
 }

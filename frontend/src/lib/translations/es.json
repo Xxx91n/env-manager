@@ -409,5 +409,12 @@
   "settings.audit.empty": "No se encontraron registros de auditoría",
   "settings.service.start": "Iniciar",
   "settings.service.started": "Servicio iniciado",
-  "settings.service.startFailed": "Error al iniciar el servicio — revisar logs"
+  "settings.service.startFailed": "Error al iniciar el servicio — revisar logs",
+  "nav.audit": "Registro de Auditoría",
+  "audit.description": "Libro mayor de auditoría de cadena hash a nivel de servicio (Phase E)",
+  "audit.vsHistory": "Este es el libro mayor de auditoría a nivel de servicio (cadena hash, solo agregar). La pestaña Historial muestra la auditoría de operaciones a nivel CLI.",
+  "audit.loading": "Cargando entradas de auditoría...",
+  "audit.refresh": "Actualizar",
+  "audit.empty": "No se encontraron registros de auditoría",
+  "audit.entries": "entradas"
 }

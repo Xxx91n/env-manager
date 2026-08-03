@@ -1256,8 +1256,15 @@ partial class Program
                 Console.WriteLine($"Rotation complete: {rotatedN}/{total} secrets re-encrypted, {failedN} failed");
                 if (rotatedN > 0)
                 {
-                    RecordProfileAudit("profile secret-provider rotate", "(all)",
-                        JsonSerializer.Serialize(new { total, rotated = rotatedN, failed = failedN }), null);
+                    var rotatedProfileNames = profilesToRotate
+                        .Where(p => p.SecretVariables.Count > 0)
+                        .Select(p => p.Name)
+                        .ToList();
+                    var auditName = rotatedProfileNames.Count > 0
+                        ? string.Join(", ", rotatedProfileNames)
+                        : "(none)";
+                    RecordProfileAudit("profile secret-provider rotate", auditName,
+                        JsonSerializer.Serialize(new { total, rotated = rotatedN, failed = failedN, profiles = rotatedProfileNames }), null);
                 }
                 return 0;
 

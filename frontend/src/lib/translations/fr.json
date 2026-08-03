@@ -409,5 +409,12 @@
   "settings.audit.empty": "Aucun enregistrement d'audit trouvé",
   "settings.service.start": "Démarrer",
   "settings.service.started": "Service démarré",
-  "settings.service.startFailed": "Échec du démarrage du service — vérifier les logs"
+  "settings.service.startFailed": "Échec du démarrage du service — vérifier les logs",
+  "nav.audit": "Journal d'Audit",
+  "audit.description": "Grand livre d'audit à chaîne de hachage au niveau service (Phase E)",
+  "audit.vsHistory": "Ceci est le grand livre d'audit au niveau service (chaîne de hachage, ajout uniquement). L'onglet Historique affiche l'audit des opérations au niveau CLI.",
+  "audit.loading": "Chargement des entrées d'audit...",
+  "audit.refresh": "Actualiser",
+  "audit.empty": "Aucun enregistrement d'audit trouvé",
+  "audit.entries": "entrées"
 }

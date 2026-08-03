@@ -409,5 +409,12 @@
   "settings.audit.empty": "لم يتم العثور على سجلات تدقيق",
   "settings.service.start": "بدء",
   "settings.service.started": "تم بدء الخدمة",
-  "settings.service.startFailed": "فشل بدء الخدمة — تحقق من السجلات"
+  "settings.service.startFailed": "فشل بدء الخدمة — تحقق من السجلات",
+  "nav.audit": "سجل التدقيق",
+  "audit.description": "سجل التدقيق بسلسلة التجزئة على مستوى الخدمة (المرحلة E)",
+  "audit.vsHistory": "هذا هو سجل التدقيق على مستوى الخدمة (سلسلة التجزئة، إلحاق فقط). علامة تبويب السجل تعرض تدقيق العمليات على مستوى CLI.",
+  "audit.loading": "جاري تحميل سجلات التدقيق...",
+  "audit.refresh": "تحديث",
+  "audit.empty": "لم يتم العثور على سجلات تدقيق",
+  "audit.entries": "سجلات"
 }

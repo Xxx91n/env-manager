@@ -409,5 +409,12 @@
   "settings.audit.empty": "監査レコードが見つかりません",
   "settings.service.start": "開始",
   "settings.service.started": "サービスが開始されました",
-  "settings.service.startFailed": "サービスの開始に失敗 — ログを確認"
+  "settings.service.startFailed": "サービスの開始に失敗 — ログを確認",
+  "nav.audit": "監査ログ",
+  "audit.description": "サービスレベルのハッシュチェーン監査台帳 (Phase E)",
+  "audit.vsHistory": "これはサービスレベルの監査台帳（ハッシュチェーン、追記のみ）です。履歴タブにはCLIレベルの操作監査が表示されます。",
+  "audit.loading": "監査エントリを読み込み中...",
+  "audit.refresh": "更新",
+  "audit.empty": "監査記録が見つかりません",
+  "audit.entries": "件"
 }

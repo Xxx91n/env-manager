@@ -2,7 +2,7 @@
   import { createEventDispatcher, onMount } from 'svelte'
   import { t, locale } from 'svelte-i18n'
   import { locales, defaultLanguage } from '../i18n'
-  import { isCliInPath, addCliToPath, removeCliFromPath, listPathEntries, checkForUpdates, bulkImport, bulkExport, pickOpenFile, pickSaveFile, serviceStatus, serviceHealth, servicePing, serviceRefreshMount, serviceRotateMount, serviceShutdown, serviceReload, serviceStart, auditList } from '../api'
+  import { isCliInPath, addCliToPath, removeCliFromPath, listPathEntries, checkForUpdates, bulkImport, bulkExport, pickOpenFile, pickSaveFile, serviceStatus, serviceHealth, servicePing, serviceRefreshMount, serviceRotateMount, serviceShutdown, serviceReload, serviceStart } from '../api'
   import { get } from 'svelte/store'
   import { setSetting, frontendLog } from '../settingsStore'
   import { showToast } from '../stores'
@@ -47,15 +47,11 @@
   let serviceLoading = false
   let serviceError: string | null = null
 
-  // v1.0.0 Phase E: Audit recovery state
-  let auditEntries: any[] = []
-  let auditLoading = false
 
   onMount(async () => {
     // Check real system PATH on mount
     cliInPath = await isCliInPath()
     void refreshServiceStatus()
-    void loadAudit()
   })
 
   function switchLocale(newLocale: string) {
@@ -230,17 +226,6 @@
     }
   }
 
-  async function loadAudit() {
-    auditLoading = true
-    try {
-      const result = await auditList()
-      auditEntries = Array.isArray(result) ? result : (result?.entries ?? [])
-    } catch {
-      auditEntries = []
-    } finally {
-      auditLoading = false
-    }
-  }
   async function handleCheckUpdate() {
     if (updateChecking) return
     updateChecking = true
@@ -554,25 +539,7 @@
       {/if}
     </div>
 
-    <!-- v1.0.0 Phase E: Audit Ledger Recovery -->
-    <div class="px-5 py-3 border-t border-gray-200 dark:border-gray-700">
-      <h3 class="text-sm font-semibold text-gray-700 mb-2 dark:text-gray-200">{$t('settings.audit.title')}</h3>
-      <p class="text-xs text-gray-500 dark:text-gray-400 mb-2">{$t('settings.audit.description')}</p>
-      {#if auditLoading}
-        <p class="text-xs text-gray-400">{$t('settings.audit.loading')}</p>
-      {:else if auditEntries.length > 0}
-        <div class="max-h-32 overflow-y-auto space-y-1 mb-2">
-          {#each auditEntries.slice(0, 20) as entry}
-            <div class="text-xs px-2 py-0.5 rounded bg-gray-50 dark:bg-gray-800 font-mono">
-              {entry.timestamp} | {entry.command}
-            </div>
-          {/each}
-        </div>
-        <p class="text-xs text-gray-400">{auditEntries.length} entries</p>
-      {:else}
-        <p class="text-xs text-gray-400">{$t('settings.audit.empty')}</p>
-      {/if}
-    </div>
+
 
     <div class="px-5 py-3 border-t border-gray-200 flex justify-end dark:border-gray-700">
       <button
