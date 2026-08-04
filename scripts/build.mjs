@@ -11,7 +11,7 @@
 //   node scripts/build.mjs --skip-cli
 //   node scripts/build.mjs --skip-gui
 //   node scripts/build.mjs --skip-msi
-//   node scripts/build.mjs --append       # Don't clean release/ (for multi-arch builds)
+//   node scripts/build.mjs --skip-service     # skip Rust service build
 
 import { execSync, spawnSync } from 'node:child_process'
 import {
@@ -36,6 +36,7 @@ const getOpt = (name) => {
 const skipCli = getFlag('--skip-cli')
 const skipGui = getFlag('--skip-gui')
 const skipMsi = getFlag('--skip-msi')
+const skipService = getFlag('--skip-service')
 
 // --- arch detection ---
 function detectHostArch() {
@@ -51,7 +52,6 @@ if (!validArchs.includes(targetArch)) {
   console.error('[build] Invalid arch: ' + targetArch + '. Valid: ' + validArchs.join(', '))
   process.exit(1)
 }
-console.log('[build] Target arch: ' + targetArch)
 
 // --- RID / triple mapping ---
 const ridMap = { x64: 'win-x64', x86: 'win-x86', arm64: 'win-arm64' }
@@ -61,9 +61,6 @@ const tripleMap = {
   arm64: 'aarch64-pc-windows-msvc',
 }
 const wixArchMap = { x64: 'x64', x86: 'x86', arm64: 'arm64' }
-const rid = ridMap[targetArch]
-const triple = tripleMap[targetArch]
-const wixArch = wixArchMap[targetArch]
 
 // --- version ---
 const pkg = JSON.parse(readFileSync(join(projectRoot, 'frontend', 'package.json'), 'utf8'))
@@ -78,19 +75,21 @@ const cliOnlyDir = join(releaseDir, 'cli-only')
 // --- helpers ---
 function run(cmd, args, opts = {}) {
   console.log('[build] > ' + cmd + ' ' + args.join(' '))
-  // Only use shell for npm/npx on Windows (they need cmd.exe resolution);
-  // dotnet and other tools work without shell, avoiding deprecation warnings.
   const needsShell = (cmd === 'npm' || cmd === 'npx') && process.platform === 'win32'
   const result = spawnSync(cmd, args, { stdio: 'inherit', shell: needsShell, ...opts })
   if (result.status !== 0) throw new Error(cmd + ' failed with exit ' + result.status)
   return result
 }
 
-function findCliOutput() {
+function findCliOutput(rid) {
+  // With dotnet publish -r <rid>, output goes to bin/Release/<tfm>/<rid>/
   const releaseBase = join(projectRoot, 'bin', 'Release')
   if (!existsSync(releaseBase)) return null
-  // ponytail: prefer the TargetFramework-matching dir; stale legacy dirs (e.g. net10.0 from v0.3.0) can linger and fool the scan
   const preferred = 'net10.0-windows'
+  // RID-specific publish output
+  const ridDir = join(releaseBase, preferred, rid)
+  if (existsSync(join(ridDir, 'env-manager-cli.dll'))) return ridDir
+  // Fallback: non-RID build (host arch)
   const preferredDir = join(releaseBase, preferred)
   if (existsSync(join(preferredDir, 'env-manager-cli.dll'))) return preferredDir
   for (const dir of readdirSync(releaseBase)) {
@@ -103,7 +102,7 @@ function findCliOutput() {
   return null
 }
 
-function findGuiExe() {
+function findGuiExe(triple) {
   const targetBase = join(projectRoot, 'frontend', 'src-tauri', 'target')
   if (!existsSync(targetBase)) return null
   const triplePath = join(targetBase, triple, 'release', 'env-manager.exe')
@@ -117,10 +116,15 @@ function findGuiExe() {
   return null
 }
 
-function findServiceExe() {
-  // Service crate builds into its own target/ directory (separate from Tauri).
+function findServiceExe(triple) {
   const serviceTarget = join(projectRoot, 'service', 'target')
   if (!existsSync(serviceTarget)) return null
+  // RID-specific build output
+  if (triple) {
+    const triplePath = join(serviceTarget, triple, 'release', 'env-manager-service.exe')
+    if (existsSync(triplePath)) return triplePath
+  }
+  // Fallback: host arch
   const releasePath = join(serviceTarget, 'release', 'env-manager-service.exe')
   if (existsSync(releasePath)) return releasePath
   for (const dir of readdirSync(serviceTarget)) {
@@ -141,7 +145,6 @@ function copyDir(src, dst) {
 }
 
 function makeZip(sourceDir, zipPath) {
-  // Remove existing ZIP to prevent recursive packaging (a residual .zip in the dir would be re-archived)
   if (existsSync(zipPath)) rmSync(zipPath, { force: true })
   return new Promise((resolveP, reject) => {
     const output = createWriteStream(zipPath)
@@ -152,7 +155,6 @@ function makeZip(sourceDir, zipPath) {
     })
     archive.on('error', reject)
     archive.pipe(output)
-    // Exclude .zip files from packaging to prevent recursive nesting
     const entries = readdirSync(sourceDir, { withFileTypes: true })
     for (const entry of entries) {
       if (entry.name.endsWith('.zip')) continue
@@ -164,142 +166,175 @@ function makeZip(sourceDir, zipPath) {
   })
 }
 
-// --- clean ---
-// Only clean the release dirs if this is a fresh build (no --append flag).
-// With --append, other archs' output in the same dirs are preserved.
-const appendMode = getFlag('--append')
-if (!appendMode) {
-  if (existsSync(releaseDir)) rmSync(releaseDir, { recursive: true, force: true })
+// --- Per-arch build function ---
+async function buildArch(targetArch) {
+  const rid = ridMap[targetArch]
+  const triple = tripleMap[targetArch]
+  const wixArch = wixArchMap[targetArch]
+  console.log('\n[build] === Building arch: ' + targetArch + ' (RID: ' + rid + ', triple: ' + triple + ') ===')
+
+  // Per-arch temp staging dirs (cleaned after ZIP creation)
+  const archPortableDir = join(releaseDir, '_staging', 'portable-' + targetArch)
+  const archCliOnlyDir = join(releaseDir, '_staging', 'cli-only-' + targetArch)
+  // Remove stale staging
+  for (const d of [archPortableDir, archCliOnlyDir]) {
+    if (existsSync(d)) rmSync(d, { recursive: true, force: true })
+    mkdirSync(d, { recursive: true })
+  }
+
+  // --- Step 1: Build C# CLI with RID ---
+  if (!skipCli) {
+    console.log('[build] Step 1: Build C# CLI (RID: ' + rid + ')')
+    // Framework-dependent publish with RID: produces arch-specific apphost exe
+    // but does NOT bundle the .NET runtime (target machine needs .NET 10 runtime)
+    run('dotnet', ['publish', '-c', 'Release', '-r', rid, '--no-self-contained', '-p:PublishSingleFile=true'], { cwd: projectRoot })
+  }
+
+  const cliDir = findCliOutput(rid)
+  if (!cliDir) throw new Error('CLI output directory not found for RID ' + rid)
+  console.log('[build] CLI output: ' + cliDir)
+
+  // Version verification (skip if cross-arch: can't run x86/arm64 exe on x64 host)
+  const hostArch = detectHostArch()
+  if (targetArch === hostArch) {
+    const cliExe = join(cliDir, 'env-manager-cli.exe')
+    const probe = spawnSync(cliExe, [], { encoding: 'utf8', timeout: 10000, cwd: cliDir })
+    if (probe.status !== 0) {
+      throw new Error('CLI probe failed (exit ' + probe.status + '): ' + probe.stderr)
+    }
+    const m = probe.stdout.match(/v(\d+\.\d+\.\d+)/)
+    const cliVer = m ? m[1] : 'unknown'
+    if (cliVer !== version) {
+      throw new Error('CLI version mismatch: expected v' + version + ' got v' + cliVer + '.')
+    }
+    console.log('[build] CLI version verified: v' + cliVer)
+  } else {
+    console.log('[build] CLI version probe skipped (cross-arch: target=' + targetArch + ' host=' + hostArch + ')')
+  }
+
+  // --- Step 2: Build Tauri GUI ---
+  if (!skipGui) {
+    console.log('[build] Step 2: Build Tauri GUI (triple: ' + triple + ')')
+    run('npm', ['run', 'build'], { cwd: join(projectRoot, 'frontend') })
+    run('npx', ['tauri', 'build', '--no-bundle', '--target', triple], { cwd: join(projectRoot, 'frontend') })
+  }
+
+  const guiExe = findGuiExe(triple)
+  if (!guiExe) throw new Error('GUI exe not found for ' + triple)
+  console.log('[build] GUI exe: ' + guiExe)
+
+  // --- Step 2b: Build Rust service binary ---
+  let serviceExe = null
+  if (!skipService) {
+    console.log('[build] Step 2b: Build env-manager-service (Rust, triple: ' + triple + ')')
+    try {
+      run('cargo', ['build', '--release', '--target', triple, '--manifest-path', join(projectRoot, 'service', 'Cargo.toml')], { cwd: projectRoot })
+      serviceExe = findServiceExe(triple)
+    } catch (e) {
+      console.log('[build] Warning: cargo build --target ' + triple + ' failed: ' + e.message)
+      // Fallback: host-arch build
+      console.log('[build] Falling back to host-arch service build')
+      run('cargo', ['build', '--release', '--manifest-path', join(projectRoot, 'service', 'Cargo.toml')], { cwd: projectRoot })
+      serviceExe = findServiceExe(null)
+    }
+    if (serviceExe) {
+      console.log('[build] Service exe: ' + serviceExe)
+    } else {
+      console.log('[build] Warning: env-manager-service.exe not found.')
+    }
+  }
+
+  // --- Step 3: Assemble portable package (staging dir) ---
+  console.log('[build] Step 3: Assemble portable package -> ' + archPortableDir)
+  copyFileSync(guiExe, join(archPortableDir, 'env-manager.exe'))
+  for (const f of readdirSync(cliDir)) {
+    if (f.endsWith('.exe') || f.endsWith('.dll') || f.endsWith('.json')) {
+      copyFileSync(join(cliDir, f), join(archPortableDir, f))
+    }
+  }
+  if (serviceExe) copyFileSync(serviceExe, join(archPortableDir, 'env-manager-service.exe'))
+  const agentsMd = join(projectRoot, 'AGENTS.cli.md')
+  if (existsSync(agentsMd)) copyFileSync(agentsMd, join(archPortableDir, 'AGENTS.cli.md'))
+  const guiDir2 = dirname(guiExe)
+  const webviewLoader = join(guiDir2, 'WebView2Loader.dll')
+  if (existsSync(webviewLoader)) copyFileSync(webviewLoader, join(archPortableDir, 'WebView2Loader.dll'))
+
+  // --- Step 3b: Assemble CLI-only package (staging dir) ---
+  console.log('[build] Step 3b: Assemble CLI-only package -> ' + archCliOnlyDir)
+  for (const f of readdirSync(cliDir)) {
+    if (f.endsWith('.exe') || f.endsWith('.dll') || f.endsWith('.json')) {
+      copyFileSync(join(cliDir, f), join(archCliOnlyDir, f))
+    }
+  }
+  if (serviceExe) copyFileSync(serviceExe, join(archCliOnlyDir, 'env-manager-service.exe'))
+  if (existsSync(agentsMd)) copyFileSync(agentsMd, join(archCliOnlyDir, 'AGENTS.cli.md'))
+
+  // --- Step 4: Build MSI installer ---
+  if (!skipMsi && process.platform === 'win32') {
+    console.log('[build] Step 4: Build MSI installer (' + targetArch + ')')
+    const wixRoot = process.env.WIX || join(process.env.LOCALAPPDATA || (process.env.HOME || '.'), 'tauri', 'WixTools314')
+    const candle = join(wixRoot, 'candle.exe')
+    const light = join(wixRoot, 'light.exe')
+    if (existsSync(candle) && existsSync(light)) {
+      const wixSource = join(projectRoot, 'frontend', 'scripts', 'installer.wxs')
+      const wixObject = join(tmpdir(), 'env-manager-' + targetArch + '-' + Date.now() + '.wixobj')
+      const msiPath = join(msiDir, 'Env Manager_' + version + '_' + targetArch + '.msi')
+      const win64Val = targetArch === 'x86' ? 'no' : 'yes'
+      try {
+        const webviewLoaderPath = join(archPortableDir, 'WebView2Loader.dll')
+        const webviewPresent = existsSync(webviewLoaderPath) ? '1' : '0'
+        const candleResult = spawnSync(candle, ['-nologo', '-arch', wixArch, '-dVersion=' + version, '-dSourceDir=' + archPortableDir, '-dWin64=' + win64Val, '-dWebViewLoaderPresent=' + webviewPresent, '-out', wixObject, wixSource], { stdio: 'inherit' })
+        if (candleResult.status !== 0) throw new Error('WiX candle failed (exit ' + candleResult.status + ')')
+        const lightResult = spawnSync(light, ['-nologo', '-spdb', '-out', msiPath, wixObject], { stdio: 'inherit' })
+        if (lightResult.status !== 0) throw new Error('WiX light failed (exit ' + lightResult.status + ')')
+        if (!existsSync(msiPath)) throw new Error('WiX light failed - MSI not created')
+        console.log('[build] MSI: ' + basename(msiPath))
+      } finally {
+        try { rmSync(wixObject, { force: true }) } catch {}
+        try { rmSync(wixObject.replace(/\.wixobj$/, '.wixpdb'), { force: true }) } catch {}
+      }
+    } else {
+      console.log('[build] WiX tools not found, skipping MSI. Set WIX env var or install WiX 3.14.')
+    }
+  } else if (!skipMsi) {
+    console.log('[build] Step 4: MSI build skipped (not on Windows)')
+  }
+
+  // --- Step 5: Create ZIP archives ---
+  console.log('[build] Step 5: Create ZIP archives (' + targetArch + ')')
+  const portableZip = join(portableDir, 'Env-Manager_portable_' + version + '_' + targetArch + '.zip')
+  const cliOnlyZip = join(cliOnlyDir, 'Env-Manager_cli-only_' + version + '_' + targetArch + '.zip')
+  await makeZip(archPortableDir, portableZip)
+  await makeZip(archCliOnlyDir, cliOnlyZip)
+
+  // --- Clean staging dirs ---
+  for (const d of [archPortableDir, archCliOnlyDir]) {
+    if (existsSync(d)) rmSync(d, { recursive: true, force: true })
+  }
 }
+
+// --- Main ---
+// Always clean release/ at start (no append mode — each build is authoritative)
+if (existsSync(releaseDir)) rmSync(releaseDir, { recursive: true, force: true })
 mkdirSync(portableDir, { recursive: true })
 mkdirSync(msiDir, { recursive: true })
 mkdirSync(cliOnlyDir, { recursive: true })
 
-// --- Step 1: Build C# CLI ---
-if (!skipCli) {
-  console.log('[build] Step 1: Build C# CLI')
-  // Framework-dependent build: no RID needed (CLI runs on any arch with .NET 10 runtime)
-run('dotnet', ['build', '-c', 'Release'], { cwd: projectRoot })
-}
+// Build single arch (no loop — CI matrix handles multi-arch)
+console.log('[build] Building arch: ' + targetArch)
+await buildArch(targetArch)
 
-const cliDir = findCliOutput()
-if (!cliDir) throw new Error('CLI output directory not found under bin/Release')
-console.log('[build] CLI output: ' + cliDir)
-
-// ponytail: verify the deployed CLI matches the project version. A stale
-// bin/Release/net10.0 dir from a prior TargetFramework can fool findCliOutput
-// into shipping a v0.3.0 binary with v0.7.x code — this guard catches that.
-{
-  const cliExe = join(cliDir, 'env-manager-cli.exe')
-  const probe = spawnSync(cliExe, [], { encoding: 'utf8', timeout: 10000, cwd: cliDir })
-  if (probe.status !== 0) {
-    throw new Error('CLI probe failed (exit ' + probe.status + '): ' + probe.stderr)
-  }
-  const m = probe.stdout.match(/v(\d+\.\d+\.\d+)/)
-  const cliVer = m ? m[1] : 'unknown'
-  if (cliVer !== version) {
-    throw new Error('CLI version mismatch: expected v' + version + ' got v' + cliVer + '. The build output dir (' + cliDir + ') contains a stale binary. Run dotnet build --no-incremental or clean bin/Release/.')
-  }
-  console.log('[build] CLI version verified: v' + cliVer)
-}
-
-// --- Step 2: Build Tauri GUI ---
-if (!skipGui) {
-  console.log('[build] Step 2: Build Tauri GUI')
-  run('npm', ['run', 'build'], { cwd: join(projectRoot, 'frontend') })
-  run('npx', ['tauri', 'build', '--no-bundle', '--target', triple], { cwd: join(projectRoot, 'frontend') })
-}
-
-const guiExe = findGuiExe()
-if (!guiExe) throw new Error('GUI exe not found under frontend/src-tauri/target for ' + triple)
-console.log('[build] GUI exe: ' + guiExe)
-
-// --- Step 2b: Build Rust service binary (env-manager-service) ---
-console.log('[build] Step 2b: Build env-manager-service (Rust)')
-run('cargo', ['build', '--release', '--manifest-path', join(projectRoot, 'service', 'Cargo.toml')], { cwd: projectRoot })
-
-const serviceExe = findServiceExe()
-if (serviceExe) {
-  console.log('[build] Service exe: ' + serviceExe)
-} else {
-  console.log('[build] Warning: env-manager-service.exe not found — service binary will not be included in the release.')
-}
-
-// --- Step 3: Assemble portable package ---
-console.log('[build] Step 3: Assemble portable package')
-copyFileSync(guiExe, join(portableDir, 'env-manager.exe'))
-for (const f of readdirSync(cliDir)) {
-  if (f.endsWith('.exe') || f.endsWith('.dll') || f.endsWith('.json')) {
-    copyFileSync(join(cliDir, f), join(portableDir, f))
-  }
-}
-if (serviceExe) copyFileSync(serviceExe, join(portableDir, 'env-manager-service.exe'))
-const agentsMd = join(projectRoot, 'AGENTS.cli.md')
-if (existsSync(agentsMd)) copyFileSync(agentsMd, join(portableDir, 'AGENTS.cli.md'))
-const guiDir2 = dirname(guiExe)
-const webviewLoader = join(guiDir2, 'WebView2Loader.dll')
-if (existsSync(webviewLoader)) copyFileSync(webviewLoader, join(portableDir, 'WebView2Loader.dll'))
-
-// --- Step 3b: Assemble CLI-only package ---
-console.log('[build] Step 3b: Assemble CLI-only package')
-for (const f of readdirSync(cliDir)) {
-  if (f.endsWith('.exe') || f.endsWith('.dll') || f.endsWith('.json')) {
-    copyFileSync(join(cliDir, f), join(cliOnlyDir, f))
-  }
-}
-if (serviceExe) copyFileSync(serviceExe, join(cliOnlyDir, 'env-manager-service.exe'))
-if (existsSync(agentsMd)) copyFileSync(agentsMd, join(cliOnlyDir, 'AGENTS.cli.md'))
-
-// --- Step 4: Build MSI installer ---
-if (!skipMsi && process.platform === 'win32') {
-  console.log('[build] Step 4: Build MSI installer')
-  const wixRoot = process.env.WIX || join(process.env.LOCALAPPDATA || (process.env.HOME || '.'), 'tauri', 'WixTools314')
-  const candle = join(wixRoot, 'candle.exe')
-  const light = join(wixRoot, 'light.exe')
-  if (existsSync(candle) && existsSync(light)) {
-    const wixSource = join(projectRoot, 'frontend', 'scripts', 'installer.wxs')
-    const wixObject = join(tmpdir(), 'env-manager-' + Date.now() + '.wixobj')
-    const msiPath = join(msiDir, 'Env Manager_' + version + '_' + targetArch + '.msi')
-    const win64Val = targetArch === 'x86' ? 'no' : 'yes'
-    try {
-      const webviewLoaderPath = join(portableDir, 'WebView2Loader.dll')
-      const webviewPresent = existsSync(webviewLoaderPath) ? '1' : '0'
-      const candleResult = spawnSync(candle, ['-nologo', '-arch', wixArch, '-dVersion=' + version, '-dSourceDir=' + portableDir, '-dWin64=' + win64Val, '-dWebViewLoaderPresent=' + webviewPresent, '-out', wixObject, wixSource], { stdio: 'inherit' })
-      if (candleResult.status !== 0) throw new Error('WiX candle failed (exit ' + candleResult.status + ')')
-      const lightResult = spawnSync(light, ['-nologo', '-spdb', '-out', msiPath, wixObject], { stdio: 'inherit' })
-      if (lightResult.status !== 0) throw new Error('WiX light failed (exit ' + lightResult.status + ')')
-      if (!existsSync(msiPath)) throw new Error('WiX light failed - MSI not created')
-      console.log('[build] MSI: ' + basename(msiPath))
-    } finally {
-      try { rmSync(wixObject, { force: true }) } catch {}
-      try { rmSync(wixObject.replace(/\.wixobj$/, '.wixpdb'), { force: true }) } catch {}
-    }
-  } else {
-    console.log('[build] WiX tools not found, skipping MSI. Set WIX env var or install WiX 3.14.')
-  }
-} else if (!skipMsi) {
-  console.log('[build] Step 4: MSI build skipped (not on Windows)')
-}
-
-// --- Step 5: Create ZIP archives (inside each arch-specific subdirectory) ---
-// Layout: release/{portable,cli-only}/*.zip  (not release/*.zip)
-console.log('[build] Step 5: Create ZIP archives')
-const portableZip = join(portableDir, 'Env-Manager_portable_' + version + '_' + targetArch + '.zip')
-const cliOnlyZip = join(cliOnlyDir, 'Env-Manager_cli-only_' + version + '_' + targetArch + '.zip')
-await makeZip(portableDir, portableZip)
-await makeZip(cliOnlyDir, cliOnlyZip)
+// --- Clean staging ---
+const stagingDir = join(releaseDir, '_staging')
+if (existsSync(stagingDir)) rmSync(stagingDir, { recursive: true, force: true })
 
 // --- Summary ---
 console.log('')
-console.log('[build] Done. Output:')
-console.log('  Portable (dir):', portableDir)
-for (const f of readdirSync(portableDir)) console.log('    ', f)
-console.log('  Portable (zip):', portableZip)
-console.log('    (inside release/portable/, not release/ root)')
-console.log('  CLI-only (dir):', cliOnlyDir)
-for (const f of readdirSync(cliOnlyDir)) console.log('    ', f)
-console.log('  CLI-only (zip):', cliOnlyZip)
-if (existsSync(msiDir) && readdirSync(msiDir).some(f => f.endsWith('.msi'))) {
-  console.log('  MSI:', msiDir)
-  for (const f of readdirSync(msiDir)) if (f.endsWith('.msi')) console.log('    ', f)
-}
+console.log('[build] Done. Output layout:')
+console.log('  release/')
+console.log('  ' + cliOnlyDir + '/')
+for (const f of readdirSync(cliOnlyDir)) console.log('    ' + f)
+console.log('  ' + msiDir + '/')
+for (const f of readdirSync(msiDir)) console.log('    ' + f)
+console.log('  ' + portableDir + '/')
+for (const f of readdirSync(portableDir)) console.log('    ' + f)
