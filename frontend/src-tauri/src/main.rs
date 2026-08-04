@@ -622,6 +622,33 @@ fn shutdown_background_service() {
             info!("[shutdown_service] pipe not found (service likely already exited): {}", e);
         }
     }
+    // v0.9.2: Industrial-grade graceful shutdown per pwm research.
+    // Phase 1: IPC shutdown signal was sent above (best-effort).
+    // Phase 2: Wait 500ms for graceful exit, then force-kill if still alive.
+    // Phase 3: Reap the process to prevent zombie/leaked process.
+    std::thread::sleep(std::time::Duration::from_millis(500));
+    let still_alive = {
+        let output = std::process::Command::new("taskkill")
+            .args(&["/PID", &pid.to_string(), "/T", "/F"])
+            .creation_flags(0x08000000)
+            .output();
+        match output {
+            Ok(o) => {
+                if o.status.code() == Some(0) {
+                    warn!("[shutdown_service] process pid={} was still alive after IPC shutdown; force-killed", pid);
+                    true
+                } else {
+                    info!("[shutdown_service] process pid={} already exited gracefully", pid);
+                    false
+                }
+            }
+            Err(e) => {
+                warn!("[shutdown_service] taskkill probe failed for pid={}: {}", pid, e);
+                false
+            }
+        }
+    };
+    let _ = still_alive;
     if let Ok(mut guard) = SERVICE_PID.write() {
         *guard = None;
     }
@@ -939,8 +966,15 @@ fn main() {
             frontend_log,
              start_service,
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application")
+        .run(|_app_handle, event| {
+            // v0.9.2: Catch ALL exit paths (not just tray quit).
+            if let tauri::RunEvent::ExitRequested { .. } = event {
+                info!("[exit] ExitRequested — shutting down background service");
+                shutdown_background_service();
+            }
+        });
 }
 
 /// Updates the tray menu and tooltip based on the current GUI locale.

@@ -126,7 +126,10 @@
     serviceLoading = true
     serviceError = null
     try {
-      await servicePing()
+      const result = await servicePing()
+      if (!result.ok) {
+        serviceError = result.message || 'ping failed'
+      }
       await refreshServiceStatus()
     } catch (err) {
       serviceError = err instanceof Error ? err.message : String(err)
@@ -140,9 +143,13 @@
     serviceLoading = true
     serviceError = null
     try {
-      await serviceReload()
+      const result = await serviceReload()
+      if (!result.ok) {
+        serviceError = result.message || 'reload failed'
+      } else {
+        showToast(get(tStore)('settings.service.reloaded'), 'success')
+      }
       await refreshServiceStatus()
-      showToast(get(tStore)('settings.service.reloaded'), 'success')
     } catch (err) {
       serviceError = err instanceof Error ? err.message : String(err)
     } finally {
@@ -155,9 +162,13 @@
     serviceLoading = true
     serviceError = null
     try {
-      await serviceShutdown()
+      const result = await serviceShutdown()
+      if (!result.ok) {
+        serviceError = result.message || 'shutdown failed'
+      } else {
+        showToast(get(tStore)('settings.service.shutdown'), 'success')
+      }
       await refreshServiceStatus()
-      showToast(get(tStore)('settings.service.shutdown'), 'success')
     } catch (err) {
       serviceError = err instanceof Error ? err.message : String(err)
     } finally {
@@ -197,7 +208,10 @@
     if (serviceLoading) return
     serviceLoading = true
     try {
-      await serviceRefreshMount(mountId)
+      const result = await serviceRefreshMount(mountId)
+      if (!result.ok) {
+        serviceError = result.message || 'refresh failed'
+      }
       await refreshServiceStatus()
     } catch (err) {
       serviceError = err instanceof Error ? err.message : String(err)
@@ -210,9 +224,13 @@
     if (serviceLoading) return
     serviceLoading = true
     try {
-      await serviceRotateMount(mountId)
+      const result = await serviceRotateMount(mountId)
+      if (!result.ok) {
+        serviceError = result.message || 'rotate failed'
+      } else {
+        showToast(get(tStore)('settings.service.rotated'), 'success')
+      }
       await refreshServiceStatus()
-      showToast(get(tStore)('settings.service.rotated'), 'success')
     } catch (err) {
       serviceError = err instanceof Error ? err.message : String(err)
     } finally {
@@ -223,8 +241,8 @@
   async function refreshServiceStatus() {
     try {
       const status = await serviceStatus()
-      // CLI returns {"ok":true,"data":{"running":true,...}}
-      serviceRunning = status?.data?.running === true || status?.running === true
+      // v0.9.2: api.ts now returns unified {ok, data, message}
+      serviceRunning = status?.ok === true && status?.data?.running === true
       if (serviceRunning) {
         serviceHealthData = await serviceHealth()
       } else {

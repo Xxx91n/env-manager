@@ -1242,64 +1242,98 @@ export async function secretProviderRotate(): Promise<string> {
  * Get service status (running, mount file path, etc).
  * CLI: `service status` (read-only)
  */
-export async function serviceStatus(): Promise<any> {
+// ---- v0.9.2 unified service response parser ----
+// CLI returns raw JSON on stdout: {"ok":true,"data":{...}} or {"ok":false,"message":"..."}
+// All service functions must go through this parser to avoid the string-vs-object
+// bug that caused the GUI to show "not running" even when the service was alive.
+// Returns { ok, data, message } or { ok:false, message:'parse error' } on failure.
+function parseServiceResponse(raw: string): { ok: boolean; data?: any; message?: string } {
+  try {
+    const parsed = JSON.parse(raw)
+    if (parsed && typeof parsed === 'object' && 'ok' in parsed) {
+      return { ok: parsed.ok === true, data: parsed.data, message: parsed.message }
+    }
+    // Some responses might be bare data without the envelope
+    return { ok: true, data: parsed }
+  } catch {
+    return { ok: false, message: 'parse error: ' + raw.slice(0, 200) }
+  }
+}
+
+/**
+ * Get service status (running, mount file path, etc).
+ * CLI: `service status` (read-only)
+ * Returns { ok, data: { running, mountFile, mountPath } }
+ */
+export async function serviceStatus(): Promise<{ ok: boolean; data?: any; message?: string }> {
   const output = await runRead('service', ['status'])
-  try { return JSON.parse(output) } catch { return null }
+  return parseServiceResponse(output)
 }
 
 /**
  * Get service health (mount health summary).
  * CLI: `service health` (read-only)
+ * Returns { ok, data: { mounts: [...] } }
  */
-export async function serviceHealth(): Promise<any> {
+export async function serviceHealth(): Promise<{ ok: boolean; data?: any; message?: string }> {
   const output = await runRead('service', ['health'])
-  try { return JSON.parse(output) } catch { return null }
+  return parseServiceResponse(output)
 }
 
 /**
  * Ping the service (check if it's alive).
  * CLI: `service ping` (read-only)
+ * Returns { ok, data: { pong: true } }
  */
-export async function servicePing(): Promise<any> {
+export async function servicePing(): Promise<{ ok: boolean; data?: any; message?: string }> {
   const output = await runRead('service', ['ping'])
-  try { return JSON.parse(output) } catch { return null }
+  return parseServiceResponse(output)
 }
 
 /**
  * Refresh a single mount by ID.
  * CLI: `service refresh <mountId>` (write — serialised)
+ * Returns { ok, data?: { refreshed: true } }
  */
-export async function serviceRefreshMount(mountId: string): Promise<any> {
-  return await runWrite('service', ['refresh', mountId])
+export async function serviceRefreshMount(mountId: string): Promise<{ ok: boolean; data?: any; message?: string }> {
+  const output = await runWrite('service', ['refresh', mountId])
+  return parseServiceResponse(output)
 }
 
 /**
  * Rotate a single mount by ID.
  * CLI: `service rotate <mountId>` (write — serialised)
+ * Returns { ok, data?: { rotated: true } }
  */
-export async function serviceRotateMount(mountId: string): Promise<any> {
-  return await runWrite('service', ['rotate', mountId])
+export async function serviceRotateMount(mountId: string): Promise<{ ok: boolean; data?: any; message?: string }> {
+  const output = await runWrite('service', ['rotate', mountId])
+  return parseServiceResponse(output)
 }
 
 /**
  * Reload service config.
  * CLI: `service reload` (write — serialised)
+ * Returns { ok, data: { reloaded: true } }
  */
-export async function serviceReload(): Promise<any> {
-  return await runWrite('service', ['reload'])
+export async function serviceReload(): Promise<{ ok: boolean; data?: any; message?: string }> {
+  const output = await runWrite('service', ['reload'])
+  return parseServiceResponse(output)
 }
 
 /**
  * Shut down the service (sends shutdown via IPC).
  * CLI: `service shutdown` (write — serialised)
+ * Returns { ok, data: { shuttingDown: true } }
  */
-export async function serviceShutdown(): Promise<any> {
-  return await runWrite('service', ['shutdown'])
+export async function serviceShutdown(): Promise<{ ok: boolean; data?: any; message?: string }> {
+  const output = await runWrite('service', ['shutdown'])
+  return parseServiceResponse(output)
 }
 
 /**
  * Start the env-manager-service in background mode.
  * IPC: invoke('start_service') — Rust spawns the service binary.
+ * Returns true if the service was spawned and survived 2 seconds.
  */
 export async function serviceStart(): Promise<boolean> {
   return await invoke('start_service')
