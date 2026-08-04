@@ -416,5 +416,7 @@
   "audit.loading": "正在加载审计记录...",
   "audit.refresh": "刷新",
   "audit.empty": "未找到审计记录",
-  "audit.entries": "条记录"
+  "audit.entries": "条记录",
+  "nav.service": "服务管理",
+  "service.description": "管理后台机密挂载服务，用于定期刷新机密令牌"
 }

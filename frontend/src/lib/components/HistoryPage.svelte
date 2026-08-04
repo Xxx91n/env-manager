@@ -183,12 +183,16 @@
 
   let resizing: { col: string; startX: number; startW: number } | null = null
 
+  // Cache the table root element to avoid querySelector on every drag frame.
+  let resizeRoot: HTMLElement | null = null
+
   function startResize(e: MouseEvent) {
     const th = e.currentTarget as HTMLElement
     const col = th.dataset.col
     if (!col) return
     th.classList.add('col-resizing')
-    document.querySelector('.history-table-root')?.classList.add('col-resizing-active')
+    resizeRoot = document.querySelector('.history-table-root') as HTMLElement | null
+    resizeRoot?.classList.add('col-resizing-active')
     resizing = { col, startX: e.clientX, startW: colWidths[col] ?? COL_DEFAULTS[col] ?? 120 }
     document.body.classList.add('select-none', 'cursor-col-resize')
     window.addEventListener('mousemove', onResizeMove)
@@ -210,10 +214,11 @@
     if (!pendingFrame) {
       pendingFrame = true
       requestAnimationFrame(() => {
-        if (resizing) {
-          colWidths[resizing.col] = pendingWidth
-          const root = document.querySelector('.history-table-root') as HTMLElement | null
-          if (root) root.style.setProperty(`--col-${resizing.col}`, `${pendingWidth}px`)
+        if (resizing && resizeRoot) {
+          // Only update CSS variable — do NOT update colWidths (Svelte reactive)
+          // during drag. Updating the reactive store triggers {#each} re-evaluation
+          // on every frame, which is the root cause of column resize jank.
+          resizeRoot.style.setProperty('--col-' + resizing.col, pendingWidth + 'px')
         }
         pendingFrame = false
       })
@@ -222,15 +227,17 @@
 
   function endResize() {
     if (resizing) {
+      colWidths[resizing.col] = pendingWidth
       try { localStorage.setItem(COL_STORAGE_KEY, JSON.stringify(colWidths)) } catch {}
     }
-    document.querySelectorAll('.history-table-root .col-resizing').forEach(el => el.classList.remove('col-resizing'))
-    document.querySelector('.history-table-root')?.classList.remove('col-resizing-active')
-    resizing = null
-    document.body.classList.remove('select-none', 'cursor-col-resize')
-    window.removeEventListener('mousemove', onResizeMove)
-    window.removeEventListener('mouseup', endResize)
-  }
+    resizeRoot?.querySelectorAll('.col-resizing').forEach(el => el.classList.remove('col-resizing'))
+    resizeRoot?.classList.remove('col-resizing-active')
+   resizing = null
+   document.body.classList.remove('select-none', 'cursor-col-resize')
+   window.removeEventListener('mousemove', onResizeMove)
+   window.removeEventListener('mouseup', endResize)
+    resizeRoot = null
+ }
 </script>
 
 <style>

@@ -416,5 +416,7 @@
   "audit.loading": "Carregando entradas de auditoria...",
   "audit.refresh": "Atualizar",
   "audit.empty": "Nenhum registro de auditoria encontrado",
-  "audit.entries": "registros"
+  "audit.entries": "registros",
+  "nav.service": "Gerenciador de servico",
+  "service.description": "Gerenciar o servico em segundo plano para rotacao periodica de segredos"
 }

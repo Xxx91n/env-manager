@@ -416,5 +416,7 @@
   "audit.loading": "Chargement des entrées d'audit...",
   "audit.refresh": "Actualiser",
   "audit.empty": "Aucun enregistrement d'audit trouvé",
-  "audit.entries": "entrées"
+  "audit.entries": "entrées",
+  "nav.service": "Gestionnaire de service",
+  "service.description": "Gerer le service d'arriere-plan pour la rotation periodique des secrets"
 }

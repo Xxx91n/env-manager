@@ -416,5 +416,7 @@
   "audit.loading": "Loading audit entries...",
   "audit.refresh": "Refresh",
   "audit.empty": "No audit records found",
-  "audit.entries": "entries"
+  "audit.entries": "entries",
+  "nav.service": "Service Manager",
+  "service.description": "Manage the background secret mount service for periodic token rotation"
 }

@@ -416,5 +416,7 @@
   "audit.loading": "جاري تحميل سجلات التدقيق...",
   "audit.refresh": "تحديث",
   "audit.empty": "لم يتم العثور على سجلات تدقيق",
-  "audit.entries": "سجلات"
+  "audit.entries": "سجلات",
+  "nav.service": "مدير الخدمة",
+  "service.description": "إدارة خدمة تحميل الأسرار في الخلفية لتدوير الرموز بشكل دوري"
 }

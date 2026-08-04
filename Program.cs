@@ -1629,9 +1629,22 @@ partial class Program
             return 1;
         }
 
-        string exe = profile.TargetExecutable!;
-        string cwd = profile.WorkingDirectory ?? Path.GetDirectoryName(exe)!;
-        var effectiveVars = GetEffectiveProfileVariables(profile);
+       string exe = profile.TargetExecutable!;
+       string cwd = profile.WorkingDirectory ?? Path.GetDirectoryName(exe)!;
+        // v0.9.3: If the stored working directory no longer exists (e.g. portable
+        // app moved to a new version-named folder), fall back to the exe's directory
+        // rather than crashing with "system cannot find the file specified".
+        if (!string.IsNullOrEmpty(profile.WorkingDirectory) && !Directory.Exists(profile.WorkingDirectory))
+        {
+            string exeDir = Path.GetDirectoryName(exe) ?? "";
+            if (Directory.Exists(exeDir)) cwd = exeDir;
+        }
+        else if (!Directory.Exists(cwd))
+        {
+            // Last resort: use the current working directory if neither exists.
+            cwd = Environment.CurrentDirectory;
+        }
+       var effectiveVars = GetEffectiveProfileVariables(profile);
         var pathEntries = ResolveProfilePaths(profile);
 
         var psi = new System.Diagnostics.ProcessStartInfo
@@ -1690,11 +1703,12 @@ partial class Program
             Console.WriteLine($"Launched '{exe}' (PID={proc.Id}) with isolated environment from profile '{name}'. {(extraArgs.Count > 0 ? "Extra args: " + extraArgs.Count : "")}");
             return 0;
         }
-        catch (System.ComponentModel.Win32Exception ex)
-        {
-            Console.Error.WriteLine($"Error: Failed to launch '{exe}': {ex.Message}");
-            return 1;
-        }
+       catch (System.ComponentModel.Win32Exception ex)
+       {
+            string hint = Directory.Exists(cwd) ? "" : $" Working directory '{cwd}' does not exist.";
+            Console.Error.WriteLine($"Error: Failed to launch '{exe}':{hint} {ex.Message}");
+           return 1;
+       }
     }
 
     static int ShowProfileHelp()

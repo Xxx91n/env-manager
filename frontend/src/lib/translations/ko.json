@@ -416,5 +416,7 @@
   "audit.loading": "감사 항목 로딩 중...",
   "audit.refresh": "새로고침",
   "audit.empty": "감사 기록을 찾을 수 없습니다",
-  "audit.entries": "건"
+  "audit.entries": "건",
+  "nav.service": "서비스 관리",
+  "service.description": "주기적 토큰 갱신을 위한 백그라운드 시크릿 마운트 서비스 관리"
 }

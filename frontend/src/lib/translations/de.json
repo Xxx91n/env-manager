@@ -416,5 +416,7 @@
   "audit.loading": "Audit-Einträge werden geladen...",
   "audit.refresh": "Aktualisieren",
   "audit.empty": "Keine Audit-Einträge gefunden",
-  "audit.entries": "Einträge"
+  "audit.entries": "Einträge",
+  "nav.service": "Dienstverwaltung",
+  "service.description": "Hintergrunddienst für Secret-Mount-Lebenszyklus verwalten"
 }

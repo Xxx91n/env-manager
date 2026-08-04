@@ -416,5 +416,7 @@
   "audit.loading": "監査エントリを読み込み中...",
   "audit.refresh": "更新",
   "audit.empty": "監査記録が見つかりません",
-  "audit.entries": "件"
+  "audit.entries": "件",
+  "nav.service": "サービス管理",
+  "service.description": "定期トークン更新のためのバックグラウンドシークレットマウントサービスを管理"
 }

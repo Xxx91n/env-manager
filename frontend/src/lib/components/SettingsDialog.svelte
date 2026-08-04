@@ -507,67 +507,6 @@
       </div>
     </div>
 
-    <!-- v0.9.0 Phase B+C: Service Control Panel -->
-    <div class="px-5 py-3 border-t border-gray-200 dark:border-gray-700">
-      <h3 class="text-sm font-semibold text-gray-700 mb-2 dark:text-gray-200">{$t('settings.service.title')}</h3>
-      <div class="flex items-center gap-3 mb-2">
-        <span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium {serviceRunning ? 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300' : 'bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400'}">
-          <span class="w-1.5 h-1.5 rounded-full {serviceRunning ? 'bg-green-500' : 'bg-gray-400'}"></span>
-          {serviceRunning ? $t('settings.service.running') : $t('settings.service.stopped')}
-        </span>
-        {#if serviceLoading}
-          <span class="text-xs text-gray-400">{$t('settings.service.checking')}</span>
-        {/if}
-        <button on:click={handleServicePing} disabled={serviceLoading}
-          class="px-2 py-0.5 text-xs font-medium text-gray-600 border border-gray-300 rounded-md hover:bg-gray-50 transition disabled:opacity-50 dark:text-gray-300 dark:border-gray-600 dark:hover:bg-gray-700">
-          {$t('settings.service.ping')}
-        </button>
-        <button on:click={handleServiceReload} disabled={serviceLoading || !serviceRunning}
-          class="px-2 py-0.5 text-xs font-medium text-gray-600 border border-gray-300 rounded-md hover:bg-gray-50 transition disabled:opacity-50 dark:text-gray-300 dark:border-gray-600 dark:hover:bg-gray-700">
-          {$t('settings.service.reload')}
-        </button>
-        <button on:click={handleServiceShutdown} disabled={serviceLoading || !serviceRunning}
-          class="px-2 py-0.5 text-xs font-medium text-red-600 border border-red-300 rounded-md hover:bg-red-50 transition disabled:opacity-50 dark:text-red-300 dark:border-red-700 dark:hover:bg-red-900">
-          {$t('settings.service.shutdown')}
-        </button>
-
-        <button on:click={handleServiceStart} disabled={serviceLoading || serviceRunning}
-          class="px-2 py-0.5 text-xs font-medium text-green-600 border border-green-300 rounded-md hover:bg-green-50 transition disabled:opacity-50 dark:text-green-300 dark:border-green-700 dark:hover:bg-green-900">
-          {$t('settings.service.start')}
-        </button>
-      </div>
-      {#if serviceError && serviceRunning}
-        <p class="text-xs text-amber-600 dark:text-amber-400">{serviceError}</p>
-      {:else if serviceError && !serviceRunning}
-        <p class="text-xs text-amber-600 dark:text-amber-400">{$t('settings.service.notRunningHint')}</p>
-      {/if}
-      {#if serviceHealthData?.mounts?.length > 0}
-        <div class="mt-2 space-y-1 max-h-40 overflow-y-auto">
-          {#each serviceHealthData.mounts as mount}
-            <div class="flex items-center gap-2 text-xs px-2 py-1 rounded bg-gray-50 dark:bg-gray-800">
-              <span class="font-mono">{mount.provider}</span>
-              <span class="text-gray-500">{mount.name}</span>
-              <span class="px-1 rounded {mount.healthy ? 'text-green-600' : 'text-red-600'}">{mount.healthy ? $t('settings.service.healthy') : $t('settings.service.unhealthy')}</span>
-              <span class="text-gray-400">{mount.refreshPolicy}</span>
-              {#if mount.lastFetchedAt}
-                <span class="text-gray-400 ml-auto">{mount.lastFetchedAt}</span>
-              {/if}
-              <button on:click={() => handleMountRefresh(mount.id)} disabled={serviceLoading}
-                class="px-1 text-xs text-blue-600 hover:underline disabled:opacity-50">
-                {$t('settings.service.refreshBtn')}
-              </button>
-              <button on:click={() => handleMountRotate(mount.id)} disabled={serviceLoading}
-                class="px-1 text-xs text-blue-600 hover:underline disabled:opacity-50">
-                {$t('settings.service.rotateBtn')}
-              </button>
-            </div>
-          {/each}
-        </div>
-      {/if}
-    </div>
-
-
-
     <div class="px-5 py-3 border-t border-gray-200 flex justify-end dark:border-gray-700">
       <button
         on:click={handleClose}
