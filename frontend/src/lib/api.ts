@@ -1243,7 +1243,8 @@ export async function secretProviderRotate(): Promise<string> {
  * CLI: `service status` (read-only)
  */
 export async function serviceStatus(): Promise<any> {
-  return await runRead('service', ['status'])
+  const output = await runRead('service', ['status'])
+  try { return JSON.parse(output) } catch { return null }
 }
 
 /**
@@ -1251,7 +1252,8 @@ export async function serviceStatus(): Promise<any> {
  * CLI: `service health` (read-only)
  */
 export async function serviceHealth(): Promise<any> {
-  return await runRead('service', ['health'])
+  const output = await runRead('service', ['health'])
+  try { return JSON.parse(output) } catch { return null }
 }
 
 /**
@@ -1259,7 +1261,8 @@ export async function serviceHealth(): Promise<any> {
  * CLI: `service ping` (read-only)
  */
 export async function servicePing(): Promise<any> {
-  return await runRead('service', ['ping'])
+  const output = await runRead('service', ['ping'])
+  try { return JSON.parse(output) } catch { return null }
 }
 
 /**
@@ -1327,4 +1330,3 @@ export async function auditRecoverFromLedger(): Promise<any> {
   await frontendLog('info', 'GUI: audit recover-from-ledger requested')
   return await runWrite('audit', ['list', '--json'])
 }
-

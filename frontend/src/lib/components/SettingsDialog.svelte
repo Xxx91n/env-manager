@@ -166,10 +166,16 @@
   }
 
   async function handleServiceStart() {
-    if (serviceLoading) return
+    if (serviceLoading || serviceRunning) return
     serviceLoading = true
     serviceError = null
     try {
+      // Check if service is already running first (avoid duplicate spawn)
+      await refreshServiceStatus()
+      if (serviceRunning) {
+        showToast(get(tStore)('settings.service.started'), 'success')
+        return
+      }
       await serviceStart()
       // Give the service a moment to start up before checking status
       await new Promise(r => setTimeout(r, 3000))
@@ -217,12 +223,16 @@
   async function refreshServiceStatus() {
     try {
       const status = await serviceStatus()
-      serviceRunning = status?.running ?? false
+      // CLI returns {"ok":true,"data":{"running":true,...}}
+      serviceRunning = status?.data?.running === true || status?.running === true
       if (serviceRunning) {
         serviceHealthData = await serviceHealth()
+      } else {
+        serviceHealthData = null
       }
     } catch {
       serviceRunning = false
+      serviceHealthData = null
     }
   }
 
