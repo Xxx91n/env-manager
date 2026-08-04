@@ -45,8 +45,10 @@ impl IpcResponse {
 }
 
 /// Start the IPC named pipe server. Runs indefinitely.
-/// Anti-squatting: first creation uses first_pipe_instance(true).
-pub async fn start_ipc_server(pipe_name: &str, shutdown: Arc<CancellationToken>) {
+/// `use_first_pipe_instance`: true for Service mode (SCM guarantees single instance),
+/// false for Background mode (previous instance pipe handle may linger in OS kernel,
+/// PIPE_FIRST_PIPE_INSTANCE gets os error 5).
+pub async fn start_ipc_server(pipe_name: &str, shutdown: Arc<CancellationToken>, use_first_pipe_instance: bool) {
     log::info!("IPC server listening on {}", pipe_name);
 
     let mut first = true;
@@ -56,7 +58,7 @@ pub async fn start_ipc_server(pipe_name: &str, shutdown: Arc<CancellationToken>)
             log::info!("IPC server cancelled, exiting");
             return;
         }
-        let server = if first {
+        let server = if first && use_first_pipe_instance {
             match tokio::net::windows::named_pipe::ServerOptions::new()
                 .first_pipe_instance(true)
                 .create(pipe_name)

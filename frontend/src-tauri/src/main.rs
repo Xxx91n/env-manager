@@ -148,6 +148,12 @@ fn is_read_only(command: &str, args: &[String]) -> bool {
 /// This prevents write-write and read-write races while allowing read-read concurrency.
 static CLI_RWLOCK: RwLock<()> = RwLock::new(());
 
+/// v0.9.2: Track the detached background service PID so we can send it
+/// an IPC shutdown when the GUI exits. Without this, std::mem::forget(child)
+/// orphans the service process (process leak). The PID is read at GUI quit
+/// time and a `{"method":"shutdown"}` IPC message is sent via named pipe.
+static SERVICE_PID: RwLock<Option<u32>> = RwLock::new(None);
+
 /// Strips the `\\?\` (verbatim/long-path) prefix from a Windows path string.
 /// Rust's PathBuf::display() can emit this prefix when the path was constructed
 /// from a long path or UNC source. We remove it so that registry values and
@@ -576,6 +582,53 @@ fn resolve_service_path(app: &tauri::AppHandle) -> Option<PathBuf> {
 /// The service listens on \\.\pipe\EnvManager.Background for IPC.
 /// Returns true if the process was spawned and survived its first 2 seconds.
 #[tauri::command]
+/// v0.9.2: Send IPC shutdown to the detached background service before GUI exit.
+/// Prevents process leak: std::mem::forget(child) orphans the service process.
+/// Connects to \\\\.\\pipe\\EnvManager.Background, sends {"method":"shutdown"}, then reads response.
+/// Best-effort: if the pipe is gone or the service already exited, this is a no-op.
+fn shutdown_background_service() {
+    let pid = {
+        let guard = match SERVICE_PID.read() {
+            Ok(g) => g,
+            Err(_) => return,
+        };
+        *guard
+    };
+    let pid = match pid {
+        Some(p) => p,
+        None => {
+            info!("[shutdown_service] no background service PID tracked, skipping");
+            return;
+        }
+    };
+    info!("[shutdown_service] sending IPC shutdown to background service pid={}", pid);
+
+    use std::io::{Read, Write};
+    let pipe_path = r"\\.\pipe\EnvManager.Background";
+    match std::fs::OpenOptions::new().read(true).write(true).open(pipe_path) {
+        Ok(mut pipe) => {
+            let req = br#"{"method":"shutdown"}"#;
+            let mut req_nl = req.to_vec();
+            req_nl.push(b'\n');
+            if let Err(e) = pipe.write_all(&req_nl) {
+                warn!("[shutdown_service] failed to write shutdown request: {}", e);
+            } else {
+                let mut buf = [0u8; 256];
+                let _ = pipe.read(&mut buf);
+                info!("[shutdown_service] shutdown request sent to pid={}, response read", pid);
+            }
+        }
+        Err(e) => {
+            info!("[shutdown_service] pipe not found (service likely already exited): {}", e);
+        }
+    }
+    if let Ok(mut guard) = SERVICE_PID.write() {
+        *guard = None;
+    }
+    info!("[shutdown_service] background service cleanup complete, pid={} cleared", pid);
+}
+
+#[tauri::command]
 fn start_service(app: tauri::AppHandle) -> Result<bool, String> {
     let service_exe = match resolve_service_path(&app) {
         Some(p) => p,
@@ -622,6 +675,11 @@ fn start_service(app: tauri::AppHandle) -> Result<bool, String> {
                 Ok(None) => {
                     // Child survived 2s — healthy, detach it
                     info!("[start_service] service pid={} survived 2s, detaching", child.id());
+                    // v0.9.2: Track PID for GUI-exit cleanup (prevent process leak)
+                    if let Ok(mut guard) = SERVICE_PID.write() {
+                        *guard = Some(child.id());
+                    }
+                    info!("[start_service] service pid={} registered in SERVICE_PID for cleanup-on-quit", child.id());
                     std::mem::forget(child);
                     Ok(true)
                 }
@@ -831,6 +889,8 @@ fn main() {
                             restore_window(app);
                         }
                         "quit" => {
+                            info!("[tray] quit requested — shutting down background service before exit");
+                            shutdown_background_service();
                             app.exit(0);
                         }
                         _ => {}

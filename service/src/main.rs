@@ -122,7 +122,11 @@ fn main() {
                 let reconcile_token = shutdown_token.clone();
 
                 let reconcile_handle = tokio::spawn(reconcile::reconcile_loop(reconcile_token));
-                let ipc_handle = tokio::spawn(ipc::start_ipc_server(pipe, ipc_token));
+                // Service mode uses PIPE_FIRST_PIPE_INSTANCE (anti-squatting, SCM guarantees single instance).
+                // Background mode skips it: previous instance pipe handle may linger in OS kernel after shutdown,
+                // causing os error 5 "拒绝访问" on restart. v0.9.2 fix.
+                let use_fpi = matches!(mode, RuntimeMode::Service);
+                let ipc_handle = tokio::spawn(ipc::start_ipc_server(pipe, ipc_token, use_fpi));
 
                 tokio::select! {
                     _ = reconcile_handle => log::warn!("reconcile loop exited"),
