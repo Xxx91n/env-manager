@@ -244,7 +244,8 @@
       // v0.9.2: api.ts now returns unified {ok, data, message}
       serviceRunning = status?.ok === true && status?.data?.running === true
       if (serviceRunning) {
-        serviceHealthData = await serviceHealth()
+        const healthResult = await serviceHealth()
+      serviceHealthData = healthResult.ok ? healthResult.data : null
       } else {
         serviceHealthData = null
       }
