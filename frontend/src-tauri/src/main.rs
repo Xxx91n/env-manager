@@ -745,6 +745,15 @@ fn start_service(app: tauri::AppHandle) -> Result<bool, String> {
 
 
 
+/// v0.9.3: Stop the background service (user-initiated).
+/// This is the ONLY path that kills the service process.
+/// GUI exit does NOT call this — the service persists across GUI restarts.
+#[tauri::command]
+fn stop_service() -> Result<bool, String> {
+    info!("[stop_service] user requested service stop");
+    shutdown_background_service();
+    Ok(true)
+}
 #[tauri::command]
 fn cli_diagnostics(app: tauri::AppHandle) -> serde_json::Value {
     let exe_dir = std::env::current_exe()
@@ -916,8 +925,13 @@ fn main() {
                             restore_window(app);
                         }
                         "quit" => {
-                            info!("[tray] quit requested — shutting down background service before exit");
-                            shutdown_background_service();
+                            info!("[tray] quit requested — service stays alive (user-managed lifecycle)");
+                            // v0.9.3: GUI exit does NOT kill the background service.
+                            // The service is a persistent daemon for secret mount refresh.
+                            // Only clear our PID tracking; the process survives.
+                            if let Ok(mut guard) = SERVICE_PID.write() {
+                                *guard = None;
+                            }
                             app.exit(0);
                         }
                         _ => {}
@@ -965,14 +979,19 @@ fn main() {
             write_gui_setting,
             frontend_log,
              start_service,
+             stop_service,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
         .run(|_app_handle, event| {
-            // v0.9.2: Catch ALL exit paths (not just tray quit).
+            // v0.9.3: GUI exit does NOT kill the background service.
+            // The service persists for secret mount refresh even when GUI is closed.
+            // Only clear PID tracking to avoid stale references.
             if let tauri::RunEvent::ExitRequested { .. } = event {
-                info!("[exit] ExitRequested — shutting down background service");
-                shutdown_background_service();
+                info!("[exit] ExitRequested — clearing service PID tracking (service stays alive)");
+                if let Ok(mut guard) = SERVICE_PID.write() {
+                    *guard = None;
+                }
             }
         });
 }

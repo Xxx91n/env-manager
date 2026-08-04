@@ -2,7 +2,7 @@
   import { createEventDispatcher, onMount } from 'svelte'
   import { t, locale } from 'svelte-i18n'
   import { locales, defaultLanguage } from '../i18n'
-  import { isCliInPath, addCliToPath, removeCliFromPath, listPathEntries, checkForUpdates, bulkImport, bulkExport, pickOpenFile, pickSaveFile, serviceStatus, serviceHealth, servicePing, serviceRefreshMount, serviceRotateMount, serviceShutdown, serviceReload, serviceStart } from '../api'
+  import { isCliInPath, addCliToPath, removeCliFromPath, listPathEntries, checkForUpdates, bulkImport, bulkExport, pickOpenFile, pickSaveFile, serviceStatus, serviceHealth, servicePing, serviceRefreshMount, serviceRotateMount, serviceShutdown, serviceReload, serviceStart, serviceStop } from '../api'
   import { get } from 'svelte/store'
   import { setSetting, frontendLog } from '../settingsStore'
   import { showToast } from '../stores'
@@ -162,12 +162,10 @@
     serviceLoading = true
     serviceError = null
     try {
-      const result = await serviceShutdown()
-      if (!result.ok) {
-        serviceError = result.message || 'shutdown failed'
-      } else {
-        showToast(get(tStore)('settings.service.shutdown'), 'success')
-      }
+      // v0.9.3: Use direct Tauri IPC stop_service (not CLI relay) for faster stop.
+      // The service is a persistent daemon; only explicit user Stop kills it.
+      await serviceStop()
+      showToast(get(tStore)('settings.service.shutdown'), 'success')
       await refreshServiceStatus()
     } catch (err) {
       serviceError = err instanceof Error ? err.message : String(err)

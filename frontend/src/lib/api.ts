@@ -1339,6 +1339,15 @@ export async function serviceStart(): Promise<boolean> {
   return await invoke('start_service')
 }
 
+/**
+ * Stop the env-manager-service (user-initiated).
+ * IPC: invoke('stop_service') — Rust sends IPC shutdown + taskkill.
+ * This is the ONLY path that kills the service. GUI exit does NOT stop the service.
+ */
+export async function serviceStop(): Promise<boolean> {
+  return await invoke('stop_service')
+}
+
 
 
 // ---- v1.0.0 Phase E: Audit ledger recovery ----
