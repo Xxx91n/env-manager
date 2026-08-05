@@ -465,7 +465,7 @@ try {
   }
 
   Run-Test "secrets never in registry" {
-    if ((Invoke-Cli @("profile", "create", $secretProfileName)) -ne 0) { throw "profile create failed" }
+    if ((Invoke-Cli @("profile", "create", $secretProfileName, "--type", "launch", "--target", (Join-Path $env:SystemRoot "System32\cmd.exe"))) -ne 0) { throw "profile create failed" }
     if ((Invoke-Cli @("profile", "add-secret", $secretProfileName, "S", "topsecret")) -ne 0) { throw "add-secret failed" }
     $applyExit = Invoke-CliExit @("profile", "apply", $secretProfileName)
     if ($applyExit -eq 0) { throw "secrets-bearing profile apply must be rejected" }

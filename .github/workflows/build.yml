@@ -84,6 +84,23 @@ jobs:
         working-directory: frontend
         run: npx vitest run
 
+      - name: Run Pester integration tests
+        shell: pwsh
+        run: |
+          # Tier 3: integration tests that invoke env-manager-cli.exe
+          # Build CLI step above has produced the binary;
+          # the unit-test step has run vitest (mocked, no binary).
+          # This step runs Pester 5 + the raw ps1 harnesses.
+          ./scripts/run-ci-tests.ps1 -ResultsDir test-results
+
+      - name: Upload Pester JUnit results
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: pester-junit-results
+          path: test-results/*.junit.xml
+          if-no-files-found: ignore
+
       - name: Build frontend
         working-directory: frontend
         run: npm run build

@@ -78,3 +78,6 @@ screenshot.png
 .vault.log
 *.vault*
 .codex-tmp-pwm*
+
+# CI test JUnit output (scripts/run-ci-tests.ps1 produces)
+test-results/
