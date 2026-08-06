@@ -214,3 +214,14 @@ DOMAIN 11: IPC endpoint name conflict — multi-session / TS / machine rename
 - F: RDP second user logs in, their env-manager GUI tries to use service which is per-machine (one service instance per machine) → C: this is BY DESIGN — service is machine-level; CLI of the second user connects to the same Global pipe, sends its own per-user CLI identity, service responds per requested mount. T: test spec'd — second RDP user CLI mount refresh must not see mount metadata of first user's user-bound (DPAPI/CredMan/pwsh SecretManagement) mounts; only machine-level (Vault/Azure/AWS/1Password/SOPS) mounts are shared.
 - F: Machine rename after install → pipe name does NOT contain machine name (verified — Global\\pipe\\EnvManager.Service is machine-agnostic), so rename is a no-op for pipe routing. T: no-op regression: machine rename does not break service.
 - F: Locale affects pipe name encoding (Unicode pipe names) → C: pipe name "EnvManager.Service" is ASCII-only, locale-independent. T: no-op regression test under zh-CN/ja-JP/de-DE culture.
+
+
+## Service Lifecycle Terms (v0.9.6)
+
+- **Watchdog**: 周期性健康检查线程，检测服务进程存活状态，连续失败后触发自动重启。GUI 内嵌，30s 间隔，2 次连续失败后触发 start_service。
+- **Heartbeat**: 服务端 ping 响应携带的 uptime + reconcile 状态，用于区分 "busy" vs "deadlocked"。包含 uptime_seconds, reconcile_last_run_at, reconcile_next_run_at, mount_count, healthy_mounts。
+- **SCM Recovery**: Windows Service Control Manager 原生的失败恢复机制，通过 sc failure 配置 3 次重启/60s 间隔。Service mode 专用，与 GUI watchdog 互为 defense-in-depth。
+- **Service Lifecycle**: 服务进程从 spawn -> run -> crash -> restart -> shutdown 的完整生命周期。两条恢复路径: SCM (Service mode) 和 GUI watchdog (Background mode)。
+- **IPC Connection Health**: named pipe 连接健康度，由 ping success/failure 序列判定。CLI 端 3 次 retry with 1s backoff，GUI 端 watchdog 30s 周期检测。
+- **Version Single Source**: env-manager.csproj <Version> 是唯一版本源，build.mjs 负责同步到 frontend/package.json。不手动维护两处版本号。
+- **CHANGELOG**: 手动维护的变更日志，遵循 Keep a Changelog 格式 (Added/Changed/Deprecated/Removed/Fixed/Security)。release.yml 嵌入对应版本段落到 GitHub Release body。
