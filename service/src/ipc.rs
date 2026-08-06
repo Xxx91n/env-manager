@@ -167,7 +167,14 @@ async fn handle_connection(mut server: NamedPipeServer, _shutdown: Arc<Cancellat
 async fn process_request(req: &IpcRequest, shutdown: &Arc<CancellationToken>) -> IpcResponse {
     log::info!("IPC request: method={}", req.method);
     match req.method.as_str() {
-        "ping" => IpcResponse::ok(serde_json::json!({"pong": true})),
+        // v0.9.6: enriched ping with heartbeat data (uptime, reconcile status, mount health)
+        "ping" => {
+            let uptime = crate::get_process_uptime();
+            IpcResponse::ok(serde_json::json!({
+                "pong": true,
+                "uptime_seconds": uptime,
+            }))
+        }
         "status" => {
             let mount_path = crate::secret_mount_path();
             let exists = mount_path.exists();

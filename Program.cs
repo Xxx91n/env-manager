@@ -3166,11 +3166,25 @@ partial class Program
         try
         {
             string pipePath = pipeName.Replace(@"\\.\pipe\", "");
+            // v0.9.6: pipe connect with 3x retry, 1s backoff (prevents transient pipe-busy false negatives)
             using var client = new System.IO.Pipes.NamedPipeClientStream(
                 ".", pipePath,
                 System.IO.Pipes.PipeDirection.InOut,
                 System.IO.Pipes.PipeOptions.None);
-            client.Connect(5000);
+            bool connected = false;
+            for (int attempt = 0; attempt < 3; attempt++)
+            {
+                try { client.Connect(5000); connected = true; break; }
+                catch (System.TimeoutException) when (attempt < 2)
+                {
+                    System.Threading.Thread.Sleep(1000 << attempt); // 1s, 2s exponential backoff
+                }
+            }
+            if (!connected)
+            {
+                Console.Error.WriteLine("Error: service not responding at " + pipeName + ". Is env-manager-service running?");
+                return 1;
+            }
 
             // No `using var` — Dispose on pipe-close races with the service closing
             // its end. Manage lifetime manually, swallow all IOExceptions from cleanup

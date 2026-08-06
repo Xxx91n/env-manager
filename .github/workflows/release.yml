@@ -112,6 +112,10 @@ jobs:
             - Portable: release/portable/Env-Manager_portable_version_arch.zip (x64/x86/arm64)
             - CLI-only: release/cli-only/Env-Manager_cli-only_version_arch.zip (x64/x86/arm64)
             - MSI: Env Manager_version_arch.msi (x64/x86/arm64)
+
+            ## Changelog
+
+            See [CHANGELOG.md](https://github.com/Xxx91n/env-manager/blob/main/CHANGELOG.md) for full details.
           files: |
             artifacts/Env-Manager_portable_*.zip
             artifacts/Env-Manager_cli-only_*.zip

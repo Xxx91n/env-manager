@@ -54,6 +54,7 @@
         <ServiceControl Id="EnvManagerServiceControl" Name="EnvManagerService"
                         Start="install" Stop="both" Remove="uninstall" Wait="yes" />
       </Component>
+
       <?if "$(var.WebViewLoaderPresent)" = "1" ?>
       <Component Id="WebViewLoader" Guid="*" Win64="$(var.Win64)">
         <File Id="WebViewLoaderFile" Source="$(var.SourceDir)\WebView2Loader.dll" KeyPath="yes" />
@@ -93,5 +94,18 @@
       <ComponentRef Id="EnvManagerDataComponent" />
       <ComponentRef Id="StartMenuShortcut" />
     </Feature>
+
+    <!-- v0.9.6 SCM failure recovery: restart 3x at 60s intervals, reset after 24h -->
+    <CustomAction Id="SetServiceFailureActions" Directory="INSTALLDIR"
+                  Execute="deferred" Impersonate="no" Return="check"
+                  ExeCommand="[SystemFolder]sc.exe failure EnvManagerService reset= 86400 actions= restart/60000/restart/60000/restart/60000" />
+    <CustomAction Id="SetServiceDelayedAutoStart" Directory="INSTALLDIR"
+                  Execute="deferred" Impersonate="no" Return="check"
+                  ExeCommand="[SystemFolder]sc.exe config EnvManagerService start= delayed-auto" />
+
+    <InstallExecuteSequence>
+      <Custom Action="SetServiceDelayedAutoStart" After="InstallServices">NOT Installed</Custom>
+      <Custom Action="SetServiceFailureActions" After="SetServiceDelayedAutoStart">NOT Installed</Custom>
+    </InstallExecuteSequence>
   </Product>
 </Wix>

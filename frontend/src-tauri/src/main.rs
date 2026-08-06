@@ -745,6 +745,70 @@ fn start_service(app: tauri::AppHandle) -> Result<bool, String> {
 
 
 
+/// v0.9.6: Service watchdog — pings the service every 30s, auto-restarts after 2 consecutive failures.
+/// Spawned as a background thread on GUI startup. Thread dies when GUI process exits.
+/// Defense-in-depth on top of SCM recovery (Service mode) and manual restart (Background mode).
+fn spawn_service_watchdog(app: tauri::AppHandle) {
+    use std::io::{Read, Write};
+    std::thread::spawn(move || {
+        let mut consecutive_failures: u32 = 0;
+        info!("[watchdog] service watchdog thread started (30s interval, 2-failure threshold)");
+        loop {
+            std::thread::sleep(std::time::Duration::from_secs(30));
+            // Ping the service via named pipe (same path as CLI service ping)
+            let pipe_path = r"\\.\pipe\EnvManager.Background";
+            match std::fs::OpenOptions::new().read(true).write(true).open(pipe_path) {
+                Ok(mut pipe) => {
+                    let req = br#"{"method":"ping"}"#;
+                    let req_nl = [req.as_slice(), b"
+"].concat();
+                    if pipe.write_all(&req_nl).is_ok() {
+                        let mut buf = [0u8; 1024];
+                        if pipe.read(&mut buf).is_ok() {
+                            // ping succeeded — reset failure count
+                            if consecutive_failures > 0 {
+                                info!("[watchdog] service ping recovered after {} failures", consecutive_failures);
+                            }
+                            consecutive_failures = 0;
+                            continue;
+                        }
+                    }
+                    // write or read failed
+                    consecutive_failures += 1;
+                }
+                Err(_) => {
+                    consecutive_failures += 1;
+                }
+            }
+            warn!("[watchdog] service ping failed (consecutive: {})", consecutive_failures);
+            if consecutive_failures >= 2 {
+                warn!("[watchdog] 2 consecutive ping failures — attempting auto-restart");
+                match start_service(app.clone()) {
+                    Ok(true) => {
+                        info!("[watchdog] service auto-restarted successfully");
+                        consecutive_failures = 0;
+                    }
+                    Ok(false) => {
+                        warn!("[watchdog] service auto-restart returned false (already running?)");
+                        consecutive_failures = 0;
+                    }
+                    Err(e) => {
+                        error!("[watchdog] service auto-restart failed: {}", e);
+                        // Keep trying on next tick
+                    }
+                }
+            }
+        }
+    });
+}
+
+/// v0.9.6: Start the watchdog thread (called from frontend after service start confirmation).
+#[tauri::command]
+fn start_service_watchdog(app: tauri::AppHandle) -> Result<bool, String> {
+    spawn_service_watchdog(app);
+    Ok(true)
+}
+
 /// v0.9.3: Stop the background service (user-initiated).
 /// This is the ONLY path that kills the service process.
 /// GUI exit does NOT call this — the service persists across GUI restarts.
@@ -979,6 +1043,7 @@ fn main() {
             write_gui_setting,
             frontend_log,
              start_service,
+             start_service_watchdog,
              stop_service,
         ])
         .build(tauri::generate_context!())

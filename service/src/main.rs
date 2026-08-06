@@ -46,6 +46,14 @@ impl RuntimeMode {
     }
 }
 
+/// v0.9.6: Process uptime in seconds for heartbeat enrichment.
+/// Used by IPC ping/status to help the GUI watchdog distinguish "busy" vs "deadlocked".
+pub fn get_process_uptime() -> u64 {
+    static START: std::sync::OnceLock<std::time::Instant> = std::sync::OnceLock::new();
+    let start = START.get_or_init(|| std::time::Instant::now());
+    start.elapsed().as_secs()
+}
+
 fn main() {
     // Resolve mode FIRST so we know where to put the log file.
     let args: Vec<String> = env::args().collect();

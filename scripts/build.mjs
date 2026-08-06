@@ -62,9 +62,21 @@ const tripleMap = {
 }
 const wixArchMap = { x64: 'x64', x86: 'x86', arm64: 'arm64' }
 
-// --- version ---
-const pkg = JSON.parse(readFileSync(join(projectRoot, 'frontend', 'package.json'), 'utf8'))
-const version = pkg.version
+// --- version (v0.9.6: single source from csproj, auto-sync to package.json) ---
+const csprojPath = join(projectRoot, 'env-manager.csproj')
+const csprojRaw = readFileSync(csprojPath, 'utf8')
+const versionMatch = csprojRaw.match(/<Version>([^<]+)<\/Version>/)
+if (!versionMatch) throw new Error('Could not find <Version> in env-manager.csproj')
+const version = versionMatch[1].trim()
+// Auto-sync to frontend/package.json
+const pkgPath = join(projectRoot, 'frontend', 'package.json')
+const pkg = JSON.parse(readFileSync(pkgPath, 'utf8'))
+if (pkg.version !== version) {
+  pkg.version = version
+  writeFileSync(pkgPath, JSON.stringify(pkg, null, 2) + '\n', 'utf8')
+  console.log('[build] synced frontend/package.json version to csproj: v' + version)
+}
+const pkgVer = pkg.version
 
 // --- paths (all auto-discovered, no hardcoding) ---
 const releaseDir = join(projectRoot, 'release')
