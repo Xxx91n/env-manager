@@ -111,7 +111,7 @@ pub fn append_event(
         rotate_ledger(&path)?;
     }
 
-    log::info!("ledger event appended: {} (action={}, actor={})", event_id, action, actor);
+    tracing::info!("ledger event appended: {} (action={}, actor={})", event_id, action, actor);
     Ok(event_id)
 }
 
@@ -168,7 +168,7 @@ pub fn verify_ledger() -> Result<(), String> {
         prev_hash = stored_hash.to_string();
     }
 
-    log::info!("ledger verification passed");
+    tracing::info!("ledger verification passed");
     Ok(())
 }
 
@@ -245,7 +245,7 @@ pub fn export_survival_kit(mount_id: Option<&str>) -> Result<PathBuf, String> {
         return Err(format!("CLI encrypt-file failed: {}", stderr.trim()));
     }
 
-    log::info!("survival kit encrypted and exported to {:?}", export_path);
+    tracing::info!("survival kit encrypted and exported to {:?}", export_path);
     Ok(export_path)
 }
 
@@ -298,7 +298,7 @@ pub fn recover_from_ledger() -> Result<(), String> {
         }
     }
 
-    log::info!("recovery: {} mounts reconstructed from ledger", recovered_mounts.len());
+    tracing::info!("recovery: {} mounts reconstructed from ledger", recovered_mounts.len());
 
     // Write recovered mounts to a recovery file for GUI to pick up.
     let recovery_path = {
@@ -366,7 +366,7 @@ fn rotate_ledger(path: &PathBuf) -> Result<(), String> {
     fs::rename(path, &rotated)
         .map_err(|e| format!("failed to rotate ledger: {}", e))?;
 
-    log::info!("ledger rotated to {:?}", rotated);
+    tracing::info!("ledger rotated to {:?}", rotated);
     Ok(())
 }
 

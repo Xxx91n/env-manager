@@ -32,11 +32,12 @@ function localStorageFallback(key: string): string | null {
 export async function frontendLog(
   level: 'info' | 'warn' | 'error' | 'debug',
   message: string,
+  request_id?: string,
 ): Promise<void> {
   try {
     // Sanity-bound at the IPC boundary: cap message length to prevent a     // runaway long string from bloating the single log file. CLI values     // and secrets are already never stringified into log payloads here.
     const bounded = message.length > 2048 ? message.slice(0, 2048) + '...' : message;
-    await invoke('frontend_log', { level, message: bounded });
+    await invoke('frontend_log', { level, message: bounded, requestId: request_id || null });
   } catch {
     /* best-effort: never throw from a logger */
   }

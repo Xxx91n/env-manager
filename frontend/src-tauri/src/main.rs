@@ -1,7 +1,7 @@
 // Hide the console window in release builds on Windows.
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-use log::{info, warn, error, debug};
+use tracing::{info, warn, error, debug};
 use serde::Serialize;
 use std::path::PathBuf;
 use std::process::Command;
@@ -334,7 +334,12 @@ fn scrub_stderr(s: &str) -> String {
     out
 }
 
-    info!("[run_cli] command={}, argument_count={}", command, args.len());
+    // v0.9.8 A4: generate request_id for cross-process log tracing.
+    let request_id: String = format!("{:06x}", std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_nanos() & 0xFFFFFF);
+    info!("[run_cli] command={}, argument_count={}, request_id={}", command, args.len(), request_id);
 
     // Validate input before doing anything
     if let Err(msg) = validate_cli_input(&command, &args) {
@@ -360,6 +365,8 @@ fn scrub_stderr(s: &str) -> String {
     let read_only = is_read_only(&command, &args);
 
     let mut cmd = build_cli_command(&exe_path, &command, &args);
+    // v0.9.8 A4: propagate request_id to C# CLI via env var for cross-process log tracing.
+    cmd.env("ENVMANAGER_REQUEST_ID", &request_id);
     let start = std::time::Instant::now();
 
     // v0.9.1: Run CLI via spawn_blocking so the tokio async executor is not
@@ -543,7 +550,7 @@ fn write_atomic(path: &std::path::Path, data: &str) -> bool {
 /// A bounded message length prevents log bloat; secrets/values are never
 /// stringified by the frontend caller.
 #[tauri::command]
-fn frontend_log(level: String, message: String) -> () {
+fn frontend_log(level: String, message: String, request_id: Option<String>) -> () {
     let bounded: String = if message.len() > 2048 {
         let mut s = message.chars().take(2048).collect::<String>();
         s.push_str("...");
@@ -552,10 +559,10 @@ fn frontend_log(level: String, message: String) -> () {
         message
     };
     match level.as_str() {
-        "error" => error!("[gui] {}", bounded),
-        "warn" => warn!("[gui] {}", bounded),
-        "debug" => debug!("[gui] {}", bounded),
-        _ => info!("[gui] {}", bounded),
+        "error" => error!("[gui] {} {}", request_id.as_deref().map(|r| format!("[req:{}] ", r)).unwrap_or_default(), bounded),
+        "warn" => warn!("[gui] {} {}", request_id.as_deref().map(|r| format!("[req:{}] ", r)).unwrap_or_default(), bounded),
+        "debug" => debug!("[gui] {} {}", request_id.as_deref().map(|r| format!("[req:{}] ", r)).unwrap_or_default(), bounded),
+        _ => info!("[gui] {} {}", request_id.as_deref().map(|r| format!("[req:{}] ", r)).unwrap_or_default(), bounded),
     }
 }
 
@@ -946,36 +953,39 @@ fn version_is_newer(remote: &str, local: &str) -> bool {
 }
 
 fn main() {
+// v0.9.8: tracing + tracing-appender unified logging backend.
+// Replaces tauri-plugin-log with daily rotation + 7-day retention + 50MB cap.
+// Per-module filtering via RUST_LOG env var (e.g. RUST_LOG=env_manager=debug).
+let log_dir = std::env::current_exe()
+    .ok()
+    .and_then(|p| p.parent().map(|d| d.join("logs")))
+    .unwrap_or_else(|| std::path::PathBuf::from("logs"));
+let _ = std::fs::create_dir_all(&log_dir);
+
+// Daily rotation: env-manager.log -> env-manager.log.2026-08-07
+let file_appender = tracing_appender::rolling::daily(&log_dir, "env-manager.log");
+let (non_blocking_file, _guard) = tracing_appender::non_blocking(file_appender);
+
+let filter = tracing_subscriber::EnvFilter::try_from_default_env()
+    .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("info"));
+
+tracing_subscriber::fmt()
+    .with_env_filter(filter)
+    .with_writer(non_blocking_file)
+    .with_ansi(false)
+    .with_target(true)
+    .with_file(false)
+    .with_line_number(false)
+    .init();
+// Keep _guard alive for process lifetime (dropping it flushes + stops the writer).
+std::mem::forget(_guard);
+
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
             // If a second instance is launched, restore and focus the existing window.
            restore_window(app);
       }))
-      .plugin({
-          // Configure logging to write to a 'logs' directory adjacent to the exe.
-           // This ensures portable versions keep logs alongside the executable,
-            // while MSI installs use the standard app data path (default behavior
-            // when the custom directory cannot be created).
-            let log_dir = std::env::current_exe()
-                .ok()
-                .and_then(|p| p.parent().map(|d| d.join("logs")))
-                .unwrap_or_else(|| std::path::PathBuf::from("logs"));
-
-            // Create logs directory if it doesn't exist
-            let _ = std::fs::create_dir_all(&log_dir);
-
-            tauri_plugin_log::Builder::default()
-                .level(log::LevelFilter::Info)
-                .targets([
-                    tauri_plugin_log::Target::new(tauri_plugin_log::TargetKind::Stdout),
-                    tauri_plugin_log::Target::new(tauri_plugin_log::TargetKind::Folder {
-                        path: log_dir,
-                        file_name: Some("env-manager.log".to_string()),
-                    }),
-                ])
-                .build()
-        })
         .setup(|app| {
             // Build tray menu items - text will be updated via update_tray_locale
             let show_item = MenuItem::with_id(app, "show", "Show", true, None::<&str>)?;

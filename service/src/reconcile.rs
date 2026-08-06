@@ -57,16 +57,16 @@ pub struct MountHealth {
 /// Main reconcile loop. Runs indefinitely (300s interval).
 /// Domain 10: defer first tick 30s to avoid SCM timeout on boot.
 pub async fn reconcile_loop(shutdown: Arc<CancellationToken>) {
-    log::info!("reconcile loop starting (30s warmup, 300s interval)");
+    tracing::info!("reconcile loop starting (30s warmup, 300s interval)");
     tokio::select! {
         _ = tokio::time::sleep(Duration::from_secs(30)) => {}
         _ = shutdown.cancelled() => {
-            log::info!("reconcile loop cancelled during warmup, exiting");
+            tracing::info!("reconcile loop cancelled during warmup, exiting");
             return;
         }
     }
     if shutdown.is_cancelled() {
-        log::info!("reconcile loop cancelled, exiting");
+        tracing::info!("reconcile loop cancelled, exiting");
         return;
     }
     let mut interval = tokio::time::interval(Duration::from_secs(300));
@@ -75,11 +75,11 @@ pub async fn reconcile_loop(shutdown: Arc<CancellationToken>) {
         tokio::select! {
             _ = interval.tick() => {
                 if let Err(e) = run_reconcile_tick().await {
-                    log::error!("reconcile tick failed: {}", e);
+                    tracing::error!("reconcile tick failed: {}", e);
                 }
             }
             _ = shutdown.cancelled() => {
-                log::info!("reconcile loop cancelled, exiting gracefully");
+                tracing::info!("reconcile loop cancelled, exiting gracefully");
                 return;
             }
         }
@@ -87,13 +87,13 @@ pub async fn reconcile_loop(shutdown: Arc<CancellationToken>) {
 }
 
 async fn run_reconcile_tick() -> Result<(), String> {
-    log::info!("reconcile tick: scanning secretMount.json");
+    tracing::info!("reconcile tick: scanning secretMount.json");
 
     let path = crate::secret_mount_path();
     let mut mounts = load_mounts(&path);
 
     if mounts.is_empty() {
-        log::info!("reconcile tick: no mounts found, skipping");
+        tracing::info!("reconcile tick: no mounts found, skipping");
         return Ok(());
     }
 
@@ -125,13 +125,13 @@ async fn run_reconcile_tick() -> Result<(), String> {
 
         match refresh_mount_internal(&mount.provider).await {
             Ok(()) => {
-                log::info!("reconcile: refreshed mount {} (provider={})", mount.id, mount.provider);
+                tracing::info!("reconcile: refreshed mount {} (provider={})", mount.id, mount.provider);
                 mount.lastFetchedAt = Some(now.to_rfc3339());
                 refreshed_count += 1;
                 changed = true;
             }
             Err(e) => {
-                log::warn!("reconcile: failed to refresh mount {}: {}", mount.id, e);
+                tracing::warn!("reconcile: failed to refresh mount {}: {}", mount.id, e);
                 failed_count += 1;
             }
         }
@@ -141,7 +141,7 @@ async fn run_reconcile_tick() -> Result<(), String> {
         save_mounts(&path, &mounts)?;
     }
 
-    log::info!(
+    tracing::info!(
         "reconcile tick complete: {} refreshed, {} failed, {} skipped",
         refreshed_count, failed_count, skipped_count
     );
@@ -242,7 +242,7 @@ async fn refresh_mount_internal(_provider: &str) -> Result<(), String> {
     // If the provider supports Rotate (via CLI), the service calls the CLI
     // rotate path; otherwise it just marks the mount as checked.
     // This avoids a circular dependency (service calls CLI which calls service).
-    log::debug!("refresh_mount_internal: mount metadata check completed");
+    tracing::debug!("refresh_mount_internal: mount metadata check completed");
     Ok(())
   }
 
@@ -293,11 +293,11 @@ fn load_mounts(path: &PathBuf) -> Vec<SecretMount> {
     }
     match std::fs::read_to_string(path) {
         Ok(content) => serde_json::from_str(&content).unwrap_or_else(|e| {
-            log::warn!("failed to parse secretMount.json: {}", e);
+            tracing::warn!("failed to parse secretMount.json: {}", e);
             Vec::new()
         }),
         Err(e) => {
-            log::warn!("failed to read secretMount.json: {}", e);
+            tracing::warn!("failed to read secretMount.json: {}", e);
             Vec::new()
         }
     }

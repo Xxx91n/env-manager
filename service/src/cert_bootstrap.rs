@@ -55,7 +55,7 @@ pub fn vault_bootstrap(cert_thumbprint: &str) -> Result<String, String> {
         // This requires the windows-sys crate's Cryptography API or the
         // reqwest crate with rustls feature for client cert auth.
         // For now, return the flow description.
-        log::info!("Vault cert-based auth with thumbprint {}", cert_thumbprint);
+        tracing::info!("Vault cert-based auth with thumbprint {}", cert_thumbprint);
         // POST to {vault_addr}/v1/auth/cert/login
         // Response: { "auth": { "client_token": "...", "lease_duration": ... } }
         return vault_cert_login(&vault_addr, cert_thumbprint);
@@ -88,7 +88,7 @@ $resp.auth.client_token"#,
         return Err("Vault AppRole login returned empty token".to_string());
     }
 
-    log::info!("Vault AppRole bootstrap successful, token obtained");
+    tracing::info!("Vault AppRole bootstrap successful, token obtained");
     Ok(token)
 }
 
@@ -127,7 +127,7 @@ $resp.auth.client_token"#,
         return Err("Vault cert login returned empty token".to_string());
     }
 
-    log::info!("Vault cert-based bootstrap successful (thumbprint={})", thumbprint);
+    tracing::info!("Vault cert-based bootstrap successful (thumbprint={})", thumbprint);
     Ok(token)
 }
 
@@ -213,7 +213,7 @@ $resp.access_token"#,
         return Err("Azure SP cert auth returned empty token".to_string());
     }
 
-    log::info!("Azure SP cert bootstrap successful, token obtained");
+    tracing::info!("Azure SP cert bootstrap successful, token obtained");
     Ok(token)
 }
 

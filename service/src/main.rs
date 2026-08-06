@@ -76,23 +76,22 @@ fn main() {
     let _ = std::fs::create_dir_all(&log_dir);
     let log_file = log_dir.join("env-manager-service.log");
     // ponytail: best-effort file open; if it fails, fall back to stderr only.
-    match std::fs::OpenOptions::new().create(true).append(true).open(&log_file) {
-        Ok(f) => {
-            env_logger::Builder::from_default_env()
-                .format_timestamp_millis()
-                .target(env_logger::Target::Pipe(Box::new(f)))
-                .filter_level(log::LevelFilter::Info)
-                .init();
-        }
-        Err(e) => {
-            eprintln!("Warning: cannot open log file {:?}: {}, falling back to stderr", log_file, e);
-            env_logger::Builder::from_default_env()
-                .format_timestamp_millis()
-                .filter_level(log::LevelFilter::Info)
-                .init();
-        }
-    }
-    log::info!("env-manager-service starting in {:?} mode", mode);
+// v0.9.8: tracing + tracing-appender unified logging backend.
+// Daily rotation + per-module EnvFilter via RUST_LOG.
+let file_appender = tracing_appender::rolling::daily(&log_dir, "env-manager-service.log");
+let (non_blocking_file, guard) = tracing_appender::non_blocking(file_appender);
+let filter = tracing_subscriber::EnvFilter::try_from_default_env()
+    .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("info"));
+tracing_subscriber::fmt()
+    .with_env_filter(filter)
+    .with_writer(non_blocking_file)
+    .with_ansi(false)
+    .with_target(true)
+    .with_file(false)
+    .with_line_number(false)
+    .init();
+std::mem::forget(guard);
+    tracing::info!("env-manager-service starting in {:?} mode", mode);
 
     // Entry guard (A7): refuse direct double-click launch with no --mode.
     // If interactive session and no --mode flag, print guidance and exit.
@@ -102,7 +101,7 @@ fn main() {
         // the GUI passes --mode=background explicitly.
         // If someone double-clicks with no args at all, we land here as Background default.
         // Allow it but log a warning — background mode is user-launchable.
-        log::info!("Background mode started by user (no --mode flag). This is acceptable for foreground GUI testing.");
+        tracing::info!("Background mode started by user (no --mode flag). This is acceptable for foreground GUI testing.");
     }
 
     let rt = match tokio::runtime::Builder::new_multi_thread()
@@ -111,7 +110,7 @@ fn main() {
     {
         Ok(rt) => rt,
         Err(e) => {
-            log::error!("failed to create tokio runtime: {}", e);
+            tracing::error!("failed to create tokio runtime: {}", e);
             std::process::exit(1);
         }
     };
@@ -120,7 +119,7 @@ fn main() {
         match mode {
             RuntimeMode::Service | RuntimeMode::Background => {
                 let pipe = mode.pipe_endpoint();
-                log::info!("IPC pipe: {}", pipe);
+                tracing::info!("IPC pipe: {}", pipe);
 
                 // CancellationToken for graceful shutdown — shared between IPC server
                 // and reconcile loop. When IPC receives "shutdown", it cancels the token,
@@ -137,10 +136,10 @@ fn main() {
                 let ipc_handle = tokio::spawn(ipc::start_ipc_server(pipe, ipc_token, use_fpi));
 
                 tokio::select! {
-                    _ = reconcile_handle => log::warn!("reconcile loop exited"),
-                    _ = ipc_handle => log::warn!("IPC server exited"),
+                    _ = reconcile_handle => tracing::warn!("reconcile loop exited"),
+                    _ = ipc_handle => tracing::warn!("IPC server exited"),
                 }
-                log::info!("service shutting down (all tasks exited)");
+                tracing::info!("service shutting down (all tasks exited)");
             }
             RuntimeMode::Cli => {
                 let pipe = mode.pipe_endpoint();

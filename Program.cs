@@ -3137,22 +3137,25 @@ partial class Program
         }
 
         string subcommand = args[1].ToLowerInvariant();
+        // v0.9.8 A4: request_id propagated from Rust run_cli via env var, or generated here.
+        string reqId = Environment.GetEnvironmentVariable("ENVMANAGER_REQUEST_ID") ?? "";
+        if (string.IsNullOrEmpty(reqId)) reqId = DateTime.Now.ToString("HHmmss") + (new System.Random().Next(0, 9999)).ToString("D4");
         string pipeName = @"\\.\pipe\EnvManager.Background";
         if (args.Any(a => a == "--service-pipe"))
             pipeName = @"\\.\pipe\EnvManager.Service";
 
         string requestJson = subcommand switch
         {
-            "status" => "{\"method\":\"status\"}",
-            "health" => "{\"method\":\"health\"}",
+            "status" => $"{{\"method\":\"status\",\"request_id\":\"{EscapeJsonLocal(reqId)}\"}}",
+            "health" => $"{{\"method\":\"health\",\"request_id\":\"{EscapeJsonLocal(reqId)}\"}}",
             "refresh" => args.Length < 3
                 ? $"{{\"error\":\"refresh requires mountId\"}}"
-                : $"{{\"method\":\"refresh\",\"mountId\":\"{EscapeJsonLocal(args[2])}\"}}",
+                : $"{{\"method\":\"refresh\",\"mountId\":\"{EscapeJsonLocal(args[2])}\",\"request_id\":\"{EscapeJsonLocal(reqId)}\"}}",
             "rotate" => args.Length < 3
                 ? $"{{\"error\":\"rotate requires mountId\"}}"
-                : $"{{\"method\":\"rotate\",\"mountId\":\"{EscapeJsonLocal(args[2])}\"}}",
-            "reload" => "{\"method\":\"reload\"}",
-            "shutdown" => "{\"method\":\"shutdown\"}",
+                : $"{{\"method\":\"rotate\",\"mountId\":\"{EscapeJsonLocal(args[2])}\",\"request_id\":\"{EscapeJsonLocal(reqId)}\"}}",
+            "reload" => $"{{\"method\":\"reload\",\"request_id\":\"{EscapeJsonLocal(reqId)}\"}}",
+            "shutdown" => $"{{\"method\":\"shutdown\",\"request_id\":\"{EscapeJsonLocal(reqId)}\"}}",
             "ping" => "{\"method\":\"ping\"}",
             _ => $"{{\"error\":\"unknown subcommand: {EscapeJsonLocal(subcommand)}\"}}"
         };
@@ -3187,7 +3190,15 @@ partial class Program
             }
             if (!connected)
             {
-                Console.Error.WriteLine("Error: service not responding at " + pipeName + ". Is env-manager-service running?");
+                // v0.9.8 A3: structured service state enum - not_running vs unresponsive.
+                // Check if the named pipe exists at all (pipe server not started = not_running).
+                // If pipe path exists but connect timed out = unresponsive (service stuck).
+                bool pipeExists = System.IO.File.Exists($@"\\.\pipe\{pipePath}");
+                string state = isProbe && pipeExists ? "unresponsive" : "not_running";
+                // not_running is expected常态 = stdout JSON, stderr debug; unresponsive = stdout JSON, stderr warn.
+                Console.Out.WriteLine($"{{\"ok\":false,\"state\":\"{state}\",\"message\":\"service {state} at {pipeName}\"}}");
+                if (state == "unresponsive")
+                    Console.Error.WriteLine($"Warning: service unresponsive at {pipeName} (pipe exists but IPC timeout). Process may be deadlocked.");
                 return 1;
             }
 

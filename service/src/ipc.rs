@@ -21,6 +21,8 @@ pub struct IpcRequest {
     pub mount_id: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub request_id: Option<String>,
 }
 
 /// IPC response from the service to CLI/GUI.
@@ -49,13 +51,13 @@ impl IpcResponse {
 /// false for Background mode (previous instance pipe handle may linger in OS kernel,
 /// PIPE_FIRST_PIPE_INSTANCE gets os error 5).
 pub async fn start_ipc_server(pipe_name: &str, shutdown: Arc<CancellationToken>, use_first_pipe_instance: bool) {
-    log::info!("IPC server listening on {}", pipe_name);
+    tracing::info!("IPC server listening on {}", pipe_name);
 
     let mut first = true;
     loop {
         // Check shutdown before creating next pipe instance
         if shutdown.is_cancelled() {
-            log::info!("IPC server cancelled, exiting");
+            tracing::info!("IPC server cancelled, exiting");
             return;
         }
         let server = if first && use_first_pipe_instance {
@@ -65,11 +67,11 @@ pub async fn start_ipc_server(pipe_name: &str, shutdown: Arc<CancellationToken>,
             {
                 Ok(s) => {
                     first = false;
-                   log::info!("First pipe instance created (anti-squatting check passed)");
+                   tracing::info!("First pipe instance created (anti-squatting check passed)");
                    s
                }
                Err(e) => {
-                   log::warn!("Pipe creation failed on first attempt: {}. Retrying in 1s...", e);
+                   tracing::warn!("Pipe creation failed on first attempt: {}. Retrying in 1s...", e);
                    tokio::time::sleep(Duration::from_secs(1)).await;
                     match tokio::net::windows::named_pipe::ServerOptions::new()
                         .first_pipe_instance(true)
@@ -77,11 +79,11 @@ pub async fn start_ipc_server(pipe_name: &str, shutdown: Arc<CancellationToken>,
                     {
                         Ok(s) => {
                             first = false;
-                            log::info!("First pipe instance created on retry (stale pipe cleared)");
+                            tracing::info!("First pipe instance created on retry (stale pipe cleared)");
                             s
                         }
                         Err(e2) => {
-                            log::error!("Pipe creation failed after retry: {}. Service cannot start safely.", e2);
+                            tracing::error!("Pipe creation failed after retry: {}. Service cannot start safely.", e2);
                             return;
                         }
                     }
@@ -93,7 +95,7 @@ pub async fn start_ipc_server(pipe_name: &str, shutdown: Arc<CancellationToken>,
             {
                 Ok(s) => s,
                 Err(e) => {
-                    log::error!("Failed to create named pipe instance: {}", e);
+                    tracing::error!("Failed to create named pipe instance: {}", e);
                     tokio::time::sleep(Duration::from_secs(5)).await;
                     continue;
                 }
@@ -105,13 +107,13 @@ pub async fn start_ipc_server(pipe_name: &str, shutdown: Arc<CancellationToken>,
                 match result {
                     Ok(()) => {}
                     Err(e) => {
-                        log::warn!("Client connect failed: {}", e);
+                        tracing::warn!("Client connect failed: {}", e);
                         continue;
                     }
                 }
             }
             _ = shutdown.cancelled() => {
-                log::info!("IPC server cancelled during connect, exiting");
+                tracing::info!("IPC server cancelled during connect, exiting");
                 return;
             }
         }
@@ -119,7 +121,7 @@ pub async fn start_ipc_server(pipe_name: &str, shutdown: Arc<CancellationToken>,
         let conn_token = shutdown.clone();
         tokio::spawn(async move {
             if let Err(e) = handle_connection(server, conn_token).await {
-                log::warn!("Connection handler error: {}", e);
+                tracing::warn!("Connection handler error: {}", e);
             }
         });
     }
@@ -127,7 +129,7 @@ pub async fn start_ipc_server(pipe_name: &str, shutdown: Arc<CancellationToken>,
 
 /// Handle a single client connection: read one request line, process, write one response line.
 async fn handle_connection(mut server: NamedPipeServer, _shutdown: Arc<CancellationToken>) -> io::Result<()> {
-    log::info!("IPC connection accepted");
+    tracing::info!("IPC connection accepted");
     let mut buf = Vec::with_capacity(4096);
     let mut byte = [0u8; 1];
     loop {
@@ -137,7 +139,7 @@ async fn handle_connection(mut server: NamedPipeServer, _shutdown: Arc<Cancellat
                 if byte[0] == b'\n' { break; }
                 buf.push(byte[0]);
                 if buf.len() > 65536 {
-                    log::warn!("IPC request too large ({} bytes), rejecting", buf.len());
+                    tracing::warn!("IPC request too large ({} bytes), rejecting", buf.len());
                     return Err(io::Error::new(io::ErrorKind::InvalidInput, "request too large"));
                 }
             }
@@ -148,7 +150,7 @@ async fn handle_connection(mut server: NamedPipeServer, _shutdown: Arc<Cancellat
     let request: IpcRequest = match serde_json::from_slice(&buf) {
         Ok(r) => r,
         Err(e) => {
-            log::warn!("IPC invalid request: {}", e);
+            tracing::warn!("IPC invalid request: {}", e);
             let resp = IpcResponse::err(&format!("invalid request: {}", e));
             let line = serde_json::to_string(&resp).unwrap_or_default();
             server.write_all((line + "\n").as_bytes()).await?;
@@ -157,7 +159,7 @@ async fn handle_connection(mut server: NamedPipeServer, _shutdown: Arc<Cancellat
     };
 
     let response = process_request(&request, &_shutdown).await;
-    log::info!("IPC response: ok={} method={}", response.ok, request.method);
+    tracing::info!("IPC response: ok={} method={}", response.ok, request.method);
     let line = serde_json::to_string(&response).unwrap_or_default();
     server.write_all((line + "\n").as_bytes()).await?;
     server.flush().await?;
@@ -165,7 +167,7 @@ async fn handle_connection(mut server: NamedPipeServer, _shutdown: Arc<Cancellat
 }
 
 async fn process_request(req: &IpcRequest, shutdown: &Arc<CancellationToken>) -> IpcResponse {
-    log::info!("IPC request: method={}", req.method);
+    tracing::info!("IPC request: method={} request_id={}", req.method, req.request_id.as_deref().unwrap_or("-"));
     match req.method.as_str() {
         // v0.9.6: enriched ping with heartbeat data (uptime, reconcile status, mount health)
         "ping" => {
@@ -211,11 +213,11 @@ async fn process_request(req: &IpcRequest, shutdown: &Arc<CancellationToken>) ->
             }
         }
         "reload" => {
-            log::info!("Reload requested via IPC");
+            tracing::info!("Reload requested via IPC");
             IpcResponse::ok(serde_json::json!({"reloaded": true}))
         }
         "shutdown" => {
-            log::info!("Shutdown requested via IPC — cancelling all tasks");
+            tracing::info!("Shutdown requested via IPC — cancelling all tasks");
             shutdown.cancel();
             IpcResponse::ok(serde_json::json!({"shuttingDown": true}))
         }
