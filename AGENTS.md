@@ -360,3 +360,5 @@ A commit that does not update AGENTS.md (and the relevant `docs/` file) when the
 
 - **v0.9.6 Documentation sync CI check (hard boundary)**: `.github/workflows/build.yml` MUST run `scripts/check-doc-sync.ps1` as a CI step in the `verify` job. A broken doc reference MUST fail the build.
 
+- **v0.9.7 Service probe fast-fail vs reliable-write connect (hard boundary)**: `RunServiceCommand` in `Program.cs` MUST distinguish read probes (`status`/`ping`/`health`) from write operations (`refresh`/`rotate`/`reload`/`shutdown`) when connecting to the named pipe. Read probes use 1 attempt with a 2-second connect timeout (fail fast — the GUI needs to know the service is down in <2s, not <18s). Write operations retain the 3x retry with 5-second timeout and 1s/2s exponential backoff (reliable delivery). The prior v0.9.6 uniform 3x retry applied to ALL subcommands, causing `service status` to block for 18-31 seconds when the service was not running — the GUI appeared frozen while the pipe connect timed out three times. Never apply the retry loop to read probes; a single fast probe is the correct behavior for liveness detection.
+

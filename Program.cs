@@ -3166,18 +3166,23 @@ partial class Program
         try
         {
             string pipePath = pipeName.Replace(@"\\.\pipe\", "");
-            // v0.9.6: pipe connect with 3x retry, 1s backoff (prevents transient pipe-busy false negatives)
+                        // v0.9.7: fast-probe vs reliable-write connect strategy
+            // Read probes (status/ping/health): 1 attempt, 2s timeout — fail fast, don't block GUI
+            // Write ops (refresh/rotate/reload/shutdown): 3x retry, 5s timeout — reliable delivery
+            bool isProbe = subcommand is "status" or "ping" or "health";
+            int maxAttempts = isProbe ? 1 : 3;
+            int connectTimeout = isProbe ? 2000 : 5000;
             using var client = new System.IO.Pipes.NamedPipeClientStream(
                 ".", pipePath,
                 System.IO.Pipes.PipeDirection.InOut,
                 System.IO.Pipes.PipeOptions.None);
             bool connected = false;
-            for (int attempt = 0; attempt < 3; attempt++)
+            for (int attempt = 0; attempt < maxAttempts; attempt++)
             {
-                try { client.Connect(5000); connected = true; break; }
-                catch (System.TimeoutException) when (attempt < 2)
+                try { client.Connect(connectTimeout); connected = true; break; }
+                catch (System.TimeoutException) when (attempt < maxAttempts - 1)
                 {
-                    System.Threading.Thread.Sleep(1000 << attempt); // 1s, 2s exponential backoff
+                    System.Threading.Thread.Sleep(1000 << attempt);
                 }
             }
             if (!connected)
