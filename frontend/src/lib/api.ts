@@ -1336,7 +1336,12 @@ export async function serviceShutdown(): Promise<{ ok: boolean; data?: any; mess
  * Returns true if the service was spawned and survived 2 seconds.
  */
 export async function serviceStart(): Promise<boolean> {
-  return await invoke('start_service')
+  const ok = await invoke('start_service')
+  if (ok) {
+    // v0.9.6: start watchdog thread (auto-restart on 2 consecutive ping failures)
+    try { await invoke('start_service_watchdog') } catch { /* watchdog is best-effort */ }
+  }
+  return ok
 }
 
 /**

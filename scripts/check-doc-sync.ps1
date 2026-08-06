@@ -43,7 +43,7 @@ if (-not $readmeRaw.Contains($csprojVersion)) {
 
 # 3. Check AGENTS.md referenced doc paths exist
 $agentsRaw = Get-Content (Join-Path $root 'AGENTS.md') -Raw
-$docRefs = [regex]::Matches($agentsRaw, '[([^]]+)]((docs/[^)]+))') |
+$docRefs = [regex]::Matches($agentsRaw, '\[([^\]]+)\]\((docs/[^)]+)\)') |
     ForEach-Object { $_.Groups[2].Value } |
     Sort-Object -Unique
 
