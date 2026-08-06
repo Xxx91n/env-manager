@@ -201,6 +201,32 @@ static void AtomicWriteJson<T>(string path, T value)
     File.Move(temp, path, true);
 }
 
+    /// <summary>
+    /// Atomically write a UTF-8 string to a file: temp + fsync + rename.
+    /// Same pattern as AtomicWriteJson but accepts pre-serialized text.
+    /// </summary>
+    static void WriteAtomicUtf8(string path, string content)
+    {
+        string temp = path + ".tmp." + Environment.ProcessId;
+        using (var fs = File.Create(temp))
+        {
+            byte[] bytes = new UTF8Encoding(false).GetBytes(content);
+            fs.Write(bytes, 0, bytes.Length);
+            fs.Flush(flushToDisk: true); // fsync
+        }
+        File.Move(temp, path, true);
+    }
+
+    /// <summary>
+    /// Safe string slice: returns substring up to maxLength, or full string if shorter.
+    /// Prevents ArgumentOutOfRangeException on hash-display substrings.
+    /// </summary>
+    static string SafeSlice(string s, int maxLength)
+    {
+        if (string.IsNullOrEmpty(s) || s.Length <= maxLength) return s ?? "";
+        return s[..maxLength];
+    }
+
     static int RunHistoryCommand(string[] args)
    {
        string sub = args.Length > 1 ? args[1].ToLowerInvariant() : "list";

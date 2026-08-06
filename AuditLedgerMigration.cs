@@ -24,7 +24,9 @@ partial class Program
     {
         get
         {
-            string programData = Environment.GetEnvironmentVariable("ProgramData") ?? @"C:\ProgramData";
+            string programData = Environment.GetEnvironmentVariable("ProgramData") ?? string.Empty;
+            if (string.IsNullOrEmpty(programData))
+                throw new InvalidOperationException("ProgramData environment variable is not set. This is a required Windows system variable.");
             string dir = Path.Combine(programData, "EnvManager");
             Directory.CreateDirectory(dir);
             return Path.Combine(dir, "audit-ledger.jsonl");
@@ -185,7 +187,7 @@ partial class Program
 
             if (storedPrev != prevHash)
             {
-                Console.Error.WriteLine($"Error: hash chain broken at line {i + 1} (expected prev={prevHash[..12]}..., got={storedPrev[..12]}...)");
+                Console.Error.WriteLine($"Error: hash chain broken at line {i + 1} (expected prev={SafeSlice(prevHash, 12)}..., got={SafeSlice(storedPrev, 12)}...)");
                 return 1;
             }
 
@@ -200,7 +202,7 @@ partial class Program
 
             if (computed != storedHash)
             {
-                Console.Error.WriteLine($"Error: hash mismatch at line {i + 1} (expected={storedHash[..12]}..., computed={computed[..12]}...)");
+                Console.Error.WriteLine($"Error: hash mismatch at line {i + 1} (expected={SafeSlice(storedHash, 12)}..., computed={SafeSlice(computed, 12)}...)");
                 return 1;
             }
 
@@ -262,14 +264,12 @@ partial class Program
 
         // Write plaintext to temp, then DPAPI-encrypt.
         string tmpPath = Path.Combine(Path.GetTempPath(), "envmanager-kit-" + Environment.ProcessId + ".json");
-        File.WriteAllText(tmpPath, kitJson, new UTF8Encoding(false));
+        WriteAtomicUtf8(tmpPath, kitJson);
 
         try
         {
             string encrypted = DpapiHelper.EncryptSecret(kitJson);
-            string tempOut = outputPath + ".tmp." + Environment.ProcessId;
-            File.WriteAllText(tempOut, encrypted, new UTF8Encoding(false));
-            File.Move(tempOut, outputPath, true);
+            WriteAtomicUtf8(outputPath, encrypted);
         }
         finally
         {
@@ -343,9 +343,7 @@ partial class Program
             recoveredAt = DateTimeOffset.UtcNow.ToString("O"),
         }, JsonOptsIndented);
 
-        string recoveryTemp = recoveryPath + ".tmp." + Environment.ProcessId;
-        File.WriteAllText(recoveryTemp, recoveryJson, new UTF8Encoding(false));
-        File.Move(recoveryTemp, recoveryPath, true);
+        WriteAtomicUtf8(recoveryPath, recoveryJson);
 
         DebugLog($"audit recover-from-ledger: {mounts.Count} mounts reconstructed");
         Console.WriteLine(JsonSerializer.Serialize(new

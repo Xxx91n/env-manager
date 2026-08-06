@@ -76,9 +76,7 @@ partial class Program
         string encrypted = DpapiHelper.EncryptSecret(jsonState);
 
         // Atomic write: temp + fsync + rename.
-        string temp = outputFile + ".tmp." + Environment.ProcessId;
-        File.WriteAllText(temp, encrypted, new UTF8Encoding(false));
-        File.Move(temp, outputFile, true);
+        WriteAtomicUtf8(outputFile, encrypted);
 
         Console.WriteLine(JsonSerializer.Serialize(new
         {
@@ -171,28 +169,46 @@ partial class Program
             return 0;
         }
 
-        // Atomic import: for each file, create .bak of existing, write new atomically.
+        // Transactional import: all-or-nothing. If any file write fails, rollback all
+        // previously written files from their .bak backups before reporting the error.
         int imported = 0;
-        foreach (var kvp in validatedFiles)
+        var writtenFiles = new List<string>();
+        try
         {
-            string targetPath = Path.Combine(AppDataDirectory, kvp.Key);
-            string bakPath = targetPath + ".bak";
-
-            // Backup existing file if present.
-            if (File.Exists(targetPath))
-                File.Copy(targetPath, bakPath, true);
-
-            // Atomic write: temp + fsync + rename.
-            string temp = targetPath + ".tmp." + Environment.ProcessId;
-            using (var fs = File.Create(temp))
+            foreach (var kvp in validatedFiles)
             {
-                byte[] bytes = Encoding.UTF8.GetBytes(kvp.Value);
-                fs.Write(bytes, 0, bytes.Length);
-                fs.Flush(flushToDisk: true);
+                string targetPath = Path.Combine(AppDataDirectory, kvp.Key);
+                string bakPath = targetPath + ".bak";
+
+                // Backup existing file if present.
+                if (File.Exists(targetPath))
+                    File.Copy(targetPath, bakPath, true);
+
+                // Atomic write: temp + fsync + rename.
+                WriteAtomicUtf8(targetPath, kvp.Value);
+                writtenFiles.Add(targetPath);
+                imported++;
+                DebugLog($"import-state: wrote {kvp.Key} ({kvp.Value.Length} bytes)");
             }
-            File.Move(temp, targetPath, true);
-            imported++;
-            DebugLog($"import-state: wrote {kvp.Key} ({kvp.Value.Length} bytes)");
+        }
+        catch (Exception ex)
+        {
+            // Rollback: restore .bak for each file that was written.
+            DebugLog($"import-state: write failed at file {imported + 1}, rolling back {writtenFiles.Count} files");
+            foreach (string writtenPath in writtenFiles)
+            {
+                string bakPath2 = writtenPath + ".bak";
+                if (File.Exists(bakPath2))
+                {
+                    try { File.Move(bakPath2, writtenPath, true); } catch { }
+                }
+                else
+                {
+                    // No backup existed — the file was new; delete it.
+                    try { File.Delete(writtenPath); } catch { }
+                }
+            }
+            return ArgError($"Error: Import failed at file {imported + 1}. All changes rolled back. {ex.Message}");
         }
 
         Console.WriteLine(JsonSerializer.Serialize(new
