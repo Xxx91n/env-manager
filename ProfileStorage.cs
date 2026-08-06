@@ -33,9 +33,9 @@ partial class Program
             profile.PathEntries ??= new();
             profile.Variables ??= new();
         }
-        // v0.8.0 Phase A: one-shot migration of secret envelopes to secretMount.json.
-        // Runs only once (skips if secretMount.json already has entries).
-        MigrateSecretsToMounts(profiles);
+        // v0.9.9: Versioned schema migration (replaces ad-hoc MigrateSecretsToMounts call).
+        // The registry detects schema version, runs pending steps sequentially, and persists.
+        MigrateProfiles(profiles);
         return profiles;
     }
 

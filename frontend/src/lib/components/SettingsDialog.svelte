@@ -2,7 +2,7 @@
   import { createEventDispatcher, onMount } from 'svelte'
   import { t, locale } from 'svelte-i18n'
   import { locales, defaultLanguage } from '../i18n'
-  import { isCliInPath, addCliToPath, removeCliFromPath, listPathEntries, checkForUpdates, bulkImport, bulkExport, pickOpenFile, pickSaveFile, serviceStatus, serviceHealth, servicePing, serviceRefreshMount, serviceRotateMount, serviceShutdown, serviceReload, serviceStart, serviceStop } from '../api'
+  import { isCliInPath, addCliToPath, removeCliFromPath, listPathEntries, checkForUpdates, bulkImport, bulkExport, pickOpenFile, pickSaveFile, serviceStatus, serviceHealth, servicePing, serviceRefreshMount, serviceRotateMount, serviceShutdown, serviceReload, serviceStart, serviceStop, exportState, importState } from '../api'
   import { get } from 'svelte/store'
   import { setSetting, frontendLog } from '../settingsStore'
   import { showToast } from '../stores'
@@ -338,6 +338,44 @@
   function handleClose() {
     dispatch('close')
   }
+
+  // v0.9.9: Full-state disaster recovery handlers
+  let drLoading = false
+  let drError: string | null = null
+
+  async function handleExportState() {
+    if (drLoading) return
+    drLoading = true
+    drError = null
+    try {
+      const file = await pickSaveFile($t('settings.drExportPrompt'), 'env-manager-state.dpapi')
+      if (!file) { drLoading = false; return }
+      const result = await exportState(file)
+      showToast($t('settings.drExported', { values: { count: result.exported } }), 'success')
+    } catch (err) {
+      drError = err instanceof Error ? err.message : String(err)
+      showToast(drError, 'error')
+    }
+    drLoading = false
+  }
+
+  async function handleImportState() {
+    if (drLoading) return
+    drLoading = true
+    drError = null
+    try {
+      const file = await pickOpenFile($t('settings.drImportPrompt'))
+      if (!file) { drLoading = false; return }
+      // Dry-run first to validate
+      await importState(file, true)
+      const result = await importState(file, false)
+      showToast($t('settings.drImported', { values: { count: result.imported } }), 'success')
+    } catch (err) {
+      drError = err instanceof Error ? err.message : String(err)
+      showToast(drError, 'error')
+    }
+    drLoading = false
+  }
 </script>
 
 <div
@@ -504,6 +542,32 @@
           </button>
         </div>
         <p class="mt-1 text-[10px] text-gray-400 dark:text-gray-500">{$t('settings.bulkHint')}</p>
+      </div>
+    </div>
+
+
+    <div class="px-5 py-3 space-y-2 border-t border-gray-200 dark:border-gray-700">
+      <div>
+        <label class="block text-xs font-medium text-gray-600 mb-1.5 dark:text-gray-400">
+          {$t('settings.drTitle')}
+        </label>
+        <div class="flex items-center gap-2 flex-wrap">
+          <button
+            on:click={handleExportState}
+            disabled={drLoading}
+            class="px-3 py-1 text-xs font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 transition disabled:opacity-50 dark:text-gray-200 dark:bg-gray-800 dark:border-gray-600 dark:hover:bg-gray-700"
+          >
+            {$t('settings.drExport')}
+          </button>
+          <button
+            on:click={handleImportState}
+            disabled={drLoading}
+            class="px-3 py-1 text-xs font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 transition disabled:opacity-50 dark:text-gray-200 dark:bg-gray-800 dark:border-gray-600 dark:hover:bg-gray-700"
+          >
+            {$t('settings.drImport')}
+          </button>
+        </div>
+        <p class="mt-1 text-[10px] text-gray-400 dark:text-gray-500">{$t('settings.drHint')}</p>
       </div>
     </div>
 

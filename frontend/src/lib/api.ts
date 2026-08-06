@@ -1378,3 +1378,16 @@ export async function auditRecoverFromLedger(): Promise<any> {
   await frontendLog('info', 'GUI: audit recover-from-ledger requested')
   return await runWrite('audit', ['list', '--json'])
 }
+
+// v0.9.9: Full-state export/import for disaster recovery
+export async function exportState(outputFile: string): Promise<{ exported: number; file: string; sizeBytes: number }> {
+  const output = await runRead('export-state', ['--output', outputFile])
+  return JSON.parse(output)
+}
+
+export async function importState(inputFile: string, dryRun: boolean = false): Promise<{ imported: number; file: string }> {
+  const args = ['--input', inputFile]
+  if (dryRun) args.push('--dry-run')
+  const output = await runWrite('import-state', args)
+  return JSON.parse(output)
+}

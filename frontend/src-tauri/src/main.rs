@@ -59,6 +59,8 @@ const ALLOWED_COMMANDS: &[&str] = &[
    "protection",
    "update",
     "audit",
+    "export-state",
+    "import-state",
 ];
 
 /// Read-only commands that can run concurrently with each other.
@@ -73,6 +75,7 @@ const READ_COMMANDS: &[&str] = &[
     "expand",
     "help",
     "update",
+    "export-state",
 ];
 
 /// Write commands that mutate the registry. These must hold the write lock
@@ -87,6 +90,7 @@ const WRITE_COMMANDS: &[&str] = &[
     "toggle",
     "restore",
     "merge",
+    "import-state",
 ];
 
 /// Determines if a CLI invocation is read-only (can run concurrently) or

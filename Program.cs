@@ -53,6 +53,8 @@ class ProfileData
     [JsonPropertyName("workingDirectory")] public string? WorkingDirectory { get; set; }
     // Secret variable names in a launch profile are DPAPI-encrypted on disk; plaintext lives only in process memory.
     [JsonPropertyName("secretVariables")] public List<string> SecretVariables { get; set; } = new();
+    // v0.9.9: Schema version for migration framework. 0 = pre-v0.9.9 (inferred on load).
+    [JsonPropertyName("schemaVersion")] public int SchemaVersion { get; set; } = 0;
 }
 
 partial class Program
@@ -171,7 +173,7 @@ partial class Program
     static readonly HashSet<string> ValidCommands = new(StringComparer.OrdinalIgnoreCase)
     {
         "list", "get", "set", "rename", "change-scope", "delete", "toggle", "backup", "restore", "diff", "merge",
-        "validate", "help", "profile", "path", "agents", "history", "bulk", "expand", "protection", "update", "service", "audit"
+        "validate", "help", "profile", "path", "agents", "history", "bulk", "expand", "protection", "update", "service", "audit", "export-state", "import-state"
     };
 
     static readonly JsonSerializerOptions JsonOpts = new()
@@ -281,6 +283,8 @@ partial class Program
                 "update" => RunUpdate(args),
                 "service" => RunServiceCommand(args),
                 "audit" => RunAuditCommand(args),
+                "export-state" => RunExportState(args),
+                "import-state" => RunImportState(args),
                 "help" => ShowHelp(),
                 _ => 1
             };

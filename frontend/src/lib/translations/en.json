@@ -386,6 +386,16 @@
       "description": "Recent environment variable operations",
       "loading": "Loading...",
       "empty": "No audit entries found"
+    },
+    "dr": {
+      "drTitle": "Disaster Recovery",
+      "drExport": "Export State",
+      "drImport": "Import State",
+      "drExportPrompt": "Save state archive",
+      "drImportPrompt": "Select state archive to import",
+      "drExported": "Exported {count} files",
+      "drImported": "Imported {count} files",
+      "drHint": "Full-state backup includes profiles, secrets, protection lists, and settings."
     }
   },
   "history.allProfiles": "All Profiles",

@@ -386,6 +386,16 @@
       "description": "Operaciones de variables de entorno recientes",
       "loading": "Cargando...",
       "empty": "No se encontraron entradas de auditoría"
+    },
+    "dr": {
+      "drTitle": "Recuperación de desastres",
+      "drExport": "Exportar estado",
+      "drImport": "Importar estado",
+      "drExportPrompt": "Guardar archivo de estado",
+      "drImportPrompt": "Seleccionar archivo de estado a importar",
+      "drExported": "{count} archivos exportados",
+      "drImported": "{count} archivos importados",
+      "drHint": "La copia de seguridad completa incluye perfiles, secretos, listas de protección y configuración."
     }
   },
   "history.allProfiles": "Todos los perfiles",
