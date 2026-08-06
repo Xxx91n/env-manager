@@ -3251,6 +3251,10 @@ partial class Program
             Console.Error.WriteLine("Subcommands:");
             Console.Error.WriteLine("  encrypt-file --input <file> --output <file>  DPAPI-encrypt a file");
             Console.Error.WriteLine("  list [--mount <id>]                        List audit ledger events");
+            Console.Error.WriteLine("  migrate-audit [--dry-run]                 Migrate audit.json to hash-chained ledger");
+            Console.Error.WriteLine("  verify-ledger                              Verify audit ledger hash chain");
+            Console.Error.WriteLine("  export-survival-kit [--mount <id>] [--output <file>]  Export DPAPI-encrypted survival kit");
+            Console.Error.WriteLine("  recover-from-ledger                        Recover mounts from ledger replay");
             return 1;
         }
 
@@ -3332,6 +3336,14 @@ partial class Program
                     return 0;
                 }
 
+            case "migrate-audit":
+                return RunAuditMigrate(args);
+            case "verify-ledger":
+                return RunAuditVerifyLedger();
+            case "export-survival-kit":
+                return RunAuditExportSurvivalKit(args);
+            case "recover-from-ledger":
+                return RunAuditRecoverFromLedger();
             default:
                 Console.Error.WriteLine("Unknown audit subcommand: " + sub);
                 return 1;
