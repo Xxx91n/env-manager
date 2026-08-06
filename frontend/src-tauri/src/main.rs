@@ -138,6 +138,11 @@ fn is_read_only(command: &str, args: &[String]) -> bool {
         "audit" => matches!(args.first().map(|s| s.as_str()), Some("list")),
         "bulk" => !matches!(args.first().map(|s| s.as_str()), Some("import")) || args.iter().any(|arg| arg == "--dry-run"),
         "protection" => matches!(args.first().map(|s| s.as_str()), Some("list")),
+        // service: ping/status/health are read-only IPC probes; refresh/rotate/reload/shutdown mutate state
+        "service" => matches!(
+            args.first().map(|s| s.as_str()),
+            Some("ping") | Some("status") | Some("health")
+        ),
         _ => false,
     }
 }
