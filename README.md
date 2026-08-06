@@ -21,8 +21,8 @@ Modern, lightweight Windows environment variable manager with CLI and GUI dual-m
 - **v0.7.0 GUI**: PATH health badges (healthy/dead/duplicate/duplicate+dead) + Remove Dead bulk action; Launch profile type badge + Launch button + Create bar type selector + native file picker; variable search highlight + `%VAR%` expansion preview; `.env`/CSV bulk import/export in Settings (native file picker).
 - **v0.7.0 PATH health GUI**: one-click health check shows per-row color-coded status; `--fix` remove-dead is gated behind a confirmation modal (protected entries never removed).
 - **v0.8.0 SecretMount schema v2**: secret variables reference a `SecretMount` entry in a separate `secretMount.json` file. Atomic write ordering (mount-first, profile-second) with fsync eliminates torn-write corruption. One-shot migration from inline envelopes to mount references.
-- **v0.9.0 env-manager-service**: a standalone Rust service binary (`env-manager-service.exe`) managing secret mount lifecycle via named pipe IPC. RuntimeMode (Service/Background/Cli) resolved from `--mode` argv. Reconcile loop with 300s periodic full-scan, idempotent per-item handler. Anti-squatting pipe flag prevents pipe hijacking. GUI service control panel in Settings (Ping/Reload/Shutdown + mount health list).
-- **v0.9.5 Phase D cert bootstrap**: Vault AppRole and Azure SP certificate-based authentication eliminates long-lived tokens (`VAULT_TOKEN`, `AZURE_CLIENT_SECRET`). Short-lived tokens cached in-memory only.
+- **v0.9.11 env-manager-service**: a standalone Rust service binary (`env-manager-service.exe`) managing secret mount lifecycle via named pipe IPC. RuntimeMode (Service/Background/Cli) resolved from `--mode` argv. Reconcile loop with 300s periodic full-scan, idempotent per-item handler. Anti-squatting pipe flag prevents pipe hijacking. GUI service control panel in Settings (Ping/Reload/Shutdown + mount health list).
+- **v0.9.11 Phase D cert bootstrap**: Vault AppRole and Azure SP certificate-based authentication eliminates long-lived tokens (`VAULT_TOKEN`, `AZURE_CLIENT_SECRET`). Short-lived tokens cached in-memory only.
 - **v1.0.0 Phase E audit ledger**: append-only hash-chained audit ledger (`audit-ledger.jsonl`) with 100MB rotation, tamper detection, and DPAPI-encrypted survival kit export. Migration script converts legacy `audit.json` to ledger format.
 - User and System scope support
 - JSON backup/restore with diff/merge, audited history and guarded undo
@@ -327,7 +327,7 @@ Apache-2.0 - Use freely for personal and commercial projects. See [LICENSE](LICE
 
 ---
 
-### v0.9.0
+### v0.9.11
 
 - **SecretMount schema v2**: secret variables now reference a separate `secretMount.json` file with atomic write ordering (mount-first, profile-second) and fsync. One-shot migration from inline envelopes.
 - **env-manager-service**: standalone Rust service binary for secret mount lifecycle management via named pipe IPC. RuntimeMode (Service/Background/Cli), reconcile loop (300s periodic scan), anti-squatting pipe flag. GUI service control panel in Settings.
@@ -349,7 +349,7 @@ Open source project. For issues, feature requests, or pull requests, visit the [
 
 ---
 
-**Version**: 0.9.0 | **License**: Apache-2.0 | **Status**: Active Development
+**Version**: 0.9.11 | **License**: Apache-2.0 | **Status**: Active Development
 
 
 ### Safety and Performance

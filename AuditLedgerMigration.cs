@@ -343,7 +343,9 @@ partial class Program
             recoveredAt = DateTimeOffset.UtcNow.ToString("O"),
         }, JsonOptsIndented);
 
-        File.WriteAllText(recoveryPath, recoveryJson, new UTF8Encoding(false));
+        string recoveryTemp = recoveryPath + ".tmp." + Environment.ProcessId;
+        File.WriteAllText(recoveryTemp, recoveryJson, new UTF8Encoding(false));
+        File.Move(recoveryTemp, recoveryPath, true);
 
         DebugLog($"audit recover-from-ledger: {mounts.Count} mounts reconstructed");
         Console.WriteLine(JsonSerializer.Serialize(new

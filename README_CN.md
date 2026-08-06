@@ -20,8 +20,8 @@
 - **机密提供者**：8 个后端（DPAPI 当前用户、Windows 凭据管理器、PowerShell SecretManagement、HashiCorp Vault KV v2、SOPS、Azure Key Vault、1Password CLI、AWS Secrets Manager）。各提供者的前置条件、一次性配置、激活错误信息与精确的修复步骤见 [docs/secret-providers-guide.md](docs/secret-providers-guide.md)。提供者激活错误会在配置文件编辑器中提供者选择器下方以内联琥珀色横幅直接显示。
 - **v0.7.0 GUI**：PATH 健康徽章（healthy/dead/duplicate/duplicate+dead）+ 一键移除失效项；Launch 配置文件类型徽章 + 启动按钮 + 创建栏类型选择 + 原生文件选择器；变量搜索高亮 + `%VAR%` 展开预览；设置中的 `.env`/CSV 批量导入导出（原生文件选择器）。
 - **v0.8.0 SecretMount schema v2**：机密变量引用独立的 `secretMount.json` 文件中的 `SecretMount` 条目。原子写入顺序（先 mount 后 profile）配合 fsync 消除撕裂写入损坏。一次性迁移从内联信封到 mount 引用。
-- **v0.9.0 env-manager-service**：独立 Rust 服务二进制（`env-manager-service.exe`），通过命名管道 IPC 管理机密 mount 生命周期。RuntimeMode（Service/Background/Cli）由 `--mode` argv 解析。调和循环（300秒周期扫描），幂等单项处理器。防 squatting 管道标志防止管道劫持。GUI 设置中的服务控制面板（Ping/Reload/Shutdown + mount 健康列表）。
-- **v0.9.5 Phase D 证书引导**：Vault AppRole 和 Azure SP 证书认证，消除长期令牌（`VAULT_TOKEN`、`AZURE_CLIENT_SECRET`）。短期令牌仅缓存在内存中。
+- **v0.9.11 env-manager-service**：独立 Rust 服务二进制（`env-manager-service.exe`），通过命名管道 IPC 管理机密 mount 生命周期。RuntimeMode（Service/Background/Cli）由 `--mode` argv 解析。调和循环（300秒周期扫描），幂等单项处理器。防 squatting 管道标志防止管道劫持。GUI 设置中的服务控制面板（Ping/Reload/Shutdown + mount 健康列表）。
+- **v0.9.11 Phase D 证书引导**：Vault AppRole 和 Azure SP 证书认证，消除长期令牌（`VAULT_TOKEN`、`AZURE_CLIENT_SECRET`）。短期令牌仅缓存在内存中。
 - **v1.0.0 Phase E 审计账本**：追加式哈希链审计账本（`audit-ledger.jsonl`），100MB 轮转，篡改检测，DPAPI 加密的生存套件导出。迁移脚本将旧 `audit.json` 转换为账本格式。
 - 用户和系统作用域支持
 - JSON 备份与恢复、差异对比、合并、变更历史和安全撤销
@@ -326,7 +326,7 @@ Apache-2.0 - 可自由用于个人和商业项目。详见 [LICENSE](LICENSE)。
 
 ---
 
-### v0.9.0
+### v0.9.11
 
 - **SecretMount schema v2**：机密变量引用独立的 `secretMount.json` 文件，原子写入顺序（先 mount 后 profile）配合 fsync。一次性迁移。
 - **env-manager-service**：独立 Rust 服务二进制，命名管道 IPC 管理机密 mount 生命周期。RuntimeMode（Service/Background/Cli），调和循环（300秒周期扫描），防 squatting 管道标志。GUI 服务控制面板。
@@ -348,7 +348,7 @@ Apache-2.0 - 可自由用于个人和商业项目。详见 [LICENSE](LICENSE)。
 
 ---
 
-**版本**：0.9.0 | **许可**：Apache-2.0 | **状态**：积极开发中
+**版本**：0.9.11 | **许可**：Apache-2.0 | **状态**：积极开发中
 
 
 ### 安全与性能

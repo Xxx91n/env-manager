@@ -1,6 +1,6 @@
 [package]
 name = "env-manager-service"
-version = "0.9.10"
+version = "0.9.11"
 edition = "2021"
 license = "Apache-2.0"
 description = "Env Manager secret lifecycle service (Phase B+C v0.9.0)"
