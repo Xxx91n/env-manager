@@ -326,15 +326,13 @@ Apache-2.0 - 可自由用于个人和商业项目。详见 [LICENSE](LICENSE)。
 
 ---
 
-### v0.9.11
+### v0.9.8-v0.9.11（Phase A-E 路线图）
 
-- **SecretMount schema v2**：机密变量引用独立的 `secretMount.json` 文件，原子写入顺序（先 mount 后 profile）配合 fsync。一次性迁移。
-- **env-manager-service**：独立 Rust 服务二进制，命名管道 IPC 管理机密 mount 生命周期。RuntimeMode（Service/Background/Cli），调和循环（300秒周期扫描），防 squatting 管道标志。GUI 服务控制面板。
-- **Phase D 证书引导**：Vault AppRole 和 Azure SP 证书认证，消除长期令牌。
-- **Phase E 审计账本**：追加式哈希链账本，轮转，篡改检测，DPAPI 加密生存套件导出。
-- **MSI 安装包**：WiX ServiceInstall 注册 env-manager-service，ProgramData 目录存储机器级机密 mount 文件。
-- **构建流水线**：跨平台 `scripts/build.mjs` 编排器，多架构支持（x64/x86/arm64），CLI 版本验证防止陈旧二进制部署。
-- **安全**：audit encrypt-file 路径验证（50MB 上限 + 系统目录阻止），audit 命令纳入 Rust ALLOWED_COMMANDS，audit list/encrypt-file 读写分类。
+- **v0.9.8 工业级日志**：`tracing` + `tracing-appender` 后端，按日轮转，跨进程 `request_id` 实现 CLI/Rust/Service 调试关联，`ServiceStatus` 枚举提供类型化服务健康响应。
+- **v0.9.9 Schema 迁移**：`SchemaMigration.cs` 注册表式顺序迁移框架（profiles v0->v1->v2）。全状态导出/导入 `export-state`/`import-state` — DPAPI-CurrentUser 加密的全部配置文件归档，用于容灾恢复。GUI 设置中的 DR 区域支持 dry-run 校验。
+- **v0.9.10 审计账本**：`AuditLedgerMigration.cs` 实现 `audit migrate-audit`（audit.json → 哈希链 `audit-ledger.jsonl`）、`audit verify-ledger`（SHA256 链篡改检测）、`audit export-survival-kit`（DPAPI 加密生存套件）、`audit recover-from-ledger`（回放 create/delete 事件重建 mount 列表）。
+- **v0.9.11 最终对齐**：env-manager-service 独立 Rust 二进制（Phase B+C），Phase D 证书引导，Phase E 审计账本统一到 `ProgramData\EnvManager\audit-ledger.jsonl` 规范路径，MSI 安装包集成 WiX ServiceInstall，跨平台 `scripts/build.mjs` 支持 x64/x86/arm64。
+- **安全**：原子写入（temp+fsync+rename）替换 `File.WriteAllText`；`import-state` 事务回滚在部分失败时恢复 `.bak`；移除 `ProgramData` 硬编码 fallback；`audit verify-ledger`/`export-survival-kit` 在 Rust `is_read_only` 中归为只读。
 
 ### v0.7.1
 

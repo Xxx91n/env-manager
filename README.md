@@ -327,15 +327,13 @@ Apache-2.0 - Use freely for personal and commercial projects. See [LICENSE](LICE
 
 ---
 
-### v0.9.11
+### v0.9.8-v0.9.11 (Phase A-E roadmap)
 
-- **SecretMount schema v2**: secret variables now reference a separate `secretMount.json` file with atomic write ordering (mount-first, profile-second) and fsync. One-shot migration from inline envelopes.
-- **env-manager-service**: standalone Rust service binary for secret mount lifecycle management via named pipe IPC. RuntimeMode (Service/Background/Cli), reconcile loop (300s periodic scan), anti-squatting pipe flag. GUI service control panel in Settings.
-- **Phase D cert bootstrap**: Vault AppRole and Azure SP certificate-based auth, eliminating long-lived tokens.
-- **Phase E audit ledger**: append-only hash-chained ledger with rotation, tamper detection, and DPAPI-encrypted survival kit export.
-- **MSI installer**: WiX ServiceInstall for the env-manager-service, ProgramData directory for machine-level secret mount files.
-- **Build pipeline**: cross-platform `scripts/build.mjs` orchestrator with multi-architecture support (x64/x86/arm64), CLI version verification to prevent stale-binary deployment.
-- **Security**: path validation for audit encrypt-file (50MB cap + system directory block), audit command in Rust ALLOWED_COMMANDS, read/write classification for audit list/encrypt-file.
+- **v0.9.8 Industrial logging**: `tracing` + `tracing-appender` backend with daily rotation, cross-process `request_id` for CLI/Rust/Service debug correlation, `ServiceStatus` enum for typed service health responses.
+- **v0.9.9 Schema migration**: `SchemaMigration.cs` registry-based sequential migration framework (profiles v0->v1->v2). Full-state export/import via `export-state`/`import-state` — DPAPI-CurrentUser-encrypted archive of all Env Manager config files for disaster recovery. GUI DR section in Settings with dry-run validation.
+- **v0.9.10 Audit ledger**: `AuditLedgerMigration.cs` implements `audit migrate-audit` (audit.json → `audit-ledger.jsonl` hash-chained), `audit verify-ledger` (SHA256 chain tamper detection), `audit export-survival-kit` (DPAPI-encrypted survival kit), `audit recover-from-ledger` (replay create/delete events to reconstruct mount lists).
+- **v0.9.11 Final alignment**: env-manager-service standalone Rust binary (Phase B+C), Phase D cert bootstrap, Phase E audit ledger unification with `ProgramData\EnvManager\audit-ledger.jsonl` canonical path, MSI installer with WiX ServiceInstall, cross-platform `scripts/build.mjs` for x64/x86/arm64.
+- **Security**: atomic writes (temp+fsync+rename) replace `File.WriteAllText` across all durable state; transactional rollback for `import-state` restores `.bak` on partial failure; `ProgramData` hardcoded fallback eliminated; `audit verify-ledger`/`export-survival-kit` classified read-only in Rust `is_read_only`.
 
 ### v0.7.1
 
