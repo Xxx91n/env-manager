@@ -1,54 +1,73 @@
-# Env Manager
+# Env Manager _(env-manager)_
 
 Modern, lightweight Windows environment variable manager with CLI and GUI dual-mode support. Inspired by Microsoft PowerToys, built standalone for speed and simplicity.
 
 **[简体中文](README_CN.md)** | **English**
 
-**Supported GUI languages** (Settings dialog dropdown, persisted across restarts): English, 简体中文, 日本語, 한국어, Deutsch, Français, Español, Português, Русский, العربية.
+<!-- screenshot: main-ui -- replace with screenshot of main variable list view -->
+<!-- screenshot: profile-editor -- replace with screenshot of profile editor with secret provider selector -->
+<!-- screenshot: service-manager -- replace with screenshot of service management panel -->
 
 ---
 
-## Features
+## Security
 
-### CLI Mode
-- 18 commands for complete environment variable management
-- Simultaneous profiles with inheritance, conflict previews, PATH fragments, and safe reverse-order rollback
-- PATH editor with duplicate and missing-directory diagnostics
-- **Launch profiles**: create a Global or Launch profile directly in the GUI or with one CLI transaction. Launch profiles start the selected executable with an isolated env block (`env_clear` + inject), never write the registry, and never broadcast `WM_SETTINGCHANGE`. Profile names are globally unique so name-addressed CLI commands remain unambiguous.
-- **v0.6.0 PATH health**: `path health [--fix] [--dry-run]` detects duplicates AND dead (non-existent) PATH entries in one command; `--fix` safely removes non-protected entries; protected entries always preserved.
-- **v0.7.0 DPAPI secrets**: `profile add-secret`/`edit-secret`/`remove-secret`/`reveal-secret` - per-profile variable values encrypted with Windows DPAPI CurrentUser. Plaintext lives only in transient process memory; `profile launch` decrypts at spawn time; `reveal-secret` is the only stdout-plaintext path. Audit records NAME only.
-- **Secret providers**: 8 backends (DPAPI CurrentUser, Windows Credential Manager, PowerShell SecretManagement, HashiCorp Vault KV v2, SOPS, Azure Key Vault, 1Password CLI, AWS Secrets Manager). See [docs/secret-providers-guide.md](docs/secret-providers-guide.md) for per-provider prerequisites, one-time setup, activation errors, and the exact fix steps. Provider activation errors surface as an inline amber banner directly under the provider selector in the Profile editor.
-- **v0.7.0 GUI**: PATH health badges (healthy/dead/duplicate/duplicate+dead) + Remove Dead bulk action; Launch profile type badge + Launch button + Create bar type selector + native file picker; variable search highlight + `%VAR%` expansion preview; `.env`/CSV bulk import/export in Settings (native file picker).
-- **v0.7.0 PATH health GUI**: one-click health check shows per-row color-coded status; `--fix` remove-dead is gated behind a confirmation modal (protected entries never removed).
-- **v0.8.0 SecretMount schema v2**: secret variables reference a `SecretMount` entry in a separate `secretMount.json` file. Atomic write ordering (mount-first, profile-second) with fsync eliminates torn-write corruption. One-shot migration from inline envelopes to mount references.
-- **v0.9.11 env-manager-service**: a standalone Rust service binary (`env-manager-service.exe`) managing secret mount lifecycle via named pipe IPC. RuntimeMode (Service/Background/Cli) resolved from `--mode` argv. Reconcile loop with 300s periodic full-scan, idempotent per-item handler. Anti-squatting pipe flag prevents pipe hijacking. GUI service control panel in Settings (Ping/Reload/Shutdown + mount health list).
-- **v0.9.11 Phase D cert bootstrap**: Vault AppRole and Azure SP certificate-based authentication eliminates long-lived tokens (`VAULT_TOKEN`, `AZURE_CLIENT_SECRET`). Short-lived tokens cached in-memory only.
-- **v1.0.0 Phase E audit ledger**: append-only hash-chained audit ledger (`audit-ledger.jsonl`) with 100MB rotation, tamper detection, and DPAPI-encrypted survival kit export. Migration script converts legacy `audit.json` to ledger format.
-- User and System scope support
-- JSON backup/restore with diff/merge, audited history and guarded undo
-- Bulk `.env`, CSV, and JSON import/export with dry-run conflict previews
-- No admin required for user scope
-- Single 158KB executable, no runtime dependency
+> [!WARNING]
+> Env Manager is **not code-signed**. Windows SmartScreen may show an "unrecognized app" warning on first launch. Click "More info" then "Run anyway" to proceed. Code signing is planned for a future release.
 
-### GUI Mode
-- Native desktop app built with Tauri 2.0 (WebView2)
-- Real-time variable list with highlighted search matches, scope filtering, and expanded `%VAR%` previews
-- Inline add, edit, delete with confirmation
-- Backup and restore through the UI
-- 10-language internationalization: English, Chinese, Japanese, Korean, German, French, Spanish, Portuguese, Russian, Arabic
+Protected variables and PATH entries are disabled before deletion, with exact registry value-kind verification on restore. Secret values are encrypted via provider-specific mechanisms (DPAPI, CredMan, Vault, SOPS, Azure KV, 1Password, AWS SM) — plaintext never persists to disk or logs. Named pipe IPC uses anti-squatting flags and input validation (64 arg max, 32767 char cap, null byte rejection). See [SECURITY.md](SECURITY.md) for vulnerability reporting.
 
----
+## Table of Contents
 
-## Quick Start
+- [Security](#security)
+- [Background](#background)
+- [Install](#install)
+- [Usage](#usage)
+- [Features](#features)
+- [Architecture](#architecture)
+- [Secret Providers](#secret-providers)
+- [Service Mode](#service-mode)
+- [Maintainers](#maintainers)
+- [Contributing](#contributing)
+- [License](#license)
 
-### Download
+## Background
 
-Get the latest release from [GitHub Releases](https://github.com/Xxx91n/env-manager/releases).
+The built-in Windows environment variable editor is clunky and error-prone. Env Manager provides a modern, fast alternative with a C# CLI for scripting and automation, plus a native Tauri/Svelte GUI for interactive editing. It adds profile inheritance, PATH health diagnostics, 8 secret provider backends, Launch profile isolation, a standalone secret-lifecycle service, audit ledger, and 10-language i18n — capabilities that go beyond PowerToys, RapidEE, and other alternatives.
 
-- **Portable**: Extract the ZIP and run `env-manager.exe` directly. No installation needed.
-- **MSI Installer**: Run the `.msi` file. Creates Start Menu shortcuts automatically.
+## Install
 
-### CLI Usage
+### Portable
+
+Download from [GitHub Releases](https://github.com/Xxx91n/env-manager/releases). Extract the ZIP and run `env-manager.exe` directly. No installation needed.
+
+### MSI Installer
+
+Run the `.msi` file. Creates Start Menu shortcuts automatically. Available in x64, x86, and ARM64.
+
+### CLI-Only
+
+Download the CLI-only ZIP for headless or scripting use: `env-manager-cli.exe` plus `.dll` files. No GUI, no WebView2 dependency.
+
+### winget
+
+> [!NOTE]
+> winget distribution is planned but not yet available. Track via GitHub Issues for updates.
+
+### From Source
+
+```bash
+git clone https://github.com/Xxx91n/env-manager.git
+cd env-manager
+cd frontend && npm ci && cd ..
+node scripts/build.mjs --arch x64
+```
+
+Requires .NET 10 SDK, Node.js 20+, Rust stable with MSVC target. See [docs/build-and-release.md](docs/build-and-release.md) for details.
+
+## Usage
+
+### CLI
 
 ```bash
 # List all variables
@@ -70,286 +89,116 @@ env-manager-cli.exe backup --output backup.json
 # Restore from backup
 env-manager-cli.exe restore backup.json
 
-# Compare two backups
-env-manager-cli.exe diff old.json new.json
+# PATH health check
+env-manager-cli.exe path health
 
-# Merge two backups
-env-manager-cli.exe merge old.json new.json --output merged.json
+# Create a Launch profile and launch with isolated env
+env-manager-cli.exe profile create dev --type launch --target python.exe
+env-manager-cli.exe profile add-secret dev API_KEY "sk-xxx"
+env-manager-cli.exe profile launch dev
 
-# Validate a backup file
-env-manager-cli.exe validate backup.json
+# Service control
+env-manager-cli.exe service status
+env-manager-cli.exe service ping
+
+# State export/import for disaster recovery
+env-manager-cli.exe export-state --output state.dpapi
+env-manager-cli.exe import-state --input state.dpapi
+
+# Audit ledger
+env-manager-cli.exe audit migrate-audit
+env-manager-cli.exe audit verify-ledger
 ```
 
-```bash
-# Profile management
-env-manager-cli.exe profile list
-env-manager-cli.exe profile create dev-profile
-# Create an isolated profile for one executable
-env-manager-cli.exe profile create tool-run --type launch --target "C:\Tools\tool.exe"
-env-manager-cli.exe profile add-var dev-profile JAVA_HOME "D:\jdk17"
-# Scope: default user; --scope system routes to HKLM on apply
-env-manager-cli.exe profile add-path dev-profile "C:\Tools\bin" --scope user
-env-manager-cli.exe profile apply dev-profile
-env-manager-cli.exe profile unapply dev-profile
-env-manager-cli.exe profile delete dev-profile
+See [docs/cli-commands.md](docs/cli-commands.md) for the full command reference.
 
-# PATH editor
-env-manager-cli.exe path list --scope user
-env-manager-cli.exe path add "C:\MyTools\bin" --scope user
-env-manager-cli.exe path move-up 2 --scope user
-env-manager-cli.exe path remove "C:\OldTools\bin" --scope user
+### GUI
 
-# Protection management (lock variables / PATH entries from modification)
-env-manager-cli.exe protection list
-env-manager-cli.exe protection add-var JAVA_HOME
-env-manager-cli.exe protection remove-var JAVA_HOME
-env-manager-cli.exe protection add-path "C:\MyTools\bin"
-env-manager-cli.exe protection remove-path "C:\MyTools\bin"
-```
+Run `env-manager.exe`. The GUI provides real-time variable list with search, scope filtering, inline edit, PATH editor with drag-and-drop reordering, profile management, secret provider selection, service control panel, audit history, and 10-language i18n.
 
-### GUI Usage
+## Features
 
-Launch `env-manager.exe` from the portable package or Start Menu. The GUI communicates with the CLI backend through Tauri IPC, so both modes always operate on the same state.
+### CLI Mode
 
----
+- 18+ commands for complete environment variable management
+- Profiles with inheritance, conflict previews, PATH fragments, and safe reverse-order rollback
+- PATH editor with duplicate and missing-directory diagnostics
+- **Launch profiles**: isolated env block (`env_clear` + inject), never write registry, never broadcast `WM_SETTINGCHANGE`
+- **PATH health**: `path health [--fix] [--dry-run]` detects duplicates and dead entries
+- **Secret providers**: 8 backends with activation preflight and inline error guidance
+- **Backup/restore**: JSON backup, diff, merge, validate, audited history with guarded undo
+- **Bulk import/export**: `.env`, CSV, JSON with dry-run conflict previews
+- **State export/import**: `export-state`/`import-state` — DPAPI-encrypted full-state archive for disaster recovery
+- **Audit ledger**: `audit migrate-audit` / `verify-ledger` / `export-survival-kit` / `recover-from-ledger`
+- **Service control**: `service status` / `ping` / `refresh` / `rotate` / `reload` / `shutdown`
+- **v0.9.8 Industrial logging**: `tracing` + `tracing-appender` backend with daily rotation, 7-day retention, cross-process `request_id` for CLI/Rust/Service debug correlation
+- **v0.9.9 Schema migration**: `SchemaMigration.cs` registry-based sequential migration framework (profiles v0->v1->v2)
+- **v0.9.10 Audit ledger**: `AuditLedgerMigration.cs` implements `audit migrate-audit` (audit.json to `audit-ledger.jsonl` hash-chained), `verify-ledger` (SHA256 chain tamper detection), `export-survival-kit`, `recover-from-ledger`
+- User and System scope support, no admin required for user scope
 
-## Installation
+### GUI Mode
 
-### From Release
+- Native desktop app built with Tauri 2.0 (WebView2)
+- Real-time variable list with highlighted search, scope filtering, `%VAR%` expansion preview
+- PATH editor with staged move (Apply button), health badges, Remove Dead bulk action
+- Profile management: Global and Launch types, inheritance, secret variables, provider selector with inline error banner
+- Secret provider selector with activation preflight and inline amber error banner
+- Service management panel (Ping/Reload/Shutdown + mount health list)
+- Audit history viewer with full-command-level operation labels
+- Settings: dark mode, font scale, CLI-in-PATH toggle, DR export/import, i18n locale
+- Edge-style true-overlay scrollbar (floats over content, zero layout space)
+- 10-language internationalization: English, 简体中文, 日本語, 한국어, Deutsch, Français, Español, Português, Русский, العربية
 
-1. Go to [Releases](https://github.com/Xxx91n/env-manager/releases)
-2. Download the portable ZIP or MSI installer
-3. Portable: extract and run `env-manager.exe`
-4. MSI: run the installer, then launch from Start Menu
+## Architecture
 
-### From Source
+Four layers:
 
-**Prerequisites**: .NET 10 SDK, Node.js 18+, Rust toolchain (GNU or MSVC)
+1. **CLI backend** (`Program.cs`) — C# .NET 10 console app, reads/writes Windows Registry directly, compiles to `env-manager-cli.exe`
+2. **Tauri shell** (`frontend/src-tauri/`) — Rust app, embeds CLI as bundled resource, spawns CLI subprocesses, returns JSON via Tauri IPC
+3. **Svelte frontend** (`frontend/src/`) — TypeScript + Svelte 4 + TailwindCSS in WebView2, talks to Rust only via `invoke('run_cli', ...)`
+4. **Service crate** (`service/`) — Rust standalone binary (`env-manager-service.exe`), manages secret mount lifecycle via named pipe IPC
 
-```bash
-# Build CLI
-dotnet build -c Release
-# Output: bin/Release/net10.0-windows/env-manager-cli.exe
+See [docs/architecture.md](docs/architecture.md) for IPC bridge, race condition prevention, system tray, caching, and security hardening.
 
-# Build GUI (development with hot reload)
-cd frontend
-npm install
-npm run tauri-dev
+## Secret Providers
 
-# Build everything for distribution
-node scripts/build.mjs --arch x64
-# Output:
-#   release/portable/  - GUI + CLI flat layout, ready to run
-#   release/cli-only/  - CLI-only package (no GUI)
-#   release/msi/       - Windows MSI installer
-```
+8 provider backends with activation preflight — failures surface as inline amber banners directly in the profile editor:
 
----
+| Provider | Auth Method | Periodic Refresh | Docs |
+|---|---|---|---|
+| DPAPI CurrentUser | Windows DPAPI | No (per-user) | [Guide](docs/secret-providers-guide.md) |
+| Windows Credential Manager | CredMan + DPAPI | No (per-user) | [Guide](docs/secret-providers-guide.md) |
+| PowerShell SecretManagement | SecretStore vault | Best-effort | [Guide](docs/secret-providers-guide.md) |
+| HashiCorp Vault KV v2 | VAULT_TOKEN / AppRole cert | Yes | [Guide](docs/secret-providers-guide.md) |
+| SOPS | Age / PGP / KMS | Yes | [Guide](docs/secret-providers-guide.md) |
+| Azure Key Vault | SP cert / managed identity | Yes | [Guide](docs/secret-providers-guide.md) |
+| 1Password CLI | OP_SERVICE_ACCOUNT_TOKEN | Yes | [Guide](docs/secret-providers-guide.md) |
+| AWS Secrets Manager | SigV4 + access keys | Yes | [Guide](docs/secret-providers-guide.md) |
 
-## Commands Reference
+See [docs/secret-providers-guide.md](docs/secret-providers-guide.md) for per-provider prerequisites, one-time setup, and activation error fix steps.
 
-| Command | Usage | Description |
-|---------|-------|-------------|
-| `list` | `list` | List all variables (user and system) |
-| `get` | `get <name>` | Get variable value |
-| `set` | `set <name> <value> [--scope user\|system]` | Create or update variable (default: user) |
-| `delete` | `delete <name> [--scope user\|system]` | Remove variable (default: user) |
-| `backup` | `backup [--output <file>]` | Export all variables to JSON |
-| `restore` | `restore <file> [--scope user\|system]` | Import variables from JSON |
-| `diff` | `diff <old> <new>` | Compare two backup files |
-| `merge` | `merge <old> <new> --output <file>` | Merge two backup files |
-| `validate` | `validate <file>` | Verify backup file format |
-| `help` | `help` | Show help text |
-| `rename` | `rename <old> <new> [--scope] [--overwrite]` | Atomically rename a variable |
-| `history` | `history list [--limit N]` / `history undo <id>` | Inspect or undo audited changes |
-| `bulk` | `bulk import\|export <file> [--scope]` | Import/export JSON, .env, or CSV |
-| `expand` | `expand <value>` | Resolve nested `%VARIABLE%` references |
-| `profile preview` | `profile preview <name>` | Preview conflicts and PATH effects |
-| `profile set-inherits` | `profile set-inherits <name> [parent ...]` | Configure acyclic profile inheritance |
-| `profile add-path` | `profile add-path <name> <dir>` | Add a PATH fragment to a profile |
-| `profile list` | `profile list` | List all profiles |
-| `profile create` | `profile create <name> [--type global|launch] [--target <exe>]` | Create a Global or isolated Launch profile atomically |
-| `profile apply` | `profile apply <name>` | Apply a profile (backs up existing vars) |
-| `profile unapply` | `profile unapply <name>` | Unapply a profile (restores originals) |
-| `profile add-var` | `profile add-var <profile> <name> <val>` | Add variable to profile |
-| `profile remove-var` | `profile remove-var <profile> <name>` | Remove variable from profile |
-| `path list` | `path list [--scope]` | List PATH entries |
-| `path add` | `path add <dir> [--scope]` | Add directory to PATH |
-| `path remove` | `path remove <dir> [--scope]` | Remove directory from PATH |
-| `path move-up` | `path move-up <index> [--scope]` | Move PATH entry up |
-| `path move-down` | `path move-down <index> [--scope]` | Move PATH entry down |
+## Service Mode
 
-### Scope
+`env-manager-service.exe` is a standalone Rust binary managing secret mount lifecycle via named pipe IPC:
 
-- `user`: `HKEY_CURRENT_USER\Environment` (no elevation required)
-- `system`: `HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\Session Manager\Environment` (requires administrator)
+- **RuntimeMode**: Service (SCM-managed, machine boot), Background (user-launched), Cli (one-shot gateway)
+- **Reconcile loop**: 300s periodic full-scan, idempotent per-item handler, 30s first-tick delay
+- **Cert bootstrap** (Phase D): Vault AppRole and Azure SP certificate-based auth eliminates long-lived tokens
+- **Audit ledger** (Phase E): append-only hash-chained `audit-ledger.jsonl` with 100MB rotation and tamper detection
+- **IPC**: Anti-squatting pipe flag, 65536-byte request cap, newline-delimited JSON protocol
+- **v0.9.6 Watchdog**: two-layer recovery — SCM auto-restart (Service mode) + GUI 30s ping watchdog (Background mode)
+- **v0.9.7 Fast-fail**: service probe fast-fail in 2s when service is down (was 18s)
 
----
+See [docs/secret-architecture-blueprint.md](docs/secret-architecture-blueprint.md) and [docs/secret-architecture-decision-summary.md](docs/secret-architecture-decision-summary.md) for the Phase A-E roadmap.
 
-## Backup File Format
+## Maintainers
 
-```json
-{
-  "timestamp": "2026-07-10T12:34:56Z",
-  "version": "1.0.0",
-  "variables": [
-    {
-      "name": "PATH",
-      "value": "C:\\Windows\\System32;...",
-      "scope": "user"
-    },
-    {
-      "name": "JAVA_HOME",
-      "value": "D:\\jdk17",
-      "scope": "system"
-    }
-  ]
-}
-```
-
----
-
-## System Requirements
-
-- Windows 10 21H2 or later (Windows 11 recommended)
-- For CLI standalone: .NET Runtime 10.0+
-- For GUI: WebView2 runtime (pre-installed on Windows 11, available for Windows 10)
-
----
-
-## Tech Stack
-
-**Backend**: C# .NET 10, Spectre.Console, Microsoft.Win32.Registry
-**Frontend**: Tauri 2.0, Svelte 4, TypeScript 5, TailwindCSS 3, Vite 5
-**Native**: Rust, serde, tokio, tauri-plugin-log
-
----
-
-## Project Structure
-
-```
-env-manager/
-├── Program.cs                    # CLI implementation (C#)
-├── env-manager.csproj            # .NET 10 project (AssemblyName: env-manager-cli)
-├── frontend/                     # Tauri GUI application
-│   ├── src/                      # Svelte frontend
-│   │   ├── App.svelte            # Root component
-│   │   ├── lib/
-│   │   │   ├── api.ts            # Tauri IPC bridge
-│   │   │   ├── stores.ts         # Svelte stores
-│   │   │   ├── i18n.ts           # Internationalization
-│   │   │   ├── components/       # UI components
-│   │   │   └── translations/     # 10 language files
-│   ├── src-tauri/                # Rust backend
-│   │   ├── src/main.rs           # Tauri command handlers
-│   │   ├── tauri.conf.json       # Bundle configuration
-│   │   └── Cargo.toml            # Rust dependencies
-│   └── scripts/
-│       ├── prebuild.mjs          # Builds CLI, copies to src-tauri/bin/
-│       └── build.mjs             # Consolidated build script (cross-platform, --arch x64|x86|arm64)
-├── release/                      # Build output (gitignored)
-│   ├── portable/                 # GUI + CLI flat package
-│   ├── cli-only/                 # CLI-only package (no GUI)
-│   └── msi/                      # MSI installer
-├── AGENTS.md                     # Project specification
-└── LICENSE                       # Apache-2.0
-```
-
----
-
-## Security
-
-- No credential storage. Only manages environment variables.
-- Direct Registry API via `Microsoft.Win32.Registry`, no COM.
-- IPC isolation. CLI runs as a separate subprocess spawned by the GUI.
-- Input validation with 32767-byte limit on variable names and values.
-- Permission separation between user and system scopes.
-
----
-
-## FAQ
-
-**How do I manage system variables?**
-
-Use the `--scope system` flag. This requires administrator privileges:
-
-```bash
-env-manager-cli.exe set SYSTEM_VAR "value" --scope system
-```
-
-**Can I backup and restore?**
-
-Yes. The JSON format is human-readable and portable:
-
-```bash
-env-manager-cli.exe backup --output my-backup.json
-env-manager-cli.exe restore my-backup.json
-```
-
-**Does the GUI need a web server?**
-
-No. In production, Tauri embeds the frontend as static assets served via its `tauri://` custom protocol. No localhost server, no network dependency. During development, Vite provides hot reload at `localhost:5173`.
-
-**How do I add a new language?**
-
-Add a JSON file in `frontend/src/lib/translations/`, register it in `frontend/src/lib/i18n.ts`. See AGENTS.md for the full i18n workflow.
-
----
-
-## Troubleshooting
-
-| Issue | Solution |
-|-------|----------|
-| Access denied for system scope | Run as Administrator |
-| Variable not appearing immediately | Restart the application |
-| GUI shows blank screen | Ensure WebView2 is installed |
-| Backup file invalid | Run `validate` command or check JSON syntax |
-
----
-
-## Development
-
-See [AGENTS.md](AGENTS.md) for the full project specification, including architecture, coding standards, build system, i18n rules, and release procedures.
-
-### Quick Setup
-
-```bash
-dotnet build -c Release         # Build CLI
-cd frontend && npm install      # Install GUI dependencies
-npm run tauri-dev               # Launch GUI with hot reload
-```
-
----
-
-## License
-
-Apache-2.0 - Use freely for personal and commercial projects. See [LICENSE](LICENSE).
-
----
-
-### v0.9.8-v0.9.11 (Phase A-E roadmap)
-
-- **v0.9.8 Industrial logging**: `tracing` + `tracing-appender` backend with daily rotation, cross-process `request_id` for CLI/Rust/Service debug correlation, `ServiceStatus` enum for typed service health responses.
-- **v0.9.9 Schema migration**: `SchemaMigration.cs` registry-based sequential migration framework (profiles v0->v1->v2). Full-state export/import via `export-state`/`import-state` — DPAPI-CurrentUser-encrypted archive of all Env Manager config files for disaster recovery. GUI DR section in Settings with dry-run validation.
-- **v0.9.10 Audit ledger**: `AuditLedgerMigration.cs` implements `audit migrate-audit` (audit.json → `audit-ledger.jsonl` hash-chained), `audit verify-ledger` (SHA256 chain tamper detection), `audit export-survival-kit` (DPAPI-encrypted survival kit), `audit recover-from-ledger` (replay create/delete events to reconstruct mount lists).
-- **v0.9.11 Final alignment**: env-manager-service standalone Rust binary (Phase B+C), Phase D cert bootstrap, Phase E audit ledger unification with `ProgramData\EnvManager\audit-ledger.jsonl` canonical path, MSI installer with WiX ServiceInstall, cross-platform `scripts/build.mjs` for x64/x86/arm64.
-- **Security**: atomic writes (temp+fsync+rename) replace `File.WriteAllText` across all durable state; transactional rollback for `import-state` restores `.bak` on partial failure; `ProgramData` hardcoded fallback eliminated; `audit verify-ledger`/`export-survival-kit` classified read-only in Rust `is_read_only`.
-
-### v0.7.1
-
-- Fixed a Windows argv tokenizer hazard where a quoted PATH value ending with a trailing backslash (e.g. `"C:\Program Files\PowerShell\7\"`) swallowed the following `--scope` argument. The CLI now detects this signature and re-tokenizes lazily; clean argv from the GUI/Tauri path is never touched.
-- Added a per-session host environment snapshot script (`scripts/snapshot-host-env.ps1`) and upgraded the live smoke harness to exact registry/configuration snapshots with verified rollback; this prevents test artifacts from silently altering existing variables.
-- Redacted CLI output from Rust/frontend diagnostic logs, replaced the startup error DOM sink with a safe generic state, made registry writes verify-and-rollback before success is printed, and pinned GitHub Actions to immutable commit SHAs.
+[@Xxx91n](https://github.com/Xxx91n)
 
 ## Contributing
 
-Open source project. For issues, feature requests, or pull requests, visit the [GitHub repository](https://github.com/Xxx91n/env-manager).
+Contributions are welcome! See [CONTRIBUTING.md](.github/CONTRIBUTING.md) for development setup, testing, and PR process. For bug reports and feature requests, use the [Issue templates](https://github.com/Xxx91n/env-manager/issues). For security reports, see [SECURITY.md](SECURITY.md).
 
----
+## License
 
-**Version**: 0.9.11 | **License**: Apache-2.0 | **Status**: Active Development
-
-
-### Safety and Performance
-
-Protected variables and PATH entries are disabled in the GUI before a command is issued, while the CLI enforces the same rule as the authority. Disabled variables retain their original registry value kind and are restored only after an exact verification. The GUI uses bounded 5-second, generation-safe caches and single-flight IPC reads: large variable sets avoid duplicate refresh processes without allowing an old response to overwrite newer state.
+Apache-2.0 — see [LICENSE](LICENSE).

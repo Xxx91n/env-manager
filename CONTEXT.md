@@ -239,3 +239,37 @@ Resolved during grill-with-docs session 2026-08-07 (decisions A1-A6, see .codex-
 - **Versioned Schema Migration**: Explicit `schema_version` field in `profiles.json` and `secretMount.json` + migration registry (`v1->v2 migrate()`, ...) replacing inline one-shot `MigrateSecretsToMounts`. Startup runs migrations in version order.
 - **Full-State Export/Import**: DPAPI-CurrentUser-encrypted archive containing `profiles.json` + `secretMount.json` + `protected-vars.json` + `protected-paths.json` + `builtin-protected-vars.json` + `builtin-protected-paths.json` + `gui-settings.json` + `audit.json`. CLI: `env-manager export-state` / `import-state`. GUI: disaster recovery entry point.
 - **Audit Ledger Unification (Phase E)**: `audit.json` (CLI-level) migrates to `audit-ledger.jsonl` (append-only hash-chained, 100MB rotation). `export_survival_kit` gets DPAPI encryption via `audit encrypt-file` subprocess. Migration is one-way; after migration `audit.json` is retired.
+
+## Release Readiness Terms (v0.9.12+)
+
+Resolved during grill-with-docs session 2026-08-08 (decisions A1-A5, GitHub public release readiness).
+
+- **Release Phase 1 (Local)**: All artifacts producible within the local codebase without external service dependencies. Includes community health files (CONTRIBUTING, SECURITY, CODE_OF_CONDUCT, Issue/PR templates), README rewrite per standard-readme spec, Tauri capability audit, CSP hardening, Named Pipe DACL hardening, and README unsigned-code warning. No remote pushes required.
+_Avoid_: pre-release, local-only phase, stage one
+
+- **Release Phase 2 (Remote)**: Artifacts requiring external service interaction after the GitHub repository is public. Includes winget manifest submission to `microsoft/winget-pkgs`, code signing (OV/EV Authenticode certificate), and Tauri updater plugin integration. Blocked until repository visibility switches from private to public.
+_Avoid_: post-release, remote phase, stage two
+
+- **Community Health Files**: The standard set of GitHub repository files that signal project maturity and enable safe external contribution: `CONTRIBUTING.md`, `SECURITY.md`, `CODE_OF_CONDUCT.md`, `.github/ISSUE_TEMPLATE/` (bug report + feature request forms), `.github/PULL_REQUEST_TEMPLATE.md`. All UTF-8 without BOM, placed under `.github/`.
+_Avoid_: community templates, repo metadata, social files
+
+- **Standard README Compliance**: README.md adheres to the `standard-readme` npm specification: required sections in fixed order (Title, Short Description, Table of Contents, Security, Install, Usage, Extra Sections, API, Maintainers, Contributing, License), optional sections (Banner, Badges, Long Description, Background, Thanks). Bilingual variant `README_CN.md` mirrors structure with translated headings. i18n file naming: `README.md` is English, `README_CN.md` is Chinese.
+_Avoid_: readme spec, readme standard
+
+- **Tauri Capability Coverage**: Every custom Tauri IPC command (`run_cli`, `read_gui_setting`, `write_gui_setting`, `frontend_log`) must be explicitly listed in `frontend/src-tauri/capabilities/default.json` permissions. Tauri 2.0 deny-by-default model means unlisted commands are inaccessible from the frontend. Audit verifies no command is silently unguarded.
+_Avoid_: IPC whitelist, permission audit, capability gap
+
+- **CSP Hardening**: Content Security Policy in `tauri.conf.json` `app.security.csp`. Production target removes `'unsafe-inline'` from `style-src` if Svelte 4 scoped styles render correctly without it. Current: `default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self'`. Hardened target: remove `'unsafe-inline'` from style-src.
+_Avoid_: content security, CSP policy, style policy
+
+- **Named Pipe DACL**: Explicit Discretionary Access Control List on `\\.\pipe\EnvManager.Service` and `\\.\pipe\EnvManager.Background` named pipe endpoints. Restricts pipe access to the current user SID only. Complements existing `PIPE_FIRST_PIPE_INSTANCE` anti-squatting flag. Implemented via `SECURITY_ATTRIBUTES` with explicit DACL in Rust `ipc.rs`.
+_Avoid_: pipe ACL, pipe permissions, pipe security descriptor
+
+- **Code Signing (Phase 2)**: Authenticode signing of `env-manager.exe`, `env-manager-cli.exe`, `env-manager-service.exe`, and MSI installer with an OV (Organization Validation) code signing certificate. Eliminates SmartScreen "unrecognized app" warning after reputation builds. EV certificates no longer guarantee instant SmartScreen bypass as of 2025. Deferred to Phase 2.
+_Avoid_: cert signing, Authenticode, executable signing
+
+- **winget Distribution (Phase 2)**: Submission of a YAML manifest to `microsoft/winget-pkgs` repository via PR, enabling `winget install EnvManager` installation. Manifest includes publisher, package name, version, installer URLs (MSI per architecture), and SHA256 hashes. Blocked until GitHub repository is public and release artifacts have stable URLs.
+_Avoid_: winget manifest, package manager submission, Windows Package Manager
+
+- **Tauri Updater (Phase 2)**: Integration of `tauri-plugin-updater` for signed auto-update: app checks a remote HTTPS manifest on startup, downloads a signed update bundle, verifies with embedded public key, then restarts to apply. Requires signing key management (private key protected, public key embedded in app). Deferred to Phase 2.
+_Avoid_: auto-update, update plugin, signed update
