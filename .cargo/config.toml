@@ -1,0 +1,20 @@
+# Project-local Cargo configuration.
+# Overrides the user's global ~/.cargo/config.toml which forces
+# target = "x86_64-pc-windows-gnu" + MinGW linker.
+#
+# Tauri 2's build.rs emits a COFF resource.lib via winres which MinGW's
+# gcc cannot link (file format not recognized). We must use the MSVC
+# host triple (x86_64-pc-windows-msvc) so the MSVC linker accepts winres
+# output. This also matches the triple reported by "rustc -vV" host line.
+#
+# This file is discovered by Cargo's hierarchical probing: when cargo is
+# invoked from frontend/src-tauri/ or service/, it searches upward and
+# finds this file at the repo root, overriding the global config.
+#
+# Multi-arch note: build.mjs passes --target explicitly for x86/arm64 builds.
+# The --target CLI flag takes precedence over build.target config, so this
+# default only applies to bare cargo check/build (IDE, dev loop, CI cargo check).
+# This prevents accidental GNU pollution when a developer runs cargo without --target.
+
+[build]
+target = "x86_64-pc-windows-msvc"

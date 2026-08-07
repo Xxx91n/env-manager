@@ -49,8 +49,11 @@ omx_wiki/
 .docs/
 .opencode/
 
-# === Local Rust config (machine-specific, never commit) ===
-frontend/src-tauri/.cargo/config.toml
+# === Project-level Cargo config (committed: ensures MSVC for Tauri) ===
+# The .cargo/config.toml at repo root overrides global ~/.cargo/config.toml
+# which may force GNU target. This file IS committed — it is project policy,
+# not machine-specific. It guarantees all developers build Tauri with MSVC.
+# See: https://doc.rust-lang.org/cargo/reference/config.html#hierarchical-structure
 
 # === Temporary / cache ===
 .codex-tmp/
