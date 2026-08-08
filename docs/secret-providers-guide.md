@@ -240,3 +240,8 @@ Fix: set `AWS_REGION` (and credentials) env vars, restart Env Manager, then retr
 - The CLI command `env-manager-cli profile secret-provider list` lists available providers with the active one marked `(active)`.
 - Audit entries for Rotation / Export / Import never log plaintext or ciphertext; only provider name and counts.
 - Provider activation errors are emitted to `logs/env-manager.log` with a truncated, scrubbed `stderr_hint` line (any `Bearer`, `token=`, `password=`, `setx`, `VAULT_TOKEN=`, `AWS_SECRET_ACCESS_KEY=`, `AWS_SESSION_TOKEN=`, or `OP_SERVICE_ACCOUNT_TOKEN=` segment is masked to `<redacted>`). The log records the error message shape, never a secret value. If the inline banner disappears, the `logs/env-manager.log` line still shows the upstream error to copy into a support request.
+
+
+### v0.9.12 Expanded Redaction
+
+The redaction vocabulary was expanded from 10 to 22 patterns. In addition to the original Bearer/token/password/setx patterns, the following are now masked: client_secret=, connection_string=, subscription_key=, pi_key=, pikey=, client_id=, 	enant_id=, ccess_token=, efresh_token=, Authorization:, X-Vault-Token:, x-api-key:. All three tiers (CLI stderr, Rust tracing logs, service tracing logs) use the identical vocabulary. See ADR 0005 for the complete list.

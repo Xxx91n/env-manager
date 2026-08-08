@@ -11,6 +11,7 @@ mod reconcile;
 mod ipc;
 mod cert_bootstrap;
 mod audit_ledger;
+mod redaction;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RuntimeMode {

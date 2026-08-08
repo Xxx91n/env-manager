@@ -309,7 +309,7 @@ partial class Program
         }
         catch (Exception ex)
         {
-            Console.Error.WriteLine($"Error: {ex.Message}");
+            Console.Error.WriteLine($"Error: {ScrubExceptionMessage(ex.Message)}");
             return 1;
         }
         finally
@@ -320,6 +320,54 @@ partial class Program
                 mutationLock.Dispose();
             }
         }
+    }
+
+    /// <summary>
+    /// v0.9.12: Scrubs potentially sensitive data from exception messages before
+    /// writing to stderr or logs. Masks common secret-bearing patterns so provider
+    /// error messages are traceable without leaking credentials. Bounded + best-effort.
+    /// </summary>
+    static string ScrubExceptionMessage(string msg)
+    {
+        if (string.IsNullOrEmpty(msg)) return msg;
+        var result = msg.Length > 512 ? msg[..512] : msg;
+        string[] patterns = {
+            "Bearer ", "token=", "Token=", "password=", "Password=",
+            "setx ", "OP_SERVICE_ACCOUNT_TOKEN=", "VAULT_TOKEN=",
+            "AWS_SECRET_ACCESS_KEY=", "AWS_SESSION_TOKEN=",
+            "client_secret", "connection_string", "subscription_key",
+            "api_key", "apikey", "client_id=", "tenant_id=",
+            "access_token", "refresh_token", "Authorization:",
+            "X-Vault-Token", "x-api-key"
+        };
+        foreach (var pat in patterns)
+        {
+            int i = result.IndexOf(pat, StringComparison.OrdinalIgnoreCase);
+            if (i >= 0)
+            {
+                int start = i + pat.Length;
+                int tailLen = Math.Min(8, result.Length - start);
+                if (tailLen > 0)
+                    result = result[..start] + "<redacted>" + result[(start + tailLen)..];
+            }
+        }
+        return result;
+    }
+
+    /// <summary>
+    /// v0.9.12: SecretString wraps a decrypted secret value to prevent accidental
+    /// logging or serialization. Zeroes the underlying char[] on Dispose.
+    /// Ponytail: minimal struct, no interface, no factory. The caller is responsible
+    /// for using the value before Dispose; we do not add lifetime tracking.
+    /// </summary>
+    public ref struct SecretString
+    {
+        private char[] _buffer;
+        private bool _disposed;
+        public SecretString(string value) { _buffer = value.ToCharArray(); _disposed = false; }
+        public ReadOnlySpan<char> AsSpan() => _disposed ? ReadOnlySpan<char>.Empty : _buffer.AsSpan();
+        public override string ToString() => _disposed ? "<redacted>" : new string(_buffer);
+        public void Dispose() { if (!_disposed && _buffer != null) Array.Clear(_buffer); _disposed = true; }
     }
 
     static int ArgError(string msg)
@@ -1196,7 +1244,7 @@ partial class Program
         }
         catch (Exception ex)
         {
-            Console.Error.WriteLine($"Error: Failed to decrypt secret '{varName}': {ex.Message}");
+            Console.Error.WriteLine($"Error: Failed to decrypt secret '{varName}': {ScrubExceptionMessage(ex.Message)}");
             return 1;
         }
     }
@@ -1249,7 +1297,7 @@ partial class Program
                 }
                 catch (Exception ex)
                 {
-                    Console.Error.WriteLine($"Error: {ex.Message}");
+                    Console.Error.WriteLine($"Error: {ScrubExceptionMessage(ex.Message)}");
                     return 1;
                 }
 
@@ -1596,7 +1644,7 @@ partial class Program
         }
         catch (InvalidDataException ex)
         {
-            Console.Error.WriteLine("Error: " + ex.Message);
+            Console.Error.WriteLine("Error: " + ScrubExceptionMessage(ex.Message));
             return 1;
         }
         Console.WriteLine($"Updated launch configuration for profile '{name}' (type={profile.ProfileType})");
@@ -1710,7 +1758,7 @@ partial class Program
        catch (System.ComponentModel.Win32Exception ex)
        {
             string hint = Directory.Exists(cwd) ? "" : $" Working directory '{cwd}' does not exist.";
-            Console.Error.WriteLine($"Error: Failed to launch '{exe}':{hint} {ex.Message}");
+            Console.Error.WriteLine($"Error: Failed to launch '{exe}':{hint} {ScrubExceptionMessage(ex.Message)}");
            return 1;
        }
     }
@@ -3103,7 +3151,7 @@ partial class Program
             }
             catch (Exception ex)
             {
-                Console.Error.WriteLine("Error checking for updates: " + ex.Message);
+                Console.Error.WriteLine("Error checking for updates: " + ScrubExceptionMessage(ex.Message));
                 return 1;
             }
         }
@@ -3231,7 +3279,7 @@ partial class Program
         }
         catch (System.IO.IOException ex)
         {
-            Console.Error.WriteLine($"Error: failed to connect to service: {ex.Message}");
+            Console.Error.WriteLine($"Error: failed to connect to service: {ScrubExceptionMessage(ex.Message)}");
             return 1;
         }
     }

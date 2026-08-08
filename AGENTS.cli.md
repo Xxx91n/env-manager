@@ -239,3 +239,8 @@ The user JSON folder is shared by both the portable and MSI installations of Env
 ---
 
 When this guide is out of date relative to the CLI surface (a new subcommand, a renamed flag, a removed safeguard), trust the actual binary: `agents --json` reports the authoritative versioned command table. Update this file in the same commit that changes the CLI command surface so the next agent and the next reader stay aligned.
+
+
+## Sensitive Data Redaction (v0.9.12)
+
+All stderr output from the CLI is scrubbed of 22 secret-bearing patterns via ScrubExceptionMessage. The same vocabulary is applied in the Rust Tauri shell (scrub_stderr) and the service (edaction.rs). When debugging an error, the scrubbed patterns may mask the real value — check the unscrubbed source directly rather than disabling the scrubber. Adding a new secret provider that uses a novel token format requires adding a matching pattern to all three redaction sites. See ADR 0005 for the complete pattern list and rationale.

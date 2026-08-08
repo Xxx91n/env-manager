@@ -324,9 +324,16 @@ async fn run_cli(app: tauri::AppHandle, command: String, args: Vec<String>) -> C
 /// shape, never a secret value.
 fn scrub_stderr(s: &str) -> String {
     let mut out: String = s.chars().take(512).collect();
-    for pat in ["Bearer ", "token=", "Token=", "password=", "Password=",
-                "setx ", "OP_SERVICE_ACCOUNT_TOKEN=", "VAULT_TOKEN=",
-                "AWS_SECRET_ACCESS_KEY=", "AWS_SESSION_TOKEN="] {
+    for pat in [
+        "Bearer ", "token=", "Token=", "password=", "Password=",
+        "setx ", "OP_SERVICE_ACCOUNT_TOKEN=", "VAULT_TOKEN=",
+        "AWS_SECRET_ACCESS_KEY=", "AWS_SESSION_TOKEN=",
+        // v0.9.12: expanded redaction patterns (22 total)
+        "client_secret=", "connection_string=", "subscription_key=",
+        "api_key=", "apikey=", "client_id=", "tenant_id=",
+        "access_token=", "refresh_token=", "Authorization:",
+        "X-Vault-Token:", "x-api-key:",
+    ] {
         if let Some(i) = out.find(pat) {
             let start = i + pat.len();
             let tail: String = out.chars().skip(start).take(8).collect();

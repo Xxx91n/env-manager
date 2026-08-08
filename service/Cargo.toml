@@ -1,6 +1,6 @@
 [package]
 name = "env-manager-service"
-version = "0.9.11"
+version = "0.9.12"
 edition = "2021"
 license = "Apache-2.0"
 description = "Env Manager secret lifecycle service (Phase B+C v0.9.0)"
@@ -22,6 +22,7 @@ sha2 = "0.10"
 hex = "0.4"
 chrono = { version = "0.4", features = ["serde"] }
 base64 = "0.22"
+secrecy = "0.10"
 
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "0.59", features = [

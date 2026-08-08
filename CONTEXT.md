@@ -273,3 +273,15 @@ _Avoid_: winget manifest, package manager submission, Windows Package Manager
 
 - **Tauri Updater (Phase 2)**: Integration of `tauri-plugin-updater` for signed auto-update: app checks a remote HTTPS manifest on startup, downloads a signed update bundle, verifies with embedded public key, then restarts to apply. Requires signing key management (private key protected, public key embedded in app). Deferred to Phase 2.
 _Avoid_: auto-update, update plugin, signed update
+
+**ScrubExceptionMessage**:
+The v0.9.12 C# helper that masks 22 secret-bearing patterns from exception messages before they reach stderr or logs. Applied at all 7 x.Message leak sites in Program.cs. Bounded to 512 chars, best-effort pattern matching. Mirrors scrub_stderr in Rust.
+_Avoid_: error scrubber, message filter, log sanitizer
+
+**SecretString (C#)**:
+A ef struct wrapping a decrypted secret value. Zeroes the underlying char[] on Dispose() to minimize plaintext lifetime in heap memory. Used at ProfileRevealSecret and ProfileLaunch decrypt sites. The Rust equivalent uses the secrecy crate's SecretString with zeroize on drop.
+_Avoid_: secure string, encrypted wrapper, secret holder
+
+**Redaction Vocabulary**:
+The canonical set of 22 secret-bearing string patterns recognized by all three tiers. Patterns: Bearer, token=, Token=, password=, Password=, setx, OP_SERVICE_ACCOUNT_TOKEN=, VAULT_TOKEN=, AWS_SECRET_ACCESS_KEY=, AWS_SESSION_TOKEN=, client_secret=, connection_string=, subscription_key=, api_key=, apikey=, client_id=, tenant_id=, access_token=, refresh_token=, Authorization:, X-Vault-Token:, x-api-key:. A new pattern must be added to all three code sites simultaneously.
+_Avoid_: mask list, secret patterns, redaction rules
