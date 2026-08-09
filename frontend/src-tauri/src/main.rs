@@ -6,6 +6,7 @@ use serde::Serialize;
 use std::path::PathBuf;
 use std::process::Command;
 use std::sync::RwLock;
+use std::sync::OnceLock;
 use tauri::{
     menu::{Menu, MenuItem},
     tray::TrayIconBuilder,
@@ -25,6 +26,54 @@ const MAX_ARG_LEN: usize = 32767;
 
 /// Maximum number of arguments passed to the CLI.
 const MAX_ARGS: usize = 64;
+
+/// Cached .NET 10 runtime probe result. Probes once per process lifetime
+/// via `dotnet --list-runtimes` and caches the boolean so subsequent IPC
+/// calls do not re-spawn dotnet. When the probe fails (dotnet not on PATH,
+/// no matching runtime), run_cli returns a friendly error with the official
+/// download link instead of letting the CLI apphost emit a raw tech error.
+static DOTNET10_AVAILABLE: OnceLock<bool> = OnceLock::new();
+
+fn dotnet10_available() -> bool {
+    *DOTNET10_AVAILABLE.get_or_init(|| {
+        // Primary: `dotnet --list-runtimes` output contains a line like
+        // "Microsoft.NETCore.App 10.0.x ..." when .NET 10 is installed.
+        if let Ok(output) = Command::new("dotnet")
+            .arg("--list-runtimes")
+            .creation_flags(0x08000000) // CREATE_NO_WINDOW
+            .output()
+        {
+            if output.status.success() {
+                let stdout = String::from_utf8_lossy(&output.stdout);
+                return stdout.lines().any(|l| {
+                    l.starts_with("Microsoft.NETCore.App 10.")
+                        || l.starts_with("Microsoft.WindowsDesktop.App 10.")
+                });
+            }
+        }
+        // Fallback: check the default install directory for dotnet.exe.
+        // The registry path is authoritative but reading it requires the
+        // `winreg` crate; the directory probe is sufficient for the 99% case.
+        if let Some(pgmfiles) = std::env::var_os("ProgramFiles") {
+            let dotnet_exe = PathBuf::from(pgmfiles).join("dotnet").join("dotnet.exe");
+            if dotnet_exe.exists() {
+                if let Ok(output) = Command::new(&dotnet_exe)
+                    .arg("--list-runtimes")
+                    .creation_flags(0x08000000)
+                    .output()
+                {
+                    let stdout = String::from_utf8_lossy(&output.stdout);
+                    return stdout.lines().any(|l| {
+                        l.starts_with("Microsoft.NETCore.App 10.")
+                            || l.starts_with("Microsoft.WindowsDesktop.App 10.")
+                    });
+                }
+            }
+        }
+        false
+    })
+}
+
 
 #[derive(Serialize)]
 #[serde(crate = "serde")]
@@ -372,6 +421,20 @@ fn scrub_stderr(s: &str) -> String {
             };
         }
     };
+
+    // .NET 10 runtime fence: probe once, cache result. If the runtime
+    // is missing, return a friendly error with the download link instead
+    // of letting the CLI apphost emit a raw "You must install .NET" error.
+    if !dotnet10_available() {
+        warn!("[run_cli] .NET 10 runtime not found — returning friendly error");
+        return CliResponse {
+            success: false,
+            data: None,
+            error: Some(
+                ".NET 10 Desktop Runtime is not installed. Download from: https://dotnet.microsoft.com/download/dotnet/10.0 (pick matching architecture: x64, x86, or ARM64). After installing, restart Env Manager.".to_string()
+            ),
+        };
+    }
 
     let read_only = is_read_only(&command, &args);
 

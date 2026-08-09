@@ -58,8 +58,6 @@ Download from [GitHub Releases](https://github.com/Xxx91n/env-manager/releases).
 >
 > **WebView2 Runtime** (for GUI) is preinstalled on Windows 11 and available for Windows 10 21H2+ from <https://developer.microsoft.com/microsoft-edge/webview/>.
 
-Each ZIP also includes `check-dotnet-runtime.ps1` — run it first to verify .NET 10 is installed before launching the CLI.
-
 For optional external secret-provider tools (SOPS, 1Password CLI, Vault CLI, AWS CLI, Azure CLI, PowerShell 7), see the [Secret Providers Guide](docs/secret-providers-guide.md) for download links and setup instructions.
 
 ### MSI Installer
