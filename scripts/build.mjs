@@ -324,19 +324,29 @@ async function buildArch(targetArch) {
 }
 
 // --- Main ---
-// Always clean release/ at start (no append mode — each build is authoritative)
-if (existsSync(releaseDir)) rmSync(releaseDir, { recursive: true, force: true })
-mkdirSync(portableDir, { recursive: true })
-mkdirSync(msiDir, { recursive: true })
-mkdirSync(cliOnlyDir, { recursive: true })
+// Per-arch clean: only remove this arch's outputs, preserve other arches
+const archSuffix = '_' + targetArch
+for (const dir of [portableDir, cliOnlyDir, msiDir]) {
+  mkdirSync(dir, { recursive: true })
+  for (const f of readdirSync(dir)) {
+    if (f.includes(archSuffix)) rmSync(join(dir, f), { force: true })
+  }
+}
+// Also clean any stale staging for this arch
+const stagingDir = join(releaseDir, '_staging')
+if (existsSync(stagingDir)) {
+  for (const d of readdirSync(stagingDir)) {
+    if (d.endsWith('-' + targetArch)) rmSync(join(stagingDir, d), { recursive: true, force: true })
+  }
+}
 
 // Build single arch (no loop — CI matrix handles multi-arch)
 console.log('[build] Building arch: ' + targetArch)
 await buildArch(targetArch)
 
-// --- Clean staging ---
-const stagingDir = join(releaseDir, '_staging')
-if (existsSync(stagingDir)) rmSync(stagingDir, { recursive: true, force: true })
+// --- Clean staging (remove all staging dirs, they are temporary) ---
+const stagingDir2 = join(releaseDir, '_staging')
+if (existsSync(stagingDir2)) rmSync(stagingDir2, { recursive: true, force: true })
 
 // --- Summary ---
 console.log('')
