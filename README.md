@@ -41,6 +41,25 @@ The built-in Windows environment variable editor is clunky and error-prone. Env 
 
 Download from [GitHub Releases](https://github.com/Xxx91n/env-manager/releases). Extract the ZIP and run `env-manager.exe` directly. No installation needed.
 
+### Prerequisites
+
+> [!IMPORTANT]
+> **Portable** and **CLI-Only** builds are framework-dependent: they require the **.NET 10 Desktop Runtime** to be installed on the target machine.
+>
+> Download the matching runtime for your architecture from the official .NET download page: <https://dotnet.microsoft.com/download/dotnet/10.0>
+>
+> | Build | Architecture | .NET 10 Runtime |
+> |------|-------------|-----------------|
+> | Portable / CLI-Only | x64 | .NET 10 Desktop Runtime x64 |
+> | Portable / CLI-Only | x86 | .NET 10 Desktop Runtime x86 |
+> | Portable / CLI-Only | ARM64 | .NET 10 Desktop Runtime ARM64 |
+>
+> The **MSI installer** checks for .NET 10 at install time and prompts automatically.
+>
+> **WebView2 Runtime** (for GUI) is preinstalled on Windows 11 and available for Windows 10 21H2+ from <https://developer.microsoft.com/microsoft-edge/webview/>.
+
+For optional external secret-provider tools (SOPS, 1Password CLI, Vault CLI, AWS CLI, Azure CLI, PowerShell 7), see the [Secret Providers Guide](docs/secret-providers-guide.md) for download links and setup instructions.
+
 ### MSI Installer
 
 Run the `.msi` file. Creates Start Menu shortcuts automatically. Available in x64, x86, and ARM64.

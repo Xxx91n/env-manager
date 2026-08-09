@@ -21,7 +21,7 @@ Vault name used by Env Manager: `EnvManager` (auto-registered on first use).
 
 ### Prerequisites
 
-- PowerShell 7 or later (`pwsh`) installed and on PATH. Install via `winget install Microsoft.PowerShell`.
+- PowerShell 7 or later (`pwsh`) installed and on PATH. Install via `winget install Microsoft.PowerShell` or download from [PowerShell GitHub Releases](https://github.com/PowerShell/PowerShell/releases).
 - `Microsoft.PowerShell.SecretManagement` module (v1.1.2 latest) installed for the current user.
 - `Microsoft.PowerShell.SecretStore` module (v1.0.6 latest) installed for the current user.
 
@@ -63,7 +63,7 @@ Fix: install the two modules (command above), then in Env Manager re-select the 
 
 ## HashiCorp Vault (KV v2)
 
-Official docs: [Vault KV v2 secrets engine](https://developer.hashicorp.com/vault/docs/secrets/kv/kv-v2) · [Vault HTTP API](https://developer.hashicorp.com/vault/api-docs) · [Vault CLI](https://developer.hashicorp.com/vault/docs/commands).
+Official docs: [Vault KV v2 secrets engine](https://developer.hashicorp.com/vault/docs/secrets/kv/kv-v2) · [Vault HTTP API](https://developer.hashicorp.com/vault/api-docs) · [Vault CLI](https://developer.hashicorp.com/vault/docs/commands) · [Vault Downloads](https://developer.hashicorp.com/vault/downloads).
 
 ### Prerequisites
 
@@ -108,7 +108,7 @@ Official docs: [SOP homepage + age provider](https://getsops.io/) · [SOP age pr
 ### One-time install
 
 ```powershell
-winget install SOPS.SOPS2   # or: choco install sops
+winget install SOPS.SOPS2   # or: choco install sops   # or download from https://github.com/getsops/sops/releases
 
 # Pick exactly one key provider and set its env vars:
 
@@ -151,7 +151,7 @@ Fix: create `.sops.yaml` with at least one creation rule pointing to a key, or s
 
 ## Azure Key Vault
 
-Official docs: [Key Vault REST API](https://learn.microsoft.com/en-us/rest/api/keyvault/) · [Key Vault authentication (managed identity / SP)](https://learn.microsoft.com/en-us/azure/key-vault/general/authentication) · [az CLI (az keyvault / az role assignment)](https://learn.microsoft.com/en-us/cli/azure/keyvault).
+Official docs: [Key Vault REST API](https://learn.microsoft.com/en-us/rest/api/keyvault/) · [Key Vault authentication (managed identity / SP)](https://learn.microsoft.com/en-us/azure/key-vault/general/authentication) · [az CLI (az keyvault / az role assignment)](https://learn.microsoft.com/en-us/cli/azure/keyvault) · [Azure CLI Downloads](https://learn.microsoft.com/en-us/cli/azure/install-azure-cli).
 
 ### Prerequisites
 
@@ -205,7 +205,7 @@ Fix: either turn on the desktop app integration, run `op account add`, or set `O
 
 ## AWS Secrets Manager
 
-Official docs: [Secrets Manager REST API](https://docs.aws.amazon.com/secretsmanager/latest/userguide/) · [SigV4 signing process](https://docs.aws.amazon.com/general/latest/gr/sigv4_signing.html) · [IAM credentials / STS assume-role](https://docs.aws.amazon.com/IAM/latest/UserGuide/security-creds.html).
+Official docs: [Secrets Manager REST API](https://docs.aws.amazon.com/secretsmanager/latest/userguide/) · [SigV4 signing process](https://docs.aws.amazon.com/general/latest/gr/sigv4_signing.html) · [IAM credentials / STS assume-role](https://docs.aws.amazon.com/IAM/latest/UserGuide/security-creds.html) · [AWS CLI Downloads](https://aws.amazon.com/cli/).
 
 ### Prerequisites
 

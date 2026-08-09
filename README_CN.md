@@ -41,6 +41,25 @@ Windows 内置的环境变量编辑器笨重且易出错。Env Manager 提供了
 
 从 [GitHub Releases](https://github.com/Xxx91n/env-manager/releases) 下载。解压 ZIP 后直接运行 `env-manager.exe`，无需安装。
 
+### 前置要求
+
+> [!IMPORTANT]
+> **便携版**和**仅 CLI** 版本为框架依赖部署：目标机器需要预装 **.NET 10 Desktop Runtime**。
+>
+> 从 .NET 官方下载页获取对应架构的运行时：<https://dotnet.microsoft.com/download/dotnet/10.0>
+>
+> | 构建类型 | 架构 | .NET 10 运行时 |
+> |---------|------|---------------|
+> | 便携版 / 仅 CLI | x64 | .NET 10 Desktop Runtime x64 |
+> | 便携版 / 仅 CLI | x86 | .NET 10 Desktop Runtime x86 |
+> | 便携版 / 仅 CLI | ARM64 | .NET 10 Desktop Runtime ARM64 |
+>
+> **MSI 安装包**在安装时自动检测 .NET 10 并提示安装。
+>
+> **WebView2 运行时**（GUI 所需）已预装于 Windows 11，Windows 10 21H2+ 可从 <https://developer.microsoft.com/microsoft-edge/webview/> 下载。
+
+可选的外部机密提供者工具（SOPS、1Password CLI、Vault CLI、AWS CLI、Azure CLI、PowerShell 7）的下载链接和配置说明，请参阅 [机密提供者指南](docs/secret-providers-guide.md)。
+
 ### MSI 安装包
 
 运行 `.msi` 文件。自动创建开始菜单快捷方式。支持 x64、x86、ARM64 架构。
