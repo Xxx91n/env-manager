@@ -387,16 +387,14 @@
       "loading": "Carregando...",
       "empty": "Nenhuma entrada de auditoria encontrada"
     },
-    "dr": {
-      "drTitle": "Recuperação de desastre",
-      "drExport": "Exportar estado",
-      "drImport": "Importar estado",
-      "drExportPrompt": "Salvar arquivo de estado",
-      "drImportPrompt": "Selecionar arquivo de estado para importar",
-      "drExported": "{count} arquivos exportados",
-      "drImported": "{count} arquivos importados",
-      "drHint": "O backup completo inclui perfis, segredos, listas de proteção e configurações."
-    }
+    "drTitle": "Recuperação de desastre",
+    "drExport": "Exportar estado",
+    "drImport": "Importar estado",
+    "drExportPrompt": "Salvar arquivo de estado",
+    "drImportPrompt": "Selecionar arquivo de estado para importar",
+    "drExported": "{count} arquivos exportados",
+    "drImported": "{count} arquivos importados",
+    "drHint": "O backup completo inclui perfis, segredos, listas de proteção e configurações."
   },
   "history.allProfiles": "Todos os perfis",
   "settings.service.title": "Controle do serviço",

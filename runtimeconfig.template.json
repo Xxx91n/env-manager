@@ -1,0 +1,4 @@
+{
+  "rollForward": "LatestMajor",
+  "rollForwardOnNoCandidateFx": 2
+}

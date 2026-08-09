@@ -387,16 +387,14 @@
       "loading": "加载中...",
       "empty": "未找到审计记录"
     },
-    "dr": {
-      "drTitle": "容灾备份",
-      "drExport": "导出状态",
-      "drImport": "导入状态",
-      "drExportPrompt": "保存状态归档",
-      "drImportPrompt": "选择要导入的状态归档",
-      "drExported": "已导出 {count} 个文件",
-      "drImported": "已导入 {count} 个文件",
-      "drHint": "全状态备份包含配置文件、机密、保护名单和设置。"
-    }
+    "drTitle": "容灾备份",
+    "drExport": "导出状态",
+    "drImport": "导入状态",
+    "drExportPrompt": "保存状态归档",
+    "drImportPrompt": "选择要导入的状态归档",
+    "drExported": "已导出 {count} 个文件",
+    "drImported": "已导入 {count} 个文件",
+    "drHint": "全状态备份包含配置文件、机密、保护名单和设置。"
   },
   "history.allProfiles": "所有配置文件",
   "settings.service.title": "服务控制",

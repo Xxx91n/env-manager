@@ -58,6 +58,8 @@ Windows 内置的环境变量编辑器笨重且易出错。Env Manager 提供了
 >
 > **WebView2 运行时**（GUI 所需）已预装于 Windows 11，Windows 10 21H2+ 可从 <https://developer.microsoft.com/microsoft-edge/webview/> 下载。
 
+每个 ZIP 内还附带 `check-dotnet-runtime.ps1` — 请先运行此脚本检测 .NET 10 是否已安装，再启动 CLI。
+
 可选的外部机密提供者工具（SOPS、1Password CLI、Vault CLI、AWS CLI、Azure CLI、PowerShell 7）的下载链接和配置说明，请参阅 [机密提供者指南](docs/secret-providers-guide.md)。
 
 ### MSI 安装包

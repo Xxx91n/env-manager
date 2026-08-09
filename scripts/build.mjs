@@ -270,6 +270,8 @@ async function buildArch(targetArch) {
   const guiDir2 = dirname(guiExe)
   const webviewLoader = join(guiDir2, 'WebView2Loader.dll')
   if (existsSync(webviewLoader)) copyFileSync(webviewLoader, join(archPortableDir, 'WebView2Loader.dll'))
+  const dotnetCheck = join(projectRoot, 'scripts', 'check-dotnet-runtime.ps1')
+  if (existsSync(dotnetCheck)) copyFileSync(dotnetCheck, join(archPortableDir, 'check-dotnet-runtime.ps1'))
 
   // --- Step 3b: Assemble CLI-only package (staging dir) ---
   console.log('[build] Step 3b: Assemble CLI-only package -> ' + archCliOnlyDir)
@@ -280,6 +282,7 @@ async function buildArch(targetArch) {
   }
   if (serviceExe) copyFileSync(serviceExe, join(archCliOnlyDir, 'env-manager-service.exe'))
   if (existsSync(agentsMd)) copyFileSync(agentsMd, join(archCliOnlyDir, 'AGENTS.cli.md'))
+  if (existsSync(dotnetCheck)) copyFileSync(dotnetCheck, join(archCliOnlyDir, 'check-dotnet-runtime.ps1'))
 
   // --- Step 4: Build MSI installer ---
   if (!skipMsi && process.platform === 'win32') {

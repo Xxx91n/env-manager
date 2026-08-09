@@ -387,16 +387,14 @@
       "loading": "Laden...",
       "empty": "Keine Audit-Einträge gefunden"
     },
-    "dr": {
-      "drTitle": "Notfallwiederherstellung",
-      "drExport": "Status exportieren",
-      "drImport": "Status importieren",
-      "drExportPrompt": "Statusarchiv speichern",
-      "drImportPrompt": "Statusarchiv zum Importieren auswählen",
-      "drExported": "{count} Dateien exportiert",
-      "drImported": "{count} Dateien importiert",
-      "drHint": "Vollständiges Backup umfasst Profile, Geheimnisse, Schutzlisten und Einstellungen."
-    }
+    "drTitle": "Notfallwiederherstellung",
+    "drExport": "Status exportieren",
+    "drImport": "Status importieren",
+    "drExportPrompt": "Statusarchiv speichern",
+    "drImportPrompt": "Statusarchiv zum Importieren auswählen",
+    "drExported": "{count} Dateien exportiert",
+    "drImported": "{count} Dateien importiert",
+    "drHint": "Vollständiges Backup umfasst Profile, Geheimnisse, Schutzlisten und Einstellungen."
   },
   "history.allProfiles": "Alle Profile",
   "settings.service.title": "Dienststeuerung",

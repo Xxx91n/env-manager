@@ -387,16 +387,14 @@
       "loading": "Chargement...",
       "empty": "Aucune entrée d'audit trouvée"
     },
-    "dr": {
-      "drTitle": "Récupération d'urgence",
-      "drExport": "Exporter l'état",
-      "drImport": "Importer l'état",
-      "drExportPrompt": "Enregistrer l'archive d'état",
-      "drImportPrompt": "Sélectionner l'archive à importer",
-      "drExported": "{count} fichiers exportés",
-      "drImported": "{count} fichiers importés",
-      "drHint": "La sauvegarde complète inclut profils, secrets, listes de protection et paramètres."
-    }
+    "drTitle": "Récupération d'urgence",
+    "drExport": "Exporter l'état",
+    "drImport": "Importer l'état",
+    "drExportPrompt": "Enregistrer l'archive d'état",
+    "drImportPrompt": "Sélectionner l'archive à importer",
+    "drExported": "{count} fichiers exportés",
+    "drImported": "{count} fichiers importés",
+    "drHint": "La sauvegarde complète inclut profils, secrets, listes de protection et paramètres."
   },
   "history.allProfiles": "Tous les profils",
   "settings.service.title": "Contrôle du service",
