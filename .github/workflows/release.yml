@@ -4,9 +4,14 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: 'Release version (e.g. 0.7.14)'
+        description: 'Release version (e.g. 0.9.12)'
         required: true
         type: string
+      create_release:
+        description: 'Publish GitHub Release (uncheck for build-only)'
+        required: true
+        type: boolean
+        default: true
 
 permissions:
   contents: write
@@ -70,7 +75,6 @@ jobs:
           name: portable-${{ matrix.label }}
           path: |
             release/portable/Env-Manager_portable_*.zip
-            release/portable/*
           if-no-files-found: error
 
       - name: Upload CLI-only artifact
@@ -79,7 +83,6 @@ jobs:
           name: cli-only-${{ matrix.label }}
           path: |
             release/cli-only/Env-Manager_cli-only_*.zip
-            release/cli-only/*
           if-no-files-found: error
 
       - name: Upload MSI artifact
@@ -91,6 +94,7 @@ jobs:
 
   release:
     needs: build
+    if: ${{ github.event.inputs.create_release == 'true' }}
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -109,9 +113,14 @@ jobs:
           body: |
             ## Env Manager Downloads
 
-            - Portable: release/portable/Env-Manager_portable_version_arch.zip (x64/x86/arm64)
-            - CLI-only: release/cli-only/Env-Manager_cli-only_version_arch.zip (x64/x86/arm64)
-            - MSI: Env Manager_version_arch.msi (x64/x86/arm64)
+            - **Portable**: Env-Manager_portable_${{ inputs.version }}_x64.zip / _x86.zip / _arm64.zip
+            - **CLI-only**: Env-Manager_cli-only_${{ inputs.version }}_x64.zip / _x86.zip / _arm64.zip
+            - **MSI**: Env Manager_${{ inputs.version }}_x64.msi / _x86.msi / _arm64.msi
+
+            ## Prerequisites
+
+            - .NET 10 Desktop Runtime: https://dotnet.microsoft.com/download/dotnet/10.0
+            - WebView2 Runtime (preinstalled on Windows 11)
 
             ## Changelog
 

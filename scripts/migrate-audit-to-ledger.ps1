@@ -54,7 +54,7 @@ foreach ($entry in $entries) {
         profileName = if ($entry.profileName) { $entry.profileName } else { $null }
         reason = $null
         prevHash = $prevHash
-    } | ConvertTo-Json -Compress
+    } | ConvertTo-Json -Compress -Depth 20
 
     $hashInput = $prevHash + $eventForHash
     $sha256 = [SHA256]::Create()
@@ -73,7 +73,7 @@ foreach ($entry in $entries) {
         prevHash = $prevHash
         hash = $currentHash
         ledgerSchemaVersion = 1
-    } | ConvertTo-Json -Compress
+    } | ConvertTo-Json -Compress -Depth 20
 
     $lines += $ledgerEvent
     $prevHash = $currentHash
@@ -81,7 +81,7 @@ foreach ($entry in $entries) {
 
 # Write ledger file (atomically: write to tmp, rename).
 $tmpPath = "$ledgerPath.migrate.tmp"
-$lines | Out-File -FilePath $tmpPath -Encoding utf8
+[System.IO.File]::WriteAllLines($tmpPath, $lines, (New-Object System.Text.UTF8Encoding($false)))
 Move-Item -Path $tmpPath -Destination $ledgerPath -Force
 
 # Rename audit.json to audit.json.bak (read-only after migration).
