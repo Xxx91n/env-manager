@@ -50,6 +50,10 @@ All commands: `env-manager-cli <command> [args] [--scope user|system] [--debug]`
 | `expand` | `expand <value>` | Resolve nested %VAR% references |
 | `protection` | `protection <subcommand>` | List and manage protected vars + PATH entries |
 | `update` | `update check` | Check GitHub releases for newer version (network) |
+| `service` | `service status\|ping\|health\|refresh\|rotate\|reload\|shutdown` | IPC gateway to env-manager-service (secret mount lifecycle) |
+| `audit` | `audit list\|encrypt-file\|migrate-audit\|verify-ledger\|export-survival-kit\|recover-from-ledger` | Audit ledger management (hash-chained tamper-evident) |
+| `export-state` | `export-state --output <file>` | Export all internal config files as DPAPI-CurrentUser-encrypted archive |
+| `import-state` | `import-state --input <file> [--dry-run]` | Import DPAPI-encrypted state archive (atomically writes all config files) |
 | `agents` | `agents [--path\|--json\|--summary]` | Output this guide / machine-readable spec |
 | `help` | `help` | Show help text |
 
@@ -164,6 +168,10 @@ Pass `--debug` or `-d` to enable verbose stderr logging with timestamps. Logs re
 ## v0.8 Secret Providers
 
 Secret variables (added via `profile add-secret` on a LAUNCH profile only) are routed to the active provider declared in `%LOCALAPPDATA%\EnvManager\secret-providers.json`. List and switch providers via `profile secret-provider list` and `profile secret-provider set <name>`. `set` runs a no-op Encrypt/Decrypt/Delete probe before committing the config switch - a provider that fails its probe (pwsh missing module, Vault no `VAULT_ADDR`, cloud credentials missing, network down) is REJECTED at config time with an actionable message, never silently swapped.
+| `%LOCALAPPDATA%\EnvManager\secretMount.json` | Secret mount metadata (provider, refresh policy, lifecycle) |
+| `%LOCALAPPDATA%\EnvManager\gui-settings.json` | GUI settings (locale, darkMode, fontScale) persisted via Rust IPC |
+| `%ProgramData%\EnvManager\audit-ledger.jsonl` | Hash-chained audit ledger (service-mode, append-only) |
+| `%ProgramData%\EnvManager\service.config.json` | Service infrastructure config (non-secret metadata) |
 
 Registered providers:
 

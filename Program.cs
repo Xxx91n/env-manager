@@ -1345,9 +1345,7 @@ partial class Program
         if (pathError != null) { Console.Error.WriteLine($"Error: {pathError}"); return 1; }
 
         string encrypted = SecretProviderManager.ExportSecrets(profile);
-        string tmpExport = outputFile + ".tmp." + Environment.ProcessId;
-        File.WriteAllText(tmpExport, encrypted, new System.Text.UTF8Encoding(false));
-        File.Move(tmpExport, outputFile, true);
+        WriteAtomicUtf8(outputFile, encrypted);
         int secretCount = profile.SecretVariables.Count;
         Console.WriteLine($"Exported {secretCount} secret(s) from profile '{profileName}' to '{outputFile}'");
         RecordProfileAudit("profile export-secrets", profileName,
@@ -1441,9 +1439,7 @@ partial class Program
         };
 
         string json = JsonSerializer.Serialize(exportData, JsonOptsIndented);
-        string tmpExport = outputPath + ".tmp." + Environment.ProcessId;
-        File.WriteAllText(tmpExport, json, new System.Text.UTF8Encoding(false));
-        File.Move(tmpExport, outputPath, true);
+        WriteAtomicUtf8(outputPath, json);
         Console.WriteLine($"Exported profile '{profileName}' to {outputPath}");
         return 0;
     }
@@ -2852,9 +2848,7 @@ partial class Program
         catch (UnauthorizedAccessException) { }
 
         var json = JsonSerializer.Serialize(backup, JsonOptsIndented);
-        string tmpBackup = outputPath + ".tmp." + Environment.ProcessId;
-        File.WriteAllText(tmpBackup, json, new System.Text.UTF8Encoding(false));
-        File.Move(tmpBackup, outputPath, true);
+        WriteAtomicUtf8(outputPath, json);
         Console.WriteLine($"Backup created: {outputPath} ({backup.Variables.Count} variables)");
     }
 
@@ -2975,9 +2969,7 @@ partial class Program
             Variables = merged.Values.ToList()
         };
 
-        string tmpMerge = outFull + ".tmp." + Environment.ProcessId;
-        File.WriteAllText(tmpMerge, JsonSerializer.Serialize(result, JsonOptsIndented), new System.Text.UTF8Encoding(false));
-        File.Move(tmpMerge, outFull, true);
+        WriteAtomicUtf8(outFull, JsonSerializer.Serialize(result, JsonOptsIndented));
         Console.WriteLine($"Merged: {outFull} ({result.Variables.Count} variables)");
         return 0;
     }
@@ -3351,7 +3343,7 @@ partial class Program
                     }
                    string plainText = File.ReadAllText(inputPath);
                    string cipherBase64 = SecretProviderManager.Encrypt(plainText, "audit-survival-kit");
-                   File.WriteAllText(outputPath, cipherBase64);
+                   WriteAtomicUtf8(outputPath, cipherBase64);
                     Console.WriteLine("Encrypted: " + outputPath + " (" + cipherBase64.Length + " chars)");
                     return 0;
                 }

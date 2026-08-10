@@ -329,7 +329,7 @@ const archSuffix = '_' + targetArch
 for (const dir of [portableDir, cliOnlyDir, msiDir]) {
   mkdirSync(dir, { recursive: true })
   for (const f of readdirSync(dir)) {
-    if (f.includes(archSuffix)) rmSync(join(dir, f), { force: true })
+    if (f.includes(archSuffix)) rmSync(join(dir, f), { recursive: true, force: true })
   }
 }
 // Also clean any stale staging for this arch

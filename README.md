@@ -153,6 +153,8 @@ Run `env-manager.exe`. The GUI provides real-time variable list with search, sco
 - **v0.9.8 Industrial logging**: `tracing` + `tracing-appender` backend with daily rotation, 7-day retention, cross-process `request_id` for CLI/Rust/Service debug correlation
 - **v0.9.9 Schema migration**: `SchemaMigration.cs` registry-based sequential migration framework (profiles v0->v1->v2)
 - **v0.9.10 Audit ledger**: `AuditLedgerMigration.cs` implements `audit migrate-audit` (audit.json to `audit-ledger.jsonl` hash-chained), `verify-ledger` (SHA256 chain tamper detection), `export-survival-kit`, `recover-from-ledger`
+- **v0.9.11 Alignment**: PS5/pwsh compatibility audit (BOM-safe encoding, depth-safe JSON), GitHub Actions `workflow_dispatch` manual release gate with `create_release` + version input, multi-arch build (x64/x86/arm64) with per-arch clean
+- **v0.9.12 Final alignment**: Sensitive data redaction (22-pattern unified scrubbing across CLI/GUI/service), export-state/import-state full-state DPAPI-encrypted backup, .NET 10 runtime detection + i18n missing-key fixes, GitHub release readiness Phase 1 (community files, README rewrite, CSP hardening)
 - User and System scope support, no admin required for user scope
 
 ### GUI Mode

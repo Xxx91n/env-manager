@@ -153,6 +153,8 @@ env-manager-cli.exe audit verify-ledger
 - **v0.9.8 工业级日志**：`tracing` + `tracing-appender` 后端，日志轮转，7 天保留，跨进程 `request_id` 用于 CLI/Rust/Service 调试关联
 - **v0.9.9 Schema 迁移**：`SchemaMigration.cs` 注册表式顺序迁移框架（profiles v0->v1->v2）
 - **v0.9.10 审计账本**：`AuditLedgerMigration.cs` 实现 `audit migrate-audit`（audit.json 转 `audit-ledger.jsonl` 哈希链）、`verify-ledger`（SHA256 链防篡改）、`export-survival-kit`、`recover-from-ledger`
+- **v0.9.11 对齐**：PS5/pwsh 兼容性审计（BOM 安全编码、深度安全 JSON），GitHub Actions `workflow_dispatch` 手动发布门控（含 `create_release` + 版本输入），多架构构建（x64/x86/arm64），按架构独立清理
+- **v0.9.12 最终对齐**：敏感数据脱敏（22 模式统一脱敏，覆盖 CLI/GUI/服务三层），export-state/import-state 全状态 DPAPI 加密备份，.NET 10 运行时检测 + i18n 缺失键修复，GitHub 发布就绪 Phase 1（社区文件、README 重写、CSP 加固）
 - 用户和系统范围支持，用户范围无需管理员权限
 
 ### GUI 模式
