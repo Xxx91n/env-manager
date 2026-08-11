@@ -7,6 +7,7 @@ use std::path::PathBuf;
 use std::process::Command;
 use std::sync::RwLock;
 use std::sync::OnceLock;
+use zeroize::Zeroizing;
 use tauri::{
     menu::{Menu, MenuItem},
     tray::TrayIconBuilder,
@@ -472,7 +473,7 @@ fn scrub_stderr(s: &str) -> String {
     match output_result {
         Ok(output) => {
             let elapsed = start.elapsed();
-            let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+            let mut stdout = Zeroizing::new(String::from_utf8_lossy(&output.stdout).to_string());
             let stderr = String::from_utf8_lossy(&output.stderr).to_string();
             info!(
                 "[run_cli] exit={}, stdout_len={}, stderr_len={}, elapsed={}ms, read_only={}",
@@ -494,14 +495,14 @@ fn scrub_stderr(s: &str) -> String {
             if output.status.success() {
                 CliResponse {
                     success: true,
-                    data: Some(stdout),
+                    data: Some(std::mem::take(&mut *stdout)),
                     error: None,
                 }
             } else {
                 let err = if !stderr.trim().is_empty() {
                     stderr
                 } else {
-                    stdout
+                    std::mem::take(&mut *stdout)
                 };
                 CliResponse {
                     success: false,

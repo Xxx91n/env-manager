@@ -69,4 +69,14 @@ mod tests {
         let input = "service started ok";
         assert_eq!(scrub_message(input), "service started ok");
     }
+
+    #[test]
+    fn test_zeroizing_string_drop() {
+        use zeroize::Zeroizing;
+        // Just verify Zeroizing<String> compiles and can be used
+        let secret = Zeroizing::new(String::from("s3cr3t-v4lu3"));
+        assert_eq!(&*secret, "s3cr3t-v4lu3");
+        // secret drops here, inner String zeroed
+    }
+
 }

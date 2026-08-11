@@ -206,6 +206,9 @@ partial class Program
 
     static int Main(string[] args)
     {
+        // v0.9.13 Phase 2D/4A: Disable WER crash dialogs + SEM_NOGPFAULTERRORBOX (best-effort)
+        DisableCrashDialogs();
+
         // v0.7.1 fix: recover from the classic Windows "trailing backslash + quote"
         // tokenizer hazard, where values like "C:\Program Files\PowerShell\7\"
         // merge with following --scope/--overwrite flags. Main(args) follows
@@ -1232,14 +1235,14 @@ partial class Program
         {
             // v0.8.0: resolve mount reference if the value is a "mount:" prefixed ID.
             var envelope = ResolveSecretMount(v.Value) ?? v.Value;
-            var plaintext = SecretProviderManager.Decrypt(envelope, profileName + "\\" + varName);
+            using var secret = new SecretString(SecretProviderManager.Decrypt(envelope, profileName + "\\" + varName));
             // Audit BEFORE printing plaintext so the audit trail records the
             // fact that a secret was revealed (for security forensics) but
             // never the value itself. Marked <redacted> twice over.
             RecordProfileAudit("profile reveal-secret", profileName,
                 JsonSerializer.Serialize(new { name = varName, value = "<redacted>" }),
                 JsonSerializer.Serialize(new { name = varName, value = "<revealed>" }));
-            Console.Out.Write(plaintext);
+            Console.Out.Write(secret.AsSpan());
             return 0;
         }
         catch (Exception ex)
@@ -3341,8 +3344,8 @@ partial class Program
                         Console.Error.WriteLine("Error: input file exceeds 50 MB limit");
                         return 1;
                     }
-                   string plainText = File.ReadAllText(inputPath);
-                   string cipherBase64 = SecretProviderManager.Encrypt(plainText, "audit-survival-kit");
+                   using var plainSecret = new SecretString(File.ReadAllText(inputPath));
+                   string cipherBase64 = SecretProviderManager.Encrypt(plainSecret.ToString(), "audit-survival-kit");
                    WriteAtomicUtf8(outputPath, cipherBase64);
                     Console.WriteLine("Encrypted: " + outputPath + " (" + cipherBase64.Length + " chars)");
                     return 0;
@@ -3441,5 +3444,78 @@ Commands:
   service status|health|refresh <id>|rotate <id>  Interact with the secret lifecycle service
   --debug                    Enable verbose stderr logging");
        return 0;
+    }
+
+    // v0.9.13 Phase 2D/4A: WER disable + crash dump protection P/Invoke
+    [System.Runtime.InteropServices.DllImport("kernel32.dll", SetLastError = true)]
+    private static extern uint SetErrorMode(uint uMode);
+
+    [System.Runtime.InteropServices.DllImport("kernel32.dll", SetLastError = true)]
+    private static extern uint SetProcessErrorMode(uint uMode);
+
+    [System.Runtime.InteropServices.DllImport("wer.dll", SetLastError = true)]
+    private static extern int WerSetFlags(int flags);
+
+    /// <summary>
+    /// Disable WER crash dialogs: SEM_FAILCRITICALERRORS | SEM_NOGPFAULTERRORBOX | SEM_NOOPENFILEERRORBOX
+    /// + WerSetFlags(WER_FAULT_REPORTING_DISABLE | WER_FAULT_REPORTING_NO_QUEUE)
+    /// Best-effort: swallowed exceptions never block the CLI.
+    /// </summary>
+    private static void DisableCrashDialogs()
+    {
+        try
+        {
+            // SEM_FAILCRITICALERRORS=0x0001 | SEM_NOGPFAULTERRORBOX=0x0002 | SEM_NOOPENFILEERRORBOX=0x8000
+            const uint SEM_FLAGS = 0x0001 | 0x0002 | 0x8000;
+            var old = SetErrorMode(SEM_FLAGS);
+            SetErrorMode(SEM_FLAGS | old); // Preserve prior flags
+        }
+        catch { } // best-effort
+
+        try
+        {
+            // WER_FAULT_REPORTING_DISABLE=0x1 | WER_FAULT_REPORTING_NO_QUEUE=0x2
+            WerSetFlags(0x3);
+        }
+        catch { } // wer.dll may not be present
+    }
+
+    // v0.9.13 Phase 3A: NTFS ACL restriction on audit files
+    // Restricts access to current user + SYSTEM only. Removes inheritance.
+    private static void SetFileAclRestricted(string path)
+    {
+        if (!File.Exists(path)) return;
+        try
+        {
+            var fi = new FileInfo(path);
+            var security = fi.GetAccessControl();
+            security.SetAccessRuleProtection(true, false); // Disable inheritance, no copy
+            // Remove existing rules
+            var rules = security.GetAccessRules(true, true, typeof(System.Security.Principal.NTAccount));
+            foreach (System.Security.AccessControl.FileSystemAccessRule rule in rules)
+            {
+                security.RemoveAccessRule(rule);
+            }
+            // Add current user FullControl
+            var currentUser = System.Security.Principal.WindowsIdentity.GetCurrent().User;
+            if (currentUser != null)
+            {
+                security.AddAccessRule(new System.Security.AccessControl.FileSystemAccessRule(
+                    currentUser,
+                    System.Security.AccessControl.FileSystemRights.FullControl,
+                    System.Security.AccessControl.AccessControlType.Allow));
+            }
+            // Add SYSTEM FullControl
+            var system = new System.Security.Principal.NTAccount("NT AUTHORITY\\SYSTEM");
+            security.AddAccessRule(new System.Security.AccessControl.FileSystemAccessRule(
+                system,
+                System.Security.AccessControl.FileSystemRights.FullControl,
+                System.Security.AccessControl.AccessControlType.Allow));
+            fi.SetAccessControl(security);
+        }
+        catch (Exception ex)
+        {
+            DebugLog($"ACL restriction failed for {path}: {ex.Message}");
+        }
     }
 }

@@ -6,6 +6,7 @@
 
 use std::path::PathBuf;
 use base64::{engine::general_purpose, Engine as _};
+use zeroize::Zeroizing;
 
 /// Encode a PowerShell script as base64(UTF-16LE) for -EncodedCommand.
 /// This eliminates all shell quoting/injection risks. Same pattern as v0.7.4
@@ -40,7 +41,8 @@ fn run_powershell(script: &str) -> Result<std::process::Output, String> {
 /// 5. Return token string. Token is cached in-memory only by the caller.
 /// 6. On cert-based auth: if cert_thumbprint is provided, use TLS client cert
 ///    instead of AppRole. POST to {VAULT_ADDR}/v1/auth/cert/login with the cert.
-pub fn vault_bootstrap(cert_thumbprint: &str) -> Result<String, String> {
+pub fn vault_bootstrap(cert_thumbprint: &str) -> Result<Zeroizing<String>, String> {
+    // v0.9.13: token wrapped in Zeroizing<String> for deterministic memory zeroing on drop.
     let vault_addr = std::env::var("VAULT_ADDR")
         .map_err(|_| "VAULT_ADDR environment variable not set".to_string())?;
 
@@ -83,7 +85,7 @@ $resp.auth.client_token"#,
         return Err(format!("Vault AppRole login failed: {}", stderr.trim()));
     }
 
-    let token = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    let token = Zeroizing::new(String::from_utf8_lossy(&output.stdout).trim().to_string());
     if token.is_empty() {
         return Err("Vault AppRole login returned empty token".to_string());
     }
@@ -97,7 +99,8 @@ $resp.auth.client_token"#,
 /// the client cert from Cert:\LocalMachine\My. Same subprocess pattern as
 /// Azure SP cert auth — no reqwest/rustls dependency needed.
 /// See ADR 0001 A9: cert stored non-exportable, ACL'd to per-service SID.
-fn vault_cert_login(vault_addr: &str, thumbprint: &str) -> Result<String, String> {
+fn vault_cert_login(vault_addr: &str, thumbprint: &str) -> Result<Zeroizing<String>, String> {
+    // v0.9.13: token wrapped in Zeroizing<String> for deterministic memory zeroing on drop.
     // Script loads the cert by thumbprint and uses it for TLS client auth.
     // No secret values interpolated into the script body — thumbprint is
     // infrastructure metadata (non-secret), vault_addr is a URL.
@@ -122,7 +125,7 @@ $resp.auth.client_token"#,
         return Err(format!("Vault cert login failed: {}", stderr.trim()));
     }
 
-    let token = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    let token = Zeroizing::new(String::from_utf8_lossy(&output.stdout).trim().to_string());
     if token.is_empty() {
         return Err("Vault cert login returned empty token".to_string());
     }
@@ -147,7 +150,8 @@ $resp.auth.client_token"#,
 ///    with grant_type=client_credentials&client_assertion_type=jwt-bearer&client_assertion=<JWT>&scope=https://vault.azure.net/.default
 /// 6. Parse response for access_token + expires_in.
 /// 7. Return token. Caller caches with 5-min buffer.
-pub fn azure_sp_bootstrap(cert_thumbprint: &str) -> Result<String, String> {
+pub fn azure_sp_bootstrap(cert_thumbprint: &str) -> Result<Zeroizing<String>, String> {
+    // v0.9.13: token wrapped in Zeroizing<String> for deterministic memory zeroing on drop.
     let client_id = std::env::var("AZURE_CLIENT_ID")
         .map_err(|_| "AZURE_CLIENT_ID environment variable not set".to_string())?;
     let tenant_id = std::env::var("AZURE_TENANT_ID")
@@ -208,7 +212,7 @@ $resp.access_token"#,
         return Err(format!("Azure SP cert auth failed: {}", stderr.trim()));
     }
 
-    let token = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    let token = Zeroizing::new(String::from_utf8_lossy(&output.stdout).trim().to_string());
     if token.is_empty() {
         return Err("Azure SP cert auth returned empty token".to_string());
     }

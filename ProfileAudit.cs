@@ -31,6 +31,8 @@ partial class Program
             });
             if (history.Count > MaxAuditEntries) history = history[^MaxAuditEntries..];
             AtomicWriteJson(AuditFilePath, history);
+            // v0.9.13 Phase 3A: Restrict NTFS ACL on audit file after write
+            try { SetFileAclRestricted(AuditFilePath); } catch { } // best-effort
         }
         catch (Exception ex)
         {

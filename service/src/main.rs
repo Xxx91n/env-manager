@@ -12,6 +12,8 @@ mod ipc;
 mod cert_bootstrap;
 mod audit_ledger;
 mod redaction;
+mod pipe_dacl;
+mod process_guard;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RuntimeMode {
@@ -93,6 +95,9 @@ tracing_subscriber::fmt()
     .init();
 std::mem::forget(guard);
     tracing::info!("env-manager-service starting in {:?} mode", mode);
+
+    // v0.9.13 Phase 2D/2B/2C/2E/4B: process hardening (WER, hash, debugger, modules, lock)
+    process_guard::init();
 
     // Entry guard (A7): refuse direct double-click launch with no --mode.
     // If interactive session and no --mode flag, print guidance and exit.
