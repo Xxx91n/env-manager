@@ -3518,4 +3518,46 @@ Commands:
             DebugLog($"ACL restriction failed for {path}: {ex.Message}");
         }
     }
+
+    // v0.9.13 Phase 4F: Provider binary hash verification (best-effort)
+    // Computes SHA256 of sops/op binary on first use, warns on subsequent mismatch.
+    private static readonly string ProviderHashPath = Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+        "EnvManager", "provider-hash.json");
+
+    private static void RecordProviderHash(string binaryName, string binaryPath)
+    {
+        try
+        {
+            using var sha = System.Security.Cryptography.SHA256.Create();
+            var hashBytes = sha.ComputeHash(File.ReadAllBytes(binaryPath));
+            var hashHex = Convert.ToHexString(hashBytes);
+
+            var existing = File.Exists(ProviderHashPath)
+                ? File.ReadAllText(ProviderHashPath)
+                : "{}";
+            using var doc = JsonDocument.Parse(existing);
+            using var stream = new MemoryStream();
+            using var writer = new System.Text.Json.Utf8JsonWriter(stream);
+            writer.WriteStartObject();
+            foreach (var prop in doc.RootElement.EnumerateObject())
+            {
+                writer.WritePropertyName(prop.Name);
+                writer.WriteStringValue(prop.Name == binaryName ? hashHex : prop.Value.GetString());
+                if (prop.Name == binaryName && prop.Value.GetString() != hashHex)
+                    DebugLog($"Provider {binaryName} hash mismatch (expected={prop.Value.GetString()[..16]}, actual={hashHex[..16]})");
+            }
+            if (!doc.RootElement.EnumerateObject().Any(p => p.Name == binaryName))
+            {
+                writer.WritePropertyName(binaryName);
+                writer.WriteStringValue(hashHex);
+                DebugLog($"Provider {binaryName} hash recorded: {hashHex[..16]}");
+            }
+            writer.WriteEndObject();
+            writer.Flush();
+            var jsonText = System.Text.Encoding.UTF8.GetString(stream.ToArray());
+            WriteAtomicUtf8(ProviderHashPath, jsonText);
+        }
+        catch (Exception ex) { DebugLog($"Provider hash recording failed: {ex.GetType().Name}"); }
+    }
 }

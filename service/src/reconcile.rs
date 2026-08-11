@@ -12,6 +12,7 @@ use std::io::Write;
 use chrono::{DateTime, Utc};
 use tokio_util::sync::CancellationToken;
 use std::sync::Arc;
+use tokio::sync::Mutex; // Phase 4C: TOCTOU protection
 
 /// SecretMount mirror of the C# SecretMount class.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -54,6 +55,9 @@ pub struct MountHealth {
     pub message: Option<String>,
 }
 
+/// Phase 4C: Global lock to prevent TOCTOU between reconcile tick and CLI mount mutations.
+static RECONCILE_LOCK: Mutex<()> = Mutex::const_new(());
+
 /// Main reconcile loop. Runs indefinitely (300s interval).
 /// Domain 10: defer first tick 30s to avoid SCM timeout on boot.
 pub async fn reconcile_loop(shutdown: Arc<CancellationToken>) {
@@ -87,6 +91,8 @@ pub async fn reconcile_loop(shutdown: Arc<CancellationToken>) {
 }
 
 async fn run_reconcile_tick() -> Result<(), String> {
+    // Phase 4C: Acquire global lock for the entire tick to prevent TOCTOU with CLI mutations.
+    let _guard = RECONCILE_LOCK.lock().await;
     tracing::info!("reconcile tick: scanning secretMount.json");
 
     let path = crate::secret_mount_path();
@@ -150,6 +156,7 @@ async fn run_reconcile_tick() -> Result<(), String> {
 
 /// Refresh a single mount by ID (IPC `refresh` method).
 pub async fn refresh_mount(mount_id: &str) -> Result<serde_json::Value, String> {
+    let _guard = RECONCILE_LOCK.lock().await; // Phase 4C: TOCTOU protection
     let path = crate::secret_mount_path();
     let mut mounts = load_mounts(&path);
     let mount = mounts
@@ -175,6 +182,7 @@ pub async fn refresh_mount(mount_id: &str) -> Result<serde_json::Value, String> 
 
 /// Rotate a single mount by ID (IPC `rotate` method).
 pub async fn rotate_mount(mount_id: &str) -> Result<serde_json::Value, String> {
+    let _guard = RECONCILE_LOCK.lock().await; // Phase 4C: TOCTOU protection
     let path = crate::secret_mount_path();
     let mut mounts = load_mounts(&path);
     let mount = mounts
