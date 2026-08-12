@@ -239,14 +239,14 @@ Problem solved: L6, L8, L10.
 - Tests: capability rejection, secret-store health surfaces every provider + mount count, audit inversibility.
 - Exit criteria: a deployment can ship `agentCapabilities` whitelist and reject parallel `set`/`delete` calls from LLM agents on the same machine; blue-team can inventory all secrets from the CLI in 30 seconds.
 
-### Phase C (v0.9.0): Optional reconcile loop (`secrets-agent.exe`)
+### Phase C (v0.9.0): Optional reconcile loop (`env-manager-service.exe`)
 
 Problem solved: L1, L4 (partial).
 
-- Ship `secrets-agent.exe` as a separate portable shipped in `release/portable/secrets-agent.exe`. GUI Settings toggle opt-in.
+- Ship `env-manager-service.exe` as a separate binary bundled in `release/portable/` and `release/cli-only/`. GUI Settings toggle opt-in.
 - Default reconcile interval 300s. Only providers with `CanRotate=true` get a lease concept (`VaultKV2Provider`'s 1000s lease, Azure's 90-day secret expiry, AWS rotation Lambda's `pending/current/staged`).
 - Per-mount `refreshPolicy: Periodic | CreatedOnce | OnChange`. `OnChange` requires file-system watch on `secretMount.json`.
-- AGENTS.md: add hard boundary `v0.9.0 Optional reconcile loop (hard boundary)` describing the no-drift contract and the fail-closed behaviour when `secrets-agent.exe` is missing.
+- AGENTS.md: add hard boundary `v0.9.0 Optional reconcile loop (hard boundary)` describing the no-drift contract and the fail-closed behaviour when `env-manager-service.exe` is missing.
 - Tests: reconcile loop updates envelope without dropping semantics; `CreatedOnce` does not refresh on schedule; `Periodic` honour `interval`; crash recovery resumes reconcile.
 - Exit criteria: a Vault KV2 secret rotated upstream surfaces in the next process launch within `refreshIntervalSeconds`; the loop never writes stale plaintext to the registry.
 
@@ -290,7 +290,7 @@ Single TODO row in the per-phase ledger:
 ```
 Phase A: SecretMount schema v2 + secretMount.json + mount CLI + audit enrich   - not started
 Phase B: SecretStore controller + capability agentic surface                    - not started
-Phase C: secrets-agent.exe optional reconcile loop                              - not started
+Phase C: env-manager-service.exe optional reconcile loop                       - DONE (v0.9.0)
 Phase D: WindowsHelloIdentityProvider (passkey)                                  - not started
 Phase E: Schema v3 unified audit ledger + wrapping-key escrow                    - not started
 ```
@@ -303,7 +303,7 @@ Phase E: Schema v3 unified audit ledger + wrapping-key escrow                   
 
 Risk-aware record of the dangerous calls we considered and rejected, so future maintainers know why the proposed structure was chosen.
 
-- Risk: introducing `secrets-agent.exe` violates the "single-cli, single-GUI, single-process" emphasis users relied on. Counter: the agent is opt-in via Settings; default off in v0.8 / v0.9; on-by-opt-in in v0.9.5. Users who want the static-fetch-on-launch behaviour continue to get it for free.
+- Risk: introducing `env-manager-service.exe` violates the "single-cli, single-GUI, single-process" emphasis users relied on. Counter: the agent is opt-in via Settings; default off in v0.8 / v0.9; on-by-opt-in in v0.9.5. Users who want the static-fetch-on-launch behaviour continue to get it for free.
 - Risk: the `SecretMount` schema migration is a one-shot write that can clobber profiles. Counter: atomic write + back-up of `profiles.json` to `.env_bak/<timestamp>/` before migration; the existing per-session forensic snapshot already covers this.
 - Risk: capability-gating the agent surface may break existing automation scripts that fire parallel writes. Counter: default empty `agentCapabilities` = all-allowed; the gate is opt-in. A deployment that depends on parallel writes keeps today's behaviour.
 - Risk: passkey introduction may exclude users without Windows Hello capable hardware. Counter: capability fallback to today's static env-var token path; the passkey path is opt-in.

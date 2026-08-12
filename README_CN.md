@@ -154,6 +154,7 @@ env-manager-cli.exe audit verify-ledger
 - **v0.9.9 Schema 迁移**：`SchemaMigration.cs` 注册表式顺序迁移框架（profiles v0->v1->v2）
 - **v0.9.10 审计账本**：`AuditLedgerMigration.cs` 实现 `audit migrate-audit`（audit.json 转 `audit-ledger.jsonl` 哈希链）、`verify-ledger`（SHA256 链防篡改）、`export-survival-kit`、`recover-from-ledger`
 - **v0.9.11 对齐**：PS5/pwsh 兼容性审计（BOM 安全编码、深度安全 JSON），GitHub Actions `workflow_dispatch` 手动发布门控（含 `create_release` + 版本输入），多架构构建（x64/x86/arm64），按架构独立清理
+- **v0.9.13 安全硬化**：进程安全与生命周期加固 — Rust zeroize/secrecy（cert_bootstrap、reveal-secret stdout），C# SecretString（作用域退出时清零），命名管道 DACL（仅 BA/SY/OW），二进制哈希自校验 + 调试器检测 + WER/崩溃转储禁用 + DLL 注入枚举 + VirtualLock（服务），审计文件 NTFS ACL，audit.json AES-256-GCM 静态加密（EncryptAuditContent/DecryptAuditContent 已接入读写），export-state 双层加密（AES-GCM 载荷 + DPAPI 包裹 DEK + HMAC-SHA256 完整性，v1 向后兼容），reconcile 循环 TOCTOU mutex，provider 二进制哈希校验（sops/op 首次使用 SHA256 记录）
 - **v0.9.12 最终对齐**：敏感数据脱敏（22 模式统一脱敏，覆盖 CLI/GUI/服务三层），export-state/import-state 全状态 DPAPI 加密备份，.NET 10 运行时检测 + i18n 缺失键修复，GitHub 发布就绪 Phase 1（社区文件、README 重写、CSP 加固）
 - 用户和系统范围支持，用户范围无需管理员权限
 
