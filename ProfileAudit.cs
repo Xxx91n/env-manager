@@ -30,7 +30,10 @@ partial class Program
                 NewValue = newSummary
             });
             if (history.Count > MaxAuditEntries) history = history[^MaxAuditEntries..];
-            AtomicWriteJson(AuditFilePath, history);
+            // v0.9.13 Phase 3B: AES-GCM encrypt audit content at rest
+            var auditJson = JsonSerializer.Serialize(history, JsonOpts);
+            var encrypted = EncryptAuditContent(auditJson);
+            WriteAtomicUtf8(AuditFilePath, encrypted);
             // v0.9.13 Phase 3A: Restrict NTFS ACL on audit file after write
             try { SetFileAclRestricted(AuditFilePath); } catch { } // best-effort
         }

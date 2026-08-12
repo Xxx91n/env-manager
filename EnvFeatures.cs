@@ -185,7 +185,10 @@ partial class Program
         if (!File.Exists(AuditFilePath)) return new();
         var info = new FileInfo(AuditFilePath);
         if (info.Length > MaxBackupFileSize) throw new InvalidDataException("Audit history exceeds the safety limit");
-        return JsonSerializer.Deserialize<List<AuditEntry>>(File.ReadAllText(AuditFilePath), JsonOpts) ?? new();
+        // v0.9.13 Phase 3B: decrypt AES-GCM encrypted audit content at rest
+        string rawContent = File.ReadAllText(AuditFilePath);
+        string plainJson = DecryptAuditContent(rawContent);
+        return JsonSerializer.Deserialize<List<AuditEntry>>(plainJson, JsonOpts) ?? new();
     }
 
 static void AtomicWriteJson<T>(string path, T value)

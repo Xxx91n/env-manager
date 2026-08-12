@@ -73,7 +73,7 @@ partial class Program
             files = state,
         }, JsonOptsIndented);
 
-        string encrypted = DpapiHelper.EncryptSecret(jsonState);
+        string encrypted = ExportStateEncrypt(jsonState); // v0.9.13 Phase 3C: double-layer AES-GCM + DPAPI + HMAC
 
         // Atomic write: temp + fsync + rename.
         WriteAtomicUtf8(outputFile, encrypted);
@@ -115,7 +115,7 @@ partial class Program
         string jsonState;
         try
         {
-            jsonState = DpapiHelper.DecryptSecret(encrypted);
+            jsonState = ExportStateDecrypt(encrypted); // v0.9.13 Phase 3C: auto-detects v1/v2
         }
         catch (Exception ex)
         {

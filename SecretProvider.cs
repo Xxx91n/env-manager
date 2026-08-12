@@ -804,6 +804,8 @@ internal sealed class SopsProvider : ISecretProvider
             proc.WaitForExit(5000);
             if (!proc.HasExited || proc.ExitCode != 0)
                 throw new InvalidOperationException("sops binary not functional");
+            // v0.9.13 Phase 4F: record provider binary hash for tamper detection
+            try { Program.RecordProviderHash("sops", SOPS_BINARY); } catch { }
         }
         catch (System.ComponentModel.Win32Exception)
         {
@@ -1318,6 +1320,8 @@ internal sealed class OnePasswordProvider : ISecretProvider
             proc.WaitForExit(5000);
             if (!proc.HasExited || proc.ExitCode != 0)
                 throw new InvalidOperationException("1Password CLI (op) binary not functional");
+            // v0.9.13 Phase 4F: record provider binary hash for tamper detection
+            try { Program.RecordProviderHash("op", OP_BINARY); } catch { }
         }
         catch (System.ComponentModel.Win32Exception)
         {

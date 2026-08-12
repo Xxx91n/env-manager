@@ -3525,7 +3525,7 @@ Commands:
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
         "EnvManager", "provider-hash.json");
 
-    private static void RecordProviderHash(string binaryName, string binaryPath)
+    internal static void RecordProviderHash(string binaryName, string binaryPath)
     {
         try
         {
