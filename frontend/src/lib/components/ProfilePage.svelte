@@ -6,6 +6,7 @@
   import CloneCombobox from './CloneCombobox.svelte'
   import { profiles, showModal, refreshTrigger, openInputDialog } from '../stores'
   import { showToast } from '../stores'
+  import { frontendLog } from '../settingsStore'
   import {
     listProfiles,
     createProfile,
@@ -480,11 +481,15 @@
     }
   }
   async function handleAddVar() {
-    if (!selectedProfile || !newVarName.trim()) return
+    if (!selectedProfile || !newVarName.trim()) {
+      void frontendLog('warn', 'handleAddVar early-return: profile=' + (selectedProfile?.name ?? 'null') + ' name=[' + (newVarName || '<empty>') + ']').catch(() => {})
+      return
+    }
     const nameErr = validateVarNameInput(newVarName.trim())
     if (nameErr) { showToast(nameErr, 'error'); return }
     actionLoading = true
     try {
+      void frontendLog('info', 'handleAddVar: calling addProfileVar profile=' + selectedProfile.name + ' var=' + newVarName.trim()).catch(() => {})
       await addProfileVar(selectedProfile.name, newVarName.trim(), newVarValue, newVarScope)
       newVarName = ''
       newVarValue = ''

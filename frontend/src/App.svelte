@@ -30,12 +30,25 @@
   ]
   let tabRefs: HTMLButtonElement[] = []
   let indicatorStyle = 'width: 0px; left: 0px;'
+  let indicatorReady = false
 
   function updateIndicator() {
     const activeIdx = tabItems.findIndex(t => t.id === $activeView)
     if (activeIdx >= 0 && tabRefs[activeIdx]) {
       const el = tabRefs[activeIdx]
-      indicatorStyle = 'width: ' + el.offsetWidth + 'px; left: ' + el.offsetLeft + 'px;'
+      const w = el.offsetWidth
+      const l = el.offsetLeft
+      // Suppress transition on first placement to avoid width animation from 0
+      if (!indicatorReady) {
+        indicatorStyle = 'width: ' + w + 'px; left: ' + l + 'px; transition: none'
+        indicatorReady = true
+        // Restore transition on next frame
+        requestAnimationFrame(() => {
+          indicatorStyle = 'width: ' + w + 'px; left: ' + l + 'px;'
+        })
+      } else {
+        indicatorStyle = 'width: ' + w + 'px; left: ' + l + 'px;'
+      }
     }
   }
 
