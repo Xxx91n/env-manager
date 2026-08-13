@@ -941,15 +941,13 @@
                   <input
                     type="text"
                     placeholder={$t('labels.name')}
-                    value={newVarName}
-                    on:input={(e) => newVarName = e.currentTarget.value}
+                    bind:value={newVarName}
                     class="w-full px-2 py-1 text-[10px] border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100"
                   />
                   <input
                     type="text"
                     placeholder={$t('labels.value')}
-                    value={newVarValue}
-                    on:input={(e) => newVarValue = e.currentTarget.value}
+                    bind:value={newVarValue}
                     class="w-full px-2 py-1 text-[10px] border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100"
                   />
                   <div class="flex gap-1">

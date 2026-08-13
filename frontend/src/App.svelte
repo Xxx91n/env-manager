@@ -30,7 +30,7 @@
   ]
   let tabRefs: HTMLButtonElement[] = []
   let indicatorStyle = 'width: 0px; left: 0px;'
-  let indicatorReady = false
+  let indicatorTransition = 'none'
 
   function updateIndicator() {
     const activeIdx = tabItems.findIndex(t => t.id === $activeView)
@@ -38,16 +38,12 @@
       const el = tabRefs[activeIdx]
       const w = el.offsetWidth
       const l = el.offsetLeft
-      // Suppress transition on first placement to avoid width animation from 0
-      if (!indicatorReady) {
-        indicatorStyle = 'width: ' + w + 'px; left: ' + l + 'px; transition: none'
-        indicatorReady = true
-        // Restore transition on next frame
+      indicatorStyle = 'width: ' + w + 'px; left: ' + l + 'px;'
+      // Enable transition after the first paint to avoid width animation from 0
+      if (indicatorTransition === 'none') {
         requestAnimationFrame(() => {
-          indicatorStyle = 'width: ' + w + 'px; left: ' + l + 'px;'
+          indicatorTransition = 'all 200ms cubic-bezier(0.2, 0, 0, 1)'
         })
-      } else {
-        indicatorStyle = 'width: ' + w + 'px; left: ' + l + 'px;'
       }
     }
   }
@@ -277,7 +273,7 @@
       </div>
       <div
         class="absolute bottom-0 h-[3px] bg-blue-600 dark:bg-blue-400 rounded-t-md"
-        style={indicatorStyle + ' transition: all 200ms cubic-bezier(0.2, 0, 0, 1)'}
+        style={indicatorStyle + '; transition: ' + indicatorTransition}
         aria-hidden="true"
       ></div>
     </div>
