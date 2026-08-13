@@ -6,16 +6,23 @@
   let pending = false
   let inputEl: HTMLInputElement | undefined
 
-  $: if ($inputModal) {
-    inputValue = $inputModal.defaultValue ?? ''
-    pending = false
-    // auto-select-all after DOM update
-    setTimeout(() => {
-      if (inputEl) {
-        inputEl.focus()
-        inputEl.select()
-      }
-    }, 0)
+  // Use a tick-based approach instead of reactive block to avoid
+  // Svelte 4 dependency tracking: assigning inputValue inside a $: block
+  // makes inputValue a dependency, so typing re-fires the block and
+  // resets inputValue to defaultValue on every keystroke.
+  let lastModal: typeof $inputModal = null
+  $: if ($inputModal !== lastModal) {
+    lastModal = $inputModal
+    if ($inputModal) {
+      inputValue = $inputModal.defaultValue ?? ''
+      pending = false
+      setTimeout(() => {
+        if (inputEl) {
+          inputEl.focus()
+          inputEl.select()
+        }
+      }, 0)
+    }
   }
 
   function handleConfirm() {
