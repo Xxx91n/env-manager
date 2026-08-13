@@ -31,8 +31,11 @@
   function onInput(e) {
     highlightIndex = -1
     dropdownOpen = true
-    // Notify parent of the current typed value so it can track free-text input.
-    dispatch('input', query)
+    // Svelte 4: on:input fires BEFORE bind:value updates the query variable.
+    // Read the current DOM value from the event target to avoid dispatching
+    // a stale value (one keystroke behind).
+    const current = (e.target as HTMLInputElement).value
+    dispatch('input', current)
   }
 
   function select(v: ComboItem) {
