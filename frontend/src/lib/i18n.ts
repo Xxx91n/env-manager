@@ -148,7 +148,26 @@ export const defaultLanguage = defaultLocale
  * anything throws; callers MUST treat failure as soft (the lazy loader will
  * still resolve on its own schedule).
  */
+// Reuse the same static import paths that register() uses so Vite's
+// build-time analysis maps them to hashed chunks. Runtime string
+// concatenation import() bypasses Vite's chunk resolver and fetches a
+// path that does not exist under tauri:// in production.
+const localeLoaders: Record<string, () => Promise<{ default: Record<string, string> }>> = {
+  en: () => Promise.resolve({ default: enMessages as Record<string, string> }),
+  zh: () => import('./translations/zh.json'),
+  ja: () => import('./translations/ja.json'),
+  ko: () => import('./translations/ko.json'),
+  de: () => import('./translations/de.json'),
+  fr: () => import('./translations/fr.json'),
+  es: () => import('./translations/es.json'),
+  pt: () => import('./translations/pt.json'),
+  ru: () => import('./translations/ru.json'),
+  ar: () => import('./translations/ar.json'),
+}
+
 export async function loadLocaleMessages(loc: string): Promise<void> {
-  const mod = await import('./translations/' + loc + '.json')
-  addMessages(loc, (mod as { default: Record<string, string> }).default)
+  const loader = localeLoaders[loc]
+  if (!loader) return
+  const mod = await loader()
+  addMessages(loc, mod.default)
 }
