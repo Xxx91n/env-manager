@@ -1,5 +1,6 @@
 <script lang="ts">
   import { createEventDispatcher } from 'svelte'
+  import { frontendLog } from '../settingsStore'
   import { t } from 'svelte-i18n'
   import { createBackup, restoreBackup, pickSaveFile, pickOpenFile } from '../api'
   import { showToast } from '../stores'

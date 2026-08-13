@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte'
+  import { frontendLog } from '../settingsStore'
   import { t } from 'svelte-i18n'
   import { bulkExport, bulkImport, listHistory, undoHistory, deleteHistory, clearHistory } from '../api'
   import type { AuditEntry } from '../api'

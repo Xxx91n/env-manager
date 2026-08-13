@@ -1,5 +1,6 @@
 <script lang="ts">
   import { t } from 'svelte-i18n'
+  import { frontendLog } from '../settingsStore'
   import { modal, closeModal } from '../stores'
 
   let pending = false

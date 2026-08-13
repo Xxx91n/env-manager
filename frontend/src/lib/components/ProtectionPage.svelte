@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte'
+  import { frontendLog } from '../settingsStore'
   import { t } from 'svelte-i18n'
   import { showToast, showModal, refreshTrigger, selectedScope } from '../stores'
   import { listProtection, addProtectedPath, removeProtectedPath, addProtectedVar, removeProtectedVar, listVariablesRaw, listPathEntries } from '../api'

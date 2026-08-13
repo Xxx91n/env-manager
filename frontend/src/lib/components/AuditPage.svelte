@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte'
+  import { frontendLog } from '../settingsStore'
   import { t } from 'svelte-i18n'
   import { auditList } from '../api'
   import { showToast } from '../stores'

@@ -1,5 +1,6 @@
 <script lang="ts">
   import { t } from 'svelte-i18n'
+  import { frontendLog } from '../settingsStore'
   import { inputModal, closeInputModal } from '../stores'
 
   let inputValue = ''

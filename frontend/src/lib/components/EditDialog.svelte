@@ -1,5 +1,6 @@
 <script lang="ts">
   import { createEventDispatcher } from 'svelte'
+  import { frontendLog } from '../settingsStore'
   import { t } from 'svelte-i18n'
   import { setVariable, renameVariable, changeScope } from '../api'
   import { showModal, variables } from '../stores'

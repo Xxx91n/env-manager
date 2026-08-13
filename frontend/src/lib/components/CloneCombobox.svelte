@@ -1,5 +1,6 @@
 <script lang="ts">
   import { createEventDispatcher } from 'svelte'
+  import { frontendLog } from '../settingsStore'
   type ComboItem = { name: string; value?: string }
 
   // Reusable searchable combobox pattern, extracted from the v0.7.4 clone-from-existing

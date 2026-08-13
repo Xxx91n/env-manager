@@ -1,5 +1,6 @@
 <script lang="ts">
   import { t } from 'svelte-i18n'
+  import { frontendLog } from '../settingsStore'
   import { variables, selectedScope, search, debouncedSearch, filteredVariables, error, showModal, isWriteInProgress } from '../stores'
   import { showToast } from '../stores'
   import { deleteVariable, createBackup, toggleVariable, setVariable, expandVariableValue, addProtectedVar, removeProtectedVar, listVariables } from '../api'

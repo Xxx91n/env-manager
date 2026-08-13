@@ -7,6 +7,7 @@
     serviceStart, serviceStop, serviceRefreshMount, serviceRotateMount
   } from '../api'
   import { showToast } from '../stores'
+  import { frontendLog } from '../settingsStore'
 
   const tStore = t
 
@@ -62,7 +63,7 @@
       if (!result.ok) { serviceError = result.message || 'reload failed' }
       else { showToast(getStore(tStore)('settings.service.reloaded'), 'success') }
       await refreshServiceStatus()
-    } catch (err) { serviceError = err instanceof Error ? err.message : String(err) }
+     } catch (err) { serviceError = err instanceof Error ? err.message : String(err); void frontendLog('error', '[ServicePage] ' + (err instanceof Error ? err.message : String(err))).catch(() => {}) }
     finally { serviceLoading = false }
   }
 
@@ -74,7 +75,7 @@
       await serviceStop()
       showToast(getStore(tStore)('settings.service.shutdown'), 'success')
       await refreshServiceStatus()
-    } catch (err) { serviceError = err instanceof Error ? err.message : String(err) }
+     } catch (err) { serviceError = err instanceof Error ? err.message : String(err); void frontendLog('error', '[ServicePage] ' + (err instanceof Error ? err.message : String(err))).catch(() => {}) }
     finally { serviceLoading = false }
   }
 
@@ -89,7 +90,7 @@
       await refreshServiceStatus()
       if (serviceRunning) { showToast(getStore(tStore)('settings.service.started'), 'success') }
       else { serviceError = getStore(tStore)('settings.service.startFailed') }
-    } catch (err) { serviceError = err instanceof Error ? err.message : String(err) }
+     } catch (err) { serviceError = err instanceof Error ? err.message : String(err); void frontendLog('error', '[ServicePage] ' + (err instanceof Error ? err.message : String(err))).catch(() => {}) }
     finally { serviceLoading = false }
   }
 
@@ -100,7 +101,7 @@
       const result = await serviceRefreshMount(mountId)
       if (!result.ok) serviceError = result.message || 'refresh failed'
       await refreshServiceStatus()
-    } catch (err) { serviceError = err instanceof Error ? err.message : String(err) }
+     } catch (err) { serviceError = err instanceof Error ? err.message : String(err); void frontendLog('error', '[ServicePage] ' + (err instanceof Error ? err.message : String(err))).catch(() => {}) }
     finally { serviceLoading = false }
   }
 
@@ -112,7 +113,7 @@
       if (!result.ok) serviceError = result.message || 'rotate failed'
       else { showToast(getStore(tStore)('settings.service.rotated'), 'success') }
       await refreshServiceStatus()
-    } catch (err) { serviceError = err instanceof Error ? err.message : String(err) }
+     } catch (err) { serviceError = err instanceof Error ? err.message : String(err); void frontendLog('error', '[ServicePage] ' + (err instanceof Error ? err.message : String(err))).catch(() => {}) }
     finally { serviceLoading = false }
   }
 </script>

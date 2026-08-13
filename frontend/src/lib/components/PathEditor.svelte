@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte'
+  import { frontendLog } from '../settingsStore'
   import { t } from 'svelte-i18n'
   import { showModal, isWriteInProgress, refreshTrigger } from '../stores'
   import { showToast } from '../stores'
@@ -74,6 +75,7 @@
       stagedApplyLoading = false
     } catch (err) {
       showMessage(err instanceof Error ? err.message : String(err), 'error')
+      void frontendLog('error', '[PathEditor] ' + (err instanceof Error ? err.message : String(err))).catch(() => {})
     } finally {
       loading = false
       // Safety: clear actionLoading in case a prior action's finally was skipped
@@ -138,6 +140,7 @@
       showMessage($t('messages.pathEntryAdded'), 'success')
     } catch (err) {
       showMessage(err instanceof Error ? err.message : String(err), 'error')
+      void frontendLog('error', '[PathEditor] ' + (err instanceof Error ? err.message : String(err))).catch(() => {})
     } finally {
       actionLoading = false
     }
@@ -160,6 +163,7 @@
       }
     } catch (err) {
       showMessage(err instanceof Error ? err.message : String(err), 'error')
+      void frontendLog('error', '[PathEditor] ' + (err instanceof Error ? err.message : String(err))).catch(() => {})
     } finally {
       healthLoading = false
     }
@@ -234,6 +238,7 @@
           showMessage($t('messages.pathEntryRemoved'), 'success')
         } catch (err) {
           showMessage(err instanceof Error ? err.message : String(err), 'error')
+          void frontendLog('error', '[PathEditor] ' + (err instanceof Error ? err.message : String(err))).catch(() => {})
         } finally {
           actionLoading = false
         }
@@ -321,6 +326,7 @@
       showMessage($t('messages.pathOrderApplied'), 'success')
     } catch (err) {
       showMessage(err instanceof Error ? err.message : String(err), 'error')
+      void frontendLog('error', '[PathEditor] ' + (err instanceof Error ? err.message : String(err))).catch(() => {})
       // On failure, keep staged order visible so the user can retry or cancel.
     } finally {
       stagedApplyLoading = false
