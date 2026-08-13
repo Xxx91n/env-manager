@@ -585,15 +585,28 @@ fn write_gui_setting(key: String, value: String) -> bool {
 fn read_var_notes() -> serde_json::Value {
     let path = var_notes_path();
     match std::fs::read_to_string(&path) {
-        Ok(content) => serde_json::from_str(&content).unwrap_or(serde_json::json!({"version":1,"notes":{}})),
-        Err(_) => serde_json::json!({"version":1,"notes":{}}),
+        Ok(content) => {
+            let val = serde_json::from_str(&content).unwrap_or(serde_json::json!({"version":1,"notes":{}}));
+            info!("[IPC] read_var_notes: path={}", path.display());
+            val
+        }
+        Err(e) => {
+            info!("[IPC] read_var_notes: file not found (normal on first run): {}", e);
+            serde_json::json!({"version":1,"notes":{}})
+        }
     }
 }
 
 #[tauri::command]
 fn write_var_notes(notes_json: String) -> bool {
     let path = var_notes_path();
-    write_atomic(&path, &notes_json)
+    let ok = write_atomic(&path, &notes_json);
+    if ok {
+        info!("[IPC] write_var_notes: wrote {} bytes to {}", notes_json.len(), path.display());
+    } else {
+        error!("[IPC] write_var_notes: FAILED to write to {}", path.display());
+    }
+    ok
 }
 
 fn var_notes_path() -> std::path::PathBuf {
