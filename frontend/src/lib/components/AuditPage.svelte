@@ -17,7 +17,7 @@
     try {
       const result = await auditList()
       auditEntries = Array.isArray(result) ? result : (result?.entries ?? [])
-    } catch (err) {
+    } catch (err) { void frontendLog('error', '[AuditPage] ' + (err instanceof Error ? err.message : String(err))).catch(() => {});
       auditEntries = []
     } finally {
       auditLoading = false

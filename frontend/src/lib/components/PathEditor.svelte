@@ -119,7 +119,7 @@
         showToast($t('protection.pathLocked'), 'success')
       }
       await refresh()
-    } catch (err) {
+    } catch (err) { void frontendLog('error', '[PathEditor] ' + (err instanceof Error ? err.message : String(err))).catch(() => {});
       showToast(err instanceof Error ? err.message : String(err), 'error')
     }
   }
@@ -194,7 +194,7 @@
           }
           await refresh()
           showToast($t('messages.pathDeadRemoved', { values: { count: deadCount } }), 'success')
-        } catch (err) {
+        } catch (err) { void frontendLog('error', '[PathEditor] ' + (err instanceof Error ? err.message : String(err))).catch(() => {});
           showToast(err instanceof Error ? err.message : String(err), 'error')
         } finally {
           actionLoading = false
@@ -384,7 +384,7 @@
       editValue = ''
       await refresh()
       showMessage($t('messages.pathRenamed'), 'success')
-    } catch (err) {
+    } catch (err) { void frontendLog('error', '[PathEditor] ' + (err instanceof Error ? err.message : String(err))).catch(() => {});
       editError = err instanceof Error ? err.message : String(err)
     } finally {
       actionLoading = false

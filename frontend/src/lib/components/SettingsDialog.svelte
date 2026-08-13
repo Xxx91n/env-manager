@@ -102,7 +102,7 @@
           showToast(get(tStore)('settings.cliAddFailed') + ': ' + result.message, 'error')
         }
       }
-    } catch (err) {
+    } catch (err) { void frontendLog('error', '[SettingsDialog] ' + (err instanceof Error ? err.message : String(err))).catch(() => {});
       showToast(get(tStore)('settings.cliAddFailed') + ': ' + (err instanceof Error ? err.message : String(err)), 'error')
     } finally {
       cliToggleLoading = false
@@ -131,7 +131,7 @@
         serviceError = result.message || 'ping failed'
       }
       await refreshServiceStatus()
-    } catch (err) {
+    } catch (err) { void frontendLog('error', '[SettingsDialog] ' + (err instanceof Error ? err.message : String(err))).catch(() => {});
       serviceError = err instanceof Error ? err.message : String(err)
     } finally {
       serviceLoading = false
@@ -150,7 +150,7 @@
         showToast(get(tStore)('settings.service.reloaded'), 'success')
       }
       await refreshServiceStatus()
-    } catch (err) {
+    } catch (err) { void frontendLog('error', '[SettingsDialog] ' + (err instanceof Error ? err.message : String(err))).catch(() => {});
       serviceError = err instanceof Error ? err.message : String(err)
     } finally {
       serviceLoading = false
@@ -167,7 +167,7 @@
       await serviceStop()
       showToast(get(tStore)('settings.service.shutdown'), 'success')
       await refreshServiceStatus()
-    } catch (err) {
+    } catch (err) { void frontendLog('error', '[SettingsDialog] ' + (err instanceof Error ? err.message : String(err))).catch(() => {});
       serviceError = err instanceof Error ? err.message : String(err)
     } finally {
       serviceLoading = false
@@ -194,7 +194,7 @@
       } else {
         serviceError = get(tStore)('settings.service.startFailed')
       }
-    } catch (err) {
+    } catch (err) { void frontendLog('error', '[SettingsDialog] ' + (err instanceof Error ? err.message : String(err))).catch(() => {});
       serviceError = err instanceof Error ? err.message : String(err)
     } finally {
       serviceLoading = false
@@ -211,7 +211,7 @@
         serviceError = result.message || 'refresh failed'
       }
       await refreshServiceStatus()
-    } catch (err) {
+    } catch (err) { void frontendLog('error', '[SettingsDialog] ' + (err instanceof Error ? err.message : String(err))).catch(() => {});
       serviceError = err instanceof Error ? err.message : String(err)
     } finally {
       serviceLoading = false
@@ -229,7 +229,7 @@
         showToast(get(tStore)('settings.service.rotated'), 'success')
       }
       await refreshServiceStatus()
-    } catch (err) {
+    } catch (err) { void frontendLog('error', '[SettingsDialog] ' + (err instanceof Error ? err.message : String(err))).catch(() => {});
       serviceError = err instanceof Error ? err.message : String(err)
     } finally {
       serviceLoading = false
@@ -301,7 +301,7 @@
       if (!file) return
       await bulkImport(file, bulkScope, false, false)
       showToast($t('settings.bulkImported'), 'success')
-    } catch (err) {
+    } catch (err) { void frontendLog('error', '[SettingsDialog] ' + (err instanceof Error ? err.message : String(err))).catch(() => {});
       showToast(err instanceof Error ? err.message : String(err), 'error')
     } finally {
       bulkLoading = false
@@ -317,7 +317,7 @@
       if (!file) return
       await bulkExport(file, bulkScope)
       showToast($t('settings.bulkExported'), 'success')
-    } catch (err) {
+    } catch (err) { void frontendLog('error', '[SettingsDialog] ' + (err instanceof Error ? err.message : String(err))).catch(() => {});
       showToast(err instanceof Error ? err.message : String(err), 'error')
     } finally {
       bulkLoading = false
@@ -352,7 +352,7 @@
       if (!file) { drLoading = false; return }
       const result = await exportState(file)
       showToast($t('settings.drExported', { values: { count: result.exported } }), 'success')
-    } catch (err) {
+    } catch (err) { void frontendLog('error', '[SettingsDialog] ' + (err instanceof Error ? err.message : String(err))).catch(() => {});
       drError = err instanceof Error ? err.message : String(err)
       showToast(drError, 'error')
     }
@@ -370,7 +370,7 @@
       await importState(file, true)
       const result = await importState(file, false)
       showToast($t('settings.drImported', { values: { count: result.imported } }), 'success')
-    } catch (err) {
+    } catch (err) { void frontendLog('error', '[SettingsDialog] ' + (err instanceof Error ? err.message : String(err))).catch(() => {});
       drError = err instanceof Error ? err.message : String(err)
       showToast(drError, 'error')
     }

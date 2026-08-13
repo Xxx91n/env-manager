@@ -101,7 +101,7 @@
       onConfirm: async () => {
             try {
           await deleteVariable(name, scope as 'user' | 'system')
-        } catch (err) {
+        } catch (err) { void frontendLog('error', '[Variables] ' + (err instanceof Error ? err.message : String(err))).catch(() => {});
           showToast(err instanceof Error ? err.message : String(err), 'error')
         }
       }
@@ -130,7 +130,7 @@
     try {
       await toggleVariable(name, scope as 'user' | 'system')
       // toggleVariable() in api.ts already calls listVariables() to confirm
-    } catch (err) {
+    } catch (err) { void frontendLog('error', '[Variables] ' + (err instanceof Error ? err.message : String(err))).catch(() => {});
       // Revert optimistic update on failure
       variables.update(vars => vars.map(v => {
         if (v.name === name && v.scope === scope) {
@@ -162,7 +162,7 @@
         showToast($t('protection.varLocked'), 'success')
       }
       await listVariables()
-    } catch (err) {
+    } catch (err) { void frontendLog('error', '[Variables] ' + (err instanceof Error ? err.message : String(err))).catch(() => {});
       showToast(err instanceof Error ? err.message : String(err), 'error')
     }
   }

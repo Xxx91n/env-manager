@@ -17,7 +17,7 @@
     try {
       const result = await createBackup(fileName)
       showToast($t('messages.backupExported'), 'success')
-    } catch (err) {
+    } catch (err) { void frontendLog('error', '[BackupDialog] ' + (err instanceof Error ? err.message : String(err))).catch(() => {});
       showToast(err instanceof Error ? err.message : $t('messages.backupExportFailed'), 'error')
     } finally {
       saving = false
@@ -32,7 +32,7 @@
     try {
       await restoreBackup(filePath)
       showToast($t('messages.backupRestored'), 'success')
-    } catch (err) {
+    } catch (err) { void frontendLog('error', '[BackupDialog] ' + (err instanceof Error ? err.message : String(err))).catch(() => {});
       showToast(err instanceof Error ? err.message : $t('messages.backupExportFailed'), 'error')
     } finally {
       saving = false

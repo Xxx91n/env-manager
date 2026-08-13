@@ -61,7 +61,7 @@
         ...up.map(e => ({ path: e.path, scope: "user" })),
         ...sp.map(e => ({ path: e.path, scope: "system" })),
       ].filter(p => !data!.protectedPaths.builtIn.includes(p.path) && !data!.protectedPaths.custom.includes(p.path))
-    } catch (err) {
+    } catch (err) { void frontendLog('error', '[ProtectionPage] ' + (err instanceof Error ? err.message : String(err))).catch(() => {});
       showToast(err instanceof Error ? err.message : String(err), "error")
     } finally {
       loading = false
@@ -106,7 +106,7 @@
       selectedVarName = ''
       await refresh()
       showToast($t('protection.varLocked'), 'success')
-    } catch (err) {
+    } catch (err) { void frontendLog('error', '[ProtectionPage] ' + (err instanceof Error ? err.message : String(err))).catch(() => {});
       showToast(err instanceof Error ? err.message : String(err), 'error')
     }
   }
@@ -123,7 +123,7 @@
           await removeProtectedVar(name)
           await refresh()
           showToast($t('protection.varUnlocked'), 'success')
-        } catch (err) {
+        } catch (err) { void frontendLog('error', '[ProtectionPage] ' + (err instanceof Error ? err.message : String(err))).catch(() => {});
           showToast(err instanceof Error ? err.message : String(err), 'error')
         }
       },
@@ -138,7 +138,7 @@
       selectedPathEntry = ''
       await refresh()
       showToast($t('protection.pathLocked'), 'success')
-    } catch (err) {
+    } catch (err) { void frontendLog('error', '[ProtectionPage] ' + (err instanceof Error ? err.message : String(err))).catch(() => {});
       showToast(err instanceof Error ? err.message : String(err), 'error')
     }
   }
@@ -159,7 +159,7 @@
           await removeProtectedPath(entry)
           await refresh()
           showToast($t('protection.pathUnlocked'), 'success')
-        } catch (err) {
+        } catch (err) { void frontendLog('error', '[ProtectionPage] ' + (err instanceof Error ? err.message : String(err))).catch(() => {});
           showToast(err instanceof Error ? err.message : String(err), 'error')
         }
       },

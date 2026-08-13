@@ -107,7 +107,7 @@
         await setVariable(name, value, scope as 'user' | 'system', overwrite || !!variable)
       }
       dispatch('save')
-    } catch (err) {
+    } catch (err) { void frontendLog('error', '[EditDialog] ' + (err instanceof Error ? err.message : String(err))).catch(() => {});
       localError = err instanceof Error ? err.message : String(err)
       setTimeout(() => { localError = '' }, 4000)
     } finally {

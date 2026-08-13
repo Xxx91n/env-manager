@@ -301,7 +301,7 @@
       newProfileCwd = ''
       await refreshProfiles()
       showMessage($t('messages.profileCreated'), 'success')
-    } catch (err) {
+    } catch (err) { void frontendLog('error', '[ProfilePage] ' + (err instanceof Error ? err.message : String(err))).catch(() => {});
       const msg_ = localizeError(err instanceof Error ? err.message : String(err))
       providerErrorMessage = msg_
       showMessage(msg_, 'error')
@@ -313,7 +313,7 @@
     try {
       const picked = await pickExecutableFile($t('profiles.selectExecutable'))
       if (picked) newProfileTarget = picked
-    } catch (err) {
+    } catch (err) { void frontendLog('error', '[ProfilePage] ' + (err instanceof Error ? err.message : String(err))).catch(() => {});
       showMessage(err instanceof Error ? err.message : String(err), 'error')
     }
   }
@@ -326,7 +326,7 @@
     try {
       await profileLaunch(profile.name)
       showMessage($t('messages.profileLaunched'), 'success')
-    } catch (err) {
+    } catch (err) { void frontendLog('error', '[ProfilePage] ' + (err instanceof Error ? err.message : String(err))).catch(() => {});
       showMessage(err instanceof Error ? err.message : String(err), 'error')
     } finally {
       actionLoading = false
@@ -361,7 +361,7 @@
       activeProvider = target
       providerErrorMessage = null
       showMessage($t('secrets.providerChanged'), 'success')
-    } catch (err) {
+    } catch (err) { void frontendLog('error', '[ProfilePage] ' + (err instanceof Error ? err.message : String(err))).catch(() => {});
       // v0.7.10: show provider activation errors as an inline amber banner
       // directly under the selector (providerErrorMessage) instead of a
       // transient toast, so the user can read the full actionable fix without
@@ -386,7 +386,7 @@
       showAddSecretPanel = false
       await refreshProfiles()
       showMessage($t('messages.secretAdded'), 'success')
-    } catch (err) {
+    } catch (err) { void frontendLog('error', '[ProfilePage] ' + (err instanceof Error ? err.message : String(err))).catch(() => {});
       // v0.7.10: surface secret-add errors (provider activation failures,
       // CLIXML probes, upstream provider issues) as an inline banner under
       // the selector so the actionable fix is visible without a fading toast.
@@ -402,7 +402,7 @@
       await profileRemoveSecret(selectedProfile.name, varName)
       await refreshProfiles()
       showMessage($t('messages.secretRemoved'), 'success')
-    } catch (err) {
+    } catch (err) { void frontendLog('error', '[ProfilePage] ' + (err instanceof Error ? err.message : String(err))).catch(() => {});
       showMessage(err instanceof Error ? err.message : String(err), 'error')
     } finally {
       actionLoading = false
@@ -416,7 +416,7 @@
     try {
       await exportProfile(profile.name, fileName)
       showMessage($t('messages.profileExported'), 'success')
-    } catch (err) {
+    } catch (err) { void frontendLog('error', '[ProfilePage] ' + (err instanceof Error ? err.message : String(err))).catch(() => {});
       showMessage(localizeError(err instanceof Error ? err.message : String(err)), 'error')
     } finally {
       actionLoading = false
@@ -430,7 +430,7 @@
       await importProfile(fileName)
       await refreshProfiles()
       showMessage($t('messages.profileImported'), 'success')
-    } catch (err) {
+    } catch (err) { void frontendLog('error', '[ProfilePage] ' + (err instanceof Error ? err.message : String(err))).catch(() => {});
       showMessage(localizeError(err instanceof Error ? err.message : String(err)), 'error')
     } finally {
       actionLoading = false
@@ -448,7 +448,7 @@
       await renameProfile(profile.name, newName.trim())
       await refreshProfiles()
       showMessage($t('messages.profileRenamed'), 'success')
-    } catch (err) {
+    } catch (err) { void frontendLog('error', '[ProfilePage] ' + (err instanceof Error ? err.message : String(err))).catch(() => {});
       showMessage(localizeError(err instanceof Error ? err.message : String(err)), 'error')
     } finally {
       actionLoading = false
@@ -468,7 +468,7 @@
           if (selectedProfile?.name === profile.name) selectedProfile = null
           await refreshProfiles()
           showMessage($t('messages.profileDeleted'), 'success')
-        } catch (err) {
+        } catch (err) { void frontendLog('error', '[ProfilePage] ' + (err instanceof Error ? err.message : String(err))).catch(() => {});
           showMessage(localizeError(err instanceof Error ? err.message : String(err)), 'error')
         } finally {
           actionLoading = false
@@ -487,7 +487,7 @@
         showMessage($t('messages.profileApplied'), 'success')
       }
       await refreshProfiles()
-    } catch (err) {
+    } catch (err) { void frontendLog('error', '[ProfilePage] ' + (err instanceof Error ? err.message : String(err))).catch(() => {});
       showMessage(localizeError(err instanceof Error ? err.message : String(err)), 'error')
     } finally {
       actionLoading = false
@@ -509,7 +509,7 @@
       newVarScope = 'user'
             showAddVarPanel = false
       await refreshProfiles()
-    } catch (err) {
+    } catch (err) { void frontendLog('error', '[ProfilePage] ' + (err instanceof Error ? err.message : String(err))).catch(() => {});
       showMessage(localizeError(err instanceof Error ? err.message : String(err)), 'error')
     } finally {
       actionLoading = false
@@ -529,7 +529,7 @@
     try {
       await removeProfileVar(selectedProfile.name, varName)
       await refreshProfiles()
-    } catch (err) {
+    } catch (err) { void frontendLog('error', '[ProfilePage] ' + (err instanceof Error ? err.message : String(err))).catch(() => {});
       showMessage(localizeError(err instanceof Error ? err.message : String(err)), 'error')
     } finally {
       actionLoading = false
@@ -578,7 +578,7 @@
     try {
       await setProfileInheritance(selectedProfile.name, parents)
       await refreshProfiles()
-    } catch (err) {
+    } catch (err) { void frontendLog('error', '[ProfilePage] ' + (err instanceof Error ? err.message : String(err))).catch(() => {});
       showMessage(localizeError(err instanceof Error ? err.message : String(err)), 'error')
     }
   }
@@ -591,7 +591,7 @@
       newPathEntry = ''
       newPathScope = 'user'
       await refreshProfiles()
-    } catch (err) {
+    } catch (err) { void frontendLog('error', '[ProfilePage] ' + (err instanceof Error ? err.message : String(err))).catch(() => {});
       showMessage(localizeError(err instanceof Error ? err.message : String(err)), 'error')
     }
   }

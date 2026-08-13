@@ -46,7 +46,7 @@
     loading = true
     try {
       allHistory = await listHistory()
-    } catch (err) {
+    } catch (err) { void frontendLog('error', '[HistoryPage] ' + (err instanceof Error ? err.message : String(err))).catch(() => {});
       showToast(err instanceof Error ? err.message : String(err), 'error')
     } finally {
       loading = false
@@ -75,12 +75,12 @@
             await bulkImport(file, importScope as 'user' | 'system', conflicts > 0, false)
             await refresh()
             showToast($t('bulk.imported'), 'success')
-          } catch (err) {
+          } catch (err) { void frontendLog('error', '[HistoryPage] ' + (err instanceof Error ? err.message : String(err))).catch(() => {});
             showToast(err instanceof Error ? err.message : String(err), 'error')
           }
         },
       })
-    } catch (err) {
+    } catch (err) { void frontendLog('error', '[HistoryPage] ' + (err instanceof Error ? err.message : String(err))).catch(() => {});
       showToast(err instanceof Error ? err.message : String(err), 'error')
     }
   }
@@ -96,7 +96,7 @@
     try {
       await bulkExport(file, exportScope as 'user' | 'system')
       showToast($t('bulk.exported'), 'success')
-    } catch (err) {
+    } catch (err) { void frontendLog('error', '[HistoryPage] ' + (err instanceof Error ? err.message : String(err))).catch(() => {});
       showToast(err instanceof Error ? err.message : String(err), 'error')
     }
   }
@@ -113,7 +113,7 @@
           await undoHistory(entry.id)
           await refresh()
           showToast($t('history.undone'), 'success')
-        } catch (err) {
+        } catch (err) { void frontendLog('error', '[HistoryPage] ' + (err instanceof Error ? err.message : String(err))).catch(() => {});
           showToast(err instanceof Error ? err.message : String(err), 'error')
         }
       },
@@ -132,7 +132,7 @@
           await deleteHistory(entry.id)
           await refresh()
           showToast($t('history.deleted'), 'success')
-        } catch (err) {
+        } catch (err) { void frontendLog('error', '[HistoryPage] ' + (err instanceof Error ? err.message : String(err))).catch(() => {});
           showToast(err instanceof Error ? err.message : String(err), 'error')
         }
       },
@@ -151,7 +151,7 @@
           await clearHistory(scope)
           await refresh()
           showToast($t('history.cleared'), 'success')
-        } catch (err) {
+        } catch (err) { void frontendLog('error', '[HistoryPage] ' + (err instanceof Error ? err.message : String(err))).catch(() => {});
           showToast(err instanceof Error ? err.message : String(err), 'error')
         }
       },

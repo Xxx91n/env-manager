@@ -49,7 +49,7 @@
       const result = await servicePing()
       if (!result.ok) serviceError = result.message || 'ping failed'
       await refreshServiceStatus()
-    } catch (err) {
+    } catch (err) { void frontendLog('error', '[ServicePage] ' + (err instanceof Error ? err.message : String(err))).catch(() => {});
       serviceError = err instanceof Error ? err.message : String(err)
     } finally { serviceLoading = false }
   }
