@@ -17,6 +17,11 @@
   // a compact one-line state, freeing the screen for the next-step inputs.
   // Default false keeps the always-open pattern.
   export let collapseAfterSelect = true
+  // When true, the input keeps the selected item's name visible after selection
+  // (used by PATH entries where the user needs to see the chosen path in the input).
+  // When false, the input clears on select (used by add-var where selected values
+  // flow into separate name/value inputs below).
+  export let keepQueryOnSelect = false
 
   let query = ''
   let dropdownOpen = false
@@ -40,10 +45,16 @@
 
   function select(v: ComboItem) {
     dispatch('select', v)
-    // Bug 6/7 fixes: clear state immediately so a new search can start without
-    // needing to click the empty space first; and do NOT show the variable name
-    // again below the input (the parent shows the full name + value area below).
-    query = ''
+    if (keepQueryOnSelect) {
+      // PATH mode: show the selected path name in the input so the user
+      // sees their selection. The parent already set newPathEntry from the
+      // select event detail.
+      query = v.name
+    } else {
+      // Add-var mode: clear the search so a new search can start immediately.
+      // The selected name/value flows into separate inputs below.
+      query = ''
+    }
     dropdownOpen = false
     highlightIndex = -1
   }

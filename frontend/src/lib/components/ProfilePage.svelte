@@ -846,6 +846,7 @@
                       <CloneCombobox
                         items={pathPool}
                         placeholder={$t('profiles.cloneSearchPlaceholder')}
+                        keepQueryOnSelect={true}
                         on:input={(e) => { newPathEntry = e.detail }}
                         on:select={(e) => { newPathEntry = e.detail.name }}
                       />
