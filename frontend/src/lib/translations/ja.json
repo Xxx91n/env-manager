@@ -432,5 +432,8 @@
   "notes.deleteNote": "メモを削除",
   "notes.notePlaceholder": "メモを入力...",
   "notes.noteEmpty": "メモなし",
-  "service.description": "定期トークン更新のためのバックグラウンドシークレットマウントサービスを管理"
+  "service.description": "定期トークン更新のためのバックグラウンドシークレットマウントサービスを管理",
+  "profiles": {
+    "unapplyToEdit": "プロファイルを適用解除してから変数を追加・編集してください"
+  }
 }

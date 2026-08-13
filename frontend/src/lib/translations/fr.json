@@ -432,5 +432,8 @@
   "notes.deleteNote": "Supprimer la note",
   "notes.notePlaceholder": "Saisir une note...",
   "notes.noteEmpty": "Aucune note",
-  "service.description": "Gerer le service d'arriere-plan pour la rotation periodique des secrets"
+  "service.description": "Gerer le service d'arriere-plan pour la rotation periodique des secrets",
+  "profiles": {
+    "unapplyToEdit": "Désactivez le profil avant d'ajouter ou de modifier des variables"
+  }
 }

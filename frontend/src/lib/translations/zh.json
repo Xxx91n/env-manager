@@ -432,5 +432,8 @@
   "notes.deleteNote": "删除备注",
   "notes.notePlaceholder": "在此输入备注...",
   "notes.noteEmpty": "暂无备注",
-  "service.description": "管理后台机密挂载服务，用于定期刷新机密令牌"
+  "service.description": "管理后台机密挂载服务，用于定期刷新机密令牌",
+  "profiles": {
+    "unapplyToEdit": "请先取消应用配置文件，再添加或修改变量"
+  }
 }

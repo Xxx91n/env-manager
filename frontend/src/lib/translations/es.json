@@ -432,5 +432,8 @@
   "notes.deleteNote": "Eliminar nota",
   "notes.notePlaceholder": "Escribir nota...",
   "notes.noteEmpty": "Sin notas",
-  "service.description": "Gestionar el servicio en segundo plano para la rotacion periodica de secretos"
+  "service.description": "Gestionar el servicio en segundo plano para la rotacion periodica de secretos",
+  "profiles": {
+    "unapplyToEdit": "Desaplique el perfil antes de añadir o editar variables"
+  }
 }

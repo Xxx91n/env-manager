@@ -432,5 +432,8 @@
   "notes.deleteNote": "메모 삭제",
   "notes.notePlaceholder": "메모 입력...",
   "notes.noteEmpty": "메모 없음",
-  "service.description": "주기적 토큰 갱신을 위한 백그라운드 시크릿 마운트 서비스 관리"
+  "service.description": "주기적 토큰 갱신을 위한 백그라운드 시크릿 마운트 서비스 관리",
+  "profiles": {
+    "unapplyToEdit": "변수를 추가하거나 편집하려면 먼저 프로파일 적용을 해제하세요"
+  }
 }

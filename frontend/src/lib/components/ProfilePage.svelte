@@ -837,27 +837,30 @@
                       </div>
                     {/each}
                   </div>
-                  <div class="flex gap-1 items-center">
-                    <select bind:value={newPathScope} disabled={profile.isEnabled} class="px-1.5 py-1 text-[10px] border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100">
-                      <option value="user">{$t('scope.user')}</option>
-                      <option value="system">{$t('scope.system')}</option>
-                    </select>
-                    <div class="min-w-0 flex-1">
-                      <CloneCombobox
-                        items={pathPool}
-                        placeholder={$t('profiles.cloneSearchPlaceholder')}
-                        keepQueryOnSelect={true}
-                        on:input={(e) => { newPathEntry = e.detail }}
-                        on:select={(e) => { newPathEntry = e.detail.name }}
-                      />
-                    </div>
-                    <button on:click={handleAddPath} disabled={profile.isEnabled || !newPathEntry.trim()} class="px-2 text-[10px] text-blue-600 disabled:opacity-30">{$t('buttons.add')}</button>
-                  </div>
-                </div>
-              </div>
-              {#if profile.variables.length === 0}
-                <p class="text-[10px] text-gray-400 dark:text-gray-500 py-2">{$t('profiles.noVariables')}</p>
-              {:else}
+                 <div class="flex gap-1 items-center">
+                   <select bind:value={newPathScope} disabled={profile.isEnabled} class="px-1.5 py-1 text-[10px] border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100">
+                     <option value="user">{$t('scope.user')}</option>
+                     <option value="system">{$t('scope.system')}</option>
+                   </select>
+                   <div class="min-w-0 flex-1">
+                     <CloneCombobox
+                       items={pathPool}
+                       placeholder={$t('profiles.cloneSearchPlaceholder')}
+                       keepQueryOnSelect={true}
+                       on:input={(e) => { newPathEntry = e.detail }}
+                       on:select={(e) => { newPathEntry = e.detail.name }}
+                     />
+                   </div>
+                   <button on:click={handleAddPath} disabled={profile.isEnabled || !newPathEntry.trim()} class="px-2 text-[10px] text-blue-600 disabled:opacity-30">{$t('buttons.add')}</button>
+                 </div>
+                  {#if profile.isEnabled}
+                    <p class="text-[9px] text-amber-600 dark:text-amber-400 mt-1">{$t('profiles.unapplyToEdit')}</p>
+                  {/if}
+               </div>
+             </div>
+             {#if profile.variables.length === 0}
+               <p class="text-[10px] text-gray-400 dark:text-gray-500 py-2">{$t('profiles.noVariables')}</p>
+             {:else}
                 <!-- Regular variables section -->
                 {#if profile.variables.filter(pv => !selectedProfile?.secretVariables?.includes(pv.name)).length > 0}
                   <div class="mt-1 mb-1">
@@ -921,7 +924,8 @@
               {#if !showAddVarPanel}
                 <button
                   on:click={() => (showAddVarPanel = true)}
-                  class="flex items-center gap-1 text-[10px] font-medium text-blue-600 hover:text-blue-700 dark:text-blue-400"
+                  disabled={profile.isEnabled}
+                  class="flex items-center gap-1 text-[10px] font-medium text-blue-600 hover:text-blue-700 dark:text-blue-400 disabled:opacity-40 disabled:cursor-not-allowed"
                 >
                   <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2.5">
                     <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4" />
@@ -931,6 +935,9 @@
               {:else}
                 <!-- Add variable panel with clone-from-existing dropdown -->
                 <div class="space-y-1.5 pt-2 border-t border-gray-100 dark:border-gray-700">
+                  {#if profile.isEnabled}
+                    <p class="text-[9px] text-amber-600 dark:text-amber-400">{$t('profiles.unapplyToEdit')}</p>
+                  {/if}
                   <!-- Clone from existing variable (reusable CloneCombobox) -->
                   <CloneCombobox
                     items={allVars}
@@ -967,7 +974,7 @@
                   <div class="flex gap-1">
                     <button
                       on:click={handleAddVar}
-                      disabled={actionLoading || !newVarName.trim()}
+                      disabled={actionLoading || !newVarName.trim() || profile.isEnabled}
                       class="flex-1 px-2 py-1 text-[10px] font-medium text-white bg-blue-600 rounded hover:bg-blue-700 transition disabled:opacity-50 dark:bg-blue-500 dark:hover:bg-blue-600"
                     >
                       {$t('buttons.save')}

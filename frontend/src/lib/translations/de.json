@@ -432,5 +432,8 @@
   "notes.deleteNote": "Notiz löschen",
   "notes.notePlaceholder": "Notiz eingeben...",
   "notes.noteEmpty": "Keine Notizen",
-  "service.description": "Hintergrunddienst für Secret-Mount-Lebenszyklus verwalten"
+  "service.description": "Hintergrunddienst für Secret-Mount-Lebenszyklus verwalten",
+  "profiles": {
+    "unapplyToEdit": "Profil erst deaktivieren bevor Variablen hinzugefügt oder bearbeitet werden"
+  }
 }

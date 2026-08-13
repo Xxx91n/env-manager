@@ -432,5 +432,8 @@
   "notes.deleteNote": "Delete Note",
   "notes.notePlaceholder": "Type your note here...",
   "notes.noteEmpty": "No notes yet",
-  "service.description": "Manage the background secret mount service for periodic token rotation"
+  "service.description": "Manage the background secret mount service for periodic token rotation",
+  "profiles": {
+    "unapplyToEdit": "Unapply the profile before adding or editing variables"
+  }
 }
