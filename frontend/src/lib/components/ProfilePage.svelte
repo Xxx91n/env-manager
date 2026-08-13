@@ -56,7 +56,20 @@
   // v0.8 secret provider state
   let activeProvider = 'dpapi-current-user'
   let availableProviders: string[] = []
-    // Pointer drag state remains local. Registry/profile persistence is never
+
+
+  // Input validation for variable names and PATH entries (v0.7.5 hard boundary).
+  // Rejects characters that could cause CLI parsing issues or registry corruption.
+  function validateVarNameInput(name: string): string | null {
+    if (/ [=\0\r\n\t]/.test(name)) return $t('errors.varNameInvalid')
+    if (name.length > 255) return $t('errors.varNameTooLong')
+    return null
+  }
+  function validatePathInput(p: string): string | null {
+    if (/[;\0\r\n]/.test(p)) return $t('errors.pathInvalidChars')
+    if (p.length > 32767) return $t('errors.pathTooLong')
+    return null
+  }    // Pointer drag state remains local. Registry/profile persistence is never
   // touched by a GUI-only ordering change.
   let dragIndex: number | null = null
   let isDragging = false
