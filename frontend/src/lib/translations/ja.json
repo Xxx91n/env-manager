@@ -119,7 +119,8 @@
   "profiles.rename": "名前変更",
   "profiles.exportPrompt": "ファイルにエクスポート (パス):",
   "profiles.importPrompt": "ファイルからインポート (パス):",
-  "profiles.renamePrompt": "プロファイルの名前を変更:",
+  "profiles.renameTitle": "プロファイルの名前変更",
+  "profiles.renamePlaceholder": "新しいプロファイル名を入力",
   "messages.profileExported": "プロファイルをエクスポートしました",
   "messages.profileImported": "プロファイルをインポートしました",
   "messages.profileRenamed": "プロファイルの名前を変更しました",
@@ -426,5 +427,10 @@
   "audit.empty": "監査記録が見つかりません",
   "audit.entries": "件",
   "nav.service": "サービス管理",
+  "notes.addNote": "メモを追加",
+  "notes.editNote": "メモを編集",
+  "notes.deleteNote": "メモを削除",
+  "notes.notePlaceholder": "メモを入力...",
+  "notes.noteEmpty": "メモなし",
   "service.description": "定期トークン更新のためのバックグラウンドシークレットマウントサービスを管理"
 }

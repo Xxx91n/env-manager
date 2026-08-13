@@ -34,6 +34,7 @@ partial class Program
         "builtin-protected-paths.json",
         "gui-settings.json",
         "audit.json",
+        "var-notes.json",
     };
 
     /// <summary>

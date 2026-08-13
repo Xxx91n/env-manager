@@ -581,6 +581,29 @@ fn write_gui_setting(key: String, value: String) -> bool {
     write_atomic(&path, &json)
 }
 
+#[tauri::command]
+fn read_var_notes() -> serde_json::Value {
+    let path = var_notes_path();
+    match std::fs::read_to_string(&path) {
+        Ok(content) => serde_json::from_str(&content).unwrap_or(serde_json::json!({"version":1,"notes":{}})),
+        Err(_) => serde_json::json!({"version":1,"notes":{}}),
+    }
+}
+
+#[tauri::command]
+fn write_var_notes(notes_json: String) -> bool {
+    let path = var_notes_path();
+    write_atomic(&path, &notes_json)
+}
+
+fn var_notes_path() -> std::path::PathBuf {
+    let local_appdata = std::env::var("LOCALAPPDATA").unwrap_or_default();
+    let base = std::path::PathBuf::from(local_appdata);
+    base.join("EnvManager").join("var-notes.json")
+}
+
+
+
 /// Atomic + durable filesystem write used by write_gui_setting so GUI settings
 /// persistence cannot be torn by a mid-write kill. Writes to a sibling .tmp file
 /// with the current pid, fsyncs it, then atomically renames onto the target.
@@ -1124,7 +1147,8 @@ std::mem::forget(_guard);
                 _ => {}
             }
         })
-       .invoke_handler(tauri::generate_handler![
+       .invoke_handler(
+            tauri::generate_handler![
             run_cli,
             cli_diagnostics,
             update_tray_locale,
@@ -1132,9 +1156,11 @@ std::mem::forget(_guard);
             read_gui_setting,
             write_gui_setting,
             frontend_log,
-             start_service,
-             start_service_watchdog,
-             stop_service,
+            start_service,
+            start_service_watchdog,
+            stop_service,
+            read_var_notes,
+            write_var_notes,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")

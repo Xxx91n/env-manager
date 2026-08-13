@@ -119,7 +119,8 @@
   "profiles.rename": "Renombrar",
   "profiles.exportPrompt": "Exportar a archivo (ruta):",
   "profiles.importPrompt": "Importar desde archivo (ruta):",
-  "profiles.renamePrompt": "Renombrar perfil a:",
+  "profiles.renameTitle": "Renombrar perfil",
+  "profiles.renamePlaceholder": "Ingrese el nuevo nombre",
   "messages.profileExported": "Perfil exportado con exito",
   "messages.profileImported": "Perfil importado con exito",
   "messages.profileRenamed": "Perfil renombrado con exito",
@@ -426,5 +427,10 @@
   "audit.empty": "No se encontraron registros de auditoría",
   "audit.entries": "entradas",
   "nav.service": "Gestor de servicios",
+  "notes.addNote": "Añadir nota",
+  "notes.editNote": "Editar nota",
+  "notes.deleteNote": "Eliminar nota",
+  "notes.notePlaceholder": "Escribir nota...",
+  "notes.noteEmpty": "Sin notas",
   "service.description": "Gestionar el servicio en segundo plano para la rotacion periodica de secretos"
 }

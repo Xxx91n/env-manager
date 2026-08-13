@@ -119,7 +119,8 @@
   "profiles.rename": "Переименовать",
   "profiles.exportPrompt": "Экспорт в файл (путь):",
   "profiles.importPrompt": "Импорт из файла (путь):",
-  "profiles.renamePrompt": "Переименовать профиль в:",
+  "profiles.renameTitle": "Переименовать профиль",
+  "profiles.renamePlaceholder": "Введите новое имя профиля",
   "messages.profileExported": "Профиль успешно экспортирован",
   "messages.profileImported": "Профиль успешно импортирован",
   "messages.profileRenamed": "Профиль успешно переименован",
@@ -426,5 +427,10 @@
   "audit.empty": "Записи аудита не найдены",
   "audit.entries": "записей",
   "nav.service": "Управление службой",
+  "notes.addNote": "Добавить заметку",
+  "notes.editNote": "Изменить заметку",
+  "notes.deleteNote": "Удалить заметку",
+  "notes.notePlaceholder": "Введите заметку...",
+  "notes.noteEmpty": "Нет заметок",
   "service.description": "Управление фоновой службой монтирования секретов для периодической ротации токенов"
 }

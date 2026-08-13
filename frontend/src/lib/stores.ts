@@ -36,6 +36,33 @@ export interface ModalConfig {
   onConfirm?: () => void
 }
 
+export interface InputModalConfig {
+  title: string
+  message?: string
+  defaultValue?: string
+  placeholder?: string
+  maxLength?: number
+  allowEmpty?: boolean
+}
+
+let inputResolve: ((value: string | null) => void) | null = null
+export const inputModal = writable<InputModalConfig | null>(null)
+
+export function openInputDialog(config: InputModalConfig): Promise<string | null> {
+  return new Promise((resolve) => {
+    inputResolve = resolve
+    inputModal.set(config)
+  })
+}
+
+export function closeInputModal(value: string | null) {
+  if (inputResolve) {
+    inputResolve(value)
+    inputResolve = null
+  }
+  inputModal.set(null)
+}
+
 export const variables = writable<EnvVariable[]>([])
 export const loading = writable(false)
 export const error = writable<string | null>(null)
@@ -95,7 +122,7 @@ export const filteredVariables = derived(
   },
 )
 export const profiles = writable<ProfileData[]>([])
-export const activeView = writable<'variables' | 'profiles' | 'path' | 'history' | 'protection'>('variables')
+export const activeView = writable<'variables' | 'profiles' | 'path' | 'history' | 'protection' | 'service' | 'audit'>('variables')
 export const modal = writable<ModalConfig | null>(null)
 export const debugLogs = writable<DebugLogEntry[]>([])
 export const isWriteInProgress = writable(false)

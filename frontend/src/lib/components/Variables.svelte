@@ -6,10 +6,36 @@
   import { highlightParts } from '../features'
   import EditDialog from './EditDialog.svelte'
   import BackupDialog from './BackupDialog.svelte'
+  import { loadNotes, getNoteSync, upsertNote } from '../notesStore'
+  import { openInputDialog } from '../stores'
 
   let filteredVars = $filteredVariables
   let editingVar = null
   let showEditDialog = false
+  let notesLoaded = false
+  let notesTick = 0  // bump to re-render note indicators
+
+  async function ensureNotesLoaded() {
+    if (!notesLoaded) {
+      await loadNotes()
+      notesLoaded = true
+    }
+    notesTick++
+  }
+
+  async function handleNote(variableName: string) {
+    await ensureNotesLoaded()
+    const existing = getNoteSync(variableName)
+    const result = await openInputDialog({
+      title: existing ? $t('notes.editNote') : $t('notes.addNote'),
+      defaultValue: existing?.note ?? '',
+      placeholder: $t('notes.notePlaceholder'),
+      allowEmpty: true,
+    })
+    if (result === null) return // cancelled
+    await upsertNote(variableName, result)
+    notesTick++
+  }
   let showBackupDialog = false
   let togglingKeys: Record<string, boolean> = {}
   let expandedValues: Record<string, string> = {}
@@ -302,6 +328,23 @@
                       <path stroke-linecap="round" stroke-linejoin="round" d="M8 11V7a4 4 0 018 0v4M5 9h14a1 1 0 011 1v8a1 1 0 01-1 1H5a1 1 0 01-1-1v-8a1 1 0 011-1z" />
                     {/if}
                   </svg>
+                </button>
+                                <button
+                  on:click={() => handleNote(variable.name)}
+                  on:focus={() => ensureNotesLoaded()}
+                  class="inline-flex p-1 text-gray-400 hover:text-amber-600 hover:bg-amber-50 rounded transition dark:hover:text-amber-400 dark:hover:bg-amber-900/30"
+                  title={getNoteSync(variable.name) ? $t('notes.editNote') : $t('notes.addNote')}
+                >
+                  {#if getNoteSync(variable.name)}
+                    <svg class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20">
+                      <path d="M5 3a2 2 0 00-2 2v10a2 2 0 002 2h6a2 2 0 002-2V5a2 2 0 00-2-2H5z" />
+                      <path d="M15 7v8a2 2 0 01-2 2H7v1a2 2 0 002 2h6a2 2 0 002-2V9a2 2 0 00-2-2h-1z" />
+                    </svg>
+                  {:else}
+                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+                      <path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
+                  {/if}
                 </button>
                 <button
                   on:click={() => handleEdit(variable)}

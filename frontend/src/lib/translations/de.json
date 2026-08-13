@@ -119,7 +119,8 @@
   "profiles.rename": "Umbenennen",
   "profiles.exportPrompt": "In Datei exportieren (Pfad):",
   "profiles.importPrompt": "Aus Datei importieren (Pfad):",
-  "profiles.renamePrompt": "Profil umbenennen zu:",
+  "profiles.renameTitle": "Profil umbenennen",
+  "profiles.renamePlaceholder": "Neuen Profilnamen eingeben",
   "messages.profileExported": "Profil erfolgreich exportiert",
   "messages.profileImported": "Profil erfolgreich importiert",
   "messages.profileRenamed": "Profil erfolgreich umbenannt",
@@ -426,5 +427,10 @@
   "audit.empty": "Keine Audit-Einträge gefunden",
   "audit.entries": "Einträge",
   "nav.service": "Dienstverwaltung",
+  "notes.addNote": "Notiz hinzufügen",
+  "notes.editNote": "Notiz bearbeiten",
+  "notes.deleteNote": "Notiz löschen",
+  "notes.notePlaceholder": "Notiz eingeben...",
+  "notes.noteEmpty": "Keine Notizen",
   "service.description": "Hintergrunddienst für Secret-Mount-Lebenszyklus verwalten"
 }

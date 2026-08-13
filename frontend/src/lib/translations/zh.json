@@ -119,7 +119,8 @@
   "profiles.rename": "重命名",
   "profiles.exportPrompt": "导出到文件 (路径):",
   "profiles.importPrompt": "从文件导入 (路径):",
-  "profiles.renamePrompt": "将配置文件重命名为:",
+  "profiles.renameTitle": "重命名配置文件",
+  "profiles.renamePlaceholder": "输入新的配置文件名称",
   "messages.profileExported": "配置文件导出成功",
   "messages.profileImported": "配置文件导入成功",
   "messages.profileRenamed": "配置文件重命名成功",
@@ -426,5 +427,10 @@
   "audit.empty": "未找到审计记录",
   "audit.entries": "条记录",
   "nav.service": "服务管理",
+  "notes.addNote": "添加备注",
+  "notes.editNote": "编辑备注",
+  "notes.deleteNote": "删除备注",
+  "notes.notePlaceholder": "在此输入备注...",
+  "notes.noteEmpty": "暂无备注",
   "service.description": "管理后台机密挂载服务，用于定期刷新机密令牌"
 }

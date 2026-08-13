@@ -119,7 +119,8 @@
   "profiles.rename": "Rename",
   "profiles.exportPrompt": "Export to file (path):",
   "profiles.importPrompt": "Import from file (path):",
-  "profiles.renamePrompt": "Rename profile to:",
+  "profiles.renameTitle": "Rename Profile",
+  "profiles.renamePlaceholder": "Enter new profile name",
   "messages.profileExported": "Profile exported successfully",
   "messages.profileImported": "Profile imported successfully",
   "messages.profileRenamed": "Profile renamed successfully",
@@ -426,5 +427,10 @@
   "audit.empty": "No audit records found",
   "audit.entries": "entries",
   "nav.service": "Service Manager",
+  "notes.addNote": "Add Note",
+  "notes.editNote": "Edit Note",
+  "notes.deleteNote": "Delete Note",
+  "notes.notePlaceholder": "Type your note here...",
+  "notes.noteEmpty": "No notes yet",
   "service.description": "Manage the background secret mount service for periodic token rotation"
 }

@@ -10,13 +10,66 @@
  import AuditPage from './lib/components/AuditPage.svelte'
  import ServicePage from './lib/components/ServicePage.svelte'
   import ConfirmDialog from './lib/components/ConfirmDialog.svelte'
+  import InputDialog from './lib/components/InputDialog.svelte'
   import { variables, loading, error, activeView, modal, isWriteInProgress, debugLogs, refreshTrigger, toasts, dismissToast } from './lib/stores'
   import { listVariables, updateTrayLocale } from './lib/api'
   import { getSetting, frontendLog } from './lib/settingsStore'
  import { defaultLanguage, applyPersistedLocale } from './lib/i18n'
  
    
-  let currentLocale: string = defaultLanguage
+
+  // Tab bar ARIA + Material 3 — APG pattern: roving tabindex + arrow-key navigation
+  const tabItems = [
+    { id: 'variables', labelKey: 'nav.variables' },
+    { id: 'profiles', labelKey: 'nav.profiles' },
+    { id: 'path', labelKey: 'nav.path' },
+    { id: 'history', labelKey: 'nav.history' },
+    { id: 'protection', labelKey: 'nav.protection' },
+    { id: 'service', labelKey: 'nav.service' },
+    { id: 'audit', labelKey: 'nav.audit' },
+  ]
+  let tabRefs: HTMLButtonElement[] = []
+  let indicatorStyle = 'width: 0px; left: 0px;'
+
+  function updateIndicator() {
+    const activeIdx = tabItems.findIndex(t => t.id === $activeView)
+    if (activeIdx >= 0 && tabRefs[activeIdx]) {
+      const el = tabRefs[activeIdx]
+      indicatorStyle = 'width: ' + el.offsetWidth + 'px; left: ' + el.offsetLeft + 'px;'
+    }
+  }
+
+  $: if ($activeView) { setTimeout(updateIndicator, 0) }
+
+  function handleTabKeydown(e: KeyboardEvent, idx: number) {
+    let nextIdx: number | null = null
+    switch (e.key) {
+      case 'ArrowRight':
+      case 'ArrowDown':
+        e.preventDefault()
+        nextIdx = (idx + 1) % tabItems.length
+        break
+      case 'ArrowLeft':
+      case 'ArrowUp':
+        e.preventDefault()
+        nextIdx = (idx - 1 + tabItems.length) % tabItems.length
+        break
+      case 'Home':
+        e.preventDefault()
+        nextIdx = 0
+        break
+      case 'End':
+        e.preventDefault()
+        nextIdx = tabItems.length - 1
+        break
+    }
+    if (nextIdx !== null) {
+      activeView.set(tabItems[nextIdx].id)
+      setTimeout(() => tabRefs[nextIdx!]?.focus(), 0)
+    }
+  }
+
+    let currentLocale: string = defaultLanguage
   let initError: string | null = null
   let showSettings = false
   let darkMode = false
@@ -165,68 +218,37 @@
       </div>
     </div>
 
-    <nav class="flex gap-1 mt-3">
-      <button
-        on:click={() => activeView.set('variables')}
-        disabled={$isWriteInProgress}
-        class="px-3 py-1.5 text-xs font-medium rounded-md transition disabled:opacity-50 disabled:cursor-not-allowed {$activeView === 'variables'
-          ? 'bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300'
-          : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100 dark:text-gray-400 dark:hover:text-gray-200 dark:hover:bg-gray-700'}"
+    <div class="relative mt-3">
+      <div
+        role="tablist"
+        aria-label="{$t('nav.variables')} — {$t('nav.audit')}"
+        class="flex gap-1 border-b border-gray-200 dark:border-gray-700"
       >
-        {$t('nav.variables')}
-      </button>
-      <button
-        on:click={() => activeView.set('profiles')}
-        disabled={$isWriteInProgress}
-        class="px-3 py-1.5 text-xs font-medium rounded-md transition {$activeView === 'profiles'
-          ? 'bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300'
-          : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100 dark:text-gray-400 dark:hover:text-gray-200 dark:hover:bg-gray-700'}"
-      >
-        {$t('nav.profiles')}
-      </button>
-      <button
-        on:click={() => activeView.set('path')}
-        disabled={$isWriteInProgress}
-        class="px-3 py-1.5 text-xs font-medium rounded-md transition {$activeView === 'path'
-          ? 'bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300'
-          : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100 dark:text-gray-400 dark:hover:text-gray-200 dark:hover:bg-gray-700'}"
-      >
-        {$t('nav.path')}
-      </button>
-      <button
-        on:click={() => activeView.set('history')}
-        disabled={$isWriteInProgress}
-        class="px-3 py-1.5 text-xs font-medium rounded-md transition {$activeView === 'history'
-          ? 'bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300'
-          : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100 dark:text-gray-400 dark:hover:text-gray-200 dark:hover:bg-gray-700'}"
-      >
-        {$t('nav.history')}
-      </button>
-      <button
-        on:click={() => activeView.set('protection')}
-        class="px-3 py-1.5 text-xs font-medium rounded-md transition {$activeView === 'protection'
-          ? 'bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300'
-          : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100 dark:text-gray-400 dark:hover:text-gray-200 dark:hover:bg-gray-700'}"
-      >
-       {$t('nav.protection')}
-     </button>
-      <button
-        on:click={() => activeView.set('service')}
-        class="px-3 py-1.5 text-xs font-medium rounded-md transition {$activeView === 'service'
-          ? 'bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300'
-          : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100 dark:text-gray-400 dark:hover:text-gray-200 dark:hover:bg-gray-700'}"
-      >
-        {$t('nav.service')}
-      </button>
-     <button
-       on:click={() => activeView.set('audit')}
-        class="px-3 py-1.5 text-xs font-medium rounded-md transition {$activeView === 'audit'
-          ? 'bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300'
-          : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100 dark:text-gray-400 dark:hover:text-gray-200 dark:hover:bg-gray-700'}"
-      >
-        {$t('nav.audit')}
-      </button>
-    </nav>
+        {#each tabItems as tab, i}
+          <button
+            bind:this={tabRefs[i]}
+            role="tab"
+            aria-selected={$activeView === tab.id}
+            aria-controls="tabpanel-content"
+            tabindex={$activeView === tab.id ? 0 : -1}
+            disabled={$isWriteInProgress && (tab.id === 'variables' || tab.id === 'profiles' || tab.id === 'path')}
+            on:click={() => activeView.set(tab.id)}
+            on:keydown={(e) => handleTabKeydown(e, i)}
+            class="px-3 py-2 text-xs font-medium transition-colors duration-200 rounded-t-md {$activeView === tab.id
+              ? 'text-blue-700 dark:text-blue-300 font-semibold'
+              : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100 dark:text-gray-400 dark:hover:text-gray-200 dark:hover:bg-gray-700/50'} disabled:opacity-50 disabled:cursor-not-allowed"
+            style="transition: all 200ms cubic-bezier(0.2, 0, 0, 1)"
+          >
+            {$t(tab.labelKey)}
+          </button>
+        {/each}
+      </div>
+      <div
+        class="absolute bottom-0 h-[3px] bg-blue-600 dark:bg-blue-400 rounded-t-md"
+        style={indicatorStyle + ' transition: all 200ms cubic-bezier(0.2, 0, 0, 1)'}
+        aria-hidden="true"
+      ></div>
+    </div>
   </header>
 
   <div class="px-5 py-4">
@@ -295,6 +317,7 @@
 {/if}
 
 <ConfirmDialog />
+  <InputDialog />
 
 <style lang="postcss">
   @tailwind base;

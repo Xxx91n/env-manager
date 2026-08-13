@@ -119,7 +119,8 @@
   "profiles.rename": "إعادة تسمية",
   "profiles.exportPrompt": "تصدير إلى ملف (المسار):",
   "profiles.importPrompt": "استيراد من ملف (المسار):",
-  "profiles.renamePrompt": "إعادة تسمية الملف الشخصي إلى:",
+  "profiles.renameTitle": "إعادة تسمية الملف الشخصي",
+  "profiles.renamePlaceholder": "أدخل الاسم الجديد",
   "messages.profileExported": "تم تصدير الملف الشخصي بنجاح",
   "messages.profileImported": "تم استيراد الملف الشخصي بنجاح",
   "messages.profileRenamed": "تم إعادة تسمية الملف الشخصي بنجاح",
@@ -426,5 +427,10 @@
   "audit.empty": "لم يتم العثور على سجلات تدقيق",
   "audit.entries": "سجلات",
   "nav.service": "مدير الخدمة",
+  "notes.addNote": "إضافة ملاحظة",
+  "notes.editNote": "تحرير الملاحظة",
+  "notes.deleteNote": "حذف الملاحظة",
+  "notes.notePlaceholder": "اكتب ملاحظتك...",
+  "notes.noteEmpty": "لا ملاحظات",
   "service.description": "إدارة خدمة تحميل الأسرار في الخلفية لتدوير الرموز بشكل دوري"
 }

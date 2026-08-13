@@ -4,7 +4,7 @@
   
   import { t } from 'svelte-i18n'
   import CloneCombobox from './CloneCombobox.svelte'
-  import { profiles, showModal, refreshTrigger } from '../stores'
+  import { profiles, showModal, refreshTrigger, openInputDialog } from '../stores'
   import { showToast } from '../stores'
   import {
     listProfiles,
@@ -423,7 +423,11 @@
     }
   }
   async function handleRename(profile: ProfileData) {
-    const newName = prompt($t('profiles.renamePrompt'), profile.name)
+    const newName = await openInputDialog({
+        title: $t('profiles.renameTitle'),
+        defaultValue: profile.name,
+        placeholder: $t('profiles.renamePlaceholder'),
+      })
     if (!newName || newName === profile.name) return
     actionLoading = true
     try {
