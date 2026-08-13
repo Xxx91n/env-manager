@@ -14,6 +14,7 @@
   let showEditDialog = false
   let notesLoaded = false
   let notesTick = 0  // bump to re-render note indicators
+  let hoveredNoteVar: string | null = null  // bump to re-render note indicators
 
   async function ensureNotesLoaded() {
     if (!notesLoaded) {
@@ -329,9 +330,12 @@
                     {/if}
                   </svg>
                 </button>
-                                <button
+                                <div class="relative inline-flex group">
+                  <button
                   on:click={() => handleNote(variable.name)}
                   on:focus={() => ensureNotesLoaded()}
+                  on:mouseenter={() => { hoveredNoteVar = variable.name; ensureNotesLoaded() }}
+                  on:mouseleave={() => hoveredNoteVar = null}
                   class="inline-flex p-1 text-gray-400 hover:text-amber-600 hover:bg-amber-50 rounded transition dark:hover:text-amber-400 dark:hover:bg-amber-900/30"
                   title={getNoteSync(variable.name) ? $t('notes.editNote') : $t('notes.addNote')}
                 >
@@ -346,6 +350,12 @@
                     </svg>
                   {/if}
                 </button>
+                  {#if hoveredNoteVar === variable.name && getNoteSync(variable.name)}
+                    <div class="absolute bottom-full left-0 mb-1 px-2.5 py-1.5 bg-gray-800 text-white text-[10px] rounded shadow-lg whitespace-pre-wrap max-w-[240px] break-words z-50 pointer-events-none dark:bg-gray-700">
+                      {getNoteSync(variable.name)?.note}
+                    </div>
+                  {/if}
+                </div>
                 <button
                   on:click={() => handleEdit(variable)}
                   disabled={$isWriteInProgress || togglingKeys[variable.name + ':' + variable.scope] === true || !!variable.isProtected}

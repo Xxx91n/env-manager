@@ -925,7 +925,8 @@
                     </label>
                     <select
                       id="profile-var-scope"
-                      bind:value={newVarScope}
+                      value={newVarScope}
+                      on:change={(e) => newVarScope = e.currentTarget.value}
                       class="px-2 py-1 text-[10px] border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100"
                     >
                       <option value="user">{$t('scope.user')}</option>
@@ -935,13 +936,15 @@
                   <input
                     type="text"
                     placeholder={$t('labels.name')}
-                    bind:value={newVarName}
+                    value={newVarName}
+                    on:input={(e) => newVarName = e.currentTarget.value}
                     class="w-full px-2 py-1 text-[10px] border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100"
                   />
                   <input
                     type="text"
                     placeholder={$t('labels.value')}
-                    bind:value={newVarValue}
+                    value={newVarValue}
+                    on:input={(e) => newVarValue = e.currentTarget.value}
                     class="w-full px-2 py-1 text-[10px] border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100"
                   />
                   <div class="flex gap-1">

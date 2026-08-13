@@ -39,6 +39,23 @@
     }
   }
 
+    // Bug fix: indicator width wrong on initial load because tab buttons
+  // haven't rendered when the first setTimeout(0) fires. Use a retry loop
+  // with requestAnimationFrame for the initial paint, plus svelte:window
+  // resize handler to reposition on viewport changes.
+  onMount(() => {
+    let retries = 0
+    const tryInit = () => {
+      const activeIdx = tabItems.findIndex(t => t.id === $activeView)
+      if (activeIdx >= 0 && tabRefs[activeIdx] && tabRefs[activeIdx].offsetWidth > 0) {
+        updateIndicator()
+      } else if (retries < 10) {
+        retries++
+        requestAnimationFrame(tryInit)
+      }
+    }
+    requestAnimationFrame(tryInit)
+  })
   $: if ($activeView) { setTimeout(updateIndicator, 0) }
 
   function handleTabKeydown(e: KeyboardEvent, idx: number) {
@@ -171,6 +188,8 @@
     applyFontScale(e.detail)
   }
 </script>
+
+<svelte:window on:resize={() => setTimeout(updateIndicator, 0)} />
 
 <svelte:head>
   <title>{$t('app.title')}</title>
