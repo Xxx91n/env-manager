@@ -12,7 +12,7 @@ use zeroize::Zeroizing;
 mod lightweight;
 mod job_object;
 use tauri::{
-    menu::{Menu, MenuItem},
+    menu::{Menu, MenuItem, CheckMenuItem},
     tray::TrayIconBuilder,
     Manager, WindowEvent,
 };
@@ -1187,7 +1187,14 @@ std::mem::forget(_guard);
         .setup(|app| {
             // Build tray menu items - text will be updated via update_tray_locale
             let show_item = MenuItem::with_id(app, "show", "Show", true, None::<&str>)?;
-            let lightweight_item = MenuItem::with_id(app, "lightweight", "Lightweight Mode", true, None::<&str>)?;
+            let lightweight_item = CheckMenuItem::with_id(
+                app,
+                "lightweight",
+                "Lightweight Mode",
+                lightweight::is_in_lightweight_mode(),
+                true,
+                None::<&str>,
+            )?;
             let quit_item = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
             let menu = Menu::with_items(app, &[&show_item, &lightweight_item, &quit_item])?;
 
@@ -1204,6 +1211,8 @@ std::mem::forget(_guard);
                                 if let Err(e) = lightweight::exit_lightweight(app) {
                                     warn!("[tray] exit lightweight failed: {}", e);
                                 }
+                                // Rebuild menu to update checkmark state.
+                                rebuild_tray_menu(app);
                             }
                             restore_window(app);
                         }
@@ -1217,6 +1226,8 @@ std::mem::forget(_guard);
                                     warn!("[tray] enter lightweight failed: {}", e);
                                 }
                             }
+                            // Rebuild menu to update checkmark state.
+                            rebuild_tray_menu(app);
                         }
                         "quit" => {
                             info!("[tray] quit requested — service stays alive (user-managed lifecycle)");
@@ -1365,7 +1376,14 @@ fn update_tray_locale_impl(
     if let Some(tray) = app.tray_by_id("main") {
         match MenuItem::with_id(app, "show", show_text, true, None::<&str>) {
             Ok(show_item) => {
-                match MenuItem::with_id(app, "lightweight", lightweight_text, true, None::<&str>) {
+                match CheckMenuItem::with_id(
+                    app,
+                    "lightweight",
+                    lightweight_text,
+                    lightweight::is_in_lightweight_mode(),
+                    true,
+                    None::<&str>,
+                ) {
                     Ok(lightweight_item) => {
                         match MenuItem::with_id(app, "quit", quit_text, true, None::<&str>) {
                             Ok(quit_item) => {
@@ -1390,9 +1408,41 @@ fn update_tray_locale_impl(
     }
 }
 
+/// Rebuild the tray menu to refresh the lightweight checkmark state.
+/// Called after toggling lightweight mode via the tray menu.
+fn rebuild_tray_menu(app: &tauri::AppHandle) {
+    // Get current locale text from the i18n tray map stored in gui-settings.
+    // We reuse the same translated strings that were last set.
+    // The simplest approach: read the stored tray locale from gui-settings.json
+    // and call update_tray_locale_impl with the saved values.
+    // If no saved values, fall back to English defaults.
+    let locale = match read_gui_setting("locale".to_string()) {
+        serde_json::Value::String(s) => s,
+        _ => "en".to_string(),
+    };
+    let texts = tray_text_for_locale(&locale);
+    update_tray_locale_impl(app, &texts.0, &texts.1, &texts.2, &texts.3);
+}
+
+/// Returns (show, lightweight, quit, tooltip) text for a given locale.
+fn tray_text_for_locale(locale: &str) -> (String, String, String, String) {
+    match locale {
+        "zh" => ("显示".to_string(), "轻量模式".to_string(), "退出".to_string(), "环境变量管理器".to_string()),
+        "ja" => ("表示".to_string(), "ライトモード".to_string(), "終了".to_string(), "環境変数マネージャー".to_string()),
+        "ko" => ("표시".to_string(), "경량 모드".to_string(), "종료".to_string(), "환경변수 관리자".to_string()),
+        "de" => ("Anzeigen".to_string(), "Leichtmodus".to_string(), "Beenden".to_string(), "Umgebungsvariablen-Verwaltung".to_string()),
+        "fr" => ("Afficher".to_string(), "Mode léger".to_string(), "Quitter".to_string(), "Gestionnaire de variables d'environnement".to_string()),
+        "es" => ("Mostrar".to_string(), "Modo ligero".to_string(), "Salir".to_string(), "Gestor de variables de entorno".to_string()),
+        "pt" => ("Exibir".to_string(), "Modo leve".to_string(), "Sair".to_string(), "Gerenciador de variáveis de ambiente".to_string()),
+        "ru" => ("Показать".to_string(), "Лёгкий режим".to_string(), "Выход".to_string(), "Менеджер переменных среды".to_string()),
+        "ar" => ("إظهار".to_string(), "الوضع الخفيف".to_string(), "خروج".to_string(), "مدير متغيرات البيئة".to_string()),
+        _ => ("Show".to_string(), "Lightweight Mode".to_string(), "Quit".to_string(), "Env Manager".to_string()),
+    }
+}
+
 // ─── Lightweight mode IPC commands ───
 
-/// Enter lightweight mode: destroy the main window to free memory.
+/// Enter lightweight mode: hide the main window to free memory.
 #[tauri::command]
 fn enter_lightweight_mode(app: tauri::AppHandle) -> Result<bool, String> {
     lightweight::enter_lightweight(&app)?;
