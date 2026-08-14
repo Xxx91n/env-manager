@@ -9,8 +9,13 @@
 ## Build CLI only
 
 ```powershell
+# Development build (fast, no RID)
 dotnet build -c Release
 # Output: bin/Release/net10.0-windows/env-manager-cli.exe
+
+# Release build (arch-specific, used by build.mjs)
+dotnet publish -c Release -r win-x64 --no-self-contained -p:PublishSingleFile=true
+# Output: bin/Release/net10.0-windows/win-x64/env-manager-cli.exe
 ```
 
 ## Build GUI (development with hot reload)
