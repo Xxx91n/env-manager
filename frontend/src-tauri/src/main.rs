@@ -1046,6 +1046,7 @@ fn restore_window(app: &tauri::AppHandle) {
         if let Err(e) = lightweight::exit_lightweight(app) {
             warn!("[tray] restore_window: failed to exit lightweight mode: {}", e);
         }
+        rebuild_tray_menu(app);
         // exit_lightweight already shows/focuses the rebuilt window.
         return;
     }
