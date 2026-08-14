@@ -78,6 +78,10 @@ pub async fn reconcile_loop(shutdown: Arc<CancellationToken>) {
     loop {
         tokio::select! {
             _ = interval.tick() => {
+                // Phase 2C: Periodic debugger detection (every tick = 300s)
+                if crate::process_guard::check_debugger() {
+                    tracing::warn!("debugger detected during reconcile tick");
+                }
                 if let Err(e) = run_reconcile_tick().await {
                     tracing::error!("reconcile tick failed: {}", e);
                 }
