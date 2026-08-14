@@ -59,21 +59,21 @@
     role="presentation"
   >
     <div
-      class="bg-white rounded-lg shadow-xl max-w-sm w-full mx-4 dark:bg-gray-800"
+      class="bg-card rounded-lg shadow-xl max-w-sm w-full mx-4 bg-card"
       on:click|stopPropagation
       role="dialog"
       aria-modal="true"
       aria-labelledby="input-dialog-title"
     >
-      <div class="px-5 py-4 border-b border-gray-200 dark:border-gray-700">
-        <h2 id="input-dialog-title" class="text-sm font-semibold text-gray-900 dark:text-gray-100">
+      <div class="px-5 py-4 border-b border-border border-border">
+        <h2 id="input-dialog-title" class="text-sm font-semibold text-foreground text-foreground">
           {$inputModal.title}
         </h2>
       </div>
 
       <div class="px-5 py-4">
         {#if $inputModal.message}
-          <p class="text-xs text-gray-600 dark:text-gray-300 leading-relaxed mb-3">
+          <p class="text-xs text-muted-foreground text-foreground/80 leading-relaxed mb-3">
             {$inputModal.message}
           </p>
         {/if}
@@ -83,20 +83,20 @@
           on:keydown={handleKeydown}
           placeholder={$inputModal.placeholder ?? ''}
           maxlength={$inputModal.maxLength ?? 255}
-          class="w-full px-3 py-2 text-xs border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100 dark:placeholder-gray-400"
+          class="w-full px-3 py-2 text-xs border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary bg-accent border-border/80 text-foreground placeholder-muted-foreground"
         />
       </div>
 
-      <div class="px-5 py-3 border-t border-gray-200 flex gap-2 justify-end dark:border-gray-700">
+      <div class="px-5 py-3 border-t border-border flex gap-2 justify-end border-border">
         <button
           on:click={handleCancel}
-          class="px-4 py-1.5 text-xs text-gray-700 border border-gray-300 rounded-md hover:bg-gray-50 transition dark:text-gray-200 dark:border-gray-600 dark:hover:bg-gray-700"
+          class="px-4 py-1.5 text-xs text-foreground/80 border border-gray-300 rounded-md hover:bg-muted/20 transition text-foreground border-border/80 hover:bg-accent"
         >
           {$t('buttons.cancel')}
         </button>
         <button
           on:click={handleConfirm}
-          class="px-4 py-1.5 text-xs text-white rounded-md transition bg-blue-600 hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-600"
+          class="px-4 py-1.5 text-xs text-white rounded-md transition bg-primary hover:bg-blue-700 bg-primary/80 hover:bg-primary"
         >
           {$t('buttons.save')}
         </button>

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { Power } from 'lucide-svelte'
   import { createEventDispatcher, onMount } from 'svelte'
   import { t, locale } from 'svelte-i18n'
   import { locales, defaultLanguage } from '../i18n'
@@ -10,6 +11,7 @@
 
   export let darkMode = false
   export let fontScale: number = 1
+  export let themeStyle: string = 'slate'
 
   // Lightweight mode config
   let autoLightweight = true
@@ -74,6 +76,12 @@
     // single source of truth for tray locale sync.
   }
 
+  function changeThemeStyle(style: string) {
+    themeStyle = style
+    document.documentElement.setAttribute('data-theme-style', style)
+    void setSetting('themeStyle', style)
+  }
+
   function toggleDarkMode() {
     darkMode = !darkMode
     try {
@@ -82,6 +90,7 @@
       // Ignore storage errors
     }
     dispatch('themeChange', darkMode)
+    dispatch('themeStyleChange', themeStyle)
   }
 
   async function toggleCliInPath() {
@@ -429,21 +438,21 @@
   on:keydown={(e) => { if (e.key === 'Escape') handleClose() }}
   role="presentation"
   tabindex="-1">
-  <div class="bg-white rounded-lg shadow-xl max-w-sm w-full mx-4 dark:bg-gray-800" on:click|stopPropagation>
-    <div class="px-5 py-4 border-b border-gray-200 dark:border-gray-700">
-      <h2 class="text-sm font-semibold text-gray-900 dark:text-gray-100">{$t('nav.settings')}</h2>
+  <div class="bg-card rounded-lg shadow-xl max-w-sm w-full mx-4 bg-card" on:click|stopPropagation>
+    <div class="px-5 py-4 border-b border-border border-border">
+      <h2 class="text-sm font-semibold text-foreground text-foreground">{$t('nav.settings')}</h2>
     </div>
 
     <div class="px-5 py-4 space-y-4">
       <div>
-        <label for="settings-lang" class="block text-xs font-medium text-gray-600 mb-1.5 dark:text-gray-400">
+        <label for="settings-lang" class="block text-xs font-medium text-muted-foreground mb-1.5 text-muted-foreground">
           {$t('settings.language')}
         </label>
         <select
           id="settings-lang"
           on:change={(e) => switchLocale(e.currentTarget.value)}
           value={currentLocale}
-          class="w-full px-3 py-1.5 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100"
+          class="w-full px-3 py-1.5 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-primary bg-card bg-accent border-border/80 text-foreground"
         >
           {#each locales as loc}
             <option value={loc}>{languageNames[loc]}</option>
@@ -452,7 +461,7 @@
       </div>
 
       <div class="flex items-center justify-between">
-        <span class="text-xs font-medium text-gray-600 dark:text-gray-400">{$t('settings.darkMode')}</span>
+        <span class="text-xs font-medium text-muted-foreground">{$t('settings.darkMode')}</span>
         <button
          on:click={toggleDarkMode}
           class="relative inline-flex h-5 w-8 items-center rounded-full transition {darkMode ? 'bg-blue-600' : 'bg-gray-300'}"
@@ -461,13 +470,13 @@
          aria-label={$t('settings.darkMode')}
        >
          <span
-            class="inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition {darkMode ? 'translate-x-3.5' : 'translate-x-0.5'}"
+            class="inline-block h-3.5 w-3.5 transform rounded-full bg-card shadow transition {darkMode ? 'translate-x-3.5' : 'translate-x-0.5'}"
          ></span>
        </button>
       </div>
 
       <div class="flex items-center justify-between">
-        <span class="text-xs font-medium text-gray-600 dark:text-gray-400">{$t('settings.addCliToPath')}</span>
+        <span class="text-xs font-medium text-muted-foreground">{$t('settings.addCliToPath')}</span>
         <button
          on:click={toggleCliInPath}
          disabled={cliToggleLoading}
@@ -477,48 +486,64 @@
          aria-label={$t('settings.addCliToPath')}
        >
          <span
-            class="inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition {cliInPath ? 'translate-x-3.5' : 'translate-x-0.5'}"
+            class="inline-block h-3.5 w-3.5 transform rounded-full bg-card shadow transition {cliInPath ? 'translate-x-3.5' : 'translate-x-0.5'}"
          ></span>
         </button>
+      
+        <!-- Theme base color selector -->
+        <div class="flex items-center justify-between py-1">
+          <span class="text-xs font-medium text-muted-foreground">{$t('settings.themeStyle')}</span>
+          <div class="flex gap-1">
+            {#each ['slate', 'zinc', 'neutral'] as style}
+              <button
+                on:click={() => changeThemeStyle(style)}
+                class="px-2.5 py-1 text-xs border rounded transition {themeStyle === style ? 'bg-primary text-primary-foreground border-primary' : 'border-border text-muted-foreground hover:bg-accent'}"
+                aria-label={style}
+              >
+                {style}
+              </button>
+            {/each}
+          </div>
+        </div>
       </div>
       <div>
-        <label for="settings-font-size" class="block text-xs font-medium text-gray-600 mb-1.5 dark:text-gray-400">
+        <label for="settings-font-size" class="block text-xs font-medium text-muted-foreground mb-1.5 text-muted-foreground">
           {$t('settings.fontSize')}
         </label>
         <div class="flex items-center gap-2">
           <button
             on:click={() => changeFontScale(0.85)}
-            class="px-2 py-1 text-xs border rounded transition {selectedFontScale === 0.85 ? 'bg-blue-600 text-white border-blue-600 dark:bg-blue-500 dark:border-blue-500' : 'border-gray-300 text-gray-600 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-400 dark:hover:bg-gray-700'}"
+            class="px-2 py-1 text-xs border rounded transition {selectedFontScale === 0.85 ? 'bg-primary text-white border-blue-600 bg-primary/80 border-primary' : 'border-gray-300 text-muted-foreground hover:bg-gray-50 border-border/80 text-muted-foreground hover:bg-accent'}"
           >
             A
           </button>
           <button
             on:click={() => changeFontScale(1)}
-            class="px-2 py-1 text-sm border rounded transition {selectedFontScale === 1 ? 'bg-blue-600 text-white border-blue-600 dark:bg-blue-500 dark:border-blue-500' : 'border-gray-300 text-gray-600 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-400 dark:hover:bg-gray-700'}"
+            class="px-2 py-1 text-sm border rounded transition {selectedFontScale === 1 ? 'bg-primary text-white border-blue-600 bg-primary/80 border-primary' : 'border-gray-300 text-muted-foreground hover:bg-gray-50 border-border/80 text-muted-foreground hover:bg-accent'}"
           >
             A
           </button>
           <button
             on:click={() => changeFontScale(1.15)}
-            class="px-2 py-1 text-base border rounded transition {selectedFontScale === 1.15 ? 'bg-blue-600 text-white border-blue-600 dark:bg-blue-500 dark:border-blue-500' : 'border-gray-300 text-gray-600 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-400 dark:hover:bg-gray-700'}"
+            class="px-2 py-1 text-base border rounded transition {selectedFontScale === 1.15 ? 'bg-primary text-white border-blue-600 bg-primary/80 border-primary' : 'border-gray-300 text-muted-foreground hover:bg-gray-50 border-border/80 text-muted-foreground hover:bg-accent'}"
           >
             A
           </button>
           <button
             on:click={() => changeFontScale(1.3)}
-            class="px-2 py-1 text-lg border rounded transition {selectedFontScale === 1.3 ? 'bg-blue-600 text-white border-blue-600 dark:bg-blue-500 dark:border-blue-500' : 'border-gray-300 text-gray-600 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-400 dark:hover:bg-gray-700'}"
+            class="px-2 py-1 text-lg border rounded transition {selectedFontScale === 1.3 ? 'bg-primary text-white border-blue-600 bg-primary/80 border-primary' : 'border-gray-300 text-muted-foreground hover:bg-gray-50 border-border/80 text-muted-foreground hover:bg-accent'}"
           >
             A
           </button>
           <button
             on:click={() => changeFontScale(1.45)}
-            class="px-2 py-1 text-xl border rounded transition {selectedFontScale === 1.45 ? 'bg-blue-600 text-white border-blue-600 dark:bg-blue-500 dark:border-blue-500' : 'border-gray-300 text-gray-600 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-400 dark:hover:bg-gray-700'}"
+            class="px-2 py-1 text-xl border rounded transition {selectedFontScale === 1.45 ? 'bg-primary text-white border-blue-600 bg-primary/80 border-primary' : 'border-gray-300 text-muted-foreground hover:bg-gray-50 border-border/80 text-muted-foreground hover:bg-accent'}"
           >
             A
           </button>
           <button
             on:click={() => changeFontScale(1.6)}
-            class="px-2 py-1 text-2xl border rounded transition {selectedFontScale === 1.6 ? 'bg-blue-600 text-white border-blue-600 dark:bg-blue-500 dark:border-blue-500' : 'border-gray-300 text-gray-600 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-400 dark:hover:bg-gray-700'}"
+            class="px-2 py-1 text-2xl border rounded transition {selectedFontScale === 1.6 ? 'bg-primary text-white border-blue-600 bg-primary/80 border-primary' : 'border-gray-300 text-muted-foreground hover:bg-gray-50 border-border/80 text-muted-foreground hover:bg-accent'}"
           >
             A
           </button>
@@ -528,17 +553,17 @@
 
     <div class="px-5 py-3 space-y-2">
       <div>
-        <label class="block text-xs font-medium text-gray-600 mb-1.5 dark:text-gray-400">
+        <label class="block text-xs font-medium text-muted-foreground mb-1.5 text-muted-foreground">
           {$t('update.title')}
         </label>
         <div class="flex items-center gap-2">
           <button
             on:click={handleCheckUpdate}
             disabled={updateChecking}
-            class="px-3 py-1.5 text-xs font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 transition disabled:opacity-50 dark:bg-blue-500 dark:hover:bg-blue-600"
+            class="px-3 py-1.5 text-xs font-medium text-white bg-primary rounded-md hover:bg-blue-700 transition disabled:opacity-50 bg-primary/80 hover:bg-primary"
           >
             {#if updateChecking}
-              <svg class="animate-spin h-3 w-3 inline mr-1" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.37 0 0 5.37 0 12h4z"/></svg>
+          <Power class="animate-spin h-3 w-3 inline mr-1" />
               {$t('update.checking')}
             {:else}
               {$t('update.check')}
@@ -547,26 +572,26 @@
           {#if updateAvailable === true}
             <button
               on:click={openReleasePage}
-              class="px-3 py-1.5 text-xs font-medium text-blue-600 hover:underline dark:text-blue-400"
+              class="px-3 py-1.5 text-xs font-medium text-primary hover:underline text-primary"
             >
               {$t('update.download', { values: { version: latestVersion } })}
             </button>
           {:else if updateAvailable === false}
-            <span class="text-xs text-green-600 dark:text-green-400">{$t('update.upToDate')}</span>
+            <span class="text-xs text-primary text-primary">{$t('update.upToDate')}</span>
           {/if}
         </div>
       </div>
     </div>
 
-    <div class="px-5 py-3 space-y-2 border-t border-gray-200 dark:border-gray-700">
+    <div class="px-5 py-3 space-y-2 border-t border-border border-border">
       <div>
-        <label class="block text-xs font-medium text-gray-600 mb-1.5 dark:text-gray-400">
+        <label class="block text-xs font-medium text-muted-foreground mb-1.5 text-muted-foreground">
           {$t('settings.bulkTitle')}
         </label>
         <div class="flex items-center gap-2 flex-wrap">
           <select
             bind:value={bulkScope}
-            class="px-2 py-1 text-xs border border-gray-300 rounded-md dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100"
+            class="px-2 py-1 text-xs border border-gray-300 rounded-md bg-accent border-border/80 text-foreground"
           >
             <option value="user">{$t('scope.user')}</option>
             <option value="system">{$t('scope.system')}</option>
@@ -574,64 +599,64 @@
           <button
             on:click={handleBulkImport}
             disabled={bulkLoading}
-            class="px-3 py-1 text-xs font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 transition disabled:opacity-50 dark:text-gray-200 dark:bg-gray-800 dark:border-gray-600 dark:hover:bg-gray-700"
+            class="px-3 py-1 text-xs font-medium text-foreground/80 bg-card border border-gray-300 rounded-md hover:bg-gray-50 transition disabled:opacity-50 text-foreground bg-card border-border/80 hover:bg-accent"
           >
             {$t('settings.bulkImport')}
           </button>
           <button
             on:click={handleBulkExport}
             disabled={bulkLoading}
-            class="px-3 py-1 text-xs font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 transition disabled:opacity-50 dark:text-gray-200 dark:bg-gray-800 dark:border-gray-600 dark:hover:bg-gray-700"
+            class="px-3 py-1 text-xs font-medium text-foreground/80 bg-card border border-gray-300 rounded-md hover:bg-gray-50 transition disabled:opacity-50 text-foreground bg-card border-border/80 hover:bg-accent"
           >
             {$t('settings.bulkExport')}
           </button>
         </div>
-        <p class="mt-1 text-[10px] text-gray-400 dark:text-gray-500">{$t('settings.bulkHint')}</p>
+        <p class="mt-1 text-[10px] text-gray-400 text-muted-foreground">{$t('settings.bulkHint')}</p>
       </div>
     </div>
 
 
-    <div class="px-5 py-3 space-y-2 border-t border-gray-200 dark:border-gray-700">
+    <div class="px-5 py-3 space-y-2 border-t border-border border-border">
       <div>
-        <label class="block text-xs font-medium text-gray-600 mb-1.5 dark:text-gray-400">
+        <label class="block text-xs font-medium text-muted-foreground mb-1.5 text-muted-foreground">
           {$t('settings.drTitle')}
         </label>
         <div class="flex items-center gap-2 flex-wrap">
           <button
             on:click={handleExportState}
             disabled={drLoading}
-            class="px-3 py-1 text-xs font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 transition disabled:opacity-50 dark:text-gray-200 dark:bg-gray-800 dark:border-gray-600 dark:hover:bg-gray-700"
+            class="px-3 py-1 text-xs font-medium text-foreground/80 bg-card border border-gray-300 rounded-md hover:bg-gray-50 transition disabled:opacity-50 text-foreground bg-card border-border/80 hover:bg-accent"
           >
             {$t('settings.drExport')}
           </button>
           <button
             on:click={handleImportState}
             disabled={drLoading}
-            class="px-3 py-1 text-xs font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 transition disabled:opacity-50 dark:text-gray-200 dark:bg-gray-800 dark:border-gray-600 dark:hover:bg-gray-700"
+            class="px-3 py-1 text-xs font-medium text-foreground/80 bg-card border border-gray-300 rounded-md hover:bg-gray-50 transition disabled:opacity-50 text-foreground bg-card border-border/80 hover:bg-accent"
           >
             {$t('settings.drImport')}
           </button>
         </div>
-        <p class="mt-1 text-[10px] text-gray-400 dark:text-gray-500">{$t('settings.drHint')}</p>
+        <p class="mt-1 text-[10px] text-gray-400 text-muted-foreground">{$t('settings.drHint')}</p>
       </div>
     </div>
 
-    <div class="px-5 py-3 space-y-2 border-t border-gray-200 dark:border-gray-700">
+    <div class="px-5 py-3 space-y-2 border-t border-border border-border">
       <div>
-        <label class="block text-xs font-medium text-gray-600 mb-1.5 dark:text-gray-400">
+        <label class="block text-xs font-medium text-muted-foreground mb-1.5 text-muted-foreground">
           {$t('settings.lightweightTitle')}
         </label>
         <div class="flex items-center gap-3">
           <button
             on:click={handleToggleAutoLightweight}
             disabled={lightweightLoading}
-            class="relative inline-flex h-5 w-8 items-center rounded-full transition {autoLightweight ? 'bg-blue-600' : 'bg-gray-300 dark:bg-gray-600'} disabled:opacity-50"
+            class="relative inline-flex h-5 w-8 items-center rounded-full transition {autoLightweight ? 'bg-blue-600' : 'bg-gray-300 bg-muted'} disabled:opacity-50"
             role="switch"
             aria-checked={autoLightweight}
           >
-            <span class="inline-block h-3.5 w-3.5 transform rounded-full bg-white transition {autoLightweight ? 'translate-x-3.5' : 'translate-x-0.5'}" />
+            <span class="inline-block h-3.5 w-3.5 transform rounded-full bg-card transition {autoLightweight ? 'translate-x-3.5' : 'translate-x-0.5'}" />
           </button>
-          <span class="text-xs text-gray-500 dark:text-gray-400">
+          <span class="text-xs text-gray-500 text-muted-foreground">
             {$t('settings.lightweightAuto')}
           </span>
           {#if autoLightweight}
@@ -642,21 +667,21 @@
                 max="120"
                 bind:value={lightweightTimeout}
                 on:change={handleLightweightTimeoutChange}
-                class="w-16 px-2 py-1 text-xs border border-gray-300 rounded-md dark:bg-gray-800 dark:border-gray-600 dark:text-gray-200"
+                class="w-16 px-2 py-1 text-xs border border-gray-300 rounded-md bg-card border-border/80 text-foreground"
               />
-              <span class="text-xs text-gray-500 dark:text-gray-400">
+              <span class="text-xs text-gray-500 text-muted-foreground">
                 {$t('settings.lightweightMinutes')}
               </span>
             </div>
           {/if}
         </div>
-        <p class="mt-1 text-[10px] text-gray-400 dark:text-gray-500">{$t('settings.lightweightHint')}</p>
+        <p class="mt-1 text-[10px] text-gray-400 text-muted-foreground">{$t('settings.lightweightHint')}</p>
       </div>
     </div>
-    <div class="px-5 py-3 border-t border-gray-200 flex justify-end dark:border-gray-700">
+    <div class="px-5 py-3 border-t border-border flex justify-end border-border">
       <button
         on:click={handleClose}
-        class="px-4 py-1.5 text-sm text-gray-700 border border-gray-300 rounded-md hover:bg-gray-50 transition dark:text-gray-200 dark:border-gray-600 dark:hover:bg-gray-700"
+        class="px-4 py-1.5 text-sm text-foreground/80 border border-gray-300 rounded-md hover:bg-gray-50 transition text-foreground border-border/80 hover:bg-accent"
       >
         {$t('buttons.close')}
       </button>

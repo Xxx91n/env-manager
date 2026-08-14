@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte'
+  import { Monitor, RefreshCw, Settings } from 'lucide-svelte'
   import { t, locale } from 'svelte-i18n'
   import Variables from './lib/components/Variables.svelte'
   import ProfilePage from './lib/components/ProfilePage.svelte'
@@ -125,6 +126,7 @@
   let initError: string | null = null
   let showSettings = false
   let darkMode = false
+  let themeStyle = 'slate'
   let fontScale: number = 1
 
   $: if ($locale) currentLocale = $locale
@@ -192,6 +194,7 @@
       void frontendLog('error', 'App onMount: applyPersistedLocale threw').catch(() => {})
     }
     applyDarkMode(darkMode)
+    document.documentElement.setAttribute('data-theme-style', themeStyle)
     applyFontScale(fontScale)
 
     try {
@@ -206,7 +209,7 @@
   function applyDarkMode(isDark: boolean) {
     darkMode = isDark
     if (typeof document !== 'undefined') {
-      document.documentElement.classList.toggle('dark', isDark)
+      document.documentElement.setAttribute('data-theme', isDark ? 'dark' : 'light')
     }
   }
 
@@ -232,16 +235,14 @@
   <title>{$t('app.title')}</title>
 </svelte:head>
 
-<div class="min-h-screen bg-gray-50 text-gray-900 transition-colors dark:bg-gray-900 dark:text-gray-100">
-  <header class="bg-white border-b border-gray-200 px-5 py-3 dark:bg-gray-800 dark:border-gray-700">
+<div class="min-h-screen bg-background text-foreground transition-colors">
+  <header class="bg-card border-b border-border px-5 py-3">
     <div class="flex items-center justify-between">
       <div class="flex items-center gap-3">
-        <svg class="w-5 h-5 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
-          <path stroke-linecap="round" stroke-linejoin="round" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-        </svg>
+        <Monitor class="w-5 h-5 text-primary" />
         <div>
           <h1 class="text-sm font-semibold leading-tight">{$t('app.title')}</h1>
-          <p class="text-xs text-gray-500 dark:text-gray-400 leading-tight">{$t('app.description')}</p>
+          <p class="text-xs text-muted-foreground leading-tight">{$t('app.description')}</p>
         </div>
       </div>
       <div class="flex items-center gap-2">
@@ -252,24 +253,19 @@
             // Also refresh variables store directly (variables page + backups)
             listVariables()
           }}
-          class="p-1.5 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-md transition dark:text-gray-400 dark:hover:text-gray-200 dark:hover:bg-gray-700"
+          class="p-1.5 text-muted-foreground hover:text-foreground hover:bg-accent rounded-md transition"
           title={$t('buttons.refresh')}
           aria-label={$t('buttons.refresh')}
         >
-          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-          </svg>
+          <RefreshCw class="w-4 h-4" />
         </button>
         <button
           on:click={() => (showSettings = true)}
-          class="p-1.5 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-md transition dark:text-gray-400 dark:hover:text-gray-200 dark:hover:bg-gray-700"
+          class="p-1.5 text-muted-foreground hover:text-foreground hover:bg-accent rounded-md transition"
           title={$t('nav.settings')}
           aria-label={$t('nav.settings')}
         >
-          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-            <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-          </svg>
+          <Settings class="w-4 h-4" />
         </button>
       </div>
     </div>
@@ -278,7 +274,7 @@
       <div
         role="tablist"
         aria-label="{$t('nav.variables')} — {$t('nav.audit')}"
-        class="flex gap-1 border-b border-gray-200 dark:border-gray-700"
+        class="flex gap-1 border-b border-border"
       >
         {#each tabItems as tab, i}
           <button
@@ -291,8 +287,8 @@
             on:click={() => activeView.set(tab.id)}
             on:keydown={(e) => handleTabKeydown(e, i)}
             class="px-3 py-2 text-xs font-medium transition-colors duration-200 rounded-t-md {$activeView === tab.id
-              ? 'text-blue-700 dark:text-blue-300 font-semibold'
-              : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100 dark:text-gray-400 dark:hover:text-gray-200 dark:hover:bg-gray-700/50'} disabled:opacity-50 disabled:cursor-not-allowed"
+              ? 'text-primary font-semibold'
+              : 'text-muted-foreground hover:text-foreground hover:bg-accent'} disabled:opacity-50 disabled:cursor-not-allowed"
             
           >
             {$t(tab.labelKey)}
@@ -300,7 +296,7 @@
         {/each}
       </div>
       <div
-        class="absolute bottom-0 h-[3px] bg-blue-600 dark:bg-blue-400 rounded-t-md"
+        class="absolute bottom-0 h-[3px] bg-primary rounded-t-md"
         style={indicatorStyle + '; transition: ' + indicatorTransition + '; will-change: transform'}
         aria-hidden="true"
       ></div>
@@ -309,7 +305,7 @@
 
   <div class="px-5 py-4">
     {#if initError}
-      <div class="fixed top-4 left-1/2 -translate-x-1/2 px-3 py-2 bg-red-600 text-white rounded-md text-xs shadow-lg z-50 pointer-events-none max-w-md">
+      <div class="fixed top-4 left-1/2 -translate-x-1/2 px-3 py-2 bg-destructive text-destructive-foreground rounded-md text-xs shadow-lg z-50 pointer-events-none max-w-md">
         <p class="font-medium mb-0.5">{$t('errors.cliExecutionFailed')}</p>
         <p class="font-mono break-all opacity-80">{initError}</p>
       </div>
@@ -342,6 +338,7 @@
 {#if showSettings}
   <SettingsDialog
     darkMode={darkMode}
+      themeStyle={themeStyle}
     on:close={() => (showSettings = false)}
     on:themeChange={handleThemeChange}
     fontScale={fontScale}
@@ -363,7 +360,7 @@
           ? 'bg-green-600 text-white'
           : toast.type === 'error'
             ? 'bg-red-600 text-white'
-            : 'bg-gray-800 text-white dark:bg-gray-700'}"
+            : 'bg-primary text-primary-foreground'}"
         on:click={() => dismissToast(toast.id)}
       >
         {toast.message}
@@ -432,19 +429,19 @@
   :global(*:active)::-webkit-scrollbar-thumb {
     background-color: rgba(0, 0, 0, 0.4);
   }
-  :global(.dark *) {
+  :global([data-theme="dark"] *) {
     scrollbar-color: rgba(255, 255, 255, 0) transparent;
   }
-  :global(.dark *:hover) {
+  :global([data-theme="dark"] *:hover) {
     scrollbar-color: rgba(255, 255, 255, 0.3) transparent;
   }
-  :global(.dark *)::-webkit-scrollbar-thumb {
+  :global([data-theme="dark"] *)::-webkit-scrollbar-thumb {
     background-color: rgba(255, 255, 255, 0);
   }
-  :global(.dark *:hover)::-webkit-scrollbar-thumb {
+  :global([data-theme="dark"] *:hover)::-webkit-scrollbar-thumb {
     background-color: rgba(255, 255, 255, 0.3);
   }
-  :global(.dark *:active)::-webkit-scrollbar-thumb {
+  :global([data-theme="dark"] *:active)::-webkit-scrollbar-thumb {
     background-color: rgba(255, 255, 255, 0.45);
   }
   /* v0.9.18: Disable WebView2 native context menu globally. */

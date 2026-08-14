@@ -65,6 +65,7 @@
   "settings.language": "언어",
   "settings.theme": "테마",
   "settings.darkMode": "다크 모드",
+  "settings.themeStyle": "테마 스타일",
   "profiles.name": "프로필 이름",
   "profiles.variables": "변수",
   "profiles.apply": "적용",

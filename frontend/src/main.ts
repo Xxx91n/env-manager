@@ -1,3 +1,4 @@
+import './app.css'
 import App from './App.svelte'
 import { setupI18n, applyPersistedLocale } from './lib/i18n'
 

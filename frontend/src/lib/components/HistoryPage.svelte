@@ -279,21 +279,21 @@
 </style>
 <div class="space-y-3">
   <div class="flex items-center gap-2">
-    <select bind:value={scope} on:change={refresh} class="px-2.5 py-1.5 text-xs border border-gray-300 rounded-md bg-white dark:bg-gray-800 dark:border-gray-600 dark:text-gray-100">
+    <select bind:value={scope} on:change={refresh} class="px-2.5 py-1.5 text-xs border border-gray-300 rounded-md bg-card bg-card border-border/80 text-foreground">
       <option value="all">{$t('scope.all')}</option>
       <option value="user">{$t('scope.user')}</option>
       <option value="system">{$t('scope.system')}</option>
       <option value="profile">{$t('scope.profile')}</option>
     </select>
-    <button on:click={handleImport} class="px-3 py-1.5 text-xs font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700">{$t('bulk.import')}</button>
-    <button on:click={handleExport} class="px-3 py-1.5 text-xs font-medium border border-gray-300 rounded-md hover:bg-gray-50 dark:border-gray-600 dark:hover:bg-gray-700">{$t('bulk.export')}</button>
+    <button on:click={handleImport} class="px-3 py-1.5 text-xs font-medium text-white bg-primary rounded-md hover:bg-blue-700">{$t('bulk.import')}</button>
+    <button on:click={handleExport} class="px-3 py-1.5 text-xs font-medium border border-gray-300 rounded-md hover:bg-muted/20 border-border/80 hover:bg-accent">{$t('bulk.export')}</button>
     {#if filteredHistory.length > 0}
-      <button on:click={handleClearAll} class="px-3 py-1.5 text-xs font-medium text-red-600 border border-red-300 rounded-md hover:bg-red-50 dark:border-red-700 dark:hover:bg-red-900/30">{$t('history.clearAll')}</button>
+      <button on:click={handleClearAll} class="px-3 py-1.5 text-xs font-medium text-destructive border border-red-300 rounded-md hover:bg-destructive/10 border-destructive hover:bg-destructive/15">{$t('history.clearAll')}</button>
     {/if}
-    <button on:click={refresh} class="ml-auto px-3 py-1.5 text-xs text-gray-600 hover:bg-gray-100 rounded-md dark:text-gray-300 dark:hover:bg-gray-700">{$t('buttons.refresh')}</button>
+    <button on:click={refresh} class="ml-auto px-3 py-1.5 text-xs text-muted-foreground hover:bg-muted/30 rounded-md text-foreground/80 hover:bg-accent">{$t('buttons.refresh')}</button>
   </div>
 
-  <div class="history-table-root bg-white border border-gray-200 rounded-md overflow-auto dark:bg-gray-800 dark:border-gray-700">
+  <div class="history-table-root bg-card border border-border rounded-md overflow-auto bg-card border-border">
     {#if loading}
       <div class="p-8 text-center text-xs text-gray-400">{$t('messages.loading')}</div>
     {:else if filteredHistory.length === 0}
@@ -308,33 +308,33 @@
           <col style="width: var(--col-change, 240px);">
           <col style="width: var(--col-ops, 96px);">
         </colgroup>
-        <thead class="bg-gray-50 border-b border-gray-200 dark:bg-gray-750 dark:border-gray-700">
+        <thead class="bg-muted/20 border-b border-border bg-muted border-border">
           <tr>
-            <th data-col="time" on:mousedown={startResize} class="resize px-3 py-2 text-left text-[10px] text-gray-500 select-none cursor-col-resize">{$t('history.time')}</th>
-            <th data-col="action" on:mousedown={startResize} class="resize px-3 py-2 text-left text-[10px] text-gray-500 select-none cursor-col-resize">{$t('history.action')}</th>
-            <th data-col="scope" on:mousedown={startResize} class="resize px-3 py-2 text-left text-[10px] text-gray-500 select-none cursor-col-resize">{$t('scope.scope')}</th>
-            <th data-col="name" on:mousedown={startResize} class="resize px-3 py-2 text-left text-[10px] text-gray-500 select-none cursor-col-resize">{$t('table.name')}</th>
-            <th data-col="change" on:mousedown={startResize} class="resize px-3 py-2 text-left text-[10px] text-gray-500 select-none cursor-col-resize">{$t('history.change')}</th>
+            <th data-col="time" on:mousedown={startResize} class="resize px-3 py-2 text-left text-[10px] text-muted-foreground select-none cursor-col-resize">{$t('history.time')}</th>
+            <th data-col="action" on:mousedown={startResize} class="resize px-3 py-2 text-left text-[10px] text-muted-foreground select-none cursor-col-resize">{$t('history.action')}</th>
+            <th data-col="scope" on:mousedown={startResize} class="resize px-3 py-2 text-left text-[10px] text-muted-foreground select-none cursor-col-resize">{$t('scope.scope')}</th>
+            <th data-col="name" on:mousedown={startResize} class="resize px-3 py-2 text-left text-[10px] text-muted-foreground select-none cursor-col-resize">{$t('table.name')}</th>
+            <th data-col="change" on:mousedown={startResize} class="resize px-3 py-2 text-left text-[10px] text-muted-foreground select-none cursor-col-resize">{$t('history.change')}</th>
             <th class="px-3 py-2"></th>
           </tr>
         </thead>
-        <tbody class="divide-y divide-gray-100 dark:divide-gray-700">
+        <tbody class="divide-y divide-gray-100 divide-border">
           {#each filteredHistory as entry (entry.id)}
-            <tr class="hover:bg-gray-50 dark:hover:bg-gray-750">
+            <tr class="hover:bg-muted/20 hover:bg-muted">
               <td class="px-3 py-2 text-[10px] text-gray-500">{new Date(entry.timestamp).toLocaleString()}</td>
               <td class="px-3 py-2 text-[10px] font-mono break-all whitespace-normal" title={entry.command}>{getOperationLabel(entry.command, $t)}</td>
               <td class="px-3 py-2 text-[10px]">
                 {#if entry.scope === 'profile'}
-                  <span class="px-1.5 py-0.5 rounded text-[9px] font-medium bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300">{$t('scope.profile')}</span>
+                  <span class="px-1.5 py-0.5 rounded text-[9px] font-medium bg-amber-100 text-amber-800 bg-primary/15 text-primary">{$t('scope.profile')}</span>
                 {:else}
-                  <span class="px-1.5 py-0.5 rounded text-[9px] font-medium {entry.scope === 'user' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300' : 'bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300'}">{entry.scope === 'user' ? $t('scope.user') : $t('scope.system')}</span>
+                  <span class="px-1.5 py-0.5 rounded text-[9px] font-medium {entry.scope === 'user' ? 'bg-blue-100 text-primary bg-primary/20/40 text-primary' : 'bg-purple-100 text-purple-700 bg-primary/15 text-primary'}">{entry.scope === 'user' ? $t('scope.user') : $t('scope.system')}</span>
                 {/if}
               </td>
               <td class="px-3 py-2 text-xs font-mono truncate" title={entry.name}>{entry.name}</td>
-              <td class="px-3 py-2 text-[10px] font-mono text-gray-500 truncate" title={`${entry.oldValue ?? 'null'} -> ${entry.newValue ?? 'null'}`}>{entry.oldValue ?? 'null'} -> {entry.newValue ?? 'null'}</td>
+              <td class="px-3 py-2 text-[10px] font-mono text-muted-foreground truncate" title={`${entry.oldValue ?? 'null'} -> ${entry.newValue ?? 'null'}`}>{entry.oldValue ?? 'null'} -> {entry.newValue ?? 'null'}</td>
               <td class="px-3 py-2 text-right whitespace-nowrap">
-                <button on:click={() => handleUndo(entry)} class="text-[10px] text-blue-600 hover:underline mr-2">{$t('history.undo')}</button>
-                <button on:click={() => handleDelete(entry)} class="text-[10px] text-red-600 hover:underline">{$t('buttons.delete')}</button>
+                <button on:click={() => handleUndo(entry)} class="text-[10px] text-primary hover:underline mr-2">{$t('history.undo')}</button>
+                <button on:click={() => handleDelete(entry)} class="text-[10px] text-destructive hover:underline">{$t('buttons.delete')}</button>
               </td>
             </tr>
           {/each}

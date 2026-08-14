@@ -65,6 +65,7 @@
   "settings.language": "语言",
   "settings.theme": "主题",
   "settings.darkMode": "深色模式",
+  "settings.themeStyle": "主题风格",
   "profiles.name": "配置文件名",
   "profiles.variables": "变量",
   "profiles.apply": "应用",

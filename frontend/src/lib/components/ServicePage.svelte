@@ -133,18 +133,18 @@
 <div class="space-y-3">
   <div class="flex items-center justify-between">
     <div>
-      <h2 class="text-base font-semibold text-gray-800 dark:text-gray-200">{$t('nav.service')}</h2>
-      <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">{$t('service.description')}</p>
+      <h2 class="text-base font-semibold text-gray-800 text-foreground">{$t('nav.service')}</h2>
+      <p class="text-xs text-muted-foreground text-muted-foreground mt-1">{$t('service.description')}</p>
     </div>
     <button on:click={refreshServiceStatus} disabled={serviceLoading}
-      class="px-3 py-1.5 text-xs font-medium rounded-md border border-gray-300 hover:bg-gray-50 transition dark:border-gray-600 dark:hover:bg-gray-700 disabled:opacity-50">
+      class="px-3 py-1.5 text-xs font-medium rounded-md border border-gray-300 hover:bg-muted/20 transition border-border/80 hover:bg-accent disabled:opacity-50">
       {$t('buttons.refresh')}
     </button>
   </div>
 
-  <div class="bg-white border border-gray-200 rounded-md dark:bg-gray-800 dark:border-gray-700 p-4">
+  <div class="bg-card border border-border rounded-md bg-card border-border p-4">
     <div class="flex items-center gap-3 mb-2">
-      <span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium {serviceRunning ? 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300' : 'bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400'}">
+      <span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium {serviceRunning ? 'bg-green-100 text-green-700 bg-primary/20 text-primary' : 'bg-muted/30 text-muted-foreground bg-card text-muted-foreground'}">
         <span class="w-1.5 h-1.5 rounded-full {serviceRunning ? 'bg-green-500' : 'bg-gray-400'}"></span>
         {serviceRunning ? $t('settings.service.running') : $t('settings.service.stopped')}
       </span>
@@ -152,31 +152,31 @@
         <span class="text-xs text-gray-400">{$t('settings.service.checking')}</span>
       {/if}
       <button on:click={handleServicePing} disabled={serviceLoading}
-        class="px-2 py-0.5 text-xs font-medium text-gray-600 border border-gray-300 rounded-md hover:bg-gray-50 transition disabled:opacity-50 dark:text-gray-300 dark:border-gray-600 dark:hover:bg-gray-700">
+        class="px-2 py-0.5 text-xs font-medium text-muted-foreground border border-gray-300 rounded-md hover:bg-muted/20 transition disabled:opacity-50 text-foreground/80 border-border/80 hover:bg-accent">
         {$t('settings.service.ping')}
       </button>
       <button on:click={handleServiceReload} disabled={serviceLoading || !serviceRunning}
-        class="px-2 py-0.5 text-xs font-medium text-gray-600 border border-gray-300 rounded-md hover:bg-gray-50 transition disabled:opacity-50 dark:text-gray-300 dark:border-gray-600 dark:hover:bg-gray-700">
+        class="px-2 py-0.5 text-xs font-medium text-muted-foreground border border-gray-300 rounded-md hover:bg-muted/20 transition disabled:opacity-50 text-foreground/80 border-border/80 hover:bg-accent">
         {$t('settings.service.reload')}
       </button>
       <button on:click={handleServiceShutdown} disabled={serviceLoading || !serviceRunning}
-        class="px-2 py-0.5 text-xs font-medium text-red-600 border border-red-300 rounded-md hover:bg-red-50 transition disabled:opacity-50 dark:text-red-300 dark:border-red-700 dark:hover:bg-red-900">
+        class="px-2 py-0.5 text-xs font-medium text-destructive border border-red-300 rounded-md hover:bg-destructive/10 transition disabled:opacity-50 text-destructive border-destructive hover:bg-destructive/20">
         {$t('settings.service.shutdown')}
       </button>
       <button on:click={handleServiceStart} disabled={serviceLoading || serviceRunning}
-        class="px-2 py-0.5 text-xs font-medium text-green-600 border border-green-300 rounded-md hover:bg-green-50 transition disabled:opacity-50 dark:text-green-300 dark:border-green-700 dark:hover:bg-green-900">
+        class="px-2 py-0.5 text-xs font-medium text-primary border border-green-300 rounded-md hover:bg-primary/10 transition disabled:opacity-50 text-primary border-primary hover:bg-primary/20">
         {$t('settings.service.start')}
       </button>
     </div>
     {#if serviceError && serviceRunning}
-      <p class="text-xs text-amber-600 dark:text-amber-400">{serviceError}</p>
+      <p class="text-xs text-primary/80 text-primary/80">{serviceError}</p>
     {:else if serviceError && !serviceRunning}
-      <p class="text-xs text-amber-600 dark:text-amber-400">{$t('settings.service.notRunningHint')}</p>
+      <p class="text-xs text-primary/80 text-primary/80">{$t('settings.service.notRunningHint')}</p>
     {/if}
     {#if serviceHealthData?.mounts?.length > 0}
       <div class="mt-2 space-y-1 max-h-40 overflow-y-auto">
         {#each serviceHealthData.mounts as mount}
-          <div class="flex items-center gap-2 text-xs px-2 py-1 rounded bg-gray-50 dark:bg-gray-800">
+          <div class="flex items-center gap-2 text-xs px-2 py-1 rounded bg-muted/20 bg-card">
             <span class="font-mono" title={mount.provider}>{localizeProvider(mount.provider, $t)}</span>
             <span class="text-gray-500">{mount.name}</span>
             <span class="px-1 rounded {mount.healthy ? 'text-green-600' : 'text-red-600'}">{mount.healthy ? $t('settings.service.healthy') : $t('settings.service.unhealthy')}</span>
@@ -187,11 +187,11 @@
               </span>
             {/if}
             <button on:click={() => handleMountRefresh(mount.id)} disabled={serviceLoading}
-              class="px-1 text-xs text-blue-600 hover:underline disabled:opacity-50">
+              class="px-1 text-xs text-primary hover:underline disabled:opacity-50">
               {$t('settings.service.refreshBtn')}
             </button>
             <button on:click={() => handleMountRotate(mount.id)} disabled={serviceLoading}
-              class="px-1 text-xs text-blue-600 hover:underline disabled:opacity-50">
+              class="px-1 text-xs text-primary hover:underline disabled:opacity-50">
               {$t('settings.service.rotateBtn')}
             </button>
           </div>

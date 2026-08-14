@@ -126,22 +126,22 @@
   on:keydown={(e) => { if (e.key === 'Escape') handleClose() }}
   role="presentation"
   tabindex="-1">
-  <div class="bg-white rounded-lg shadow-xl max-w-md w-full mx-4 dark:bg-gray-800" on:click|stopPropagation>
-    <div class="px-5 py-3 border-b border-gray-200 dark:border-gray-700">
-      <h2 class="text-sm font-semibold text-gray-900 dark:text-gray-100">
+  <div class="bg-card rounded-lg shadow-xl max-w-md w-full mx-4 bg-card" on:click|stopPropagation>
+    <div class="px-5 py-3 border-b border-border border-border">
+      <h2 class="text-sm font-semibold text-foreground text-foreground">
         {variable ? $t('dialogs.editVariable') : $t('dialogs.addVariable')}
       </h2>
     </div>
 
     <div class="px-5 py-4 space-y-3">
       {#if localError}
-        <div class="bg-red-50 border border-red-200 text-red-800 px-3 py-2 rounded-md text-xs dark:bg-red-900/30 dark:border-red-700 dark:text-red-300">
+        <div class="bg-destructive/10 border border-red-200 text-red-800 px-3 py-2 rounded-md text-xs bg-destructive/15 border-destructive text-destructive">
           {localError}
         </div>
       {/if}
 
       <div>
-        <label for="edit-name" class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">
+        <label for="edit-name" class="block text-xs font-medium text-muted-foreground text-muted-foreground mb-1">
           {$t('labels.name')}
         </label>
         <input
@@ -149,36 +149,36 @@
           type="text"
           bind:value={name}
           spellcheck="false"
-          class="w-full px-3 py-1.5 text-xs border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 font-mono dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100"
+          class="w-full px-3 py-1.5 text-xs border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary font-mono bg-accent border-border/80 text-foreground"
         />
         {#if nameChanged}
-          <p class="mt-1 text-[10px] text-amber-600 dark:text-amber-400">
+          <p class="mt-1 text-[10px] text-primary/80 text-primary/80">
             {$t('messages.renameWarning')}
           </p>
         {/if}
       </div>
 
       <div>
-        <label for="edit-value" class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">
+        <label for="edit-value" class="block text-xs font-medium text-muted-foreground text-muted-foreground mb-1">
           {$t('labels.value')}
         </label>
         <textarea
           id="edit-value"
           bind:value={value}
           rows="4"
-          class="w-full px-3 py-1.5 text-xs border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 font-mono dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100"
+          class="w-full px-3 py-1.5 text-xs border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary font-mono bg-accent border-border/80 text-foreground"
         />
       </div>
 
       <div>
-        <label for="edit-scope" class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">
+        <label for="edit-scope" class="block text-xs font-medium text-muted-foreground text-muted-foreground mb-1">
           {$t('labels.scope')}
         </label>
         <select
           id="edit-scope"
           bind:value={scope}
           disabled={!!(variable && variable.isProtected)}
-          class="w-full px-3 py-1.5 text-xs border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white disabled:bg-gray-100 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100"
+          class="w-full px-3 py-1.5 text-xs border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-primary bg-card disabled:bg-muted/30 bg-accent border-border/80 text-foreground"
         >
           <option value="user">{$t('scope.user')}</option>
           <option value="system">{$t('scope.system')}</option>
@@ -186,18 +186,18 @@
       </div>
     </div>
 
-    <div class="px-5 py-3 border-t border-gray-200 flex gap-2 justify-end dark:border-gray-700">
+    <div class="px-5 py-3 border-t border-border flex gap-2 justify-end border-border">
       <button
         on:click={handleClose}
         disabled={saving}
-        class="px-4 py-1.5 text-xs text-gray-700 border border-gray-300 rounded-md hover:bg-gray-50 transition disabled:opacity-50 dark:text-gray-200 dark:border-gray-600 dark:hover:bg-gray-700"
+        class="px-4 py-1.5 text-xs text-foreground/80 border border-gray-300 rounded-md hover:bg-muted/20 transition disabled:opacity-50 text-foreground border-border/80 hover:bg-accent"
       >
         {$t('buttons.cancel')}
       </button>
       <button
         on:click={handleSave}
         disabled={saving}
-        class="px-4 py-1.5 text-xs text-white bg-blue-600 rounded-md hover:bg-blue-700 transition disabled:opacity-50 dark:bg-blue-500 dark:hover:bg-blue-600"
+        class="px-4 py-1.5 text-xs text-white bg-primary rounded-md hover:bg-blue-700 transition disabled:opacity-50 bg-primary/80 hover:bg-primary"
       >
         {saving ? $t('messages.loading') : $t('buttons.save')}
       </button>

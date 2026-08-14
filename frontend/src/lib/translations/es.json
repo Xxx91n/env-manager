@@ -65,6 +65,7 @@
   "settings.language": "Idioma",
   "settings.theme": "Tema",
   "settings.darkMode": "Modo oscuro",
+  "settings.themeStyle": "Estilo de tema",
   "profiles.name": "Nombre del perfil",
   "profiles.variables": "Variables",
   "profiles.apply": "Aplicar",

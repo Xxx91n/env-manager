@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { Download } from 'lucide-svelte'
   import { createEventDispatcher } from 'svelte'
   import { frontendLog } from '../settingsStore'
   import { t } from 'svelte-i18n'
@@ -50,70 +51,66 @@
   on:keydown={(e) => { if (e.key === 'Escape') handleClose() }}
   role="presentation"
   tabindex="-1">
-  <div class="bg-white rounded-lg shadow-xl max-w-md w-full mx-4 dark:bg-gray-800" on:click|stopPropagation>
-    <div class="px-5 py-3 border-b border-gray-200 dark:border-gray-700">
-      <h2 class="text-sm font-semibold text-gray-900 dark:text-gray-100">
+  <div class="bg-card rounded-lg shadow-xl max-w-md w-full mx-4 bg-card" on:click|stopPropagation>
+    <div class="px-5 py-3 border-b border-border border-border">
+      <h2 class="text-sm font-semibold text-foreground text-foreground">
         {$t('dialogs.backupCreate')}
       </h2>
     </div>
 
     <div class="px-5 py-4">
       <!-- Mode toggle -->
-      <div class="flex gap-1 mb-3 p-0.5 bg-gray-100 rounded-md dark:bg-gray-700">
+      <div class="flex gap-1 mb-3 p-0.5 bg-muted/30 rounded-md bg-accent">
         <button
           on:click={() => (mode = 'export')}
           class="flex-1 px-3 py-1.5 text-xs font-medium rounded {mode === 'export'
-            ? 'bg-white text-gray-900 shadow-sm dark:bg-gray-800 dark:text-gray-100'
-            : 'text-gray-500 dark:text-gray-400'}"
+            ? 'bg-card text-foreground shadow-sm bg-card text-foreground'
+            : 'text-muted-foreground text-muted-foreground'}"
         >
           {$t('buttons.export')}
         </button>
         <button
           on:click={() => (mode = 'import')}
           class="flex-1 px-3 py-1.5 text-xs font-medium rounded {mode === 'import'
-            ? 'bg-white text-gray-900 shadow-sm dark:bg-gray-800 dark:text-gray-100'
-            : 'text-gray-500 dark:text-gray-400'}"
+            ? 'bg-card text-foreground shadow-sm bg-card text-foreground'
+            : 'text-muted-foreground text-muted-foreground'}"
         >
           {$t('buttons.restore')}
         </button>
       </div>
 
       {#if mode === 'export'}
-        <p class="text-xs text-gray-500 dark:text-gray-400 mb-3">
+        <p class="text-xs text-muted-foreground text-muted-foreground mb-3">
           {$t('messages.exportDescription')}
         </p>
         <button
           on:click={handleExport}
           disabled={saving}
-          class="w-full flex items-center justify-center gap-1.5 px-4 py-2 text-xs font-medium text-white bg-green-600 rounded-md hover:bg-green-700 transition disabled:opacity-50 dark:bg-green-500 dark:hover:bg-green-600"
+          class="w-full flex items-center justify-center gap-1.5 px-4 py-2 text-xs font-medium text-white bg-primary rounded-md hover:bg-green-700 transition disabled:opacity-50 bg-primary hover:bg-primary"
         >
-          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-          </svg>
+          <Download class="w-3.5 h-3.5" />
           {saving ? $t('messages.loading') : $t('buttons.export')}
         </button>
       {:else}
-        <p class="text-xs text-gray-500 dark:text-gray-400 mb-3">
+        <p class="text-xs text-muted-foreground text-muted-foreground mb-3">
           {$t('messages.importDescription')}
         </p>
         <button
           on:click={handleRestore}
           disabled={saving}
-          class="w-full flex items-center justify-center gap-1.5 px-4 py-2 text-xs font-medium text-white bg-green-600 rounded-md hover:bg-green-700 transition disabled:opacity-50 dark:bg-green-500 dark:hover:bg-green-600"
+          class="w-full flex items-center justify-center gap-1.5 px-4 py-2 text-xs font-medium text-white bg-primary rounded-md hover:bg-green-700 transition disabled:opacity-50 bg-primary hover:bg-primary"
         >
-          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
-          </svg>
+          <Download class="w-3.5 h-3.5" />
           {saving ? $t('messages.loading') : $t('buttons.restore')}
         </button>
       {/if}
 
       </div>
 
-    <div class="px-5 py-3 border-t border-gray-200 flex justify-end dark:border-gray-700">
+    <div class="px-5 py-3 border-t border-border flex justify-end border-border">
       <button
         on:click={handleClose}
-        class="px-4 py-1.5 text-xs text-gray-700 border border-gray-300 rounded-md hover:bg-gray-50 transition dark:text-gray-200 dark:border-gray-600 dark:hover:bg-gray-700"
+        class="px-4 py-1.5 text-xs text-foreground/80 border border-gray-300 rounded-md hover:bg-muted/20 transition text-foreground border-border/80 hover:bg-accent"
       >
         {$t('buttons.close')}
       </button>

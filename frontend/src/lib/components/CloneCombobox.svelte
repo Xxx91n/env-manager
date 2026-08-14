@@ -82,7 +82,7 @@
 
 <div class="relative">
   {#if label}
-    <label class="block text-[10px] font-medium text-gray-500 dark:text-gray-400 mb-0.5">{label}</label>
+    <label class="block text-[10px] font-medium text-muted-foreground text-muted-foreground mb-0.5">{label}</label>
   {/if}
   <input
     type="text"
@@ -92,19 +92,19 @@
     on:focus={() => { dropdownOpen = true }}
     on:keydown={onKeydown}
     on:blur={() => { setTimeout(() => { dropdownOpen = false }, 150) }}
-    class="w-full px-2 py-1 text-[10px] border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100"
+    class="w-full px-2 py-1 text-[10px] border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-primary bg-accent border-border/80 text-foreground"
   />
   {#if dropdownOpen && filtered.length > 0}
-    <ul class="absolute z-30 left-0 right-0 mt-0.5 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded shadow-lg max-h-40 overflow-auto">
+    <ul class="absolute z-30 left-0 right-0 mt-0.5 bg-card bg-card border border-gray-300 border-border/80 rounded shadow-lg max-h-40 overflow-auto">
       {#each filtered.slice(0, 10) as v, i (v.name)}
         <li
-          class="px-2 py-1 cursor-pointer text-[10px] flex items-center gap-2 {i === highlightIndex ? 'bg-blue-100 dark:bg-blue-900/40' : 'hover:bg-gray-100 dark:hover:bg-gray-700'}"
+          class="px-2 py-1 cursor-pointer text-[10px] flex items-center gap-2 {i === highlightIndex ? 'bg-blue-100 bg-primary/20/40' : 'hover:bg-muted/30 hover:bg-accent'}"
           on:mousedown={(e) => { e.preventDefault(); select(v) }}
           role="option"
           aria-selected={i === highlightIndex}
         >
-          <span class="font-mono text-gray-700 dark:text-gray-200 truncate flex-1">{v.name}</span>
-          <span class="font-mono text-[9px] text-gray-400 dark:text-gray-500 truncate max-w-[40%]">{v.value}</span>
+          <span class="font-mono text-foreground/80 text-foreground truncate flex-1">{v.name}</span>
+          <span class="font-mono text-[9px] text-gray-400 text-muted-foreground truncate max-w-[40%]">{v.value}</span>
         </li>
       {/each}
     </ul>

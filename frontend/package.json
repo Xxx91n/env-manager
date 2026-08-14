@@ -1,6 +1,6 @@
 {
   "name": "env-manager",
-  "version": "0.9.19",
+  "version": "0.9.20",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -36,7 +36,12 @@
     "vitest": "^4.1.10"
   },
   "dependencies": {
-    "@tauri-apps/plugin-dialog": "^2.7.1"
+    "@tauri-apps/plugin-dialog": "^2.7.1",
+    "bits-ui": "^0.22.0",
+    "clsx": "^2.1.1",
+    "lucide-svelte": "^0.479.0",
+    "tailwind-merge": "^2.6.1",
+    "tailwindcss-animate": "^1.0.7"
   },
   "license": "Apache-2.0"
 }

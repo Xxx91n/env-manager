@@ -1,0 +1,6 @@
+// This file is a sentinel for shadcn-svelte CLI preflight.
+// env-manager uses Vite (not SvelteKit), but shadcn-svelte CLI checks for
+// .svelte-kit/tsconfig.json during init. This file satisfies that check.
+{
+  "extends": "../tsconfig.json"
+}
