@@ -17,14 +17,19 @@ partial class Program
         var pathEntries = ResolveProfilePaths(profile);
         if (pathEntries.Count == 0) return variables;
 
-        var currentPath = GetPathEntries("user");
-        foreach (string entry in pathEntries)
-        {
-            if (!currentPath.Any(item => NormalizePathEntry(item).Equals(NormalizePathEntry(entry), StringComparison.OrdinalIgnoreCase)))
-                currentPath.Add(entry);
-        }
         variables.RemoveAll(variable => variable.Name.Equals("PATH", StringComparison.OrdinalIgnoreCase));
-        variables.Add(new ProfileVariable { Name = "PATH", Value = string.Join(';', currentPath) });
+        var allPairs = ResolveProfilePathsWithScopes(profile);
+        foreach (var scopeGroup in allPairs.GroupBy(p => p.scope ?? "user"))
+        {
+            string scope = scopeGroup.Key;
+            var currentPath = GetPathEntries(scope);
+            foreach (string entry in scopeGroup.Select(p => p.path))
+            {
+                if (!currentPath.Any(item => NormalizePathEntry(item).Equals(NormalizePathEntry(entry), StringComparison.OrdinalIgnoreCase)))
+                    currentPath.Add(entry);
+            }
+            variables.Add(new ProfileVariable { Name = "PATH", Value = string.Join(';', currentPath), Scope = scope });
+        }
         return variables;
     }
 
@@ -95,10 +100,11 @@ partial class Program
         foreach (var variable in GetEffectiveProfileVariables(profile))
         {
             string backupName = GetBackupVariableName(variable.Name, profile.Name);
-            string? existingValue = GetVariableValue(variable.Name, "user");
-            if (existingValue != null && GetVariableValue(backupName, "user") == null)
-                SetVariableWithoutNotify(backupName, existingValue, "user");
-            SetVariableWithoutNotify(variable.Name, variable.Value, "user");
+            string scope = variable.Scope ?? "user";
+            string? existingValue = GetVariableValue(variable.Name, scope);
+            if (existingValue != null && GetVariableValue(backupName, scope) == null)
+                SetVariableWithoutNotify(backupName, existingValue, scope);
+            SetVariableWithoutNotify(variable.Name, variable.Value, scope);
         }
         BroadcastSettingChange();
     }
@@ -108,11 +114,12 @@ partial class Program
         foreach (var variable in GetEffectiveProfileVariables(profile))
         {
             string backupName = GetBackupVariableName(variable.Name, profile.Name);
-            DeleteVariableWithoutNotify(variable.Name, "user");
-            string? backupValue = GetVariableValue(backupName, "user");
+            string scope = variable.Scope ?? "user";
+            DeleteVariableWithoutNotify(variable.Name, scope);
+            string? backupValue = GetVariableValue(backupName, scope);
             if (backupValue == null) continue;
-            SetVariableWithoutNotify(variable.Name, backupValue, "user");
-            DeleteVariableWithoutNotify(backupName, "user");
+            SetVariableWithoutNotify(variable.Name, backupValue, scope);
+            DeleteVariableWithoutNotify(backupName, scope);
         }
         BroadcastSettingChange();
     }

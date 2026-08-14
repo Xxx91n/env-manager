@@ -524,6 +524,35 @@ static void AtomicWriteJson<T>(string path, T value)
         stack.Remove(profile.Name);
     }
 
+    // v0.9.15: Resolve PATH entries with per-entry scope preserved.
+    // Returns (path, scope) pairs index-aligned with PathEntries[i] / PathScopes[i].
+    // Missing PathScopes[i] defaults to "user" (backward compat with pre-v0.7.1 profiles).
+    static List<(string path, string scope)> ResolveProfilePathsWithScopes(ProfileData profile, List<ProfileData>? profiles = null)
+    {
+        profiles ??= LoadProfiles();
+        var result = new List<(string path, string scope)>();
+        ResolvePathsWithScopes(profile, profiles, new HashSet<string>(StringComparer.OrdinalIgnoreCase), result);
+        // Deduplicate by normalized path entry, keeping first occurrence (which carries the most specific scope).
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        return result.Where(p =>
+        {
+            string norm = NormalizePathEntry(p.path);
+            return seen.Add(norm);
+        }).ToList();
+    }
+
+    static void ResolvePathsWithScopes(ProfileData profile, List<ProfileData> profiles, HashSet<string> stack, List<(string path, string scope)> result)
+    {
+        if (!stack.Add(profile.Name)) throw new InvalidDataException("Profile inheritance cycle detected at " + profile.Name);
+        foreach (string parentName in profile.Inherits) ResolvePathsWithScopes(FindProfile(profiles, parentName) ?? throw new InvalidDataException("Inherited profile not found: " + parentName), profiles, stack, result);
+        for (int i = 0; i < profile.PathEntries.Count; i++)
+        {
+            string scope = i < profile.PathScopes.Count ? (profile.PathScopes[i] ?? "user") : "user";
+            result.Add((profile.PathEntries[i], scope));
+        }
+        stack.Remove(profile.Name);
+    }
+
     static int ProfilePreview(string name)
     {
         var profiles = LoadProfiles();
