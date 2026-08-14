@@ -1,4 +1,4 @@
-// Lightweight mode: destroy WebView window to minimize memory when idle.
+// Lightweight mode: hide WebView window to minimize memory when idle.
 // Reference: cc-switch src-tauri/src/lightweight.rs + clash-verge-rev lightweight.rs
 // State machine: Normal ↔ InLightweight, guarded by AtomicU8 CAS.
 
@@ -28,76 +28,51 @@ fn try_transition(from: u8, to: u8) -> bool {
         .is_ok()
 }
 
-/// Enter lightweight mode: destroy the main WebView window to free memory.
-/// The service process (if running) stays alive — this only destroys the GUI.
+/// Enter lightweight mode: hide the main WebView window to free memory.
+///
+/// We use `hide()` instead of `destroy()` because Tauri 2.x exits the
+/// process when all windows are destroyed — and the tray icon is bound
+/// to the process.  `hide()` on Windows suspends the WebView2 renderer
+/// (zero-pixel, not painted) and keeps the process alive with the tray.
+/// This matches the cc-switch / clash-verge-rev lightweight approach.
 pub fn enter_lightweight(app: &tauri::AppHandle) -> Result<(), String> {
     if !try_transition(STATE_NORMAL, STATE_LIGHTWEIGHT) {
         info!("[lightweight] already in lightweight mode, skipping");
         return Ok(());
     }
 
-    // Save window state before destroying (for future restore if needed)
     if let Some(window) = app.get_webview_window("main") {
+        let _ = window.hide();
         #[cfg(target_os = "windows")]
         {
             let _ = window.set_skip_taskbar(true);
         }
-        window
-            .destroy()
-            .map_err(|e| format!("destroy window failed: {e}"))?;
     }
 
     cancel_lightweight_timer();
-    info!("[lightweight] entered lightweight mode — window destroyed, service stays alive");
-    Ok(())
-}
+    info!("[lightweight] entered lightweight mode — window hidden, service stays alive");
+    Ok(())}
 
-/// Exit lightweight mode: rebuild the main WebView window from config.
+/// Exit lightweight mode: un-hide the main WebView window.
 pub fn exit_lightweight(app: &tauri::AppHandle) -> Result<(), String> {
     if !try_transition(STATE_LIGHTWEIGHT, STATE_NORMAL) {
         info!("[lightweight] not in lightweight mode, skipping exit");
         return Ok(());
     }
 
-    // If window still exists (edge case), just show it
     if let Some(window) = app.get_webview_window("main") {
-        let _ = window.unminimize();
-        let _ = window.show();
-        let _ = window.set_focus();
         #[cfg(target_os = "windows")]
         {
             let _ = window.set_skip_taskbar(false);
         }
-        info!("[lightweight] exited — window shown");
-        return Ok(());
-    }
-
-    // Rebuild window from config
-    let window_config = app
-        .config()
-        .app
-        .windows
-        .iter()
-        .find(|w| w.label == "main")
-        .ok_or("main window config not found")?;
-
-    let new_window = tauri::webview::WebviewWindowBuilder::from_config(app, window_config)
-        .map_err(|e| format!("rebuild window config failed: {e}"))?
-        .build()
-        .map_err(|e| format!("rebuild window build failed: {e}"))?;
-
-    let _ = new_window.unminimize();
-    let _ = new_window.show();
-    let _ = new_window.set_focus();
-    #[cfg(target_os = "windows")]
-    {
-        let _ = new_window.set_skip_taskbar(false);
+        let _ = window.unminimize();
+        let _ = window.show();
+        let _ = window.set_focus();
     }
 
     cancel_lightweight_timer();
-    info!("[lightweight] exited — window rebuilt from config");
-    Ok(())
-}
+    info!("[lightweight] exited — window shown");
+    Ok(())}
 
 /// Start the auto-lightweight countdown timer.
 /// After `timeout_minutes` the window is destroyed and the app enters
