@@ -963,9 +963,93 @@ fn cli_diagnostics(app: tauri::AppHandle) -> serde_json::Value {
     })
 }
 
+/// Startup service residual cleanup (Q4/Q8b).
+///
+/// Probes the background service named pipe. If the pipe is dead but a
+/// stale service PID was persisted (from a prior GUI session that crashed
+/// without graceful shutdown), taskkills the orphaned process to prevent
+/// zombie accumulation. This is the startup complement to
+/// `stop_service`'s graceful shutdown path — it handles the case where
+/// the GUI was force-killed and the service process leaked.
+fn cleanup_stale_service_on_startup() {
+    // Check if the background service pipe is alive.
+    let pipe_path = r"\\.\pipe\EnvManager.Background";
+    let pipe_alive = std::fs::OpenOptions::new()
+        .read(true)
+        .write(true)
+        .open(pipe_path)
+        .is_ok();
+
+    if pipe_alive {
+        info!("[startup] service pipe alive — no stale cleanup needed");
+        if let Ok(mut guard) = SERVICE_PID.write() {
+            *guard = None;
+        }
+        return;
+    }
+
+    // Pipe is dead — check if we have a stale PID to clean up.
+    let stale_pid = match SERVICE_PID.read() {
+        Ok(guard) => *guard,
+        Err(_) => None,
+    };
+
+    match stale_pid {
+        Some(pid) => {
+            warn!(
+                "[startup] service pipe dead and stale PID={} found — attempting taskkill",
+                pid
+            );
+            let output = std::process::Command::new("taskkill")
+                .args(&["/PID", &pid.to_string(), "/T", "/F"])
+                .creation_flags(0x08000000) // CREATE_NO_WINDOW
+                .output();
+            match output {
+                Ok(o) if o.status.code() == Some(0) => {
+                    warn!(
+                        "[startup] stale service pid={} force-killed (pipe was dead)",
+                        pid
+                    );
+                }
+                Ok(_) => {
+                    info!(
+                        "[startup] stale service pid={} already exited (no kill needed)",
+                        pid
+                    );
+                }
+                Err(e) => {
+                    warn!(
+                        "[startup] taskkill probe failed for stale pid={}: {}",
+                        pid, e
+                    );
+                }
+            }
+            if let Ok(mut guard) = SERVICE_PID.write() {
+                *guard = None;
+            }
+        }
+        None => {
+            info!("[startup] service pipe dead, no stale PID — clean state");
+        }
+    }
+}
+
 /// Restores the main window from tray: un-minimize, show, bring to front, and focus.
 /// Handles all hiding states: minimized, hidden to tray, or behind other windows.
 fn restore_window(app: &tauri::AppHandle) {
+    // Cancel any pending auto-lightweight timer — user is showing the window.
+    lightweight::cancel_lightweight_timer();
+
+    // If in lightweight mode (window destroyed), rebuild it first.
+    if lightweight::is_in_lightweight_mode() {
+        info!("[tray] restore_window: in lightweight mode, rebuilding window");
+        if let Err(e) = lightweight::exit_lightweight(app) {
+            warn!("[tray] restore_window: failed to exit lightweight mode: {}", e);
+        }
+        // exit_lightweight already shows/focuses the rebuilt window.
+        return;
+    }
+
     if let Some(window) = app.get_webview_window("main") {
         // First ensure the window is not skipped from taskbar
         // (it may have been hidden to tray which can set skip_taskbar)
@@ -1172,6 +1256,12 @@ std::mem::forget(_guard);
             // up when the GUI exits (even on task manager forced kill).
             job_object::init_job_object();
 
+            // Q4/Q8b: Startup service residual cleanup — probe the background
+            // service pipe. If the pipe is dead but a stale service PID was
+            // tracked (from a prior GUI session that crashed), taskkill the
+            // orphaned process to prevent zombie accumulation.
+            cleanup_stale_service_on_startup();
+
             Ok(())
         })
         .on_window_event(|window, event| {
@@ -1191,6 +1281,23 @@ std::mem::forget(_guard);
                         let _ = window.hide();
                     }
                     api.prevent_close();
+                    // Start auto-lightweight timer if enabled in settings.
+                    // The timer will destroy the WebView window after the
+                    // configured timeout to free memory while the service
+                    // stays alive.
+                    let app = window.app_handle();
+                    let config = get_lightweight_config();
+                    let enabled = config
+                        .get("enabled")
+                        .and_then(|v| v.as_bool())
+                        .unwrap_or(true);
+                    let timeout = config
+                        .get("timeoutMinutes")
+                        .and_then(|v| v.as_u64())
+                        .unwrap_or(10);
+                    if enabled && timeout > 0 {
+                        lightweight::start_lightweight_timer(app.clone(), timeout);
+                    }
                 }
                 _ => {}
             }

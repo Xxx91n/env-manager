@@ -102,7 +102,6 @@ pub fn exit_lightweight(app: &tauri::AppHandle) -> Result<(), String> {
 /// Start the auto-lightweight countdown timer.
 /// After `timeout_minutes` the window is destroyed and the app enters
 /// lightweight mode. The timer can be cancelled by user focus or activity.
-#[allow(dead_code)] // Wired in Phase 3 (auto-lightweight timer)
 pub fn start_lightweight_timer(app: tauri::AppHandle, timeout_minutes: u64) {
     if is_in_lightweight_mode() {
         return;
