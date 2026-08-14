@@ -13,6 +13,32 @@
   import InputDialog from './lib/components/InputDialog.svelte'
   import { variables, loading, error, activeView, modal, isWriteInProgress, debugLogs, refreshTrigger, toasts, dismissToast } from './lib/stores'
   import { preloadAdjacentPages,  listVariables, updateTrayLocale } from './lib/api'
+
+  // Lazy-loaded components (Phase 4: Svelte code splitting)
+  // Variables stays static (default tab, always needed on first load)
+  // The other 7 tabs load on-demand via dynamic import() with a cache Map
+  // to avoid re-importing on repeated tab switches.
+  const lazyComponentCache: Record<string, any> = {}
+  async function loadComponent<T>(key: string, importer: () => Promise<{ default: T }>): Promise<T> {
+    if (!lazyComponentCache[key]) {
+      lazyComponentCache[key] = await importer()
+    }
+    return lazyComponentCache[key].default
+  }
+  // Track which lazy component is currently loaded for each tab
+  let lazyProfile: any = null
+  let lazyPath: any = null
+  let lazyHistory: any = null
+  let lazyProtection: any = null
+  let lazyAudit: any = null
+  let lazyService: any = null
+
+  // Preload a component in the background (fire-and-forget)
+  function preloadComponent(key: string, importer: () => Promise<any>) {
+    if (!lazyComponentCache[key]) {
+      importer().then(mod => { lazyComponentCache[key] = mod }).catch(() => {})
+    }
+  }
   import { getSetting, frontendLog } from './lib/settingsStore'
  import { defaultLanguage, applyPersistedLocale } from './lib/i18n'
  
