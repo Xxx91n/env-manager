@@ -94,21 +94,34 @@ Run the cross-platform build after any code change:
 # From project root - build for host arch (default x64)
 node scripts/build.mjs --arch x64
 
-# Or via the legacy wrapper (Windows PowerShell only)
-node scripts/build.mjs --arch x64
+# Never use --skip-cli/--skip-gui/--skip-service after code changes (see below).
 ```
 
 Verify the output:
 - `release/portable/env-manager.exe` - GUI executable
 - `release/portable/env-manager-cli.exe` - CLI backend
 - `release/cli-only/env-manager-cli.exe` - standalone CLI
-- `release/Env-Manager_portable_X.Y.Z_x64.zip` - portable ZIP
-- `release/Env-Manager_cli-only_X.Y.Z_x64.zip` - CLI-only ZIP
+- `release/portable/Env-Manager_portable_X.Y.Z_x64.zip` - portable ZIP
+- `release/cli-only/Env-Manager_cli-only_X.Y.Z_x64.zip` - CLI-only ZIP
 - `release/msi/Env Manager_X.Y.Z_x64.msi` - MSI installer (no locale suffix, Windows only)
 
 A commit that does not produce working `release/` artifacts is considered incomplete. The `release/` directory is gitignored - artifacts are for local testing only, not committed to git.
 
 Before building, stop any running instances: `Get-Process -Name 'env-manager*' -ErrorAction SilentlyContinue | Stop-Process -Force`.
+
+### Compile-Before-Package Enforcement (Hard Boundary)
+
+The build orchestrator (`scripts/build.mjs`) enforces a strict compile-then-package sequence:
+
+1. **Step 1**: `dotnet build -c Release -r <RID>` compiles the C# CLI, then verifies the deployed `env-manager-cli.exe` version matches `env-manager.csproj` `<Version>`. A mismatch (stale binary) throws `CLI version mismatch` and aborts the build before any packaging occurs.
+2. **Step 2**: `npm run build` + `tauri build` compiles the Tauri GUI (Rust + Svelte frontend).
+3. **Step 2b**: `cargo build` compiles the `env-manager-service` Rust binary.
+4. **Step 3-4**: Assembles portable/cli-only staging dirs from the freshly compiled output, builds MSI via WiX.
+5. **Step 5**: Creates ZIP archives from the staging dirs.
+
+**The `--skip-cli`, `--skip-gui`, and `--skip-service` flags are for incremental packaging ONLY** — for example, re-running the MSI build after a WiX template change without touching CLI/GUI code. If any source file (`*.cs`, `*.rs`, `*.svelte`, `*.ts`, `*.css`) changed since the last successful `build.mjs` run, ALL compile steps must run. Using skip flags to bypass compilation after a code change produces stale binaries in `release/` and is a hard boundary violation.
+
+The CLI version verification guard (AGENTS.md hard boundary v0.7.15) is the automated backstop: if a stale `bin/Release/net10.0-windows/env-manager-cli.exe` is detected (version mismatch against csproj), `build.mjs` throws and aborts before any packaging occurs. This prevents the incident where the deployed CLI was a months-old v0.3.0 artifact while the GUI showed "Unknown command: history/protection/path/profile" for every page.
 
 ### Live CLI smoke test with registry backup/restore
 
