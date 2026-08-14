@@ -437,6 +437,7 @@
     "unapplyToEdit": "Profil erst deaktivieren bevor Variablen hinzugefügt oder bearbeitet werden"
   },
   "profiles.inheritsFrom": "geerbt von",
+  "profiles.fromProfile": "von",
   "secrets.policy.createdOnly": "Nur bei Erstellung",
   "secrets.policy.onDemand": "Auf Abruf",
   "secrets.policy.periodic": "Periodisch"

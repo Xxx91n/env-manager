@@ -437,6 +437,7 @@
     "unapplyToEdit": "Сначала отключите профиль перед добавлением или редактированием переменных"
   },
   "profiles.inheritsFrom": "унаследовано от",
+  "profiles.fromProfile": "из",
   "secrets.policy.createdOnly": "Только при создании",
   "secrets.policy.onDemand": "По запросу",
   "secrets.policy.periodic": "Периодически"

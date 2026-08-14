@@ -4,7 +4,7 @@
   
   import { t } from 'svelte-i18n'
   import CloneCombobox from './CloneCombobox.svelte'
-  import { profiles, showModal, refreshTrigger, openInputDialog } from '../stores'
+  import { profiles, showModal, refreshTrigger, openInputDialog, pathProfileIndex } from '../stores'
   import { showToast } from '../stores'
   import { frontendLog } from '../settingsStore'
   import {
@@ -137,6 +137,17 @@
       if (requestEpoch !== profileRefreshEpoch) return
       profileList = applyStored(nextProfiles)
       profiles.set(profileList)
+      // Build reverse index: normalized path -> contributing profile names
+      const idx = new Map<string, string[]>()
+      for (const p of profileList) {
+        for (const pe of (p.pathEntries ?? [])) {
+          const norm = pe.toLowerCase().replace(/\\+$/, "")
+          const arr = idx.get(norm) ?? []
+          arr.push(p.name)
+          idx.set(norm, arr)
+        }
+      }
+      pathProfileIndex.set(idx)
       allVars = nextVariables
       // Build a searchable pool of existing PATH entries for the add-path
       // CloneCombobox. Deduplicate by path so entries appearing in both
@@ -830,29 +841,17 @@
                 <div>
                   <div class="text-[10px] font-medium text-gray-500 mb-1">{$t('profiles.pathEntries')}</div>
                   <div class="space-y-1 mb-1">
-                    {#if profile.resolvedPaths}
-                      {#each profile.resolvedPaths ?? [] as rp (rp.path)}
-                        <div class="flex items-center gap-1 text-[10px] font-mono">
-                          <span class="truncate flex-1" title={rp.path}>{rp.path}</span>
-                          {#if rp.scope === "system"}
-                            <span class="text-[9px] px-1 rounded-full bg-orange-100 text-orange-800 dark:bg-orange-900/40 dark:text-orange-300">{$t("scope.system")}</span>
-                          {:else}
-                            <span class="text-[9px] px-1 rounded-full bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300">{$t("scope.user")}</span>
-                          {/if}
-                          {#if rp.sourceProfile && rp.sourceProfile !== profile.name}
-                            <span class="text-[9px] text-gray-400 dark:text-gray-500" title={rp.sourceProfile}>{$t("profiles.inheritsFrom")} {rp.sourceProfile}</span>
-                          {/if}
-                          <button on:click={() => handleRemovePath(rp.path)} disabled={profile.isEnabled} class="text-red-500 disabled:opacity-30" aria-label={$t("buttons.delete")}>×</button>
-                        </div>
-                      {/each}
-                    {:else}
-                      {#each profile.pathEntries ?? [] as path (path)}
-                        <div class="flex items-center gap-1 text-[10px] font-mono">
-                          <span class="truncate flex-1" title={path}>{path}</span>
-                          <button on:click={() => handleRemovePath(path)} disabled={profile.isEnabled} class="text-red-500 disabled:opacity-30" aria-label={$t("buttons.delete")}>×</button>
-                        </div>
-                      {/each}
-                    {/if}
+                     {#each profile.pathEntries ?? [] as path, i (path)}
+                       <div class="flex items-center gap-1 text-[10px] font-mono">
+                         <span class="truncate flex-1" title={path}>{path}</span>
+                         {#if (profile.pathScopes?.[i] ?? 'user') === 'system'}
+                           <span class="text-[9px] px-1 rounded-full bg-orange-100 text-orange-800 dark:bg-orange-900/40 dark:text-orange-300">{$t('scope.system')}</span>
+                         {:else}
+                           <span class="text-[9px] px-1 rounded-full bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300">{$t('scope.user')}</span>
+                         {/if}
+                         <button on:click={() => handleRemovePath(path)} disabled={profile.isEnabled} class="text-red-500 disabled:opacity-30" aria-label={$t('buttons.delete')}>×</button>
+                       </div>
+                     {/each}
                   </div>
                  <div class="flex gap-1 items-center">
                    <select bind:value={newPathScope} disabled={profile.isEnabled} class="px-1.5 py-1 text-[10px] border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100">

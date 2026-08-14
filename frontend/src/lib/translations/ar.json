@@ -437,6 +437,7 @@
     "unapplyToEdit": "قم بإلغاء تطبيق الملف الشخصي قبل إضافة أو تعديل المتغيرات"
   },
   "profiles.inheritsFrom": "موروث من",
+  "profiles.fromProfile": "من",
   "secrets.policy.createdOnly": "عند الإنشاء فقط",
   "secrets.policy.onDemand": "عند الطلب",
   "secrets.policy.periodic": "دوري"

@@ -437,6 +437,7 @@
     "unapplyToEdit": "Desaplique el perfil antes de añadir o editar variables"
   },
   "profiles.inheritsFrom": "heredado de",
+  "profiles.fromProfile": "de",
   "secrets.policy.createdOnly": "Solo al crear",
   "secrets.policy.onDemand": "Bajo demanda",
   "secrets.policy.periodic": "Periódico"

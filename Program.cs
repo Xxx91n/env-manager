@@ -3218,10 +3218,10 @@ partial class Program
             "health" => $"{{\"method\":\"health\",\"request_id\":\"{EscapeJsonLocal(reqId)}\"}}",
             "refresh" => args.Length < 3
                 ? $"{{\"error\":\"refresh requires mountId\"}}"
-                : $"{{\"method\":\"refresh\",\"mountId\":\"{EscapeJsonLocal(args[2])}\",\"request_id\":\"{EscapeJsonLocal(reqId)}\"}}",
+                : $"{{\"method\":\"refresh\",\"mount_id\":\"{EscapeJsonLocal(args[2])}\",\"request_id\":\"{EscapeJsonLocal(reqId)}\"}}",
             "rotate" => args.Length < 3
                 ? $"{{\"error\":\"rotate requires mountId\"}}"
-                : $"{{\"method\":\"rotate\",\"mountId\":\"{EscapeJsonLocal(args[2])}\",\"request_id\":\"{EscapeJsonLocal(reqId)}\"}}",
+                : $"{{\"method\":\"rotate\",\"mount_id\":\"{EscapeJsonLocal(args[2])}\",\"request_id\":\"{EscapeJsonLocal(reqId)}\"}}",
             "reload" => $"{{\"method\":\"reload\",\"request_id\":\"{EscapeJsonLocal(reqId)}\"}}",
             "shutdown" => $"{{\"method\":\"shutdown\",\"request_id\":\"{EscapeJsonLocal(reqId)}\"}}",
             "ping" => "{\"method\":\"ping\"}",

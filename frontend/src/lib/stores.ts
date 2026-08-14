@@ -122,6 +122,7 @@ export const filteredVariables = derived(
   },
 )
 export const profiles = writable<ProfileData[]>([])
+export const pathProfileIndex = writable<Map<string, string[]>>(new Map())
 export const activeView = writable<'variables' | 'profiles' | 'path' | 'history' | 'protection' | 'service' | 'audit'>('variables')
 export const modal = writable<ModalConfig | null>(null)
 export const debugLogs = writable<DebugLogEntry[]>([])

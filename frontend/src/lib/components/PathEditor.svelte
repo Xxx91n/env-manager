@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte'
   import { frontendLog } from '../settingsStore'
+  import { pathProfileIndex } from '../stores'
   import { t } from 'svelte-i18n'
   import { showModal, isWriteInProgress, refreshTrigger } from '../stores'
   import { showToast } from '../stores'
@@ -20,6 +21,9 @@
   import type { PathHealthEntry } from '../api'
 
  let entries: PathEntry[] = []
+  // v0.9.17: reverse index from ProfilePage — normalized path -> profile names
+  let pathIdx: Map<string, string[]> = new Map()
+  $: if (pathProfileIndex) { pathIdx = $pathProfileIndex }
  let scope: 'user' | 'system' = 'user'
  let loading = false
  let actionLoading = false
@@ -626,6 +630,7 @@
                       {/if}
                     {/if}
                     {#if entry.expandedPath !== entry.path}<span class="font-mono text-gray-400 truncate max-w-xs" title={entry.expandedPath}>{entry.expandedPath}</span>{/if}
+                     {#if pathIdx.has(entry.path.toLowerCase().replace(/\\+$/, ""))}<span class="text-[9px] text-blue-500 dark:text-blue-400" title={pathIdx.get(entry.path.toLowerCase().replace(/\\+$/, ""))?.join(', ')}>{$t('profiles.fromProfile')} {pathIdx.get(entry.path.toLowerCase().replace(/\\+$/, ""))?.join(', ')}</span>{/if}
                   </div>
                 {/if}
               </td>
