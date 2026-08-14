@@ -16,7 +16,7 @@
 import { execSync, spawnSync } from 'node:child_process'
 import {
   existsSync, rmSync, mkdirSync, readdirSync, copyFileSync,
-  createWriteStream, readFileSync
+  createWriteStream, readFileSync, utimesSync
 } from 'node:fs'
 import { resolve, join, dirname, basename } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -160,7 +160,7 @@ function makeZip(sourceDir, zipPath) {
   if (existsSync(zipPath)) rmSync(zipPath, { force: true })
   return new Promise((resolveP, reject) => {
     const output = createWriteStream(zipPath)
-    const archive = archiver('zip', { zlib: { level: 6 } })
+    const archive = archiver('zip', { zlib: { level: 6 }, forceLocalTime: true })
     output.on('close', () => {
       console.log('[build] ZIP created: ' + zipPath + ' (' + archive.pointer() + ' bytes)')
       resolveP()
@@ -172,10 +172,18 @@ function makeZip(sourceDir, zipPath) {
       if (entry.name.endsWith('.zip')) continue
       const fullPath = join(sourceDir, entry.name)
       if (entry.isDirectory()) archive.directory(fullPath, entry.name)
-      else archive.file(fullPath, { name: entry.name })
+      else archive.file(fullPath, { name: entry.name, date: new Date() })
     }
     archive.finalize()
   })
+}
+
+/// Touch a file's mtime to "now" so ZIP entries and staging dirs reflect build time,
+/// not the stale cargo/dotnet output timestamp. This prevents "is this the latest build?"
+/// confusion when comparing timestamps across rebuilds.
+function touchFileSync(p) {
+  const now = Date.now() / 1000;
+  try { utimesSync(p, now, now); } catch {}
 }
 
 // --- Per-arch build function ---
@@ -259,12 +267,14 @@ async function buildArch(targetArch) {
   // --- Step 3: Assemble portable package (staging dir) ---
   console.log('[build] Step 3: Assemble portable package -> ' + archPortableDir)
   copyFileSync(guiExe, join(archPortableDir, 'env-manager.exe'))
+  touchFileSync(join(archPortableDir, 'env-manager.exe'))
   for (const f of readdirSync(cliDir)) {
     if (f.endsWith('.exe') || f.endsWith('.dll') || f.endsWith('.json')) {
       copyFileSync(join(cliDir, f), join(archPortableDir, f))
+      touchFileSync(join(archPortableDir, f))
     }
   }
-  if (serviceExe) copyFileSync(serviceExe, join(archPortableDir, 'env-manager-service.exe'))
+  if (serviceExe) { copyFileSync(serviceExe, join(archPortableDir, 'env-manager-service.exe')); touchFileSync(join(archPortableDir, 'env-manager-service.exe')); }
   const agentsMd = join(projectRoot, 'AGENTS.cli.md')
   if (existsSync(agentsMd)) copyFileSync(agentsMd, join(archPortableDir, 'AGENTS.cli.md'))
   const guiDir2 = dirname(guiExe)
@@ -275,9 +285,10 @@ async function buildArch(targetArch) {
   for (const f of readdirSync(cliDir)) {
     if (f.endsWith('.exe') || f.endsWith('.dll') || f.endsWith('.json')) {
       copyFileSync(join(cliDir, f), join(archCliOnlyDir, f))
+      touchFileSync(join(archCliOnlyDir, f))
     }
   }
-  if (serviceExe) copyFileSync(serviceExe, join(archCliOnlyDir, 'env-manager-service.exe'))
+  if (serviceExe) { copyFileSync(serviceExe, join(archCliOnlyDir, 'env-manager-service.exe')); touchFileSync(join(archCliOnlyDir, 'env-manager-service.exe')); }
   if (existsSync(agentsMd)) copyFileSync(agentsMd, join(archCliOnlyDir, 'AGENTS.cli.md'))
   // --- Step 4: Build MSI installer ---
   if (!skipMsi && process.platform === 'win32') {
