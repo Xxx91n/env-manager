@@ -226,7 +226,7 @@ export async function updateTrayLocale(
 // Used by secondary surfaces (e.g. ProtectionPage) to avoid duplicate CLI calls.
 // TTL-based: cached data expires after 5 seconds so secondary pages see fresh
 // data without hammering the CLI on every page switch.
-const VARIABLES_CACHE_TTL_MS = 5000
+const VARIABLES_CACHE_TTL_MS = 15000
 const MAX_CACHE_ENTRIES = 4
 let lastVariablesRaw: EnvVariable[] = []
 let lastVariablesCacheTime = 0
@@ -236,14 +236,14 @@ let dataGeneration = 0
 
 // PATH entries cache uses bounded single-flight reads. A generation prevents an
 // old in-flight read from repopulating cache after a successful mutation.
-const PATH_CACHE_TTL_MS = 5000
+const PATH_CACHE_TTL_MS = 15000
 const pathEntriesCache: Map<string, { data: PathEntry[]; time: number; generation: number }> = new Map()
 const pathReadsInFlight = new Map<string, { generation: number; promise: Promise<PathEntry[]> }>()
 
 // History audit cache mirrors the variables cache shape: bounded TTL + single-flight
 // reads so secondary pages (History, profile audit replay) don't re-shell the CLI
 // on every tab switch. Invalidated by invalidateApiCache() on any write.
-const HISTORY_CACHE_TTL_MS = 5000
+const HISTORY_CACHE_TTL_MS = 15000
 let historyCacheData: AuditEntry[] = []
 let lastHistoryCacheTime = 0
 let historyReadInFlight: Promise<AuditEntry[]> | null = null
@@ -251,28 +251,41 @@ let historyReadInFlight: Promise<AuditEntry[]> | null = null
 // Protection page cache: same pattern. ListProtection runs a read-only CLI command
 // whose output rarely changes between renders; cache it for the TTL window and
 // invalidate on any write (protect/unprotect, add/remove protected path, etc.).
-const PROTECTION_CACHE_TTL_MS = 5000
+const PROTECTION_CACHE_TTL_MS = 15000
 let protectionCacheData: ProtectionData | null = null
 let lastProtectionCacheTime = 0
 let protectionReadInFlight: Promise<ProtectionData> | null = null
+
+
+// Profiles cache: listProfiles was previously un-cached, causing a CLI spawn
+// on every tab switch to the profiles page. SWR pattern: return stale data
+// immediately, refresh in background.
+const PROFILES_CACHE_TTL_MS = 15000
+let profilesCacheData: ProfileData[] = []
+let lastProfilesCacheTime = 0
+let profilesReadInFlight: Promise<ProfileData[]> | null = null
 
 /**
  * Invalidate all cached data. Called after any write operation to ensure
  * secondary pages see fresh data on their next read.
  */
 export function invalidateApiCache(): void {
-  lastVariablesCacheTime = 0
+  // v0.9.19: SWR — mark caches as stale (set time to 0) but DON'T clear data.
+  // Next read returns stale data immediately + kicks off background refresh.
   dataGeneration += 1
   variablesRequestEpoch += 1
-  pathEntriesCache.clear()
-  // Secondary-page caches are also dropped so the next read after a write sees
-  // fresh data instead of a stale TTL snapshot.
-  historyCacheData = []
+  lastVariablesCacheTime = 0
+  // Path cache: scope-keyed, set time to 0 per entry (keep data for SWR)
+  for (const [, entry] of pathEntriesCache) {
+    entry.time = 0
+  }
   lastHistoryCacheTime = 0
   historyReadInFlight = null
-  protectionCacheData = null
   lastProtectionCacheTime = 0
   protectionReadInFlight = null
+  // Profiles cache: same SWR pattern
+  lastProfilesCacheTime = 0
+  profilesReadInFlight = null
 }
 
 /**
@@ -284,10 +297,31 @@ export function invalidateApiCache(): void {
 export async function listVariablesRaw(force = false): Promise<EnvVariable[]> {
   const now = Date.now()
   const generation = dataGeneration
-  const cacheFresh = !force
-    && lastVariablesRaw.length > 0
-    && (now - lastVariablesCacheTime) < VARIABLES_CACHE_TTL_MS
+  const cacheExists = lastVariablesRaw.length > 0
+  const cacheFresh = !force && cacheExists && (now - lastVariablesCacheTime) < VARIABLES_CACHE_TTL_MS
   if (cacheFresh) return lastVariablesRaw
+
+  // SWR: if stale cache exists, return it immediately and refresh in background
+  if (!force && cacheExists && variablesReadInFlight?.generation !== generation) {
+    // kick off background refresh
+    const requestEpoch = ++variablesRequestEpoch
+    const refreshPromise = runRead('list')
+      .then((output) => JSON.parse(output) as EnvVariable[])
+      .then((parsed) => {
+        if (generation === dataGeneration && requestEpoch === variablesRequestEpoch) {
+          lastVariablesRaw = parsed
+          lastVariablesCacheTime = Date.now()
+        }
+        return parsed
+      })
+      .finally(() => {
+        if (variablesReadInFlight?.promise === refreshPromise) variablesReadInFlight = null
+      })
+    variablesReadInFlight = { generation, promise: refreshPromise }
+    return lastVariablesRaw // return stale data immediately
+  }
+
+  // No cache at all: must block on first fetch
   if (variablesReadInFlight?.generation === generation) return variablesReadInFlight.promise
 
   const requestEpoch = ++variablesRequestEpoch
@@ -462,10 +496,40 @@ export async function restoreBackup(
 
 // --- Profile API ---
 
-export async function listProfiles(): Promise<ProfileData[]> {
+export async function listProfiles(force = false): Promise<ProfileData[]> {
+  const now = Date.now()
+  const cacheExists = profilesCacheData.length > 0
+  const cacheFresh = !force && cacheExists && (now - lastProfilesCacheTime) < PROFILES_CACHE_TTL_MS
+  if (cacheFresh) return profilesCacheData
+
+  // SWR: return stale data immediately, refresh in background
+  if (!force && cacheExists && !profilesReadInFlight) {
+    const refreshPromise = (async () => {
+      try {
+        const output = await runRead('profile', ['list'])
+        const data = JSON.parse(output) as ProfileData[]
+        profilesCacheData = data
+        lastProfilesCacheTime = Date.now()
+        return data
+      } catch (err) {
+        error.set(err instanceof Error ? err.message : 'Failed to list profiles')
+        return profilesCacheData
+      } finally {
+        profilesReadInFlight = null
+      }
+    })()
+    profilesReadInFlight = refreshPromise
+    return profilesCacheData // return stale immediately
+  }
+
+  // No cache: block on first fetch
+  if (profilesReadInFlight) return profilesReadInFlight
   try {
     const output = await runRead('profile', ['list'])
-    return JSON.parse(output) as ProfileData[]
+    const data = JSON.parse(output) as ProfileData[]
+    profilesCacheData = data
+    lastProfilesCacheTime = Date.now()
+    return data
   } catch (err) {
     error.set(err instanceof Error ? err.message : 'Failed to list profiles')
     return []
@@ -773,9 +837,31 @@ export async function expandVariableValue(value: string): Promise<string> {
 
 export async function listHistory(limit = 200, force: boolean = false): Promise<AuditEntry[]> {
   const now = Date.now()
-  if (!force && historyCacheData.length > 0 && (now - lastHistoryCacheTime) < HISTORY_CACHE_TTL_MS) {
-    return historyCacheData
+  const cacheExists = historyCacheData.length > 0
+  const cacheFresh = !force && cacheExists && (now - lastHistoryCacheTime) < HISTORY_CACHE_TTL_MS
+  if (cacheFresh) return historyCacheData
+
+  // SWR: return stale data immediately, refresh in background
+  if (!force && cacheExists && !historyReadInFlight) {
+    const refreshPromise = (async () => {
+      try {
+        const output = await runRead('history', ['list', '--limit', String(limit)])
+        const data = JSON.parse(output) as AuditEntry[]
+        historyCacheData = data
+        lastHistoryCacheTime = Date.now()
+        return data
+      } catch (err) {
+        error.set(err instanceof Error ? err.message : 'Failed to load history')
+        return historyCacheData
+      } finally {
+        historyReadInFlight = null
+      }
+    })()
+    historyReadInFlight = refreshPromise
+    return historyCacheData // return stale immediately
   }
+
+  // No cache: block on first fetch
   if (historyReadInFlight) return historyReadInFlight as Promise<AuditEntry[]>
   const promise = (async () => {
     try {
@@ -1030,9 +1116,29 @@ export interface ProtectionData {
 
 export async function listProtection(force: boolean = false): Promise<ProtectionData> {
   const now = Date.now()
-  if (!force && protectionCacheData && (now - lastProtectionCacheTime) < PROTECTION_CACHE_TTL_MS) {
-    return protectionCacheData
+  const cacheExists = protectionCacheData !== null
+  const cacheFresh = !force && cacheExists && (now - lastProtectionCacheTime) < PROTECTION_CACHE_TTL_MS
+  if (cacheFresh) return protectionCacheData!
+
+  // SWR: return stale data immediately, refresh in background
+  if (!force && cacheExists && !protectionReadInFlight) {
+    const refreshPromise = (async () => {
+      try {
+        const output = await runRead('protection', ['list'])
+        const data = JSON.parse(output) as ProtectionData
+        protectionCacheData = data
+        lastProtectionCacheTime = Date.now()
+        return data
+      } catch (err) {
+        return protectionCacheData!
+      } finally {
+        protectionReadInFlight = null
+      }
+    })()
+    protectionReadInFlight = refreshPromise
+    return protectionCacheData! // return stale immediately
   }
+
   if (protectionReadInFlight) return protectionReadInFlight
   const promise = (async () => {
     try {
@@ -1394,4 +1500,22 @@ export async function importState(inputFile: string, dryRun: boolean = false): P
   if (dryRun) args.push('--dry-run')
   const output = await runWrite('import-state', args)
   return JSON.parse(output)
+}
+
+/**
+ * v0.9.19: Preload adjacent page data in background.
+ * Called on idle/tab switch to warm caches before user navigates.
+ * Silent: catches all errors, never throws.
+ */
+export async function preloadAdjacentPages(): Promise<void> {
+  try {
+    // Fire and forget — these populate the SWR cache
+    await Promise.allSettled([
+      listPathEntries('user', true),
+      listPathEntries('system', true),
+      listProtection(true),
+    ])
+  } catch {
+    // swallow — preload is best-effort
+  }
 }

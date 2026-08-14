@@ -12,7 +12,7 @@
   import ConfirmDialog from './lib/components/ConfirmDialog.svelte'
   import InputDialog from './lib/components/InputDialog.svelte'
   import { variables, loading, error, activeView, modal, isWriteInProgress, debugLogs, refreshTrigger, toasts, dismissToast } from './lib/stores'
-  import { listVariables, updateTrayLocale } from './lib/api'
+  import { preloadAdjacentPages,  listVariables, updateTrayLocale } from './lib/api'
   import { getSetting, frontendLog } from './lib/settingsStore'
  import { defaultLanguage, applyPersistedLocale } from './lib/i18n'
  
@@ -170,6 +170,8 @@
 
     try {
       await listVariables()
+      // v0.9.19: Preload adjacent page data in background for instant tab switch
+      void preloadAdjacentPages()
     } catch (err) {
       initError = err instanceof Error ? err.message : String(err)
     }

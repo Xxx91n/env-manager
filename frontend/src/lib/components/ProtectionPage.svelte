@@ -32,23 +32,18 @@
   async function refresh() {
     loading = true
     try {
-      data = await listProtection()
-      // Per-call timeout helper: a single slow call (e.g. HKLM access denied,
-      // or a UNC PATH entry stalling Directory.Exists) must not block the whole
-      // page. We race the call against a 4500ms timeout and treat a timeout as
-      // an empty result so the UI renders the rest.
+      // v0.9.19: All 4 IPC calls launched concurrently (SWR makes listProtection instant on cache hit)
       const withTimeout = (p, ms) => Promise.race([
         p,
         new Promise((_, reject) => setTimeout(() => reject(new Error("timeout")), ms)),
       ]).catch(() => null)
-      const varsP = withTimeout(listVariablesRaw(), 4500)
-      const userPathsP = withTimeout(listPathEntries("user"), 4500)
-      const systemPathsP = withTimeout(listPathEntries("system"), 4500)
-      const [varsResult, userPaths, systemPaths] = await Promise.all([
-        varsP,
-        userPathsP,
-        systemPathsP,
+      const [protectionResult, varsResult, userPaths, systemPaths] = await Promise.all([
+        withTimeout(listProtection(), 4500),
+        withTimeout(listVariablesRaw(), 4500),
+        withTimeout(listPathEntries("user"), 4500),
+        withTimeout(listPathEntries("system"), 4500),
       ])
+      data = protectionResult
       if (varsResult) {
         allVars = varsResult
           .filter(v => !data!.protectedVars.builtIn.includes(v.name) && !data!.protectedVars.custom.includes(v.name))
