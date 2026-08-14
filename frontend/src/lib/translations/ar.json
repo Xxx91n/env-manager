@@ -435,5 +435,9 @@
   "service.description": "إدارة خدمة تحميل الأسرار في الخلفية لتدوير الرموز بشكل دوري",
   "profiles": {
     "unapplyToEdit": "قم بإلغاء تطبيق الملف الشخصي قبل إضافة أو تعديل المتغيرات"
-  }
+  },
+  "profiles.inheritsFrom": "موروث من",
+  "secrets.policy.createdOnly": "عند الإنشاء فقط",
+  "secrets.policy.onDemand": "عند الطلب",
+  "secrets.policy.periodic": "دوري"
 }

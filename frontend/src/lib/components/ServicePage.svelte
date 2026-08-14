@@ -8,6 +8,18 @@
   } from '../api'
   import { showToast } from '../stores'
   import { frontendLog } from '../settingsStore'
+  function localizeProvider(provider: string, t: (k: string) => string): string {
+    const map: Record<string, string> = { 'dpapi-current-user': 'secrets.providerDpapi', 'credential-manager': 'secrets.providerCredMan', 'powershell-secretmanagement': 'secrets.providerPsm', 'vault-kv2': 'secrets.providerVault', 'sops': 'secrets.providerSops', 'azure-keyvault': 'secrets.providerAzure', '1password': 'secrets.provider1Password', 'aws-secretsmanager': 'secrets.providerAws' };
+    const key = map[provider] || provider;
+    const translated = t(key);
+    return translated === key ? provider : translated;
+  }
+  function localizeRefreshPolicy(policy: string, t: (k: string) => string): string {
+    const map: Record<string, string> = { 'CreatedOnly': 'secrets.policy.createdOnly', 'OnDemand': 'secrets.policy.onDemand', 'Periodic': 'secrets.policy.periodic' };
+    const key = map[policy] || policy;
+    const translated = t(key);
+    return translated === key ? policy : translated;
+  }
 
   const tStore = t
 
@@ -73,7 +85,7 @@
     serviceError = null
     try {
       await serviceStop()
-      showToast(getStore(tStore)('settings.service.shutdown'), 'success')
+      showToast(getStore(tStore)('settings.service.stopped'), 'info')
       await refreshServiceStatus()
      } catch (err) { serviceError = err instanceof Error ? err.message : String(err); void frontendLog('error', '[ServicePage] ' + (err instanceof Error ? err.message : String(err))).catch(() => {}) }
     finally { serviceLoading = false }
@@ -165,10 +177,10 @@
       <div class="mt-2 space-y-1 max-h-40 overflow-y-auto">
         {#each serviceHealthData.mounts as mount}
           <div class="flex items-center gap-2 text-xs px-2 py-1 rounded bg-gray-50 dark:bg-gray-800">
-            <span class="font-mono">{mount.provider}</span>
+            <span class="font-mono" title={mount.provider}>{localizeProvider(mount.provider, $t)}</span>
             <span class="text-gray-500">{mount.name}</span>
             <span class="px-1 rounded {mount.healthy ? 'text-green-600' : 'text-red-600'}">{mount.healthy ? $t('settings.service.healthy') : $t('settings.service.unhealthy')}</span>
-            <span class="text-gray-400">{mount.refreshPolicy}</span>
+            <span class="text-gray-400" title={mount.refreshPolicy}>{localizeRefreshPolicy(mount.refreshPolicy, $t)}</span>
             {#if mount.lastFetchedAt}
               <span class="text-gray-400 ml-auto">{mount.lastFetchedAt}</span>
             {/if}

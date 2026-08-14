@@ -435,5 +435,9 @@
   "service.description": "Управление фоновой службой монтирования секретов для периодической ротации токенов",
   "profiles": {
     "unapplyToEdit": "Сначала отключите профиль перед добавлением или редактированием переменных"
-  }
+  },
+  "profiles.inheritsFrom": "унаследовано от",
+  "secrets.policy.createdOnly": "Только при создании",
+  "secrets.policy.onDemand": "По запросу",
+  "secrets.policy.periodic": "Периодически"
 }

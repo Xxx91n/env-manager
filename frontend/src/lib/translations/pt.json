@@ -435,5 +435,9 @@
   "service.description": "Gerenciar o servico em segundo plano para rotacao periodica de segredos",
   "profiles": {
     "unapplyToEdit": "Desaplique o perfil antes de adicionar ou editar variáveis"
-  }
+  },
+  "profiles.inheritsFrom": "herdado de",
+  "secrets.policy.createdOnly": "Apenas na criação",
+  "secrets.policy.onDemand": "Sob demanda",
+  "secrets.policy.periodic": "Periódico"
 }

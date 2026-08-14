@@ -435,5 +435,9 @@
   "service.description": "定期トークン更新のためのバックグラウンドシークレットマウントサービスを管理",
   "profiles": {
     "unapplyToEdit": "プロファイルを適用解除してから変数を追加・編集してください"
-  }
+  },
+  "profiles.inheritsFrom": "継承元",
+  "secrets.policy.createdOnly": "作成時のみ",
+  "secrets.policy.onDemand": "オンデマンド",
+  "secrets.policy.periodic": "定期"
 }

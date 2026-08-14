@@ -553,6 +553,57 @@ static void AtomicWriteJson<T>(string path, T value)
         stack.Remove(profile.Name);
     }
 
+    // v0.9.16: Resolve PATH entries with per-entry scope AND source profile name preserved.
+    // Returns (path, scope, sourceProfile) tuples tracking which profile contributed each entry.
+    // Inherits chain walked depth-first; parent entries appear before child entries (same order as ResolveProfilePathsWithScopes).
+    static List<(string path, string scope, string sourceProfile)> ResolveProfilePathsWithSource(ProfileData profile, List<ProfileData>? profiles = null)
+    {
+        profiles ??= LoadProfiles();
+        var result = new List<(string path, string scope, string sourceProfile)>();
+        ResolvePathsWithSource(profile, profiles, new HashSet<string>(StringComparer.OrdinalIgnoreCase), result);
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        return result.Where(p =>
+        {
+            string norm = NormalizePathEntry(p.path);
+            return seen.Add(norm);
+        }).ToList();
+    }
+
+    static void ResolvePathsWithSource(ProfileData profile, List<ProfileData> profiles, HashSet<string> stack, List<(string path, string scope, string sourceProfile)> result)
+    {
+        if (!stack.Add(profile.Name)) throw new InvalidDataException("Profile inheritance cycle detected at " + profile.Name);
+        foreach (string parentName in profile.Inherits) ResolvePathsWithSource(FindProfile(profiles, parentName) ?? throw new InvalidDataException("Inherited profile not found: " + parentName), profiles, stack, result);
+        for (int i = 0; i < profile.PathEntries.Count; i++)
+        {
+            string scope = i < profile.PathScopes.Count ? (profile.PathScopes[i] ?? "user") : "user";
+            result.Add((profile.PathEntries[i], scope, profile.Name));
+        }
+        stack.Remove(profile.Name);
+    }
+
+    // v0.9.16: Resolve variables with source profile name preserved.
+    // Returns ProfileVariable list with Scope + SourceProfile fields populated.
+    // Child variables override parent variables by name (same semantics as ResolveProfileVariables).
+    static List<ProfileVariable> ResolveProfileVariablesWithSource(ProfileData profile, List<ProfileData>? profiles = null)
+    {
+        profiles ??= LoadProfiles();
+        var result = new Dictionary<string, ProfileVariable>(StringComparer.OrdinalIgnoreCase);
+        ResolveProfileWithSource(profile, profiles, new HashSet<string>(StringComparer.OrdinalIgnoreCase), result);
+        return result.Values.ToList();
+    }
+
+    static void ResolveProfileWithSource(ProfileData profile, List<ProfileData> profiles, HashSet<string> stack, Dictionary<string, ProfileVariable> result)
+    {
+        if (!stack.Add(profile.Name)) throw new InvalidDataException("Profile inheritance cycle detected at " + profile.Name);
+        foreach (string parentName in profile.Inherits)
+        {
+            var parent = FindProfile(profiles, parentName) ?? throw new InvalidDataException("Inherited profile not found: " + parentName);
+            ResolveProfileWithSource(parent, profiles, stack, result);
+        }
+        foreach (var variable in profile.Variables) result[variable.Name] = new ProfileVariable { Name = variable.Name, Value = variable.Value, Scope = variable.Scope, SourceProfile = profile.Name };
+        stack.Remove(profile.Name);
+    }
+
     static int ProfilePreview(string name)
     {
         var profiles = LoadProfiles();

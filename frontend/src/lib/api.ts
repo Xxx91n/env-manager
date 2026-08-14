@@ -27,6 +27,8 @@ export interface Diagnostics {
 export interface ProfileVariable {
   name: string
   value: string
+  scope?: string
+  sourceProfile?: string
 }
 
 export interface ProfileData {
@@ -36,6 +38,8 @@ export interface ProfileData {
   appliedAt?: number | null
   inherits: string[]
   pathEntries: string[]
+  pathScopes?: string[]
+  resolvedPaths?: Array<{ path: string; scope: string; sourceProfile: string }>
   variables: ProfileVariable[]
   profileType?: 'global' | 'launch'
   targetExecutable?: string

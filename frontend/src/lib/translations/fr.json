@@ -435,5 +435,9 @@
   "service.description": "Gerer le service d'arriere-plan pour la rotation periodique des secrets",
   "profiles": {
     "unapplyToEdit": "Désactivez le profil avant d'ajouter ou de modifier des variables"
-  }
+  },
+  "profiles.inheritsFrom": "hérité de",
+  "secrets.policy.createdOnly": "À la création seulement",
+  "secrets.policy.onDemand": "À la demande",
+  "secrets.policy.periodic": "Périodique"
 }

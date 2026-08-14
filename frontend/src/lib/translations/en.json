@@ -435,5 +435,9 @@
   "service.description": "Manage the background secret mount service for periodic token rotation",
   "profiles": {
     "unapplyToEdit": "Unapply the profile before adding or editing variables"
-  }
+  },
+  "profiles.inheritsFrom": "inherited from",
+  "secrets.policy.createdOnly": "CreatedAt only",
+  "secrets.policy.onDemand": "On-demand",
+  "secrets.policy.periodic": "Periodic"
 }

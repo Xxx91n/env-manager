@@ -29,6 +29,16 @@ class ProfileVariable
     [JsonPropertyName("value")] public string Value { get; set; } = "";
     // Optional scope: "user" (default) or "system". Only meaningful for global profiles.
     [JsonPropertyName("scope")] public string Scope { get; set; } = "user";
+    // v0.9.16: Which profile contributed this variable (set by ResolveProfileVariablesWithSource).
+    [JsonPropertyName("sourceProfile")] public string? SourceProfile { get; set; }
+}
+
+// v0.9.16: Resolved path entry with scope + source profile for profile show output.
+class ResolvedPathEntry
+{
+    [JsonPropertyName("path")] public string Path { get; set; } = "";
+    [JsonPropertyName("scope")] public string Scope { get; set; } = "user";
+    [JsonPropertyName("sourceProfile")] public string? SourceProfile { get; set; }
 }
 
 class ProfileData
@@ -53,6 +63,8 @@ class ProfileData
     [JsonPropertyName("workingDirectory")] public string? WorkingDirectory { get; set; }
     // Secret variable names in a launch profile are DPAPI-encrypted on disk; plaintext lives only in process memory.
     [JsonPropertyName("secretVariables")] public List<string> SecretVariables { get; set; } = new();
+    // v0.9.16: Resolved PATH entries (including inherited) with scope + sourceProfile.
+    [JsonPropertyName("resolvedPaths")] public List<ResolvedPathEntry>? ResolvedPaths { get; set; }
     // v0.9.9: Schema version for migration framework. 0 = pre-v0.9.9 (inferred on load).
     [JsonPropertyName("schemaVersion")] public int SchemaVersion { get; set; } = 0;
 }
@@ -1940,27 +1952,36 @@ partial class Program
             AppliedAt = profile.AppliedAt,
             Inherits = profile.Inherits,
             PathEntries = profile.PathEntries,
+            PathScopes = profile.PathScopes,
             ProfileType = profile.ProfileType,
             TargetExecutable = profile.TargetExecutable,
             LaunchArguments = profile.LaunchArguments,
             WorkingDirectory = profile.WorkingDirectory,
             SecretVariables = profile.SecretVariables,
         };
-        foreach (var v in profile.Variables)
+        // v0.9.16: Use ResolveProfileVariablesWithSource to populate Scope + SourceProfile for each variable.
+        var resolvedVars = ResolveProfileVariablesWithSource(profile, profiles);
+        foreach (var rv in resolvedVars)
         {
-            if (profile.SecretVariables.Contains(v.Name, StringComparer.OrdinalIgnoreCase))
+            if (profile.SecretVariables.Contains(rv.Name, StringComparer.OrdinalIgnoreCase))
             {
                 masked.Variables.Add(new ProfileVariable
                 {
-                    Name = v.Name,
-                    Value = revealSecrets ? TryDecryptSafe(v.Value) : "<encrypted>",
+                    Name = rv.Name,
+                    Value = revealSecrets ? TryDecryptSafe(profile.Variables.First(pv => pv.Name.Equals(rv.Name, StringComparison.OrdinalIgnoreCase)).Value) : "<encrypted>",
+                    Scope = rv.Scope,
+                    SourceProfile = rv.SourceProfile,
                 });
             }
             else
             {
-                masked.Variables.Add(new ProfileVariable { Name = v.Name, Value = v.Value });
+                masked.Variables.Add(new ProfileVariable { Name = rv.Name, Value = rv.Value, Scope = rv.Scope, SourceProfile = rv.SourceProfile });
             }
         }
+        // v0.9.16: Also include resolved PATH entries with sourceProfile for each inherited path.
+        // v0.9.16: Also include resolved PATH entries with sourceProfile for each inherited path.
+        masked.ResolvedPaths = ResolveProfilePathsWithSource(profile, profiles)
+            .Select(p => new ResolvedPathEntry { Path = p.path, Scope = p.scope, SourceProfile = p.sourceProfile }).ToList();
         Console.WriteLine(JsonSerializer.Serialize(masked, JsonOptsIndented));
         return 0;
     }

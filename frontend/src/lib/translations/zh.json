@@ -435,5 +435,9 @@
   "service.description": "管理后台机密挂载服务，用于定期刷新机密令牌",
   "profiles": {
     "unapplyToEdit": "请先取消应用配置文件，再添加或修改变量"
-  }
+  },
+  "profiles.inheritsFrom": "继承自",
+  "secrets.policy.createdOnly": "仅创建时",
+  "secrets.policy.onDemand": "按需",
+  "secrets.policy.periodic": "定期"
 }
