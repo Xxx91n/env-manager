@@ -4,12 +4,17 @@
   import { locales, defaultLanguage } from '../i18n'
   import { isCliInPath, addCliToPath, removeCliFromPath, listPathEntries, checkForUpdates, bulkImport, bulkExport, pickOpenFile, pickSaveFile, serviceStatus, serviceHealth, servicePing, serviceRefreshMount, serviceRotateMount, serviceShutdown, serviceReload, serviceStart, serviceStop, exportState, importState } from '../api'
   import { get } from 'svelte/store'
-  import { setSetting, frontendLog } from '../settingsStore'
+  import { setSetting, frontendLog, getLightweightConfig as getLwConfig, setLightweightConfig as setLwConfig } from '../settingsStore'
   import { showToast } from '../stores'
   import { t as tStore } from 'svelte-i18n'
 
   export let darkMode = false
   export let fontScale: number = 1
+
+  // Lightweight mode config
+  let autoLightweight = true
+  let lightweightTimeout = 10
+  let lightweightLoading = false
 
   const dispatch = createEventDispatcher()
 
@@ -370,12 +375,52 @@
       await importState(file, true)
       const result = await importState(file, false)
       showToast($t('settings.drImported', { values: { count: result.imported } }), 'success')
+
     } catch (err) { void frontendLog('error', '[SettingsDialog] ' + (err instanceof Error ? err.message : String(err))).catch(() => {});
       drError = err instanceof Error ? err.message : String(err)
       showToast(drError, 'error')
     }
     drLoading = false
   }
+
+  // ---- Lightweight mode ----
+
+  async function loadLightweightConfig() {
+    try {
+      const config = await getLwConfig()
+      autoLightweight = config.enabled
+      lightweightTimeout = config.timeoutMinutes
+    } catch {
+      // defaults are fine
+    }
+  }
+
+  async function handleToggleAutoLightweight() {
+    autoLightweight = !autoLightweight
+    await saveLightweightConfig()
+  }
+
+  async function handleLightweightTimeoutChange(e: Event) {
+    const val = parseInt((e.target as HTMLInputElement).value, 10)
+    lightweightTimeout = isNaN(val) || val < 1 ? 1 : val > 120 ? 120 : val
+    await saveLightweightConfig()
+  }
+
+  async function saveLightweightConfig() {
+    lightweightLoading = true
+    try {
+      await setLwConfig(autoLightweight, lightweightTimeout)
+      showToast($t('settings.lightweightSaved'), 'success')
+    } catch {
+      showToast($t('settings.lightweightSaveFailed'), 'error')
+    } finally {
+      lightweightLoading = false
+    }
+  }
+
+  onMount(() => {
+    loadLightweightConfig()
+  })
 </script>
 
 <div
@@ -571,6 +616,43 @@
       </div>
     </div>
 
+    <div class="px-5 py-3 space-y-2 border-t border-gray-200 dark:border-gray-700">
+      <div>
+        <label class="block text-xs font-medium text-gray-600 mb-1.5 dark:text-gray-400">
+          {$t('settings.lightweightTitle')}
+        </label>
+        <div class="flex items-center gap-3">
+          <button
+            on:click={handleToggleAutoLightweight}
+            disabled={lightweightLoading}
+            class="relative inline-flex h-5 w-8 items-center rounded-full transition {autoLightweight ? 'bg-blue-600' : 'bg-gray-300 dark:bg-gray-600'} disabled:opacity-50"
+            role="switch"
+            aria-checked={autoLightweight}
+          >
+            <span class="inline-block h-3.5 w-3.5 transform rounded-full bg-white transition {autoLightweight ? 'translate-x-3.5' : 'translate-x-0.5'}" />
+          </button>
+          <span class="text-xs text-gray-500 dark:text-gray-400">
+            {$t('settings.lightweightAuto')}
+          </span>
+          {#if autoLightweight}
+            <div class="flex items-center gap-1.5 ml-2">
+              <input
+                type="number"
+                min="1"
+                max="120"
+                bind:value={lightweightTimeout}
+                on:change={handleLightweightTimeoutChange}
+                class="w-16 px-2 py-1 text-xs border border-gray-300 rounded-md dark:bg-gray-800 dark:border-gray-600 dark:text-gray-200"
+              />
+              <span class="text-xs text-gray-500 dark:text-gray-400">
+                {$t('settings.lightweightMinutes')}
+              </span>
+            </div>
+          {/if}
+        </div>
+        <p class="mt-1 text-[10px] text-gray-400 dark:text-gray-500">{$t('settings.lightweightHint')}</p>
+      </div>
+    </div>
     <div class="px-5 py-3 border-t border-gray-200 flex justify-end dark:border-gray-700">
       <button
         on:click={handleClose}

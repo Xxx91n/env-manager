@@ -42,3 +42,23 @@ export async function frontendLog(
     /* best-effort: never throw from a logger */
   }
 }
+
+// ---- v0.9.20: Lightweight mode config persistence ----
+
+export async function getLightweightConfig(): Promise<{ enabled: boolean; timeoutMinutes: number }> {
+  try {
+    const enabled = await getSetting('autoLightweight')
+    const timeout = await getSetting('lightweightTimeout')
+    return {
+      enabled: enabled === 'true',
+      timeoutMinutes: timeout ? parseInt(timeout, 10) || 10 : 10,
+    }
+  } catch {
+    return { enabled: true, timeoutMinutes: 10 }
+  }
+}
+
+export async function setLightweightConfig(enabled: boolean, timeoutMinutes: number): Promise<void> {
+  await setSetting('autoLightweight', enabled ? 'true' : 'false')
+  await setSetting('lightweightTimeout', String(timeoutMinutes))
+}

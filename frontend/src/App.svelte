@@ -124,22 +124,22 @@
   // This is the pattern recommended by pwm research on Tauri tray i18n (2025):
   // don't pipe tray strings through an async i18n layer; inline a sync lookup
   // so the tray update is fire-and-forget from the reactive Svelte handler.
-  const trayI18n: Record<string, { show: string; quit: string; tooltip: string }> = {
-    en: { show: 'Show', quit: 'Quit', tooltip: 'Env Manager' },
-    zh: { show: '显示', quit: '退出', tooltip: '环境变量管理器' },
-    ja: { show: '表示', quit: '終了', tooltip: '環境変数マネージャー' },
-    ko: { show: '표시', quit: '종료', tooltip: '환경변수 관리자' },
-    de: { show: 'Anzeigen', quit: 'Beenden', tooltip: 'Umgebungsvariablen-Verwaltung' },
-    fr: { show: 'Afficher', quit: 'Quitter', tooltip: "Gestionnaire de variables d'environnement" },
-    es: { show: 'Mostrar', quit: 'Salir', tooltip: 'Gestor de variables de entorno' },
-    pt: { show: 'Exibir', quit: 'Sair', tooltip: 'Gerenciador de variáveis de ambiente' },
-    ru: { show: 'Показать', quit: 'Выход', tooltip: 'Менеджер переменных среды' },
-    ar: { show: 'إظهار', quit: 'خروج', tooltip: 'مدير متغيرات البيئة' },
+  const trayI18n: Record<string, { show: string; lightweight: string; quit: string; tooltip: string }> = {
+    en: { show: 'Show', lightweight: 'Lightweight Mode', quit: 'Quit', tooltip: 'Env Manager' },
+    zh: { show: '显示', lightweight: '轻量模式', quit: '退出', tooltip: '环境变量管理器' },
+    ja: { show: '表示', lightweight: 'ライトモード', quit: '終了', tooltip: '環境変数マネージャー' },
+    ko: { show: '표시', lightweight: '경량 모드', quit: '종료', tooltip: '환경변수 관리자' },
+    de: { show: 'Anzeigen', lightweight: 'Leichtmodus', quit: 'Beenden', tooltip: 'Umgebungsvariablen-Verwaltung' },
+    fr: { show: 'Afficher', lightweight: 'Mode léger', quit: 'Quitter', tooltip: "Gestionnaire de variables d'environnement" },
+    es: { show: 'Mostrar', lightweight: 'Modo ligero', quit: 'Salir', tooltip: 'Gestor de variables de entorno' },
+    pt: { show: 'Exibir', lightweight: 'Modo leve', quit: 'Sair', tooltip: 'Gerenciador de variáveis de ambiente' },
+    ru: { show: 'Показать', lightweight: 'Лёгкий режим', quit: 'Выход', tooltip: 'Менеджер переменных среды' },
+    ar: { show: 'إظهار', lightweight: 'الوضع الخفيف', quit: 'خروج', tooltip: 'مدير متغيرات البيئة' },
   }
 
   function syncTrayLocale(loc: string) {
     const t = trayI18n[loc] ?? trayI18n.en
-    updateTrayLocale(t.show, t.quit, t.tooltip)
+    updateTrayLocale(t.show, t.lightweight, t.quit, t.tooltip)
   }
   onMount(async () => {
     // Read persisted settings from localStorage (settings are saved there by

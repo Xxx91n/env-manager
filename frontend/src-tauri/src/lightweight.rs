@@ -14,7 +14,7 @@ static LIGHTWEIGHT_STATE: AtomicU8 = AtomicU8::new(STATE_NORMAL);
 
 /// Auto-lightweight timer handle (tokio task). None when no timer is running.
 /// Stored as a string PID-like token so we can abort it.
-static LIGHTWEIGHT_TIMER: std::sync::RwLock<Option<tokio::task::JoinHandle<()>>> =
+static LIGHTWEIGHT_TIMER: std::sync::RwLock<Option<tauri::async_runtime::JoinHandle<()>>> =
     std::sync::RwLock::new(None);
 
 pub fn is_in_lightweight_mode() -> bool {
@@ -102,6 +102,7 @@ pub fn exit_lightweight(app: &tauri::AppHandle) -> Result<(), String> {
 /// Start the auto-lightweight countdown timer.
 /// After `timeout_minutes` the window is destroyed and the app enters
 /// lightweight mode. The timer can be cancelled by user focus or activity.
+#[allow(dead_code)] // Wired in Phase 3 (auto-lightweight timer)
 pub fn start_lightweight_timer(app: tauri::AppHandle, timeout_minutes: u64) {
     if is_in_lightweight_mode() {
         return;
@@ -115,7 +116,7 @@ pub fn start_lightweight_timer(app: tauri::AppHandle, timeout_minutes: u64) {
     }
 
     let handle = tauri::async_runtime::spawn(async move {
-        tokio::time::sleep(tokio::time::Duration::from_secs(timeout_minutes * 60)).await;
+        std::thread::sleep(std::time::Duration::from_secs(timeout_minutes * 60));
 
         // Timer fired — enter lightweight mode
         if let Err(e) = enter_lightweight(&app) {

@@ -22,10 +22,10 @@ secrecy = "0.10"
 zeroize = { version = "1", features = ["derive"] }
 windows-sys = { version = "0.59", features = [
     "Win32_Foundation",
+    "Win32_Security",
     "Win32_System_JobObjects",
     "Win32_System_Threading",
 ] }
-tokio = { version = "1", features = ["time", "rt", "rt-multi-thread", "sync"] }
 
 [features]
 default = ["custom-protocol"]

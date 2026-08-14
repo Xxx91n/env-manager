@@ -55,7 +55,7 @@ pub fn init_job_object() {
         // lifetime of the process so KILL_ON_JOB_CLOSE fires on exit.
         // When the process exits, the OS closes the handle and kills
         // all job members (WebView2 renderer/GPU subprocesses).
-        std::mem::forget(job);
+        let _ = job; // Handle is an OS-owned raw pointer; keep it alive for process lifetime
         tracing::info!("[job_object] GUI process assigned to Job Object with KILL_ON_JOB_CLOSE");
     }
 }

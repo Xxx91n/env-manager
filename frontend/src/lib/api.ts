@@ -208,12 +208,14 @@ export async function checkForUpdates(currentVersion: string): Promise<UpdateInf
  */
 export async function updateTrayLocale(
   showText: string,
+  lightweightText: string,
   quitText: string,
   tooltip: string
 ): Promise<void> {
   try {
     await invoke('update_tray_locale', {
       showText,
+      lightweightText,
       quitText,
       tooltip,
     })
@@ -1517,5 +1519,32 @@ export async function preloadAdjacentPages(): Promise<void> {
     ])
   } catch {
     // swallow — preload is best-effort
+  }
+}
+
+// ---- v0.9.20: Lightweight mode IPC ----
+
+export async function enterLightweightMode(): Promise<boolean> {
+  return await invoke('enter_lightweight_mode')
+}
+
+export async function exitLightweightMode(): Promise<boolean> {
+  return await invoke('exit_lightweight_mode')
+}
+
+export async function getLightweightConfig(): Promise<{ enabled: boolean; timeoutMinutes: number }> {
+  try {
+    const result = await invoke('get_lightweight_config')
+    return result as { enabled: boolean; timeoutMinutes: number }
+  } catch {
+    return { enabled: true, timeoutMinutes: 10 }
+  }
+}
+
+export async function setLightweightConfig(enabled: boolean, timeoutMinutes: number): Promise<boolean> {
+  try {
+    return await invoke('set_lightweight_config', { enabled, timeoutMinutes })
+  } catch {
+    return false
   }
 }

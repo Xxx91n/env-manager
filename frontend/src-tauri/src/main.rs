@@ -8,6 +8,9 @@ use std::process::Command;
 use std::sync::RwLock;
 use std::sync::OnceLock;
 use zeroize::Zeroizing;
+
+mod lightweight;
+mod job_object;
 use tauri::{
     menu::{Menu, MenuItem},
     tray::TrayIconBuilder,
@@ -1100,8 +1103,9 @@ std::mem::forget(_guard);
         .setup(|app| {
             // Build tray menu items - text will be updated via update_tray_locale
             let show_item = MenuItem::with_id(app, "show", "Show", true, None::<&str>)?;
+            let lightweight_item = MenuItem::with_id(app, "lightweight", "Lightweight Mode", true, None::<&str>)?;
             let quit_item = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
-            let menu = Menu::with_items(app, &[&show_item, &quit_item])?;
+            let menu = Menu::with_items(app, &[&show_item, &lightweight_item, &quit_item])?;
 
             // Create system tray icon
             let _tray = TrayIconBuilder::with_id("main")
@@ -1112,7 +1116,23 @@ std::mem::forget(_guard);
                 .on_menu_event(|app, event| {
                     match event.id.as_ref() {
                         "show" => {
+                            if lightweight::is_in_lightweight_mode() {
+                                if let Err(e) = lightweight::exit_lightweight(app) {
+                                    warn!("[tray] exit lightweight failed: {}", e);
+                                }
+                            }
                             restore_window(app);
+                        }
+                        "lightweight" => {
+                            if lightweight::is_in_lightweight_mode() {
+                                if let Err(e) = lightweight::exit_lightweight(app) {
+                                    warn!("[tray] exit lightweight failed: {}", e);
+                                }
+                            } else {
+                                if let Err(e) = lightweight::enter_lightweight(app) {
+                                    warn!("[tray] enter lightweight failed: {}", e);
+                                }
+                            }
                         }
                         "quit" => {
                             info!("[tray] quit requested — service stays alive (user-managed lifecycle)");
@@ -1148,13 +1168,28 @@ std::mem::forget(_guard);
                 })
                 .build(app)?;
 
+            // Initialize Job Object so WebView2 child processes are cleaned
+            // up when the GUI exits (even on task manager forced kill).
+            job_object::init_job_object();
+
             Ok(())
         })
         .on_window_event(|window, event| {
             match event {
-                // Close button hides to tray instead of exiting
+                // Close button: minimize to tray instead of exiting.
+                // Windows: use minimize + set_skip_taskbar(true) instead of hide()
+                // because WebView2 hide()/show() is unreliable (wry#637).
+                // Non-Windows: hide() works fine.
                 WindowEvent::CloseRequested { api, .. } => {
-                    let _ = window.hide();
+                    #[cfg(target_os = "windows")]
+                    {
+                        let _ = window.set_skip_taskbar(true);
+                        let _ = window.minimize();
+                    }
+                    #[cfg(not(target_os = "windows"))]
+                    {
+                        let _ = window.hide();
+                    }
                     api.prevent_close();
                 }
                 _ => {}
@@ -1174,6 +1209,10 @@ std::mem::forget(_guard);
             stop_service,
             read_var_notes,
             write_var_notes,
+            enter_lightweight_mode,
+            exit_lightweight_mode,
+            get_lightweight_config,
+            set_lightweight_config,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
@@ -1183,6 +1222,7 @@ std::mem::forget(_guard);
             // Only clear PID tracking to avoid stale references.
             if let tauri::RunEvent::ExitRequested { .. } = event {
                 info!("[exit] ExitRequested — clearing service PID tracking (service stays alive)");
+                lightweight::cancel_lightweight_timer();
                 if let Ok(mut guard) = SERVICE_PID.write() {
                     *guard = None;
                 }
@@ -1196,15 +1236,17 @@ std::mem::forget(_guard);
 fn update_tray_locale(
     app: tauri::AppHandle,
     show_text: String,
+    lightweight_text: String,
     quit_text: String,
     tooltip: String,
 ) {
-    update_tray_locale_impl(&app, &show_text, &quit_text, &tooltip)
+    update_tray_locale_impl(&app, &show_text, &lightweight_text, &quit_text, &tooltip)
 }
 
 fn update_tray_locale_impl(
     app: &tauri::AppHandle,
     show_text: &str,
+    lightweight_text: &str,
     quit_text: &str,
     tooltip: &str,
 ) {
@@ -1216,17 +1258,22 @@ fn update_tray_locale_impl(
     if let Some(tray) = app.tray_by_id("main") {
         match MenuItem::with_id(app, "show", show_text, true, None::<&str>) {
             Ok(show_item) => {
-                match MenuItem::with_id(app, "quit", quit_text, true, None::<&str>) {
-                    Ok(quit_item) => {
-                        match Menu::with_items(app, &[&show_item, &quit_item]) {
-                            Ok(menu) => {
-                                let _ = tray.set_menu(Some(menu));
-                                let _ = tray.set_tooltip(Some(tooltip));
+                match MenuItem::with_id(app, "lightweight", lightweight_text, true, None::<&str>) {
+                    Ok(lightweight_item) => {
+                        match MenuItem::with_id(app, "quit", quit_text, true, None::<&str>) {
+                            Ok(quit_item) => {
+                                match Menu::with_items(app, &[&show_item, &lightweight_item, &quit_item]) {
+                                    Ok(menu) => {
+                                        let _ = tray.set_menu(Some(menu));
+                                        let _ = tray.set_tooltip(Some(tooltip));
+                                    }
+                                    Err(e) => warn!("[tray] failed to build menu: {}", e),
+                                }
                             }
-                            Err(e) => warn!("[tray] failed to build menu: {}", e),
+                            Err(e) => warn!("[tray] failed to create quit item: {}", e),
                         }
                     }
-                    Err(e) => warn!("[tray] failed to create quit item: {}", e),
+                    Err(e) => warn!("[tray] failed to create lightweight item: {}", e),
                 }
             }
             Err(e) => warn!("[tray] failed to create show item: {}", e),
@@ -1234,4 +1281,45 @@ fn update_tray_locale_impl(
     } else {
         warn!("[tray] tray icon not found for locale update");
     }
+}
+
+// ─── Lightweight mode IPC commands ───
+
+/// Enter lightweight mode: destroy the main window to free memory.
+#[tauri::command]
+fn enter_lightweight_mode(app: tauri::AppHandle) -> Result<bool, String> {
+    lightweight::enter_lightweight(&app)?;
+    Ok(true)
+}
+
+/// Exit lightweight mode: rebuild the main window from config.
+#[tauri::command]
+fn exit_lightweight_mode(app: tauri::AppHandle) -> Result<bool, String> {
+    lightweight::exit_lightweight(&app)?;
+    Ok(true)
+}
+
+/// Read auto-lightweight config from gui-settings.json.
+/// Returns {enabled: bool, timeoutMinutes: u32}.
+#[tauri::command]
+fn get_lightweight_config() -> serde_json::Value {
+    let enabled = match read_gui_setting("autoLightweight".to_string()) {
+        serde_json::Value::Bool(b) => b,
+        serde_json::Value::String(s) => s == "true",
+        _ => true,
+    };
+    let timeout = match read_gui_setting("lightweightTimeout".to_string()) {
+        serde_json::Value::String(s) => s.parse::<u32>().unwrap_or(10),
+        serde_json::Value::Number(n) => n.as_u64().unwrap_or(10) as u32,
+        _ => 10,
+    };
+    serde_json::json!({ "enabled": enabled, "timeoutMinutes": timeout })
+}
+
+/// Persist auto-lightweight config to gui-settings.json.
+#[tauri::command]
+fn set_lightweight_config(enabled: bool, timeout_minutes: u32) -> bool {
+    let _ = write_gui_setting("autoLightweight".to_string(), if enabled { "true".to_string() } else { "false".to_string() });
+    let _ = write_gui_setting("lightweightTimeout".to_string(), timeout_minutes.to_string());
+    true
 }
