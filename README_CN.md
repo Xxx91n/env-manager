@@ -156,6 +156,11 @@ env-manager-cli.exe audit verify-ledger
 - **v0.9.11 对齐**：PS5/pwsh 兼容性审计（BOM 安全编码、深度安全 JSON），GitHub Actions `workflow_dispatch` 手动发布门控（含 `create_release` + 版本输入），多架构构建（x64/x86/arm64），按架构独立清理
 - **v0.9.13 安全硬化**：进程安全与生命周期加固 — Rust zeroize/secrecy（cert_bootstrap、reveal-secret stdout），C# SecretString（作用域退出时清零），命名管道 DACL（仅 BA/SY/OW），二进制哈希自校验 + 调试器检测 + WER/崩溃转储禁用 + DLL 注入枚举 + VirtualLock（服务），审计文件 NTFS ACL，audit.json AES-256-GCM 静态加密（EncryptAuditContent/DecryptAuditContent 已接入读写），export-state 双层加密（AES-GCM 载荷 + DPAPI 包裹 DEK + HMAC-SHA256 完整性，v1 向后兼容），reconcile 循环 TOCTOU mutex，provider 二进制哈希校验（sops/op 首次使用 SHA256 记录）
 - **v0.9.12 最终对齐**：敏感数据脱敏（22 模式统一脱敏，覆盖 CLI/GUI/服务三层），export-state/import-state 全状态 DPAPI 加密备份，.NET 10 运行时检测 + i18n 缺失键修复，GitHub 发布就绪 Phase 1（社区文件、README 重写、CSP 加固）
+- **v0.9.14 输入对话框 + 便利贴 + Material 3 标签栏**：`InputDialog.svelte` 全局替换 `window.prompt()`（重命名、添加变量/配置文件输入）。变量便利贴注释存储于 `var-notes.json`。Material 3 ARIA 标签栏 + roving tabindex。PATH scope-aware apply/unapply 修复（配置文件启用时 PATH 条目未生效的根因）。编译先于打包顺序强制执行 — 源码修改后 `build.mjs` 不得使用 skip 标志。
+- **v0.9.16 ProfileShow 源感知 + path scope 徽章 + ServicePage i18n**：`profile show` 输出包含每个变量/路径的源配置文件名。ProfilePage 显示"来自 {profile}"徽章。ServicePage 全部 10 语言本地化。IPC `mount_id` 参数在 Rust/C# 间统一 snake_case。
+- **v0.9.17 PathEditor 反向索引 + ProfilePage pathScopes 徽章**：`PathEditor.svelte` 使用反向索引查找进行移动操作。ProfilePage 为 PATH 条目显示 per-entry scope 徽章（用户/系统）。IPC `mount_id` 字段完全 snake_case 对齐。
+- **v0.9.18 服务轮换 + WebView2 加固**：`reconcile.rs` 中 `call_cli_rotate()` 设置 `CREATE_NO_WINDOW` 标志防止控制台窗口闪现。`ServicePage.svelte` 使用 `toLocaleString()` 格式化时间戳。WebView2 原生右键菜单完全屏蔽（`oncontextmenu preventDefault` + CSS `user-select: none`，clash-verge-rev 模式）。
+- **v0.9.19 SWR 缓存 + 预加载**：所有 5 个读 API（listVariablesRaw、listPathEntries、listHistory、listProtection、listProfiles）使用 stale-while-revalidate 模式，TTL 15 秒。`listProfiles` 添加缓存（此前完全无缓存，为最大延迟源）。ProtectionPage 4 路并发 IPC。启动时预加载相邻页面缓存。
 - 用户和系统范围支持，用户范围无需管理员权限
 
 ### GUI 模式

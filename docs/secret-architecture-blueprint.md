@@ -107,7 +107,7 @@ Rejected alternative: keep secrets inside the Profile but add the metadata field
 
 ### P2: External authority + reconciliation loop, modeled on External Secrets Operator
 
-A Secrets coordinator (see P3) runs as a background service (Tauri-managed Task Scheduler entry or `secrets-agent.exe`) that periodically reconciles each SecretMount against its provider, refreshes the envelope if needed, records the audit, and surfaces new state to subscribers (the GUI, the CLI on next read). The reconcile contract is `spec.refreshPolicy: Periodic | CreatedOnce | OnChange` with `spec.refreshIntervalSeconds` default 300. This removes L1/L4.
+A Secrets coordinator (see P3) runs as a background service (`env-manager-service.exe` with `--mode=service` or `--mode=background`) that periodically reconciles each SecretMount against its provider, refreshes the envelope if needed, records the audit, and surfaces new state to subscribers (the GUI, the CLI on next read). The reconcile contract is `spec.refreshPolicy: Periodic | CreatedOnce | OnChange` with `spec.refreshIntervalSeconds` default 300. This removes L1/L4.
 
 Rejected alternative: on-demand fetch only, no reconcile loop. This is the current behaviour and it leaks stale credentials. On-demand only belongs at the very-low-end of provider sophistication (DPAPI) and is the wrong default for the network providers.
 
@@ -154,7 +154,7 @@ Rejected alternative: command-string allow-list. Already what AGENTS.md document
 - `SecretEnvelope` grows from `{ provider, version, targetName, createdAt }` to `{ provider, version, targetName, createdAt, expiresAt, rotationPolicyId, schemaVersion: 2 }`. v0.8 envelopes have only the first four; the new fields are auto-prefilled on next read.
 - New CLI commands: `mount list/show/add/remove/refresh/rotate/set-policy`, `secret-store list-providers/set-default/health/audit`. Secret-oriented `profile *` commands become aliases for back-compat.
 - The agent JSON under `agents --json` adds the `capabilities` array per command and a new `authZ` field defined per the project's `agentCapabilities` config.
-- A new optional background reconcile service is shipped as a portable `secrets-agent.exe` that the GUI starts on demand and Task Scheduler can install. This service is gated by a Settings toggle - off by default in v0.8, on by opt-in.
+- A new optional background reconcile service is shipped as a portable `env-manager-service.exe` that the GUI starts on demand and Windows Service Manager can install. This service is gated by a Settings toggle - off by default in v0.8, on by opt-in.
 
 ---
 
