@@ -13,6 +13,7 @@ use chrono::{DateTime, Utc};
 use tokio_util::sync::CancellationToken;
 use std::sync::Arc;
 use tokio::sync::Mutex; // Phase 4C: TOCTOU protection
+use std::os::windows::process::CommandExt; // v0.9.18: CREATE_NO_WINDOW for CLI subprocess
 
 /// SecretMount mirror of the C# SecretMount class.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -262,9 +263,12 @@ async fn call_cli_rotate() -> Result<String, String> {
     // v0.9.0: Rotation delegates to the CLI's existing secret-provider rotate path.
     // This is NOT a circular dependency because rotate is a one-shot write
     // (mutates profiles.json/secretMount.json), not an IPC to the service.
+    // v0.9.18: CREATE_NO_WINDOW (0x08000000) prevents console window flash.
+    //          --json removed: CLI rotate does not support it (exits non-zero).
     let cli_exe = find_cli_exe()?;
     let output = tokio::process::Command::new(&cli_exe)
-        .args(["profile", "secret-provider", "rotate", "--json"])
+        .args(["profile", "secret-provider", "rotate"])
+        .creation_flags(0x08000000) // CREATE_NO_WINDOW
         .output()
         .await
         .map_err(|e| format!("failed to run CLI rotate: {}", e))?;

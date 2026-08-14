@@ -198,7 +198,7 @@
   }
 </script>
 
-<svelte:window on:resize={() => setTimeout(updateIndicator, 0)} />
+<svelte:window on:resize={() => setTimeout(updateIndicator, 0)} on:contextmenu={(e) => e.preventDefault()} />
 
 <svelte:head>
   <title>{$t('app.title')}</title>
@@ -418,5 +418,15 @@
   }
   :global(.dark *:active)::-webkit-scrollbar-thumb {
     background-color: rgba(255, 255, 255, 0.45);
+  }
+  /* v0.9.18: Disable WebView2 native context menu globally. */
+  /* Allow text selection only in input/textarea/contenteditable. */
+  :global(body) {
+    -webkit-user-select: none;
+    user-select: none;
+  }
+  :global(input), :global(textarea), :global([contenteditable]) {
+    -webkit-user-select: text;
+    user-select: text;
   }
 </style>

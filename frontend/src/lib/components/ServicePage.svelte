@@ -182,7 +182,9 @@
             <span class="px-1 rounded {mount.healthy ? 'text-green-600' : 'text-red-600'}">{mount.healthy ? $t('settings.service.healthy') : $t('settings.service.unhealthy')}</span>
             <span class="text-gray-400" title={mount.refreshPolicy}>{localizeRefreshPolicy(mount.refreshPolicy, $t)}</span>
             {#if mount.lastFetchedAt}
-              <span class="text-gray-400 ml-auto">{mount.lastFetchedAt}</span>
+              <span class="text-gray-400 ml-auto text-[10px] whitespace-nowrap truncate max-w-[180px]" title={mount.lastFetchedAt}>
+                {new Date(mount.lastFetchedAt).toLocaleString()}
+              </span>
             {/if}
             <button on:click={() => handleMountRefresh(mount.id)} disabled={serviceLoading}
               class="px-1 text-xs text-blue-600 hover:underline disabled:opacity-50">
