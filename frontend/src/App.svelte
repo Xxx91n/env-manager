@@ -64,11 +64,11 @@
       const el = tabRefs[activeIdx]
       const w = el.offsetWidth
       const l = el.offsetLeft
-      indicatorStyle = 'width: ' + w + 'px; left: ' + l + 'px;'
+      indicatorStyle = 'width: ' + w + 'px; transform: translateX(' + l + 'px);'
       // Enable transition after the first paint to avoid width animation from 0
       if (indicatorTransition === 'none') {
         requestAnimationFrame(() => {
-          indicatorTransition = 'all 200ms cubic-bezier(0.2, 0, 0, 1)'
+          indicatorTransition = 'transform 200ms cubic-bezier(0.2, 0, 0, 1), width 200ms cubic-bezier(0.2, 0, 0, 1)'
         })
       }
     }
@@ -91,7 +91,7 @@
     }
     requestAnimationFrame(tryInit)
   })
-  $: if ($activeView) { setTimeout(updateIndicator, 0) }
+  $: if ($activeView) { requestAnimationFrame(updateIndicator) }
 
   function handleTabKeydown(e: KeyboardEvent, idx: number) {
     let nextIdx: number | null = null
@@ -226,7 +226,7 @@
   }
 </script>
 
-<svelte:window on:resize={() => setTimeout(updateIndicator, 0)} on:contextmenu={(e) => e.preventDefault()} />
+<svelte:window on:resize={() => requestAnimationFrame(updateIndicator)} on:contextmenu={(e) => e.preventDefault()} />
 
 <svelte:head>
   <title>{$t('app.title')}</title>
@@ -293,7 +293,7 @@
             class="px-3 py-2 text-xs font-medium transition-colors duration-200 rounded-t-md {$activeView === tab.id
               ? 'text-blue-700 dark:text-blue-300 font-semibold'
               : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100 dark:text-gray-400 dark:hover:text-gray-200 dark:hover:bg-gray-700/50'} disabled:opacity-50 disabled:cursor-not-allowed"
-            style="transition: all 200ms cubic-bezier(0.2, 0, 0, 1)"
+            
           >
             {$t(tab.labelKey)}
           </button>
@@ -301,7 +301,7 @@
       </div>
       <div
         class="absolute bottom-0 h-[3px] bg-blue-600 dark:bg-blue-400 rounded-t-md"
-        style={indicatorStyle + '; transition: ' + indicatorTransition}
+        style={indicatorStyle + '; transition: ' + indicatorTransition + '; will-change: transform'}
         aria-hidden="true"
       ></div>
     </div>
