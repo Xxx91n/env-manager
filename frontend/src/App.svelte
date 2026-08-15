@@ -185,7 +185,7 @@
     } catch { /* best-effort */ }
     try {
       const storedThemeStyle = await getSetting('themeStyle')
-      if (storedThemeStyle && ['slate', 'zinc', 'neutral'].includes(storedThemeStyle)) {
+      if (storedThemeStyle && ['slate', 'blue', 'violet', 'rose', 'cyan', 'amber'].includes(storedThemeStyle)) {
         themeStyle = storedThemeStyle
       }
     } catch { /* best-effort */ }
