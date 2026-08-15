@@ -147,7 +147,7 @@ dependencies = [
 
 [[package]]
 name = "env-manager-service"
-version = "0.9.22"
+version = "0.9.23"
 dependencies = [
  "base64",
  "chrono",

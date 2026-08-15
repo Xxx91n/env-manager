@@ -233,12 +233,29 @@
   function applyDarkMode(isDark: boolean, skipTransition = false) {
     darkMode = isDark
     if (typeof document !== 'undefined') {
+      // Industry-standard withoutTransition pattern (mode-watcher / reemus.dev):
+      // Temporarily disable ALL CSS transitions during mode switch to prevent
+      // white flash on locked/muted elements. Uses getComputedStyle to force
+      // browser reflow before re-enabling transitions.
+      let styleEl: HTMLStyleElement | null = null
+      const disableTransitions = !skipTransition
+      if (disableTransitions) {
+        styleEl = document.createElement('style')
+        styleEl.textContent = '* { transition: none !important; }'
+        document.head.appendChild(styleEl)
+      }
+
+      // Apply mode change synchronously (inside the transition-disabled window)
       document.documentElement.setAttribute('data-theme', isDark ? 'dark' : 'light')
-      if (!skipTransition) {
-        document.body.classList.add('theme-changing')
-        setTimeout(() => {
-          document.body.classList.remove('theme-changing')
-        }, 250)
+
+      if (styleEl) {
+        // Force browser to paint the transition-disabled state before removing it
+        // getComputedStyle forces a synchronous reflow (reemus.dev "ultimate solution")
+        void window.getComputedStyle(styleEl).opacity
+        // Remove on next frame to ensure the DOM has settled
+        window.requestAnimationFrame(() => {
+          styleEl?.remove()
+        })
       }
     }
   }
@@ -293,7 +310,7 @@
   </div>
 </div>
 
-<div class="h-screen pt-[32px] overflow-hidden bg-background text-foreground transition-colors duration-300 ease-in-out">
+<div class="h-screen flex flex-col overflow-hidden bg-background text-foreground transition-colors duration-300 ease-in-out">
   <header class="bg-card border-b border-border px-5 py-3">
     <div class="flex items-center justify-between">
       <div class="flex items-center gap-3">

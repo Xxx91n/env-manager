@@ -8,6 +8,7 @@
   import { t } from 'svelte-i18n'
   import { showModal, isWriteInProgress, refreshTrigger } from '../stores'
   import { showToast } from '../stores'
+  import { writable } from 'svelte/store'
   import {
     listPathEntries,
     addPathEntry,
@@ -51,7 +52,7 @@
   
   // Notes (sticky-note) — shared notesStore, key prefixed with path:
   let notesLoaded = false
-  let notesTick = 0
+  let notesTick = writable(0)  // store: async-safe re-render trigger (Svelte 4 await limitation)
   let hoveredNotePath: string | null = null
 
   async function ensureNotesLoaded() {
@@ -59,7 +60,7 @@
       await loadNotes()
       notesLoaded = true
     }
-    notesTick++
+    notesTick.update(n => n + 1)
   }
 
   function pathNoteKey(pathScope: string, pathStr: string): string {
@@ -79,7 +80,7 @@
     })
     if (result !== null) {
       await upsertNote(key, result)
-      notesTick++
+      notesTick.update(n => n + 1)
     }
   }
   // get $t-stable variant via store directly (Avoid reactive retriggers): N/A.
@@ -596,7 +597,7 @@
         <tbody class="divide-y divide-border/50 divide-border">
           {#each displayEntries as entry, pos (entry.index)}
             <tr class="hover:bg-muted/50 transition hover:bg-muted {entry.isDuplicate ? 'bg-amber-50/60/60 bg-primary/5' : ''} {!entry.exists ? 'bg-destructive/5/60 bg-destructive/20/10' : ''} {entry.isProtected ? 'bg-muted/60 bg-card/60' : ''}">
-              <td class="px-2 py-1.5 text-[10px] text-muted-foreground align-top">{entry.index}</td>
+              <td class="px-2 py-1.5 text-[10px] text-muted-foreground align-top">{pos + 1}</td>
               <td class="px-2 py-1.5 align-top">
                 {#if editingIndex === entry.index}
                   <!-- Inline edit mode -->
@@ -672,18 +673,18 @@
                     <button
                       on:click={() => handlePathNote(scope, entry.path)}
                       on:focus={() => ensureNotesLoaded()}
-                      on:mouseenter={() => { hoveredNotePath = entry.path; void ensureNotesLoaded().then(() => { notesTick = notesTick + 1 }) }}
+                      on:mouseenter={() => { hoveredNotePath = entry.path; notesTick.update(n => n + 1); if (!notesLoaded) void ensureNotesLoaded().then(() => { notesTick.update(n => n + 1) }) }}
                       on:mouseleave={() => hoveredNotePath = null}
                       class="inline-flex p-1 text-muted-foreground hover:text-primary/80 hover:bg-primary/10 rounded transition hover:bg-primary/15"
-                      title={(notesTick, getNoteSync(pathNoteKey(scope, entry.path)) ? $t('notes.editNote') : $t('notes.addNote'))}
+                      title={($notesTick, getNoteSync(pathNoteKey(scope, entry.path)) ? $t('notes.editNote') : $t('notes.addNote'))}
                     >
-                      {#if (notesTick, getNoteSync(pathNoteKey(scope, entry.path)))}
+                      {#if ($notesTick, getNoteSync(pathNoteKey(scope, entry.path)))}
                         <Tag class="w-3.5 h-3.5" />
                       {:else}
                         <FileText class="w-3.5 h-3.5" />
                       {/if}
                     </button>
-                    {#if hoveredNotePath === entry.path && notesTick && getNoteSync(pathNoteKey(scope, entry.path))}
+                    {#if hoveredNotePath === entry.path && $notesTick && getNoteSync(pathNoteKey(scope, entry.path))}
                       <div class="absolute bottom-full right-0 mb-1 px-2.5 py-1.5 bg-card text-primary-foreground text-[10px] rounded shadow-lg whitespace-pre-wrap max-w-[240px] break-words z-50 pointer-events-none bg-accent">
                         {getNoteSync(pathNoteKey(scope, entry.path))?.note}
                       </div>
@@ -710,7 +711,7 @@
           <Pencil class="w-3 h-3" />
                   </button>
                   <button
-                    on:click={() => handleMoveUp(entry.index)}
+                    on:click={() => handleMoveUp(pos)}
                     disabled={actionLoading || pos === 0 || entry.isProtected}
                     class="inline-flex p-1 text-muted-foreground hover:text-primary hover:bg-primary/10 rounded transition disabled:opacity-30 hover:bg-primary/15"
                     title={$t('path.moveUp')}
@@ -719,7 +720,7 @@
           <ChevronUp class="w-3 h-3" />
                   </button>
                   <button
-                    on:click={() => handleMoveDown(entry.index)}
+                    on:click={() => handleMoveDown(pos)}
                     disabled={actionLoading || pos === displayEntries.length - 1 || entry.isProtected}
                     class="inline-flex p-1 text-muted-foreground hover:text-primary hover:bg-primary/10 rounded transition disabled:opacity-30 hover:bg-primary/15"
                     title={$t('path.moveDown')}

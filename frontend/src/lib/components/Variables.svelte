@@ -10,12 +10,13 @@
   import BackupDialog from './BackupDialog.svelte'
   import { loadNotes, getNoteSync, upsertNote } from '../notesStore'
   import { openInputDialog } from '../stores'
+  import { writable } from 'svelte/store'
 
   let filteredVars = $filteredVariables
   let editingVar = null
   let showEditDialog = false
   let notesLoaded = false
-  let notesTick = 0  // bump to re-render note indicators
+  let notesTick = writable(0)  // store: async-safe re-render trigger (Svelte 4 await limitation)
   let hoveredNoteVar: string | null = null  // bump to re-render note indicators
 
   async function ensureNotesLoaded() {
@@ -23,7 +24,7 @@
       await loadNotes()
       notesLoaded = true
     }
-    notesTick++
+    notesTick.update(n => n + 1)
   }
 
   async function handleNote(variableName: string) {
@@ -37,7 +38,7 @@
     })
     if (result === null) return // cancelled
     await upsertNote(variableName, result)
-    notesTick++
+    notesTick.update(n => n + 1)
   }
   let showBackupDialog = false
   let togglingKeys: Record<string, boolean> = {}
@@ -324,18 +325,18 @@
                   <button
                   on:click={() => handleNote(variable.name)}
                   on:focus={() => ensureNotesLoaded()}
-                  on:mouseenter={() => { hoveredNoteVar = variable.name; void ensureNotesLoaded().then(() => { notesTick = notesTick + 1 }) }}
+                  on:mouseenter={() => { hoveredNoteVar = variable.name; notesTick.update(n => n + 1); if (!notesLoaded) void ensureNotesLoaded().then(() => { notesTick.update(n => n + 1) }) }}
                   on:mouseleave={() => hoveredNoteVar = null}
                   class="inline-flex p-1 text-muted-foreground hover:text-primary/80 hover:bg-primary/10 rounded transition hover:bg-primary/15"
-                  title={(notesTick, getNoteSync(variable.name) ? $t('notes.editNote') : $t('notes.addNote'))}
+                  title={($notesTick, getNoteSync(variable.name) ? $t('notes.editNote') : $t('notes.addNote'))}
                 >
-                  {#if (notesTick, getNoteSync(variable.name))}
+                  {#if ($notesTick, getNoteSync(variable.name))}
           <Tag class="w-3.5 h-3.5" />
                   {:else}
           <FileText class="w-3.5 h-3.5" />
                   {/if}
                 </button>
-                  {#if hoveredNoteVar === variable.name && notesTick && getNoteSync(variable.name)}
+                  {#if hoveredNoteVar === variable.name && $notesTick && getNoteSync(variable.name)}
                     <div class="absolute bottom-full left-0 mb-1 px-2.5 py-1.5 bg-card text-primary-foreground text-[10px] rounded shadow-lg whitespace-pre-wrap max-w-[240px] break-words z-50 pointer-events-none bg-accent">
                       {getNoteSync(variable.name)?.note}
                     </div>
