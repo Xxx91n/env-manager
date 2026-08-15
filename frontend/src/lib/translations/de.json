@@ -65,6 +65,7 @@
   "settings.language": "Sprache",
   "settings.theme": "Design",
   "settings.darkMode": "Dunkelmodus",
+  "settings.lightMode": "Hellmodus",
   "settings.themeStyle": "Themenstil",
   "profiles.name": "Profilname",
   "profiles.variables": "Variablen",
