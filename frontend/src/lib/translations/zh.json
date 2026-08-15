@@ -400,8 +400,6 @@
     "drHint": "全状态备份包含配置文件、机密、保护名单和设置。",
     "themeStyle": "颜色风格",
     "themeStyleSlate": "板岩灰",
-    "themeStyleZinc": "锌灰",
-    "themeStyleNeutral": "中性灰",
     "themeStyleBlue": "蓝色",
     "themeStyleViolet": "紫色",
     "themeStyleRose": "玫红",
@@ -459,5 +457,8 @@
   "secrets.policy.onDemand": "按需",
   "secrets.policy.periodic": "定期",
   "errors.chunkLoadFailed": "组件加载失败，请重试。",
-  "common.retry": "重试"
+  "common.retry": "重试",
+  "app.minimize": "最小化",
+  "app.maximize": "最大化",
+  "app.close": "关闭"
 }

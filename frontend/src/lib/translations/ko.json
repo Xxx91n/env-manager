@@ -400,8 +400,6 @@
     "drHint": "전체 상태 백업에는 프로필, 보안 정보, 보호 목록, 설정이 포함됩니다.",
     "themeStyle": "색상 스타일",
     "themeStyleSlate": "슬레이트",
-    "themeStyleZinc": "아연",
-    "themeStyleNeutral": "중성",
     "themeStyleBlue": "블루",
     "themeStyleViolet": "바이올렛",
     "themeStyleRose": "로즈",
@@ -459,5 +457,8 @@
   "secrets.policy.onDemand": "주문형",
   "secrets.policy.periodic": "주기적",
   "errors.chunkLoadFailed": "컴포넌트 로드에 실패했습니다. 다시 시도해 주세요.",
-  "common.retry": "재시도"
+  "common.retry": "재시도",
+  "app.minimize": "최소화",
+  "app.maximize": "최대화",
+  "app.close": "닫기"
 }

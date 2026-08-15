@@ -400,8 +400,6 @@
     "drHint": "Vollständiges Backup umfasst Profile, Geheimnisse, Schutzlisten und Einstellungen.",
     "themeStyle": "Farbstil",
     "themeStyleSlate": "Schiefer",
-    "themeStyleZinc": "Zink",
-    "themeStyleNeutral": "Neutral",
     "themeStyleBlue": "Blau",
     "themeStyleViolet": "Violet",
     "themeStyleRose": "Rosé",
@@ -459,5 +457,8 @@
   "secrets.policy.onDemand": "Auf Abruf",
   "secrets.policy.periodic": "Periodisch",
   "errors.chunkLoadFailed": "Komponente konnte nicht geladen werden. Bitte erneut versuchen.",
-  "common.retry": "Erneut versuchen"
+  "common.retry": "Erneut versuchen",
+  "app.minimize": "Minimieren",
+  "app.maximize": "Maximieren",
+  "app.close": "Schließen"
 }

@@ -400,8 +400,6 @@
     "drHint": "النسخ الاحتياطي الكامل يشمل الملفات الشخصية والأسرار وقوائم الحماية والإعدادات.",
     "themeStyle": "نمط اللون",
     "themeStyleSlate": "الأردواز",
-    "themeStyleZinc": "الزنك",
-    "themeStyleNeutral": "محايد",
     "themeStyleBlue": "أزرق",
     "themeStyleViolet": "بنفسجي",
     "themeStyleRose": "وردي",
@@ -459,5 +457,8 @@
   "secrets.policy.onDemand": "عند الطلب",
   "secrets.policy.periodic": "دوري",
   "errors.chunkLoadFailed": "فشل تحميل المكون. يرجى إعادة المحاولة.",
-  "common.retry": "إعادة المحاولة"
+  "common.retry": "إعادة المحاولة",
+  "app.minimize": "تصغير",
+  "app.maximize": "تكبير",
+  "app.close": "إغلاق"
 }

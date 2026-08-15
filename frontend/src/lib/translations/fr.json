@@ -400,8 +400,6 @@
     "drHint": "La sauvegarde complète inclut profils, secrets, listes de protection et paramètres.",
     "themeStyle": "Style de couleur",
     "themeStyleSlate": "Ardoise",
-    "themeStyleZinc": "Zinc",
-    "themeStyleNeutral": "Neutre",
     "themeStyleBlue": "Bleu",
     "themeStyleViolet": "Violet",
     "themeStyleRose": "Rose",
@@ -459,5 +457,8 @@
   "secrets.policy.onDemand": "À la demande",
   "secrets.policy.periodic": "Périodique",
   "errors.chunkLoadFailed": "Échec du chargement du composant. Veuillez réessayer.",
-  "common.retry": "Réessayer"
+  "common.retry": "Réessayer",
+  "app.minimize": "Réduire",
+  "app.maximize": "Agrandir",
+  "app.close": "Fermer"
 }

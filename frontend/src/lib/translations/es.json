@@ -400,8 +400,6 @@
     "drHint": "La copia de seguridad completa incluye perfiles, secretos, listas de protección y configuración.",
     "themeStyle": "Estilo de color",
     "themeStyleSlate": "Pizarra",
-    "themeStyleZinc": "Zinc",
-    "themeStyleNeutral": "Neutral",
     "themeStyleBlue": "Azul",
     "themeStyleViolet": "Violeta",
     "themeStyleRose": "Rosa",
@@ -459,5 +457,8 @@
   "secrets.policy.onDemand": "Bajo demanda",
   "secrets.policy.periodic": "Periódico",
   "errors.chunkLoadFailed": "Error al cargar el componente. Reintente.",
-  "common.retry": "Reintentar"
+  "common.retry": "Reintentar",
+  "app.minimize": "Minimizar",
+  "app.maximize": "Maximizar",
+  "app.close": "Cerrar"
 }

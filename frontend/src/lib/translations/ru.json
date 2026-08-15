@@ -400,8 +400,6 @@
     "drHint": "Полное резервное копирование включает профили, секреты, списки защиты и настройки.",
     "themeStyle": "Стиль цвета",
     "themeStyleSlate": "Сланец",
-    "themeStyleZinc": "Цинк",
-    "themeStyleNeutral": "Нейтральный",
     "themeStyleBlue": "Синий",
     "themeStyleViolet": "Фиолетовый",
     "themeStyleRose": "Розовый",
@@ -459,5 +457,8 @@
   "secrets.policy.onDemand": "По запросу",
   "secrets.policy.periodic": "Периодически",
   "errors.chunkLoadFailed": "Не удалось загрузить компонент. Повторите попытку.",
-  "common.retry": "Повторить"
+  "common.retry": "Повторить",
+  "app.minimize": "Свернуть",
+  "app.maximize": "Развернуть",
+  "app.close": "Закрыть"
 }

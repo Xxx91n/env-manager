@@ -400,8 +400,6 @@
     "drHint": "全状態バックアップにはプロファイル、シークレット、保護リスト、設定が含まれます。",
     "themeStyle": "カラースタイル",
     "themeStyleSlate": "スレート",
-    "themeStyleZinc": "ジンク",
-    "themeStyleNeutral": "ニュートラル",
     "themeStyleBlue": "ブルー",
     "themeStyleViolet": "バイオレット",
     "themeStyleRose": "ローズ",
@@ -459,5 +457,8 @@
   "secrets.policy.onDemand": "オンデマンド",
   "secrets.policy.periodic": "定期",
   "errors.chunkLoadFailed": "コンポーネントの読み込みに失敗しました。再試行してください。",
-  "common.retry": "再試行"
+  "common.retry": "再試行",
+  "app.minimize": "最小化",
+  "app.maximize": "最大化",
+  "app.close": "閉じる"
 }

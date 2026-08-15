@@ -120,6 +120,39 @@ describe('v0.9.21 Custom titlebar configuration', () => {
   })
 })
 
+
+describe('v0.9.21 Titlebar button tooltip i18n keys', () => {
+  const localeDir = join(__dirname2, 'lib', 'translations')
+  const locales = ['en', 'zh', 'ja', 'ko', 'de', 'fr', 'es', 'pt', 'ru', 'ar']
+  const requiredKeys = ['app.minimize', 'app.maximize', 'app.close']
+
+  locales.forEach((loc) => {
+    it(`${loc} has titlebar button tooltip i18n keys`, () => {
+      const raw = readFileSync(join(localeDir, `${loc}.json`), 'utf8')
+      const data: Record<string, unknown> = JSON.parse(raw)
+      requiredKeys.forEach((key) => {
+        expect(key in data).toBe(true)
+        const val = data[key]
+        expect(typeof val).toBe('string')
+        expect((val as string).length).toBeGreaterThan(0)
+      })
+    })
+  })
+
+  it('no locale file has dead themeStyleZinc or themeStyleNeutral keys', () => {
+    const locales = ['en', 'zh', 'ja', 'ko', 'de', 'fr', 'es', 'pt', 'ru', 'ar']
+    locales.forEach((loc) => {
+      const raw = readFileSync(join(localeDir, `${loc}.json`), 'utf8')
+      const data: Record<string, unknown> = JSON.parse(raw)
+      const settings = data.settings as Record<string, unknown>
+      if (settings) {
+        expect('themeStyleZinc' in settings).toBe(false)
+        expect('themeStyleNeutral' in settings).toBe(false)
+      }
+    })
+  })
+})
+
 describe('v0.9.21 CSS containment for performance', () => {
   it('app.css has containment rules', () => {
     const css = readFileSync(join(__dirname2, 'app.css'), 'utf8')

@@ -400,8 +400,6 @@
     "drHint": "Full-state backup includes profiles, secrets, protection lists, and settings.",
     "themeStyle": "Color Style",
     "themeStyleSlate": "Slate",
-    "themeStyleZinc": "Zinc",
-    "themeStyleNeutral": "Neutral",
     "themeStyleBlue": "Blue",
     "themeStyleViolet": "Violet",
     "themeStyleRose": "Rose",
@@ -459,5 +457,8 @@
   "secrets.policy.onDemand": "On-demand",
   "secrets.policy.periodic": "Periodic",
   "errors.chunkLoadFailed": "Failed to load component. Please retry.",
-  "common.retry": "Retry"
+  "common.retry": "Retry",
+  "app.minimize": "Minimize",
+  "app.maximize": "Maximize",
+  "app.close": "Close"
 }

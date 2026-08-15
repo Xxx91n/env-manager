@@ -281,13 +281,13 @@
     <span class="text-xs font-medium text-muted-foreground select-none">Env Manager</span>
   </div>
   <div class="titlebar-controls">
-    <button class="titlebar-btn" on:click={() => getCurrentWindow().minimize()} title={$t('app.title')}>
+    <button class="titlebar-btn" on:click={() => getCurrentWindow().minimize()} title={$t('app.minimize')}>
       <Minus class="w-3.5 h-3.5" />
     </button>
-    <button class="titlebar-btn" on:click={() => getCurrentWindow().toggleMaximize()} title={$t('app.title')}>
+    <button class="titlebar-btn" on:click={() => getCurrentWindow().toggleMaximize()} title={$t('app.maximize')}>
       <Square class="w-3 h-3" />
     </button>
-    <button class="titlebar-btn close" on:click={() => getCurrentWindow().close()} title={$t('app.title')}>
+    <button class="titlebar-btn close" on:click={() => getCurrentWindow().close()} title={$t('app.close')}>
       <X class="w-3.5 h-3.5" />
     </button>
   </div>
