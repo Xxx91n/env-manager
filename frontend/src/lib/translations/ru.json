@@ -452,5 +452,11 @@
   "profiles.fromProfile": "из",
   "secrets.policy.createdOnly": "Только при создании",
   "secrets.policy.onDemand": "По запросу",
-  "secrets.policy.periodic": "Периодически"
+  "secrets.policy.periodic": "Периодически",
+  "errors": {
+    "chunkLoadFailed": "Не удалось загрузить компонент. Повторите попытку."
+  },
+  "common": {
+    "retry": "Повторить"
+  }
 }

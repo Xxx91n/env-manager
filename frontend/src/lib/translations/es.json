@@ -452,5 +452,11 @@
   "profiles.fromProfile": "de",
   "secrets.policy.createdOnly": "Solo al crear",
   "secrets.policy.onDemand": "Bajo demanda",
-  "secrets.policy.periodic": "Periódico"
+  "secrets.policy.periodic": "Periódico",
+  "errors": {
+    "chunkLoadFailed": "Error al cargar el componente. Reintente."
+  },
+  "common": {
+    "retry": "Reintentar"
+  }
 }

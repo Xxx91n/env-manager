@@ -452,5 +452,11 @@
   "profiles.fromProfile": "von",
   "secrets.policy.createdOnly": "Nur bei Erstellung",
   "secrets.policy.onDemand": "Auf Abruf",
-  "secrets.policy.periodic": "Periodisch"
+  "secrets.policy.periodic": "Periodisch",
+  "errors": {
+    "chunkLoadFailed": "Komponente konnte nicht geladen werden. Bitte erneut versuchen."
+  },
+  "common": {
+    "retry": "Erneut versuchen"
+  }
 }

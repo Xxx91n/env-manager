@@ -452,5 +452,11 @@
   "profiles.fromProfile": "from",
   "secrets.policy.createdOnly": "CreatedAt only",
   "secrets.policy.onDemand": "On-demand",
-  "secrets.policy.periodic": "Periodic"
+  "secrets.policy.periodic": "Periodic",
+  "errors": {
+    "chunkLoadFailed": "Failed to load component. Please retry."
+  },
+  "common": {
+    "retry": "Retry"
+  }
 }

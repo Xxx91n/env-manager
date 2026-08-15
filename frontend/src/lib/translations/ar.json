@@ -452,5 +452,11 @@
   "profiles.fromProfile": "من",
   "secrets.policy.createdOnly": "عند الإنشاء فقط",
   "secrets.policy.onDemand": "عند الطلب",
-  "secrets.policy.periodic": "دوري"
+  "secrets.policy.periodic": "دوري",
+  "errors": {
+    "chunkLoadFailed": "فشل تحميل المكون. يرجى إعادة المحاولة."
+  },
+  "common": {
+    "retry": "إعادة المحاولة"
+  }
 }

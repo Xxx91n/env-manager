@@ -452,5 +452,11 @@
   "profiles.fromProfile": "from",
   "secrets.policy.createdOnly": "생성시만",
   "secrets.policy.onDemand": "주문형",
-  "secrets.policy.periodic": "주기적"
+  "secrets.policy.periodic": "주기적",
+  "errors": {
+    "chunkLoadFailed": "컴포넌트 로드에 실패했습니다. 다시 시도해 주세요."
+  },
+  "common": {
+    "retry": "재시도"
+  }
 }

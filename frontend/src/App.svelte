@@ -3,13 +3,7 @@
   import { Monitor, RefreshCw, Settings } from 'lucide-svelte'
   import { t, locale } from 'svelte-i18n'
   import Variables from './lib/components/Variables.svelte'
-  import ProfilePage from './lib/components/ProfilePage.svelte'
   import SettingsDialog from './lib/components/SettingsDialog.svelte'
-  import PathEditor from './lib/components/PathEditor.svelte'
- import HistoryPage from './lib/components/HistoryPage.svelte'
- import ProtectionPage from './lib/components/ProtectionPage.svelte'
- import AuditPage from './lib/components/AuditPage.svelte'
- import ServicePage from './lib/components/ServicePage.svelte'
   import ConfirmDialog from './lib/components/ConfirmDialog.svelte'
   import InputDialog from './lib/components/InputDialog.svelte'
   import { variables, loading, error, activeView, modal, isWriteInProgress, debugLogs, refreshTrigger, toasts, dismissToast } from './lib/stores'
@@ -19,6 +13,17 @@
   // Variables stays static (default tab, always needed on first load)
   // The other 7 tabs load on-demand via dynamic import() with a cache Map
   // to avoid re-importing on repeated tab switches.
+  // Dynamic import map for lazy-loaded tabs (Phase 1: code splitting activated)
+  // Each tab maps to a factory that returns a dynamic import() promise.
+  // Vite/Rollup will create separate chunks for each import() call.
+  const lazyImporters: Record<string, () => Promise<any>> = {
+    profiles: () => import('./lib/components/ProfilePage.svelte'),
+    path: () => import('./lib/components/PathEditor.svelte'),
+    history: () => import('./lib/components/HistoryPage.svelte'),
+    protection: () => import('./lib/components/ProtectionPage.svelte'),
+    audit: () => import('./lib/components/AuditPage.svelte'),
+    service: () => import('./lib/components/ServicePage.svelte'),
+  }
   const lazyComponentCache: Record<string, any> = {}
   async function loadComponent<T>(key: string, importer: () => Promise<{ default: T }>): Promise<T> {
     if (!lazyComponentCache[key]) {
@@ -207,6 +212,9 @@
       await listVariables()
       // v0.9.19: Preload adjacent page data in background for instant tab switch
       void preloadAdjacentPages()
+      // Phase 1: preload adjacent lazy components in background for instant tab switch
+      preloadComponent('profiles', lazyImporters.profiles)
+      setTimeout(() => preloadComponent('path', lazyImporters.path), 300)
     } catch (err) {
       initError = err instanceof Error ? err.message : String(err)
     }
@@ -343,17 +351,59 @@
         <Variables />
       {/if}
     {:else if $activeView === 'profiles'}
-      <ProfilePage />
+      {#await loadComponent('profiles', lazyImporters.profiles)}
+        <div class="flex justify-center py-8"><div class="animate-spin rounded-full h-6 w-6 border-b-2 border-primary"></div></div>
+      {:then mod}
+        {@const Comp = mod}
+        <Comp />
+      {:catch err}
+        <div class="flex flex-col items-center gap-2 py-8 text-muted-foreground"><Monitor class="w-6 h-6"/><p class="text-xs">{$t('errors.chunkLoadFailed')}</p><button on:click={() => { delete lazyComponentCache['profiles']; activeView.set('profiles') }} class="text-xs text-primary underline">{$t('common.retry')}</button></div>
+      {/await}
     {:else if $activeView === 'path'}
-      <PathEditor />
+      {#await loadComponent('path', lazyImporters.path)}
+        <div class="flex justify-center py-8"><div class="animate-spin rounded-full h-6 w-6 border-b-2 border-primary"></div></div>
+      {:then mod}
+        {@const Comp = mod}
+        <Comp />
+      {:catch err}
+        <div class="flex flex-col items-center gap-2 py-8 text-muted-foreground"><Monitor class="w-6 h-6"/><p class="text-xs">{$t('errors.chunkLoadFailed')}</p><button on:click={() => { delete lazyComponentCache['path']; activeView.set('path') }} class="text-xs text-primary underline">{$t('common.retry')}</button></div>
+      {/await}
     {:else if $activeView === 'history'}
-      <HistoryPage />
+      {#await loadComponent('history', lazyImporters.history)}
+        <div class="flex justify-center py-8"><div class="animate-spin rounded-full h-6 w-6 border-b-2 border-primary"></div></div>
+      {:then mod}
+        {@const Comp = mod}
+        <Comp />
+      {:catch err}
+        <div class="flex flex-col items-center gap-2 py-8 text-muted-foreground"><Monitor class="w-6 h-6"/><p class="text-xs">{$t('errors.chunkLoadFailed')}</p><button on:click={() => { delete lazyComponentCache['history']; activeView.set('history') }} class="text-xs text-primary underline">{$t('common.retry')}</button></div>
+      {/await}
     {:else if $activeView === 'protection'}
-      <ProtectionPage />
-   {:else if $activeView === 'audit'}
-     <AuditPage />
+      {#await loadComponent('protection', lazyImporters.protection)}
+        <div class="flex justify-center py-8"><div class="animate-spin rounded-full h-6 w-6 border-b-2 border-primary"></div></div>
+      {:then mod}
+        {@const Comp = mod}
+        <Comp />
+      {:catch err}
+        <div class="flex flex-col items-center gap-2 py-8 text-muted-foreground"><Monitor class="w-6 h-6"/><p class="text-xs">{$t('errors.chunkLoadFailed')}</p><button on:click={() => { delete lazyComponentCache['protection']; activeView.set('protection') }} class="text-xs text-primary underline">{$t('common.retry')}</button></div>
+      {/await}
+    {:else if $activeView === 'audit'}
+      {#await loadComponent('audit', lazyImporters.audit)}
+        <div class="flex justify-center py-8"><div class="animate-spin rounded-full h-6 w-6 border-b-2 border-primary"></div></div>
+      {:then mod}
+        {@const Comp = mod}
+        <Comp />
+      {:catch err}
+        <div class="flex flex-col items-center gap-2 py-8 text-muted-foreground"><Monitor class="w-6 h-6"/><p class="text-xs">{$t('errors.chunkLoadFailed')}</p><button on:click={() => { delete lazyComponentCache['audit']; activeView.set('audit') }} class="text-xs text-primary underline">{$t('common.retry')}</button></div>
+      {/await}
     {:else if $activeView === 'service'}
-      <ServicePage />
+      {#await loadComponent('service', lazyImporters.service)}
+        <div class="flex justify-center py-8"><div class="animate-spin rounded-full h-6 w-6 border-b-2 border-primary"></div></div>
+      {:then mod}
+        {@const Comp = mod}
+        <Comp />
+      {:catch err}
+        <div class="flex flex-col items-center gap-2 py-8 text-muted-foreground"><Monitor class="w-6 h-6"/><p class="text-xs">{$t('errors.chunkLoadFailed')}</p><button on:click={() => { delete lazyComponentCache['service']; activeView.set('service') }} class="text-xs text-primary underline">{$t('common.retry')}</button></div>
+      {/await}
     {/if}
   </div>
 </div>
