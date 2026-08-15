@@ -397,7 +397,11 @@
     "drImportPrompt": "Selecionar arquivo de estado para importar",
     "drExported": "{count} arquivos exportados",
     "drImported": "{count} arquivos importados",
-    "drHint": "O backup completo inclui perfis, segredos, listas de proteção e configurações."
+    "drHint": "O backup completo inclui perfis, segredos, listas de proteção e configurações.",
+    "themeStyle": "Estilo de cor",
+    "themeStyleSlate": "Ardósia",
+    "themeStyleZinc": "Zinco",
+    "themeStyleNeutral": "Neutro"
   },
   "history.allProfiles": "Todos os perfis",
   "settings.service.title": "Controle do serviço",

@@ -397,7 +397,11 @@
     "drImportPrompt": "اختر أرشيف الحالة للاستيراد",
     "drExported": "تم تصدير {count} ملف",
     "drImported": "تم استيراد {count} ملف",
-    "drHint": "النسخ الاحتياطي الكامل يشمل الملفات الشخصية والأسرار وقوائم الحماية والإعدادات."
+    "drHint": "النسخ الاحتياطي الكامل يشمل الملفات الشخصية والأسرار وقوائم الحماية والإعدادات.",
+    "themeStyle": "نمط اللون",
+    "themeStyleSlate": "الأردواز",
+    "themeStyleZinc": "الزنك",
+    "themeStyleNeutral": "محايد"
   },
   "history.allProfiles": "كل الملفات الشخصية",
   "settings.service.title": "تحكم الخدمة",

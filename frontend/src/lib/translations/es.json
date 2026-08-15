@@ -397,7 +397,11 @@
     "drImportPrompt": "Seleccionar archivo de estado a importar",
     "drExported": "{count} archivos exportados",
     "drImported": "{count} archivos importados",
-    "drHint": "La copia de seguridad completa incluye perfiles, secretos, listas de protección y configuración."
+    "drHint": "La copia de seguridad completa incluye perfiles, secretos, listas de protección y configuración.",
+    "themeStyle": "Estilo de color",
+    "themeStyleSlate": "Pizarra",
+    "themeStyleZinc": "Zinc",
+    "themeStyleNeutral": "Neutral"
   },
   "history.allProfiles": "Todos los perfiles",
   "settings.service.title": "Control del servicio",

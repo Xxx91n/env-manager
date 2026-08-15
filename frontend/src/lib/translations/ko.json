@@ -397,7 +397,11 @@
     "drImportPrompt": "가져올 상태 아카이브 선택",
     "drExported": "{count}개 파일 내보냄",
     "drImported": "{count}개 파일 가져옴",
-    "drHint": "전체 상태 백업에는 프로필, 보안 정보, 보호 목록, 설정이 포함됩니다."
+    "drHint": "전체 상태 백업에는 프로필, 보안 정보, 보호 목록, 설정이 포함됩니다.",
+    "themeStyle": "색상 스타일",
+    "themeStyleSlate": "슬레이트",
+    "themeStyleZinc": "아연",
+    "themeStyleNeutral": "중성"
   },
   "history.allProfiles": "모든 프로필",
   "settings.service.title": "서비스 제어",

@@ -397,7 +397,11 @@
     "drImportPrompt": "Select state archive to import",
     "drExported": "Exported {count} files",
     "drImported": "Imported {count} files",
-    "drHint": "Full-state backup includes profiles, secrets, protection lists, and settings."
+    "drHint": "Full-state backup includes profiles, secrets, protection lists, and settings.",
+    "themeStyle": "Color Style",
+    "themeStyleSlate": "Slate",
+    "themeStyleZinc": "Zinc",
+    "themeStyleNeutral": "Neutral"
   },
   "history.allProfiles": "All Profiles",
   "settings.service.title": "Service Control",

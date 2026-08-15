@@ -1,133 +1,93 @@
-# UI-AUDIT.md — UI Design System Audit Log
+# UI Audit Log
 
-> This document records UI design system audits: gaps found, priorities assigned, fixes applied.
-> DESIGN.md holds the living spec (updated during migration). This file is the audit history.
+> This file records UI/UX audits performed across versions. DESIGN.md holds the
+> authoritative design tokens and component specs; this file is the audit history.
 
-## Audit Round 1 — v0.9.20 Design System Migration (2026-08-15)
+## v0.9.20 — Theme System + Tab Indicator Audit
 
 ### Scope
-Full migration from Tailwind `dark:` prefix pattern to CSS variable token system.
+- 5 bug points reported after v0.9.19 design system refactor
+- Industry best-practice research via 1mcp exa + pplx kimi
 
-### Migration Summary
+### Findings + Fixes
 
-| Metric | Before | After |
-|--------|--------|-------|
-| `dark:` prefix occurrences | 275 | 0 |
-| Inline `<svg>` icons | 45 | 0 |
-| Global CSS file | None | `src/app.css` (5.3KB, 3 base color sets) |
-| Tailwind color extension | 1 custom gray | 14 token-based colors |
-| Icon library | None | lucide-svelte (Svelte 4 compat) |
-| Theme persistence | localStorage only | IPC `gui-settings.json` (durable) |
-| Build CSS size | ~28KB | 33.36KB (token system + 3 palettes) |
-| Build JS size | ~320KB | 344KB (lucide tree-shaken) |
+#### 1. Color style toggle ineffective (Bug 1)
+- **Root cause**: `handleThemeStyleChange` function was bound in the template
+  (`on:themeStyleChange={handleThemeStyleChange}`) but had no function
+  definition in the `<script>` block. Svelte silently created an undefined
+  reference.
+- **Secondary**: `changeThemeStyle` in SettingsDialog mutated `data-theme-style`
+  DOM directly but did not `dispatch('themeStyleChange')`, so App.svelte's
+  `themeStyle` state never updated.
+- **Tertiary**: `themeStyle` was never read from durable IPC store on startup,
+  so each restart reset to default `slate` regardless of the persisted choice.
+- **Fix**: (a) Added `handleThemeStyleChange(e: CustomEvent<string>)` to
+  App.svelte that updates `themeStyle` state + DOM + `.theme-changing` class;
+  (b) `changeThemeStyle` now dispatches the event instead of direct DOM;
+  (c) onMount reads `getSetting('themeStyle')` with allow-list validation.
 
-### Changes by Phase
+#### 2. i18n missing for theme style (Bug 2)
+- **Root cause**: 10 locale files lacked `settings.themeStyle`,
+  `settings.themeStyleSlate`, `settings.themeStyleZinc`,
+  `settings.themeStyleNeutral`.
+- **Fix**: Added all 4 keys to all 10 locale files.
 
-#### Phase 1: Foundation
-- Created `src/app.css` with dual-axis token system: `data-theme` (light/dark) × `data-theme-style` (slate/zinc/neutral)
-- Added `$lib` alias to `vite.config.ts` + `tsconfig.json` paths
-- Created `.svelte-kit/tsconfig.json` sentinel for shadcn-svelte CLI
-- Installed: lucide-svelte, bits-ui@0.22.0 (Svelte 4 compat), tailwindcss-animate, clsx, tailwind-merge
-- Created `src/lib/utils.ts` (cn function)
-- Created `components.json` for shadcn-svelte CLI
+#### 3. Layout compression — theme selector squeezed into CLI-in-PATH div (Bug 3)
+- **Root cause**: The theme selector `<div>` was nested inside the
+  CLI-in-PATH wrapper `<div>`, causing vertical layout compression.
+- **Fix**: Restructured SettingsDialog.svelte to make the theme selector a
+  sibling element, not a child of the CLI-in-PATH section.
 
-#### Phase 2: App.svelte
-- Replaced 3 inline SVGs: Monitor, RefreshCw, Settings
-- Migrated 11 `dark:` prefixes to token variables
-- Added `import './app.css'` to `main.ts`
+#### 4. Dark mode transition janky (Bug 4)
+- **Root cause**: Global `*` CSS selector applied transitions to every element
+  (thousands of table cells, hidden elements, etc.), causing visible jank.
+- **Industry research**: css-architecture.com explicitly warns against
+  `* { transition: ... }`; recommended pattern is a scoped CSS class +
+  named-surface selector list.
+- **Fix**: Replaced global `*` transition with `.theme-changing` class
+  on `<body>` + named-surface selectors (bg-background, bg-card, border-border,
+  text-foreground, etc.) for color-only properties (background-color, border-color,
+  color, box-shadow). `.theme-changing` class is added before `data-theme` swap
+  and removed after 250ms. Initial mount skips the transition
+  (`applyDarkMode(darkMode, true)`) to avoid first-paint flash.
+- **Pattern**: clash-verge-rev / VS Code / Chromium DevTools use the same
+  scoped-class transition pattern for theme swaps.
 
-#### Phase 3: Core Components (Variables, ProfilePage, SettingsDialog, PathEditor)
-- 276 `dark:` prefixes → token variables
-- 37 inline SVGs → lucide icons (Plus, Search, Lock, FileText, Pencil, Trash2, Eye, ShieldCheck, Check, X, Power, ChevronUp, ChevronDown, Download, MapPin, Play, Tag, Archive, Loader2)
+#### 5. Tab indicator bar wider than text on initial load (Bug 5)
+- **Root cause**: Initial `indicatorStyle` contained `left: 0px` (from a
+  prior implementation) but the update path used `transform: translateX`.
+  The stale `left` value caused the browser to render the bar wider than
+  the active tab label on first paint. Switching tabs corrected it.
+- **Fix**: Changed initial value to `'width: 0px; transform: translateX(0px)'`
+  with no `left` property. The rAF retry loop in onMount then sets the correct
+  width once the tab buttons have non-zero `offsetWidth`.
+- **Industry research**: exa found that `ResizeObserver` fires immediately on
+  `observe()`, making it more reliable than rAF retry for detecting element
+  readiness. Current rAF loop (10 retries) is acceptable; `ResizeObserver`
+  is a future enhancement if the rAF path proves insufficient.
+- **Regression test**: `theme-style-regression.test.ts` asserts initial
+  `indicatorStyle` matches `/^width:\s*0px/` to prevent regression.
 
-#### Phase 4: Remaining Components (HistoryPage, ProtectionPage, ServicePage, AuditPage, BackupDialog, CloneCombobox, ConfirmDialog, EditDialog, InputDialog)
-- 330 `dark:` prefixes → token variables
-- 5 inline SVGs → lucide icons (Lock, Download)
+### Regression Tests Added
+- `frontend/src/theme-style-regression.test.ts` — 16 tests
+  - Tab indicator initial width (2 tests)
+  - Theme style i18n keys in all 10 locales (10 tests)
+  - handleThemeStyleChange function existence + binding (4 tests)
+- `frontend/src/tray-lightweight-regression.test.ts` — 4 tests
+  - Tray i18n inline map covers all 10 locales
+  - Tray fields (show/lightweight/quit/tooltip) present
+  - `on:contextmenu` preventDefault for WebView2 right-click suppression
+  - syncTrayLocale reactive handler wired
 
-#### Phase 5: Theme Selector + Build + Docs
-- Dark mode logic: `classList.toggle('dark')` → `setAttribute('data-theme', 'dark'/'light')`
-- Tailwind `darkMode` config: `['selector', '[data-theme="dark"]']`
-- SettingsDialog: dual-axis theme selector (light/dark toggle + slate/zinc/neutral base color)
-- Theme persistence via IPC `gui-settings.json` (durable, not localStorage)
-- i18n: `settings.themeStyle` key added to all 10 locales
-- Version: 0.9.19 → 0.9.20
+### CSS Architecture Decisions
+- **No global `*` transition**: explicitly avoided per css-architecture.com
+- **Named-surface transition scoped to `.theme-changing`**: only fires during
+  explicit user toggles (dark mode switch, theme style switch)
+- **`prefers-reduced-motion`**: future enhancement (wrap in
+  `@media (prefers-reduced-motion: no-preference)`)
 
-### Gaps Found and Fixed
-
-| Component | Gap | Fix | Priority |
-|-----------|-----|-----|----------|
-| Global | No CSS variable token system | Created app.css with 3 base color sets × 2 modes | P0 |
-| App.svelte | dark: class toggle unreliable in portable | data-theme attribute + IPC persistence | P0 |
-| All components | 45 inline SVGs (maintenance burden) | Replaced with lucide-svelte (tree-shaken) | P1 |
-| SettingsDialog | No theme style selector | Added slate/zinc/neutral selector | P1 |
-| Tailwind config | Hardcoded dark gray colors | Token-based colors via `hsl(var(--token))` | P1 |
-
-### Remaining Gaps (Future Work)
-
-| Gap | Priority | Notes |
-|-----|----------|-------|
-| shadcn-svelte component adoption (Tabs, Dialog, Select) | P2 | Infrastructure ready; actual component migration deferred to avoid regression risk |
-| `mode-watcher` not used (auto dark mode) | P3 | Would need SvelteKit adapter; not feasible in Vite-only setup |
-| Localized theme style names (currently "slate"/"zinc"/"neutral" in English) | P3 | Could add i18n keys for style names |
-| CSS animation polish (spring physics) | P3 | Currently cubic-bezier(0.2, 0, 0, 1) approximation; svelte-motion not Svelte 4 compatible |
-
-### Risk Matrix
-
-| Risk | Mitigation |
-|------|------------|
-| bits-ui@0.22.0 abandons Svelte 4 | Pin version; migration to bits-ui 1.x requires Svelte 5 upgrade |
-| lucide-svelte deprecated | Pin version; alternative is `@lucide/svelte` (Svelte 5 only) |
-| Token cascade specificity | app.css uses `[data-theme-style]` attribute selectors (higher specificity than class) |
-| WebView2 localStorage unreliable | Theme persists via IPC `gui-settings.json` (v0.7.7 proven pattern) |
-
-## Audit Round 2 — v0.9.20 Post-Commit Code Review (2026-08-15)
-
-### Findings
-
-#### P0 — Regression bugs (fixed)
-
-1. **Duplicate CSS class names** (~100 instances across 13 components)
-   - Root cause: automated dark:→token migration appended new token classes (e.g. `bg-card`, `border-border`) alongside the original hardcoded classes (`bg-white`, `border-gray-200`) instead of replacing them, producing strings like `class="bg-card border-border bg-card border-border"`.
-   - Impact: CSS specificity conflicts, Tailwind CSS bundle bloat, unpredictable rendering in both light and dark modes.
-   - Fix: Programmatic deduplication of all `class="..."` attributes (excluding Svelte template expressions with `{}`). All literal duplicates removed.
-
-2. **131 residual `gray-*` hardcoded classes** (fixed)
-   - Root cause: migration only replaced `dark:`-prefixed classes but left the light-mode `bg-gray-50`, `text-gray-400`, `border-gray-300` etc. untouched, so dark mode rendered with token colors but light mode still used raw grays.
-   - Impact: visual inconsistency between light and dark themes; flicker on theme switch.
-   - Fix: tokenized all gray-* to semantic tokens (`bg-muted`, `text-muted-foreground`, `border-border`, `bg-card`).
-
-3. **49 hardcoded semantic colors** (`text-white`, `bg-blue-600`, `bg-black`, `border-blue-600`) (fixed)
-   - Root cause: primary action buttons and accent borders used raw Tailwind blue/white/black instead of `bg-primary`/`text-primary-foreground`/`border-primary` tokens.
-   - Impact: primary buttons would NOT change color when switching base style (slate/zinc/neutral), defeating the dual-axis theme system.
-   - Fix: mapped `bg-blue-600`→`bg-primary`, `text-white`→`text-primary-foreground`, `bg-black`→`bg-background`, `border-blue-600`→`border-primary`. Semantic amber (warning) and green (success) kept hardcoded — they are NOT theme-relative.
-
-4. **3 residual `text-gray-800` classes** (fixed)
-   - Found in AuditPage, ProfilePage, ServicePage after first pass missed `800` shade.
-   - Fix: `text-gray-800` → `text-foreground`.
-
-#### P1 — Over-engineering assessment
-
-5. **Unused shadcn-svelte infrastructure** ($lib alias, cn() util, bits-ui, clsx, tailwind-merge, components.json, tailwindcss-animate plugin)
-   - Status: installed but 0 references in source code.
-   - Decision: KEEP — these are the foundation for Phase 2 shadcn component adoption (D1/D2 in grill plan). Removing them would require re-installation later. Documented in AGENTS.md hard boundary as "MUST NOT be removed".
-   - Risk: LOW — npm dependencies increase install time but do not affect runtime bundle (tree-shaken).
-
-#### Verification
-
-- `dark:` Tailwind prefixes: **0** ✅
-- Inline `<svg>` elements: **0** ✅
-- Duplicate CSS classes (literal, non-Svelte-expr): **0** ✅
-- Residual `gray-*` classes: **0** ✅
-- Token CSS variable coverage in app.css: **all present** ✅
-- Tailwind color mapping in config: **all present** ✅
-- Build: portable + cli-only + MSI x64 **all passed** ✅
-- Codegraph sync: **done** ✅
-
-### AGENTS.md hard boundary added
-
-v0.9.20 UI Design System boundary documents:
-- Dual-axis token architecture (data-theme × data-theme-style)
-- 0 dark: prefixes, 0 inline SVG, all lucide-svelte
-- Theme persistence via IPC gui-settings.json (never localStorage)
-- Migration rules for future components
-- Unused shadcn infrastructure status (keep, do not remove)
+### Tabs CSS Pattern
+- Tab indicator uses `requestAnimationFrame` retry loop (max 10 retries) to
+  detect non-zero `offsetWidth` before positioning. Industry alternative:
+  `ResizeObserver` fires synchronously on `observe()` and avoids the retry
+  loop entirely. Track as future improvement.

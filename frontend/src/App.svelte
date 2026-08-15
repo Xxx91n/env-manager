@@ -56,7 +56,7 @@
     { id: 'audit', labelKey: 'nav.audit' },
   ]
   let tabRefs: HTMLButtonElement[] = []
-  let indicatorStyle = 'width: 0px; left: 0px;'
+  let indicatorStyle = 'width: 0px; transform: translateX(0px);'
   let indicatorTransition = 'none'
 
   function updateIndicator() {
@@ -178,6 +178,12 @@
       if (storedDarkMode === 'true') darkMode = true
     } catch { /* best-effort */ }
     try {
+      const storedThemeStyle = await getSetting('themeStyle')
+      if (storedThemeStyle && ['slate', 'zinc', 'neutral'].includes(storedThemeStyle)) {
+        themeStyle = storedThemeStyle
+      }
+    } catch { /* best-effort */ }
+    try {
       const storedFontScale = await getSetting('fontScale')
       if (storedFontScale) {
         const parsed = parseFloat(storedFontScale)
@@ -193,7 +199,7 @@
     } catch (err) {
       void frontendLog('error', 'App onMount: applyPersistedLocale threw').catch(() => {})
     }
-    applyDarkMode(darkMode)
+    applyDarkMode(darkMode, true)
     document.documentElement.setAttribute('data-theme-style', themeStyle)
     applyFontScale(fontScale)
 
@@ -206,10 +212,16 @@
     }
   })
 
-  function applyDarkMode(isDark: boolean) {
+  function applyDarkMode(isDark: boolean, skipTransition = false) {
     darkMode = isDark
     if (typeof document !== 'undefined') {
       document.documentElement.setAttribute('data-theme', isDark ? 'dark' : 'light')
+      if (!skipTransition) {
+        document.body.classList.add('theme-changing')
+        setTimeout(() => {
+          document.body.classList.remove('theme-changing')
+        }, 250)
+      }
     }
   }
 
@@ -224,6 +236,17 @@
     applyDarkMode(e.detail)
   }
 
+  function handleThemeStyleChange(e: CustomEvent<string>) {
+    themeStyle = e.detail
+    if (typeof document !== 'undefined') {
+      document.body.classList.add('theme-changing')
+      document.documentElement.setAttribute('data-theme-style', e.detail)
+      setTimeout(() => {
+        document.body.classList.remove('theme-changing')
+      }, 250)
+    }
+  }
+
   function handleFontScaleChange(e: CustomEvent<number>) {
     applyFontScale(e.detail)
   }
@@ -235,7 +258,7 @@
   <title>{$t('app.title')}</title>
 </svelte:head>
 
-<div class="min-h-screen bg-background text-foreground transition-colors">
+<div class="min-h-screen bg-background text-foreground transition-colors duration-300 ease-in-out">
   <header class="bg-card border-b border-border px-5 py-3">
     <div class="flex items-center justify-between">
       <div class="flex items-center gap-3">
@@ -341,6 +364,7 @@
       themeStyle={themeStyle}
     on:close={() => (showSettings = false)}
     on:themeChange={handleThemeChange}
+    on:themeStyleChange={handleThemeStyleChange}
     fontScale={fontScale}
     on:fontScaleChange={handleFontScaleChange}
     on:pathChanged={() => {

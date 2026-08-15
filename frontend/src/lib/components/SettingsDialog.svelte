@@ -78,8 +78,15 @@
 
   function changeThemeStyle(style: string) {
     themeStyle = style
-    document.documentElement.setAttribute('data-theme-style', style)
     void setSetting('themeStyle', style)
+    dispatch('themeStyleChange', style)
+    // v0.9.20 Add theme-changing class for smooth color base transition
+    if (typeof document !== 'undefined' && document.body) {
+      document.body.classList.add('theme-changing')
+      setTimeout(() => {
+        document.body.classList.remove('theme-changing')
+      }, 250)
+    }
   }
 
   function toggleDarkMode() {
@@ -90,7 +97,6 @@
       // Ignore storage errors
     }
     dispatch('themeChange', darkMode)
-    dispatch('themeStyleChange', themeStyle)
   }
 
   async function toggleCliInPath() {
@@ -478,32 +484,32 @@
       <div class="flex items-center justify-between">
         <span class="text-xs font-medium text-muted-foreground">{$t('settings.addCliToPath')}</span>
         <button
-         on:click={toggleCliInPath}
-         disabled={cliToggleLoading}
+          on:click={toggleCliInPath}
+          disabled={cliToggleLoading}
           class="relative inline-flex h-5 w-8 items-center rounded-full transition {cliInPath ? 'bg-primary' : 'bg-border'} disabled:opacity-50"
-         role="switch"
-         aria-checked={cliInPath}
-         aria-label={$t('settings.addCliToPath')}
-       >
-         <span
+          role="switch"
+          aria-checked={cliInPath}
+          aria-label={$t('settings.addCliToPath')}
+        >
+          <span
             class="inline-block h-3.5 w-3.5 transform rounded-full bg-card shadow transition {cliInPath ? 'translate-x-3.5' : 'translate-x-0.5'}"
-         ></span>
+          ></span>
         </button>
-      
-        <!-- Theme base color selector -->
-        <div class="flex items-center justify-between py-1">
-          <span class="text-xs font-medium text-muted-foreground">{$t('settings.themeStyle')}</span>
-          <div class="flex gap-1">
-            {#each ['slate', 'zinc', 'neutral'] as style}
-              <button
-                on:click={() => changeThemeStyle(style)}
-                class="px-2.5 py-1 text-xs border rounded transition {themeStyle === style ? 'bg-primary text-primary-foreground border-primary' : 'border-border text-muted-foreground hover:bg-accent'}"
-                aria-label={style}
-              >
-                {style}
-              </button>
-            {/each}
-          </div>
+      </div>
+
+      <!-- Theme base color selector -->
+      <div class="flex items-center justify-between py-1">
+        <span class="text-xs font-medium text-muted-foreground">{$t('settings.themeStyle')}</span>
+        <div class="flex gap-1">
+          {#each ['slate', 'zinc', 'neutral'] as style}
+            <button
+              on:click={() => changeThemeStyle(style)}
+              class="px-2.5 py-1 text-xs border rounded transition {themeStyle === style ? 'bg-primary text-primary-foreground border-primary' : 'border-border text-muted-foreground hover:bg-accent'}"
+              aria-label={$t('settings.' + (style === 'slate' ? 'themeStyleSlate' : style === 'zinc' ? 'themeStyleZinc' : 'themeStyleNeutral'))}
+            >
+              {$t('settings.' + (style === 'slate' ? 'themeStyleSlate' : style === 'zinc' ? 'themeStyleZinc' : 'themeStyleNeutral'))}
+            </button>
+          {/each}
         </div>
       </div>
       <div>

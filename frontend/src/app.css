@@ -181,3 +181,35 @@
   --popover: 222.2 84% 4.9%;
   --popover-foreground: 210 40% 98%;
 }
+
+
+/* v0.9.20 Theme transition — scoped to named surfaces only (industry best practice)
+   Pattern: add .theme-changing class to body before data-theme swap,
+   remove after ~200ms. Only color properties (background-color, border-color,
+   box-shadow) transition — never layout properties.
+   Global * selector is explicitly avoided: it transitions thousands of elements
+   simultaneously, multiplying paint cost with no perceptual benefit.
+*/
+@media (prefers-reduced-motion: no-preference) {
+  .theme-changing,
+  .theme-changing .bg-background,
+  .theme-changing .bg-card,
+  .theme-changing .bg-muted,
+  .theme-changing .bg-secondary,
+  .theme-changing .bg-accent,
+  .theme-changing .bg-popover,
+  .theme-changing .bg-primary,
+  .theme-changing .bg-destructive,
+  .theme-changing .border-border,
+  .theme-changing .border-input,
+  .theme-changing .text-foreground,
+  .theme-changing .text-muted-foreground,
+  .theme-changing .text-primary,
+  .theme-changing .text-destructive,
+  .theme-changing .text-secondary,
+  .theme-changing .text-accent-foreground,
+  .theme-changing .text-popover-foreground,
+  .theme-changing .text-primary-foreground {
+    transition: background-color 0.2s ease, border-color 0.2s ease, color 0.15s ease, box-shadow 0.2s ease;
+  }
+}

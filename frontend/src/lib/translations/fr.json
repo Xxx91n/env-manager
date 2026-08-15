@@ -397,7 +397,11 @@
     "drImportPrompt": "Sélectionner l'archive à importer",
     "drExported": "{count} fichiers exportés",
     "drImported": "{count} fichiers importés",
-    "drHint": "La sauvegarde complète inclut profils, secrets, listes de protection et paramètres."
+    "drHint": "La sauvegarde complète inclut profils, secrets, listes de protection et paramètres.",
+    "themeStyle": "Style de couleur",
+    "themeStyleSlate": "Ardoise",
+    "themeStyleZinc": "Zinc",
+    "themeStyleNeutral": "Neutre"
   },
   "history.allProfiles": "Tous les profils",
   "settings.service.title": "Contrôle du service",

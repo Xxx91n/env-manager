@@ -397,7 +397,11 @@
     "drImportPrompt": "インポートする状態アーカイブを選択",
     "drExported": "{count} ファイルをエクスポート",
     "drImported": "{count} ファイルをインポート",
-    "drHint": "全状態バックアップにはプロファイル、シークレット、保護リスト、設定が含まれます。"
+    "drHint": "全状態バックアップにはプロファイル、シークレット、保護リスト、設定が含まれます。",
+    "themeStyle": "カラースタイル",
+    "themeStyleSlate": "スレート",
+    "themeStyleZinc": "ジンク",
+    "themeStyleNeutral": "ニュートラル"
   },
   "history.allProfiles": "すべてのプロファイル",
   "settings.service.title": "サービス制御",

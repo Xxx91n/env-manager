@@ -397,7 +397,11 @@
     "drImportPrompt": "选择要导入的状态归档",
     "drExported": "已导出 {count} 个文件",
     "drImported": "已导入 {count} 个文件",
-    "drHint": "全状态备份包含配置文件、机密、保护名单和设置。"
+    "drHint": "全状态备份包含配置文件、机密、保护名单和设置。",
+    "themeStyle": "颜色风格",
+    "themeStyleSlate": "板岩灰",
+    "themeStyleZinc": "锌灰",
+    "themeStyleNeutral": "中性灰"
   },
   "history.allProfiles": "所有配置文件",
   "settings.service.title": "服务控制",
