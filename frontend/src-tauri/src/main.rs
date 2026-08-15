@@ -1051,6 +1051,11 @@ fn update_lightweight_check(app: &tauri::AppHandle, checked: bool) {
         if let Err(e) = state.lightweight_item.set_checked(checked) {
             warn!("[tray] set_checked({}) failed: {}", checked, e);
         }
+        // Also re-assert enabled state as defense-in-depth against muda
+        // Windows HMENU state loss (same root cause as set_text regression).
+        if let Err(e) = state.lightweight_item.set_enabled(true) {
+            warn!("[tray] set_enabled in update_lightweight_check failed: {}", e);
+        }
     } else {
         warn!("[tray] LightMenuState not managed — cannot update checkmark");
     }
@@ -1425,6 +1430,12 @@ fn update_tray_locale_impl(
         // lightweight state to prevent the "always checked" regression.
         if let Err(e) = state.lightweight_item.set_checked(lightweight::is_in_lightweight_mode()) {
             warn!("[tray] set_checked after set_text failed: {}", e);
+        }
+        // After set_text, muda on Windows also resets the enabled state,
+        // causing the menu item to appear grey/disabled. Re-sync to ensure
+        // the item remains interactive (root cause of persistent disabled bug).
+        if let Err(e) = state.lightweight_item.set_enabled(true) {
+            warn!("[tray] set_enabled after set_text failed: {}", e);
         }
     } else {
         warn!("[tray] LightMenuState not managed — menu text not updated");

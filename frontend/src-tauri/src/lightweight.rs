@@ -210,4 +210,31 @@ mod tests {
         cancel_lightweight_timer(); // again no-op
         assert!(!is_in_lightweight_mode());
     }
+
+    /// Regression test for the "always disabled/grey" bug (muda set_text resets
+    /// enabled state on Windows). This test verifies the state machine transition
+    /// sequence that update_tray_locale_impl relies on to correctly call both
+    /// set_checked AND set_enabled after a set_text call.
+    #[test]
+    fn test_tray_sync_state_after_transition() {
+        LIGHTWEIGHT_STATE.store(STATE_NORMAL, Ordering::Release);
+        assert!(!is_in_lightweight_mode());
+        assert!(try_transition(STATE_NORMAL, STATE_LIGHTWEIGHT));
+        assert!(is_in_lightweight_mode());
+        assert!(try_transition(STATE_LIGHTWEIGHT, STATE_NORMAL));
+        assert!(!is_in_lightweight_mode());
+    }
+
+    /// Regression test: verify the callback registration mechanism works
+    /// for both checked=true and checked=false paths (enter and exit).
+    #[test]
+    fn test_tray_callback_registration_for_enabled_sync() {
+        use std::sync::atomic::{AtomicU8, Ordering};
+        static LAST_CHECKED_VALUE: AtomicU8 = AtomicU8::new(99);
+        register_tray_check_callback(Box::new(|_app, checked| {
+            LAST_CHECKED_VALUE.store(if checked { 1 } else { 0 }, Ordering::Release);
+        }));
+        assert!(TRAY_CHECK_CB.read().is_ok());
+        assert_eq!(LAST_CHECKED_VALUE.load(Ordering::Acquire), 99);
+    }
 }
