@@ -161,6 +161,9 @@ env-manager-cli.exe audit verify-ledger
 - **v0.9.17 PathEditor 反向索引 + ProfilePage pathScopes 徽章**：`PathEditor.svelte` 使用反向索引查找进行移动操作。ProfilePage 为 PATH 条目显示 per-entry scope 徽章（用户/系统）。IPC `mount_id` 字段完全 snake_case 对齐。
 - **v0.9.18 服务轮换 + WebView2 加固**：`reconcile.rs` 中 `call_cli_rotate()` 设置 `CREATE_NO_WINDOW` 标志防止控制台窗口闪现。`ServicePage.svelte` 使用 `toLocaleString()` 格式化时间戳。WebView2 原生右键菜单完全屏蔽（`oncontextmenu preventDefault` + CSS `user-select: none`，clash-verge-rev 模式）。
 - **v0.9.19 SWR 缓存 + 预加载**：所有 5 个读 API（listVariablesRaw、listPathEntries、listHistory、listProtection、listProfiles）使用 stale-while-revalidate 模式，TTL 15 秒。`listProfiles` 添加缓存（此前完全无缓存，为最大延迟源）。ProtectionPage 4 路并发 IPC。启动时预加载相邻页面缓存。
+- **v0.9.20 UI 设计系统 — 双轴主题令牌**：6 色主题系统（slate/blue/violet/rose/cyan/amber），使用 `data-theme` + `data-theme-style` 属性选择器。移除所有 `dark:` Tailwind 前缀；暗色模式由 `[data-theme="dark"]` 驱动。所有内联 SVG 替换为 `lucide-svelte`。作用域 CSS 过渡（`.theme-changing` 类）。WebView2 右键菜单屏蔽。Tab 指示器宽度 0px 初始状态修复。
+- **v0.9.20 轻量模式 + 托盘修复**：`CheckMenuItem.set_enabled(true)` 在 `set_text` 后调用以修复 muda HMENU 重建 bug。`close` = 最小化到托盘；退出仅通过托盘。每次 `update_lightweight_check` 同步勾选状态。
+- **v0.9.21 性能 Phase 2 — 进程生命周期 + 懒加载 + 遥测**：6 个 tab 从静态 import 改为动态 `import()` + Vite 代码分割（懒加载 `loadComponent`/`preloadComponent` 已激活，不再是死代码）。进程泄露防护 + IPC 连接计数器 + 排水验证。静默性能遥测（视图切换计时 + `run_cli` 耗时）。机密提供者超时 + 长会话内存安全。标题栏按钮工具提示 + 清理无用 i18n 键。主题样式 allow-list 修复（此前过期，重启时阻止非 slate 主题）。
 - 用户和系统范围支持，用户范围无需管理员权限
 
 ### GUI 模式
