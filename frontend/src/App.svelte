@@ -61,44 +61,11 @@
     { id: 'service', labelKey: 'nav.service' },
     { id: 'audit', labelKey: 'nav.audit' },
   ]
+  // v0.9.24: CSS-only tab indicator — no JS measurement, no offsetWidth.
+  // Each tab button has its own border-b that shows when active.
+  // This eliminates the MUI #7187 class bug where offsetWidth includes
+  // button padding (px-3 = 12px each side), making indicator wider than text.
   let tabRefs: HTMLButtonElement[] = []
-  let indicatorStyle = 'width: 0px; transform: translateX(0px);'
-  let indicatorTransition = 'none'
-
-  function updateIndicator() {
-    const activeIdx = tabItems.findIndex(t => t.id === $activeView)
-    if (activeIdx >= 0 && tabRefs[activeIdx]) {
-      const el = tabRefs[activeIdx]
-      const w = el.offsetWidth
-      const l = el.offsetLeft
-      indicatorStyle = 'width: ' + w + 'px; transform: translateX(' + l + 'px);'
-      // Enable transition after the first paint to avoid width animation from 0
-      if (indicatorTransition === 'none') {
-        requestAnimationFrame(() => {
-          indicatorTransition = 'transform 200ms cubic-bezier(0.2, 0, 0, 1), width 200ms cubic-bezier(0.2, 0, 0, 1)'
-        })
-      }
-    }
-  }
-
-    // Bug fix: indicator width wrong on initial load because tab buttons
-  // haven't rendered when the first setTimeout(0) fires. Use a retry loop
-  // with requestAnimationFrame for the initial paint, plus svelte:window
-  // resize handler to reposition on viewport changes.
-  onMount(() => {
-    let retries = 0
-    const tryInit = () => {
-      const activeIdx = tabItems.findIndex(t => t.id === $activeView)
-      if (activeIdx >= 0 && tabRefs[activeIdx] && tabRefs[activeIdx].offsetWidth > 0) {
-        updateIndicator()
-      } else if (retries < 10) {
-        retries++
-        requestAnimationFrame(tryInit)
-      }
-    }
-    requestAnimationFrame(tryInit)
-  })
-  $: if ($activeView) { requestAnimationFrame(updateIndicator) }
 
   function handleTabKeydown(e: KeyboardEvent, idx: number) {
     let nextIdx: number | null = null
@@ -233,10 +200,10 @@
   function applyDarkMode(isDark: boolean, skipTransition = false) {
     darkMode = isDark
     if (typeof document !== 'undefined') {
-      // Industry-standard withoutTransition pattern (mode-watcher / reemus.dev):
-      // Temporarily disable ALL CSS transitions during mode switch to prevent
-      // white flash on locked/muted elements. Uses getComputedStyle to force
-      // browser reflow before re-enabling transitions.
+      // v0.9.24: withoutTransition pattern (reemus.dev "ultimate solution"):
+      // disable → action → getComputedStyle(force reflow) → enable SYNCHRONOUSLY.
+      // The prior code removed the style in requestAnimationFrame (async), leaving
+      // a 1-frame gap where transitions re-enabled → white flash on locked elements.
       let styleEl: HTMLStyleElement | null = null
       const disableTransitions = !skipTransition
       if (disableTransitions) {
@@ -249,13 +216,13 @@
       document.documentElement.setAttribute('data-theme', isDark ? 'dark' : 'light')
 
       if (styleEl) {
-        // Force browser to paint the transition-disabled state before removing it
-        // getComputedStyle forces a synchronous reflow (reemus.dev "ultimate solution")
+        // Force browser to evaluate the transition-disabled state by reading
+        // computed style — this flushes the pending style change synchronously.
         void window.getComputedStyle(styleEl).opacity
-        // Remove on next frame to ensure the DOM has settled
-        window.requestAnimationFrame(() => {
-          styleEl?.remove()
-        })
+        // Remove style SYNCHRONOUSLY (not in rAF) — reemus.dev best practice:
+        // the style must be removed in the same synchronous frame it was applied
+        // so no rAF gap exists where transitions could re-enable and flash.
+        styleEl.remove()
       }
     }
   }
@@ -310,8 +277,8 @@
   </div>
 </div>
 
-<div class="h-screen flex flex-col overflow-hidden bg-background text-foreground transition-colors duration-300 ease-in-out">
-  <header class="bg-card border-b border-border px-5 py-3">
+<div class="h-screen flex flex-col overflow-hidden bg-background text-foreground" style="padding-top: 32px;">
+  <header class="bg-card border-b border-border px-5 py-3 flex-shrink-0">
     <div class="flex items-center justify-between">
       <div class="flex items-center gap-3">
         <Monitor class="w-5 h-5 text-primary" />
@@ -357,11 +324,11 @@
       </div>
     </div>
 
-    <div class="relative mt-3">
+    <div class="mt-3">
       <div
         role="tablist"
         aria-label="{$t('nav.variables')} — {$t('nav.audit')}"
-        class="flex gap-1 border-b border-border"
+        class="flex gap-1"
       >
         {#each tabItems as tab, i}
           <button
@@ -373,20 +340,14 @@
             disabled={$isWriteInProgress && (tab.id === 'variables' || tab.id === 'profiles' || tab.id === 'path')}
             on:click={() => activeView.set(tab.id)}
             on:keydown={(e) => handleTabKeydown(e, i)}
-            class="px-3 py-2 text-xs font-medium transition-colors duration-200 rounded-t-md {$activeView === tab.id
-              ? 'text-primary font-semibold'
-              : 'text-muted-foreground hover:text-foreground hover:bg-accent'} disabled:opacity-50 disabled:cursor-not-allowed"
-            
+            class="px-3 py-2 text-xs font-medium transition-colors duration-200 rounded-t-md border-b-2 {$activeView === tab.id
+              ? 'text-primary font-semibold border-primary'
+              : 'text-muted-foreground hover:text-foreground hover:bg-accent border-transparent'} disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {$t(tab.labelKey)}
           </button>
         {/each}
       </div>
-      <div
-        class="absolute bottom-0 h-[3px] bg-primary rounded-t-md"
-        style={indicatorStyle + '; transition: ' + indicatorTransition + '; will-change: transform'}
-        aria-hidden="true"
-      ></div>
     </div>
   </header>
 

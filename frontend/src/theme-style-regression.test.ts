@@ -5,26 +5,32 @@ import { fileURLToPath } from 'url'
 
 const __dirname2 = typeof __dirname !== 'undefined' ? __dirname : dirname(fileURLToPath(import.meta.url))
 
-describe('v0.9.20 Tab indicator initial width regression', () => {
-  it('initial indicatorStyle is width:0px to prevent first-render oversized bar', () => {
-    // Read App.svelte source and verify the initial indicatorStyle value
-    // is width:0, not a computed non-zero width. This catches the regression
-    // where the indicator bar renders wider than the active tab label text
-    // on the very first paint.
+describe('v0.9.24 Tab indicator CSS-only invariant (supersedes v0.9.20)', () => {
+  // v0.9.24: The indicator is now CSS-only (border-b-2 on active tab).
+  // The prior test only checked the initial string value of indicatorStyle,
+  // which was always 'width: 0px' — a static string assertion that never
+  // caught the real bug: el.offsetWidth includes button padding (px-3 = 12px
+  // each side), making the indicator 24px wider than the text (MUI #7187).
+  // The real invariant is: NO JS-based width measurement drives the indicator,
+  // and the active tab must have a CSS border indicator.
+
+  it('no JS offsetWidth-based indicator measurement (MUI #7187 root cause eliminated)', () => {
     const appSrc = readFileSync(join(__dirname2, 'App.svelte'), 'utf8')
-    // The initial value must be width: 0px OR a string that starts with width:0
-    const match = appSrc.match(/let\s+indicatorStyle\s*=\s*'([^']*)'/)
-    expect(match).toBeTruthy()
-    const initialValue = match![1]
-    expect(initialValue).toMatch(/^width:\s*0px/)
-    expect(initialValue).not.toMatch(/^width:\s*[1-9]/)
+    expect(appSrc).not.toMatch(/function\s+updateIndicator\s*\([^)]*\)\s*\{[\s\S]*?offsetWidth/)
+    expect(appSrc).not.toMatch(/let\s+indicatorStyle\s*=/)
+    expect(appSrc).not.toMatch(/let\s+indicatorTransition\s*=/)
   })
 
-  it('indicatorTransition starts as none to avoid animating from width:0', () => {
+  it('active tab has CSS border-bottom indicator (border-primary)', () => {
     const appSrc = readFileSync(join(__dirname2, 'App.svelte'), 'utf8')
-    const match = appSrc.match(/let\s+indicatorTransition\s*=\s*'([^']*)'/)
-    expect(match).toBeTruthy()
-    expect(match![1]).toBe('none')
+    expect(appSrc).toMatch(/border-primary/)
+    expect(appSrc).toMatch(/border-transparent/)
+    expect(appSrc).not.toMatch(/absolute\s+bottom-0.*bg-primary.*rounded-t-md/)
+  })
+
+  it('no absolute indicator div with inline style binding', () => {
+    const appSrc = readFileSync(join(__dirname2, 'App.svelte'), 'utf8')
+    expect(appSrc).not.toMatch(/style=\{indicatorStyle/)
   })
 })
 

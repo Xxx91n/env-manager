@@ -11,6 +11,7 @@
 /* ========== Slate base color (default) ========== */
 :root,
 [data-theme-style="slate"] {
+  color-scheme: light dark; /* v0.9.24: WebView2 native scrollbar/form controls follow theme */
   --background: 0 0% 100%;
   --foreground: 222.2 84% 4.9%;
   --card: 0 0% 100%;
@@ -41,7 +42,7 @@
   --secondary: 217.2 32.6% 17.5%; --secondary-foreground: 210 40% 98%;
   --muted: 217.2 32.6% 17.5%; --muted-foreground: 215 20.2% 65.1%;
   --accent: 217.2 32.6% 17.5%; --accent-foreground: 210 40% 98%;
-  --destructive: 0 72.2% 50.6%; --destructive-foreground: 210 40% 98%;
+  --destructive: 0 84% 67%; --destructive-foreground: 210 40% 98%;
   --border: 217.2 32.6% 17.5%; --input: 217.2 32.6% 17.5%; --ring: 212.7 26.8% 83.9%;
   --chart-1: 220 70% 50%; --chart-2: 160 60% 45%; --chart-3: 130 60% 35%; --chart-4: 210 80% 66%; --chart-5: 340 75% 55%;
 }
@@ -68,7 +69,7 @@
   --secondary: 217.2 32.6% 17.5%; --secondary-foreground: 210 40% 98%;
   --muted: 217.2 32.6% 17.5%; --muted-foreground: 215 25.2% 65.1%;
   --accent: 217.2 32.6% 20%; --accent-foreground: 210 40% 98%;
-  --destructive: 0 72.2% 50.6%; --destructive-foreground: 210 40% 98%;
+  --destructive: 0 84% 67%; --destructive-foreground: 210 40% 98%;
   --border: 217.2 32.6% 17.5%; --input: 217.2 32.6% 17.5%; --ring: 217.2 91.2% 59.8%;
   --chart-1: 220 70% 60%; --chart-2: 160 60% 45%; --chart-3: 130 60% 35%; --chart-4: 210 80% 66%; --chart-5: 340 75% 55%;
 }
@@ -95,7 +96,7 @@
   --secondary: 263 25% 18%; --secondary-foreground: 263 70% 85%;
   --muted: 263 20% 15%; --muted-foreground: 263 15% 55%;
   --accent: 263 30% 22%; --accent-foreground: 263 70% 85%;
-  --destructive: 0 72.2% 50.6%; --destructive-foreground: 210 40% 98%;
+  --destructive: 0 84% 67%; --destructive-foreground: 210 40% 98%;
   --border: 263 20% 20%; --input: 263 20% 20%; --ring: 263 70% 70%;
   --chart-1: 263 70% 70%; --chart-2: 160 60% 45%; --chart-3: 130 60% 35%; --chart-4: 210 80% 66%; --chart-5: 340 75% 55%;
 }
@@ -122,7 +123,7 @@
   --secondary: 340 25% 18%; --secondary-foreground: 340 70% 85%;
   --muted: 340 20% 15%; --muted-foreground: 340 15% 55%;
   --accent: 340 30% 22%; --accent-foreground: 340 70% 85%;
-  --destructive: 0 72.2% 50.6%; --destructive-foreground: 210 40% 98%;
+  --destructive: 0 84% 67%; --destructive-foreground: 210 40% 98%;
   --border: 340 20% 20%; --input: 340 20% 20%; --ring: 340 70% 65%;
   --chart-1: 340 70% 65%; --chart-2: 160 60% 45%; --chart-3: 130 60% 35%; --chart-4: 210 80% 66%; --chart-5: 27 87% 67%;
 }
@@ -149,7 +150,7 @@
   --secondary: 190 25% 18%; --secondary-foreground: 190 70% 85%;
   --muted: 190 20% 15%; --muted-foreground: 190 15% 55%;
   --accent: 190 30% 22%; --accent-foreground: 190 70% 85%;
-  --destructive: 0 72.2% 50.6%; --destructive-foreground: 210 40% 98%;
+  --destructive: 0 84% 67%; --destructive-foreground: 210 40% 98%;
   --border: 190 20% 20%; --input: 190 20% 20%; --ring: 190 70% 55%;
   --chart-1: 190 70% 55%; --chart-2: 160 60% 45%; --chart-3: 130 60% 35%; --chart-4: 210 80% 66%; --chart-5: 340 75% 55%;
 }
@@ -176,7 +177,7 @@
   --secondary: 38 25% 18%; --secondary-foreground: 38 80% 85%;
   --muted: 38 20% 15%; --muted-foreground: 38 15% 55%;
   --accent: 38 30% 22%; --accent-foreground: 38 80% 85%;
-  --destructive: 0 72.2% 50.6%; --destructive-foreground: 210 40% 98%;
+  --destructive: 0 84% 67%; --destructive-foreground: 210 40% 98%;
   --border: 38 20% 20%; --input: 38 20% 20%; --ring: 38 80% 60%;
   --chart-1: 38 80% 60%; --chart-2: 160 60% 45%; --chart-3: 130 60% 35%; --chart-4: 210 80% 66%; --chart-5: 340 75% 55%;
 }
@@ -188,7 +189,7 @@
   --secondary: 217.2 32.6% 17.5%; --secondary-foreground: 210 40% 98%;
   --muted: 217.2 32.6% 17.5%; --muted-foreground: 215 20.2% 65.1%;
   --accent: 217.2 32.6% 17.5%; --accent-foreground: 210 40% 98%;
-  --destructive: 0 72.2% 50.6%; --destructive-foreground: 210 40% 98%;
+  --destructive: 0 84% 67%; --destructive-foreground: 210 40% 98%;
   --border: 217.2 32.6% 17.5%; --input: 217.2 32.6% 17.5%; --ring: 212.7 26.8% 83.9%;
   --card: 222.2 84% 4.9%; --card-foreground: 210 40% 98%;
   --popover: 222.2 84% 4.9%; --popover-foreground: 210 40% 98%;
@@ -222,8 +223,10 @@
   -webkit-user-select: none;
   background: hsl(var(--card));
   border-bottom: 1px solid hsl(var(--border));
-  flex-shrink: 0;
-  position: relative;
+  position: fixed; /* v0.9.24: Tauri official — fixed top, content padded 32px */
+  top: 0;
+  left: 0;
+  right: 0;
   z-index: 100;
 }
 .titlebar-drag {
