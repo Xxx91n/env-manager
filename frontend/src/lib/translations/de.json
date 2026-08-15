@@ -404,7 +404,8 @@
     "themeStyleViolet": "Violet",
     "themeStyleRose": "Rosé",
     "themeStyleCyan": "Cyan",
-    "themeStyleAmber": "Bernstein"
+    "themeStyleAmber": "Bernstein",
+    "lightMode": "Hell"
   },
   "history.allProfiles": "Alle Profile",
   "settings.service.title": "Dienststeuerung",

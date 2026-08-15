@@ -444,7 +444,7 @@
   on:keydown={(e) => { if (e.key === 'Escape') handleClose() }}
   role="presentation"
   tabindex="-1">
-  <div class="bg-card rounded-lg shadow-xl max-w-sm w-full mx-4" on:click|stopPropagation>
+  <div class="bg-card rounded-lg shadow-xl max-w-sm max-h-[90vh] overflow-y-auto w-full mx-4" on:click|stopPropagation>
     <div class="px-5 py-4 border-b border-border">
       <h2 class="text-sm font-semibold text-foreground">{$t('nav.settings')}</h2>
     </div>
@@ -516,43 +516,22 @@
         <label for="settings-font-size" class="block text-xs font-medium text-muted-foreground mb-1.5">
           {$t('settings.fontSize')}
         </label>
-        <div class="flex items-center gap-2">
-          <button
-            on:click={() => changeFontScale(0.85)}
-            class="px-2 py-1 text-xs border rounded transition {selectedFontScale === 0.85 ? 'bg-primary text-primary-foreground border-primary bg-primary/80 border-primary' : 'border-border text-muted-foreground hover:bg-muted/50 border-border/80 text-muted-foreground hover:bg-accent'}"
-          >
-            A
-          </button>
-          <button
-            on:click={() => changeFontScale(1)}
-            class="px-2 py-1 text-sm border rounded transition {selectedFontScale === 1 ? 'bg-primary text-primary-foreground border-primary bg-primary/80 border-primary' : 'border-border text-muted-foreground hover:bg-muted/50 border-border/80 text-muted-foreground hover:bg-accent'}"
-          >
-            A
-          </button>
-          <button
-            on:click={() => changeFontScale(1.15)}
-            class="px-2 py-1 text-base border rounded transition {selectedFontScale === 1.15 ? 'bg-primary text-primary-foreground border-primary bg-primary/80 border-primary' : 'border-border text-muted-foreground hover:bg-muted/50 border-border/80 text-muted-foreground hover:bg-accent'}"
-          >
-            A
-          </button>
-          <button
-            on:click={() => changeFontScale(1.3)}
-            class="px-2 py-1 text-lg border rounded transition {selectedFontScale === 1.3 ? 'bg-primary text-primary-foreground border-primary bg-primary/80 border-primary' : 'border-border text-muted-foreground hover:bg-muted/50 border-border/80 text-muted-foreground hover:bg-accent'}"
-          >
-            A
-          </button>
-          <button
-            on:click={() => changeFontScale(1.45)}
-            class="px-2 py-1 text-xl border rounded transition {selectedFontScale === 1.45 ? 'bg-primary text-primary-foreground border-primary bg-primary/80 border-primary' : 'border-border text-muted-foreground hover:bg-muted/50 border-border/80 text-muted-foreground hover:bg-accent'}"
-          >
-            A
-          </button>
-          <button
-            on:click={() => changeFontScale(1.6)}
-            class="px-2 py-1 text-2xl border rounded transition {selectedFontScale === 1.6 ? 'bg-primary text-primary-foreground border-primary bg-primary/80 border-primary' : 'border-border text-muted-foreground hover:bg-muted/50 border-border/80 text-muted-foreground hover:bg-accent'}"
-          >
-            A
-          </button>
+        <div class="flex items-center gap-3">
+          <input
+            type="range"
+            min={0.8}
+            max={1.5}
+            step={0.05}
+            value={selectedFontScale}
+            on:input={(e) => changeFontScale(parseFloat(e.currentTarget.value))}
+            class="flex-1 h-1.5 rounded-full appearance-none bg-border cursor-pointer
+                   accent-[hsl(var(--primary))]"
+            id="settings-font-size"
+            aria-label={$t('settings.fontSize')}
+          />
+          <span class="text-xs font-medium text-muted-foreground tabular-nums min-w-[3rem] text-right">
+            {Math.round(selectedFontScale * 100)}%
+          </span>
         </div>
       </div>
     </div>

@@ -404,7 +404,8 @@
     "themeStyleViolet": "Фиолетовый",
     "themeStyleRose": "Розовый",
     "themeStyleCyan": "Голубой",
-    "themeStyleAmber": "Янтарный"
+    "themeStyleAmber": "Янтарный",
+    "lightMode": "Светлая"
   },
   "history.allProfiles": "Все профили",
   "settings.service.title": "Управление службой",

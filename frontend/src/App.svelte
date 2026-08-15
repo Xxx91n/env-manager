@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte'
-  import { Monitor, RefreshCw, Settings, Minus, Square, X } from 'lucide-svelte'
+  import { Monitor, RefreshCw, Settings, Minus, Square, X, Sun, Moon } from 'lucide-svelte'
   import { getCurrentWindow } from '@tauri-apps/api/window'
   import { t, locale } from 'svelte-i18n'
   import Variables from './lib/components/Variables.svelte'
@@ -46,7 +46,7 @@
       importer().then(mod => { lazyComponentCache[key] = mod }).catch(() => {})
     }
   }
-  import { getSetting, frontendLog } from './lib/settingsStore'
+  import { getSetting, setSetting, frontendLog } from './lib/settingsStore'
  import { defaultLanguage, applyPersistedLocale } from './lib/i18n'
  
    
@@ -293,7 +293,7 @@
   </div>
 </div>
 
-<div class="min-h-screen bg-background text-foreground transition-colors duration-300 ease-in-out">
+<div class="h-screen pt-[32px] overflow-hidden bg-background text-foreground transition-colors duration-300 ease-in-out">
   <header class="bg-card border-b border-border px-5 py-3">
     <div class="flex items-center justify-between">
       <div class="flex items-center gap-3">
@@ -304,6 +304,18 @@
         </div>
       </div>
       <div class="flex items-center gap-2">
+        <button
+          on:click={() => { applyDarkMode(!darkMode); void setSetting('darkMode', String(!darkMode)) }}
+          class="p-1.5 text-muted-foreground hover:text-foreground hover:bg-accent rounded-md transition"
+          title={darkMode ? $t('settings.lightMode') : $t('settings.darkMode')}
+          aria-label={darkMode ? $t('settings.lightMode') : $t('settings.darkMode')}
+        >
+          {#if darkMode}
+            <Sun class="w-4 h-4" />
+          {:else}
+            <Moon class="w-4 h-4" />
+          {/if}
+        </button>
         <button
           on:click={() => {
             // Refresh the current active view, not just variables
@@ -361,7 +373,7 @@
     </div>
   </header>
 
-  <div class="px-5 py-4">
+  <div class="px-5 py-4 h-full overflow-y-auto">
     {#if initError}
       <div class="fixed top-4 left-1/2 -translate-x-1/2 px-3 py-2 bg-destructive text-destructive-foreground rounded-md text-xs shadow-lg z-50 pointer-events-none max-w-md">
         <p class="font-medium mb-0.5">{$t('errors.cliExecutionFailed')}</p>
@@ -483,6 +495,7 @@
        CJK UI face; Segoe UI keeps Latin/digits looking native on Windows 10/11;
        system-ui + sans-serif are the safe tail for any locale without YaHei. */
     font-family: 'Microsoft YaHei UI', 'Segoe UI', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+    scroll-behavior: smooth;
     margin: 0;
     padding: 0;
     font-size: 13px;
@@ -510,9 +523,6 @@
     scrollbar-width: thin;
     scrollbar-color: rgba(0, 0, 0, 0) transparent;
   }
-  :global(*:hover) {
-    scrollbar-color: rgba(0, 0, 0, 0.25) transparent;
-  }
   /* Width intentionally NOT set on ::-webkit-scrollbar: pinning it to 8px
      would reserve a dedicated 8px track, contradicting the true-overlay goal.
      Chromium renders a transient overlay that does not shift layout. We style
@@ -524,23 +534,14 @@
     border-radius: 8px;
     transition: background-color 0.15s ease;
   }
-  :global(*:hover)::-webkit-scrollbar-thumb {
-    background-color: rgba(0, 0, 0, 0.25);
-  }
   :global(*:active)::-webkit-scrollbar-thumb {
     background-color: rgba(0, 0, 0, 0.4);
   }
   :global([data-theme="dark"] *) {
     scrollbar-color: rgba(255, 255, 255, 0) transparent;
   }
-  :global([data-theme="dark"] *:hover) {
-    scrollbar-color: rgba(255, 255, 255, 0.3) transparent;
-  }
   :global([data-theme="dark"] *)::-webkit-scrollbar-thumb {
     background-color: rgba(255, 255, 255, 0);
-  }
-  :global([data-theme="dark"] *:hover)::-webkit-scrollbar-thumb {
-    background-color: rgba(255, 255, 255, 0.3);
   }
   :global([data-theme="dark"] *:active)::-webkit-scrollbar-thumb {
     background-color: rgba(255, 255, 255, 0.45);

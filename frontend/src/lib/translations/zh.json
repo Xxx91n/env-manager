@@ -404,7 +404,8 @@
     "themeStyleViolet": "紫色",
     "themeStyleRose": "玫红",
     "themeStyleCyan": "青色",
-    "themeStyleAmber": "琥珀"
+    "themeStyleAmber": "琥珀",
+    "lightMode": "浅色"
   },
   "history.allProfiles": "所有配置文件",
   "settings.service.title": "服务控制",

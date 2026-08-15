@@ -404,7 +404,8 @@
     "themeStyleViolet": "بنفسجي",
     "themeStyleRose": "وردي",
     "themeStyleCyan": "سماوي",
-    "themeStyleAmber": "كهرماني"
+    "themeStyleAmber": "كهرماني",
+    "lightMode": "فاتح"
   },
   "history.allProfiles": "كل الملفات الشخصية",
   "settings.service.title": "تحكم الخدمة",

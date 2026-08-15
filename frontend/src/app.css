@@ -235,8 +235,11 @@
   background: hsl(var(--card));
   border-bottom: 1px solid hsl(var(--border));
   flex-shrink: 0;
-  position: relative;
-  z-index: 50;
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 100;
 }
 .titlebar-drag {
   flex: 1;

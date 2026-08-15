@@ -404,7 +404,8 @@
     "themeStyleViolet": "Violeta",
     "themeStyleRose": "Rosa",
     "themeStyleCyan": "Ciano",
-    "themeStyleAmber": "Âmbar"
+    "themeStyleAmber": "Âmbar",
+    "lightMode": "Claro"
   },
   "history.allProfiles": "Todos os perfis",
   "settings.service.title": "Controle do serviço",

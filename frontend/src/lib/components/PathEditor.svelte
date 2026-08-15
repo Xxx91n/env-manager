@@ -1,7 +1,9 @@
 <script lang="ts">
-  import { Plus, Trash2, ShieldCheck, Check, X, Power, Pencil, ChevronUp, ChevronDown, Eye, Loader2 } from 'lucide-svelte'
+  import { Plus, Trash2, ShieldCheck, Check, X, Power, Pencil, ChevronUp, ChevronDown, Eye, Loader2, StickyNote, FileText, Tag } from 'lucide-svelte'
+  import { loadNotes, getNoteSync, upsertNote } from '../notesStore'
   import { onMount } from 'svelte'
   import { frontendLog } from '../settingsStore'
+  import { openInputDialog } from '../stores'
   import { pathProfileIndex } from '../stores'
   import { t } from 'svelte-i18n'
   import { showModal, isWriteInProgress, refreshTrigger } from '../stores'
@@ -46,6 +48,40 @@
   // operate on the visual position `pos` (NOT entry.index, which is the
   // original registry index used as the stable key).
   $: displayEntries = stagedActive ? stagedEntries : entries
+  
+  // Notes (sticky-note) — shared notesStore, key prefixed with path:
+  let notesLoaded = false
+  let notesTick = 0
+  let hoveredNotePath: string | null = null
+
+  async function ensureNotesLoaded() {
+    if (!notesLoaded) {
+      await loadNotes()
+      notesLoaded = true
+    }
+    notesTick++
+  }
+
+  function pathNoteKey(pathScope: string, pathStr: string): string {
+    return 'path:' + pathScope + ':' + pathStr.toLowerCase().replace(/\\+$/, '')
+  }
+
+  async function handlePathNote(pathScope: string, pathStr: string) {
+    await ensureNotesLoaded()
+    const key = pathNoteKey(pathScope, pathStr)
+    const existing = getNoteSync(key)
+    const result = await openInputDialog({
+      title: existing ? $t('notes.editNote') : $t('notes.addNote'),
+      defaultValue: existing?.note ?? '',
+      placeholder: $t('notes.notePlaceholder'),
+      confirmLabel: $t('buttons.save'),
+      cancelLabel: $t('buttons.cancel'),
+    })
+    if (result !== null) {
+      await upsertNote(key, result)
+      notesTick++
+    }
+  }
   // get $t-stable variant via store directly (Avoid reactive retriggers): N/A.
 
   // Inline rename state
@@ -316,13 +352,22 @@
           // poison sequence that silently reorders other entries.
           throw new Error(`PATH entry at original index ${wantOrigIdx} no longer exists; staged move aborted`)
         }
+        // Protected entries: skip moving them (they can be reordered visually
+        // in the staged view, but commit should not move them in the registry).
+        if (target[i].isProtected && realPos !== i) {
+          void frontendLog('warn', '[PathEditor] skipping protected entry at index ' + wantOrigIdx + ' during commit').catch(() => {})
+          live = await listPathEntries(scope)
+          continue
+        }
         while (realPos > i) {
           await movePathEntryUp(realPos, scope)
           realPos--
         }
-        // If realPos < i it means a prior loop misordered; since we only ever
-        // move entries left, that should not happen when target was built by
-        // adjacent swaps. Refresh live state defensively.
+        while (realPos < i) {
+          await movePathEntryDown(realPos, scope)
+          realPos++
+        }
+        // Refresh live state after each entry is positioned.
         live = await listPathEntries(scope)
       }
       stagedActive = false
@@ -590,7 +635,7 @@
                   <!-- Display mode: click to copy -->
                   <div
                     class="text-[11px] font-mono text-foreground/80 text-foreground break-all cursor-pointer hover:text-primary transition select-none leading-relaxed"
-                    title={$t('messages.clickToCopy')}
+                    title={getNoteSync(pathNoteKey(scope, entry.path)) ? getNoteSync(pathNoteKey(scope, entry.path))?.note : $t('messages.clickToCopy')}
                     on:click={() => copyToClipboard(entry.path)}
                   >
                     {entry.path}
@@ -622,6 +667,28 @@
               </td>
               <td class="px-2 py-1.5 text-right align-top">
                 {#if editingIndex !== entry.index}
+                  <!-- Note button (sticky-note) -->
+                  <div class="relative inline-flex">
+                    <button
+                      on:click={() => handlePathNote(scope, entry.path)}
+                      on:focus={() => ensureNotesLoaded()}
+                      on:mouseenter={() => { hoveredNotePath = entry.path; void ensureNotesLoaded().then(() => { notesTick = notesTick + 1 }) }}
+                      on:mouseleave={() => hoveredNotePath = null}
+                      class="inline-flex p-1 text-muted-foreground hover:text-primary/80 hover:bg-primary/10 rounded transition hover:bg-primary/15"
+                      title={(notesTick, getNoteSync(pathNoteKey(scope, entry.path)) ? $t('notes.editNote') : $t('notes.addNote'))}
+                    >
+                      {#if (notesTick, getNoteSync(pathNoteKey(scope, entry.path)))}
+                        <Tag class="w-3.5 h-3.5" />
+                      {:else}
+                        <FileText class="w-3.5 h-3.5" />
+                      {/if}
+                    </button>
+                    {#if hoveredNotePath === entry.path && notesTick && getNoteSync(pathNoteKey(scope, entry.path))}
+                      <div class="absolute bottom-full right-0 mb-1 px-2.5 py-1.5 bg-card text-primary-foreground text-[10px] rounded shadow-lg whitespace-pre-wrap max-w-[240px] break-words z-50 pointer-events-none bg-accent">
+                        {getNoteSync(pathNoteKey(scope, entry.path))?.note}
+                      </div>
+                    {/if}
+                  </div>
                   <!-- Lock button -->
                   <button
                     on:click={() => handlePathLockToggle(entry.path, !!entry.isProtected, !!entry.isBuiltinProtected)}

@@ -404,7 +404,8 @@
     "themeStyleViolet": "バイオレット",
     "themeStyleRose": "ローズ",
     "themeStyleCyan": "シアン",
-    "themeStyleAmber": "アンバー"
+    "themeStyleAmber": "アンバー",
+    "lightMode": "ライト"
   },
   "history.allProfiles": "すべてのプロファイル",
   "settings.service.title": "サービス制御",
