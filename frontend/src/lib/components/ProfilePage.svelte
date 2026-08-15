@@ -810,7 +810,7 @@
               <div class="grid grid-cols-2 gap-4 mb-3 pb-3 border-b border-border/50 border-border">
                 <div>
                   <div class="text-[10px] font-medium text-muted-foreground mb-1">{$t('profiles.inherits')}</div>
-                  <div class="space-y-1 max-h-20 overflow-y-auto">
+                  <div class="space-y-1 max-h-20 overflow-y-auto list-container">
                     {#each profileList.filter(candidate => candidate.name !== profile.name) as parent (parent.name)}
                     {@const inheritBlocked = (profile.profileType === 'global' && parent.profileType === 'launch')
                       || (profile.profileType === 'launch' && parent.profileType === 'launch' && (parent.secretVariables?.length ?? 0) > 0)}

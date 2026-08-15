@@ -401,7 +401,12 @@
     "themeStyle": "Estilo de cor",
     "themeStyleSlate": "Ardósia",
     "themeStyleZinc": "Zinco",
-    "themeStyleNeutral": "Neutro"
+    "themeStyleNeutral": "Neutro",
+    "themeStyleBlue": "Azul",
+    "themeStyleViolet": "Violeta",
+    "themeStyleRose": "Rosa",
+    "themeStyleCyan": "Ciano",
+    "themeStyleAmber": "Âmbar"
   },
   "history.allProfiles": "Todos os perfis",
   "settings.service.title": "Controle do serviço",
@@ -453,10 +458,6 @@
   "secrets.policy.createdOnly": "Apenas na criação",
   "secrets.policy.onDemand": "Sob demanda",
   "secrets.policy.periodic": "Periódico",
-  "errors": {
-    "chunkLoadFailed": "Falha ao carregar componente. Tente novamente."
-  },
-  "common": {
-    "retry": "Tentar novamente"
-  }
+  "errors.chunkLoadFailed": "Falha ao carregar componente. Tente novamente.",
+  "common.retry": "Tentar novamente"
 }

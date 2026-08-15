@@ -401,7 +401,12 @@
     "themeStyle": "Farbstil",
     "themeStyleSlate": "Schiefer",
     "themeStyleZinc": "Zink",
-    "themeStyleNeutral": "Neutral"
+    "themeStyleNeutral": "Neutral",
+    "themeStyleBlue": "Blau",
+    "themeStyleViolet": "Violet",
+    "themeStyleRose": "Rosé",
+    "themeStyleCyan": "Cyan",
+    "themeStyleAmber": "Bernstein"
   },
   "history.allProfiles": "Alle Profile",
   "settings.service.title": "Dienststeuerung",
@@ -453,10 +458,6 @@
   "secrets.policy.createdOnly": "Nur bei Erstellung",
   "secrets.policy.onDemand": "Auf Abruf",
   "secrets.policy.periodic": "Periodisch",
-  "errors": {
-    "chunkLoadFailed": "Komponente konnte nicht geladen werden. Bitte erneut versuchen."
-  },
-  "common": {
-    "retry": "Erneut versuchen"
-  }
+  "errors.chunkLoadFailed": "Komponente konnte nicht geladen werden. Bitte erneut versuchen.",
+  "common.retry": "Erneut versuchen"
 }

@@ -401,7 +401,12 @@
     "themeStyle": "カラースタイル",
     "themeStyleSlate": "スレート",
     "themeStyleZinc": "ジンク",
-    "themeStyleNeutral": "ニュートラル"
+    "themeStyleNeutral": "ニュートラル",
+    "themeStyleBlue": "ブルー",
+    "themeStyleViolet": "バイオレット",
+    "themeStyleRose": "ローズ",
+    "themeStyleCyan": "シアン",
+    "themeStyleAmber": "アンバー"
   },
   "history.allProfiles": "すべてのプロファイル",
   "settings.service.title": "サービス制御",
@@ -453,10 +458,6 @@
   "secrets.policy.createdOnly": "作成時のみ",
   "secrets.policy.onDemand": "オンデマンド",
   "secrets.policy.periodic": "定期",
-  "errors": {
-    "chunkLoadFailed": "コンポーネントの読み込みに失敗しました。再試行してください。"
-  },
-  "common": {
-    "retry": "再試行"
-  }
+  "errors.chunkLoadFailed": "コンポーネントの読み込みに失敗しました。再試行してください。",
+  "common.retry": "再試行"
 }

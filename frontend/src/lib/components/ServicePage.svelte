@@ -174,7 +174,7 @@
       <p class="text-xs text-primary/80">{$t('settings.service.notRunningHint')}</p>
     {/if}
     {#if serviceHealthData?.mounts?.length > 0}
-      <div class="mt-2 space-y-1 max-h-40 overflow-y-auto">
+      <div class="mt-2 space-y-1 max-h-40 overflow-y-auto list-container">
         {#each serviceHealthData.mounts as mount}
           <div class="flex items-center gap-2 text-xs px-2 py-1 rounded bg-muted/20 bg-card">
             <span class="font-mono" title={mount.provider}>{localizeProvider(mount.provider, $t)}</span>

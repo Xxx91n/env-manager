@@ -169,7 +169,7 @@ async fn handle_connection(mut server: NamedPipeServer, _shutdown: Arc<Cancellat
     let line = serde_json::to_string(&response).unwrap_or_default();
     server.write_all((line + "\n").as_bytes()).await?;
     server.flush().await?;
-    tracing::info!("IPC connection #{} closed (total remaining: {})", conn_id, CONNECTION_COUNT.load(Ordering::Relaxed) - 1);
+    tracing::info!("IPC connection #{} closed (total accepted: {})", conn_id, CONNECTION_COUNT.load(Ordering::Relaxed));
     Ok(())
 }
 

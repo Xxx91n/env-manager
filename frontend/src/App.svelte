@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte'
-  import { Monitor, RefreshCw, Settings } from 'lucide-svelte'
+  import { Monitor, RefreshCw, Settings, Minus, Square, X } from 'lucide-svelte'
+  import { getCurrentWindow } from '@tauri-apps/api/window'
   import { t, locale } from 'svelte-i18n'
   import Variables from './lib/components/Variables.svelte'
   import SettingsDialog from './lib/components/SettingsDialog.svelte'
@@ -215,6 +216,10 @@
       // Phase 1: preload adjacent lazy components in background for instant tab switch
       preloadComponent('profiles', lazyImporters.profiles)
       setTimeout(() => preloadComponent('path', lazyImporters.path), 300)
+    } catch (err) {
+      initError = err instanceof Error ? err.message : String(err)
+    }
+  })
   // Phase 4: silent performance telemetry — log view switch timing for developer diagnostics
   let perfPrevView = 'variables'
   let perfPrevTime = performance.now()
@@ -224,10 +229,6 @@
     perfPrevView = $activeView
     perfPrevTime = performance.now()
   }
-    } catch (err) {
-      initError = err instanceof Error ? err.message : String(err)
-    }
-  })
 
   function applyDarkMode(isDark: boolean, skipTransition = false) {
     darkMode = isDark
@@ -274,6 +275,23 @@
 <svelte:head>
   <title>{$t('app.title')}</title>
 </svelte:head>
+
+<div class="titlebar" data-tauri-drag-region>
+  <div class="titlebar-drag" data-tauri-drag-region>
+    <span class="text-xs font-medium text-muted-foreground select-none">Env Manager</span>
+  </div>
+  <div class="titlebar-controls">
+    <button class="titlebar-btn" on:click={() => getCurrentWindow().minimize()} title={$t('app.title')}>
+      <Minus class="w-3.5 h-3.5" />
+    </button>
+    <button class="titlebar-btn" on:click={() => getCurrentWindow().toggleMaximize()} title={$t('app.title')}>
+      <Square class="w-3 h-3" />
+    </button>
+    <button class="titlebar-btn close" on:click={() => getCurrentWindow().close()} title={$t('app.title')}>
+      <X class="w-3.5 h-3.5" />
+    </button>
+  </div>
+</div>
 
 <div class="min-h-screen bg-background text-foreground transition-colors duration-300 ease-in-out">
   <header class="bg-card border-b border-border px-5 py-3">

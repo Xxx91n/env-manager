@@ -401,7 +401,12 @@
     "themeStyle": "색상 스타일",
     "themeStyleSlate": "슬레이트",
     "themeStyleZinc": "아연",
-    "themeStyleNeutral": "중성"
+    "themeStyleNeutral": "중성",
+    "themeStyleBlue": "블루",
+    "themeStyleViolet": "바이올렛",
+    "themeStyleRose": "로즈",
+    "themeStyleCyan": "시안",
+    "themeStyleAmber": "앰버"
   },
   "history.allProfiles": "모든 프로필",
   "settings.service.title": "서비스 제어",
@@ -453,10 +458,6 @@
   "secrets.policy.createdOnly": "생성시만",
   "secrets.policy.onDemand": "주문형",
   "secrets.policy.periodic": "주기적",
-  "errors": {
-    "chunkLoadFailed": "컴포넌트 로드에 실패했습니다. 다시 시도해 주세요."
-  },
-  "common": {
-    "retry": "재시도"
-  }
+  "errors.chunkLoadFailed": "컴포넌트 로드에 실패했습니다. 다시 시도해 주세요.",
+  "common.retry": "재시도"
 }

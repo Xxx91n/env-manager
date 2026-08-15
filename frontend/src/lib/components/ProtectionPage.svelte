@@ -234,7 +234,7 @@
         {#if scopeFilter === 'user'}
           <div class="px-4 py-6 text-center text-[10px] text-muted-foreground">{$t('protection.builtinSystemOnly')}</div>
         {:else}
-          <div class="max-h-64 overflow-y-auto">
+          <div class="max-h-64 overflow-y-auto list-container">
             <div class="grid grid-cols-2 sm:grid-cols-3 gap-1 p-3">
               {#each filteredBuiltinVars as varName (varName)}
                 <div class="flex items-center gap-1.5 px-2 py-1 rounded bg-muted/20 bg-muted">

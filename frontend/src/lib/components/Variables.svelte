@@ -227,7 +227,7 @@
     </button>
   </div>
 
-  <div class="overflow-x-auto bg-card rounded-md border border-border">
+  <div class="overflow-x-auto table-container bg-card rounded-md border border-border">
     {#if filteredVars.length === 0}
       <div class="px-4 py-8 text-center text-muted-foreground text-xs">
         {$t('messages.noData')}

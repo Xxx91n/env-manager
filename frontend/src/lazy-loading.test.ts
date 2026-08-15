@@ -58,20 +58,20 @@ describe('Phase 1: Lazy code splitting — build verification', () => {
 describe('Phase 1: i18n keys for lazy error fallback', () => {
   it('en.json has errors.chunkLoadFailed', () => {
     const en = require('./lib/translations/en.json')
-    expect(en.errors.chunkLoadFailed).toBeTruthy()
-    expect(typeof en.errors.chunkLoadFailed).toBe('string')
+    expect(en['errors.chunkLoadFailed']).toBeTruthy()
+    expect(typeof en['errors.chunkLoadFailed']).toBe('string')
   })
 
   it('en.json has common.retry', () => {
     const en = require('./lib/translations/en.json')
-    expect(en.common.retry).toBeTruthy()
-    expect(typeof en.common.retry).toBe('string')
+    expect(en['common.retry']).toBeTruthy()
+    expect(typeof en['common.retry']).toBe('string')
   })
 
   it('zh.json has errors.chunkLoadFailed', () => {
     const zh = require('./lib/translations/zh.json')
-    expect(zh.errors.chunkLoadFailed).toBeTruthy()
-    expect(zh.errors.chunkLoadFailed).toContain('\u91cd\u8bd5')
+    expect(zh['errors.chunkLoadFailed']).toBeTruthy()
+    expect(zh['errors.chunkLoadFailed']).toContain('\u91cd\u8bd5')
   })
 
   it('all 10 locale files have chunkLoadFailed and retry', () => {
@@ -84,8 +84,8 @@ describe('Phase 1: i18n keys for lazy error fallback', () => {
     
     for (const file of files) {
       const content = JSON.parse(fs.readFileSync(path.join(transDir, file), 'utf8'))
-      expect(content.errors?.chunkLoadFailed).toBeTruthy()
-      expect(content.common?.retry).toBeTruthy()
+      expect(content['errors.chunkLoadFailed']).toBeTruthy()
+      expect(content['common.retry']).toBeTruthy()
     }
   })
 

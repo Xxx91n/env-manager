@@ -34,8 +34,11 @@ describe('v0.9.20 Theme style i18n keys', () => {
   const requiredKeys = [
     'settings.themeStyle',
     'settings.themeStyleSlate',
-    'settings.themeStyleZinc',
-    'settings.themeStyleNeutral',
+    'settings.themeStyleBlue',
+    'settings.themeStyleViolet',
+    'settings.themeStyleRose',
+    'settings.themeStyleCyan',
+    'settings.themeStyleAmber',
   ]
 
   locales.forEach((loc) => {
@@ -77,5 +80,71 @@ describe('v0.9.20 handleThemeStyleChange function exists', () => {
   it('SettingsDialog changeThemeStyle dispatches themeStyleChange event', () => {
     const sdSrc = readFileSync(join(__dirname2, 'lib', 'components', 'SettingsDialog.svelte'), 'utf8')
     expect(sdSrc).toContain("dispatch('themeStyleChange'")
+  })
+})
+
+describe('v0.9.21 Custom titlebar configuration', () => {
+  it('tauri.conf.json has decorations:false and label:main', () => {
+    const tauriConfig = JSON.parse(readFileSync(join(__dirname2, '..', 'src-tauri', 'tauri.conf.json'), 'utf8'))
+    expect(tauriConfig.app.windows[0].decorations).toBe(false)
+    expect(tauriConfig.app.windows[0].label).toBe('main')
+  })
+
+  it('capabilities/default.json has window control permissions', () => {
+    const caps = JSON.parse(readFileSync(join(__dirname2, '..', 'src-tauri', 'capabilities', 'default.json'), 'utf8'))
+    expect(caps.permissions).toContain('core:window:allow-close')
+    expect(caps.permissions).toContain('core:window:allow-minimize')
+    expect(caps.permissions).toContain('core:window:allow-toggle-maximize')
+    expect(caps.permissions).toContain('core:window:allow-start-dragging')
+  })
+
+  it('App.svelte imports getCurrentWindow from tauri-apps/api/window', () => {
+    const appSrc = readFileSync(join(__dirname2, 'App.svelte'), 'utf8')
+    expect(appSrc).toContain("import { getCurrentWindow } from '@tauri-apps/api/window'")
+  })
+
+  it('App.svelte has titlebar with data-tauri-drag-region', () => {
+    const appSrc = readFileSync(join(__dirname2, 'App.svelte'), 'utf8')
+    expect(appSrc).toContain('class="titlebar"')
+    expect(appSrc).toContain('data-tauri-drag-region')
+    expect(appSrc).toContain('getCurrentWindow().minimize()')
+    expect(appSrc).toContain('getCurrentWindow().toggleMaximize()')
+    expect(appSrc).toContain('getCurrentWindow().close()')
+  })
+
+  it('app.css has titlebar styles', () => {
+    const css = readFileSync(join(__dirname2, 'app.css'), 'utf8')
+    expect(css).toContain('.titlebar')
+    expect(css).toContain('.titlebar-btn')
+    expect(css).toContain('.titlebar-btn.close')
+  })
+})
+
+describe('v0.9.21 CSS containment for performance', () => {
+  it('app.css has containment rules', () => {
+    const css = readFileSync(join(__dirname2, 'app.css'), 'utf8')
+    expect(css).toContain('.table-container')
+    expect(css).toContain('.list-container')
+    expect(css).toContain('content-visibility')
+  })
+
+  it('HistoryPage has table-container class', () => {
+    const src = readFileSync(join(__dirname2, 'lib', 'components', 'HistoryPage.svelte'), 'utf8')
+    expect(src).toContain('table-container')
+  })
+
+  it('Variables has table-container class', () => {
+    const src = readFileSync(join(__dirname2, 'lib', 'components', 'Variables.svelte'), 'utf8')
+    expect(src).toContain('table-container')
+  })
+
+  it('ProtectionPage has list-container class', () => {
+    const src = readFileSync(join(__dirname2, 'lib', 'components', 'ProtectionPage.svelte'), 'utf8')
+    expect(src).toContain('list-container')
+  })
+
+  it('AuditPage has list-container class', () => {
+    const src = readFileSync(join(__dirname2, 'lib', 'components', 'AuditPage.svelte'), 'utf8')
+    expect(src).toContain('list-container')
   })
 })

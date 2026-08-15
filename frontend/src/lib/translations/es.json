@@ -401,7 +401,12 @@
     "themeStyle": "Estilo de color",
     "themeStyleSlate": "Pizarra",
     "themeStyleZinc": "Zinc",
-    "themeStyleNeutral": "Neutral"
+    "themeStyleNeutral": "Neutral",
+    "themeStyleBlue": "Azul",
+    "themeStyleViolet": "Violeta",
+    "themeStyleRose": "Rosa",
+    "themeStyleCyan": "Cian",
+    "themeStyleAmber": "Ámbar"
   },
   "history.allProfiles": "Todos los perfiles",
   "settings.service.title": "Control del servicio",
@@ -453,10 +458,6 @@
   "secrets.policy.createdOnly": "Solo al crear",
   "secrets.policy.onDemand": "Bajo demanda",
   "secrets.policy.periodic": "Periódico",
-  "errors": {
-    "chunkLoadFailed": "Error al cargar el componente. Reintente."
-  },
-  "common": {
-    "retry": "Reintentar"
-  }
+  "errors.chunkLoadFailed": "Error al cargar el componente. Reintente.",
+  "common.retry": "Reintentar"
 }

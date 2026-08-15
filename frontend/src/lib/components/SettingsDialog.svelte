@@ -500,17 +500,17 @@
       <!-- Theme base color selector -->
       <div class="flex items-center justify-between py-1">
         <span class="text-xs font-medium text-muted-foreground">{$t('settings.themeStyle')}</span>
-        <div class="flex gap-1">
-          {#each ['slate', 'zinc', 'neutral'] as style}
-            <button
-              on:click={() => changeThemeStyle(style)}
-              class="px-2.5 py-1 text-xs border rounded transition {themeStyle === style ? 'bg-primary text-primary-foreground border-primary' : 'border-border text-muted-foreground hover:bg-accent'}"
-              aria-label={$t('settings.' + (style === 'slate' ? 'themeStyleSlate' : style === 'zinc' ? 'themeStyleZinc' : 'themeStyleNeutral'))}
-            >
-              {$t('settings.' + (style === 'slate' ? 'themeStyleSlate' : style === 'zinc' ? 'themeStyleZinc' : 'themeStyleNeutral'))}
-            </button>
+        <select
+          on:change={(e) => changeThemeStyle(e.currentTarget.value)}
+          class="px-2.5 py-1 text-xs border rounded border-border bg-card text-foreground focus:ring-1 focus:ring-ring"
+          aria-label={$t('settings.themeStyle')}
+        >
+          {#each ['slate', 'blue', 'violet', 'rose', 'cyan', 'amber'] as style}
+            <option value={style} selected={themeStyle === style}>
+              {$t('settings.themeStyle' + (style.charAt(0).toUpperCase()) + style.slice(1))}
+            </option>
           {/each}
-        </div>
+        </select>
       </div>
       <div>
         <label for="settings-font-size" class="block text-xs font-medium text-muted-foreground mb-1.5">

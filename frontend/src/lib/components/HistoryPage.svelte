@@ -293,7 +293,7 @@
     <button on:click={refresh} class="ml-auto px-3 py-1.5 text-xs text-muted-foreground hover:bg-muted/30 rounded-md text-foreground/80 hover:bg-accent">{$t('buttons.refresh')}</button>
   </div>
 
-  <div class="history-table-root bg-card border border-border rounded-md overflow-auto">
+  <div class="history-table-root table-container bg-card border border-border rounded-md overflow-auto">
     {#if loading}
       <div class="p-8 text-center text-xs text-muted-foreground">{$t('messages.loading')}</div>
     {:else if filteredHistory.length === 0}

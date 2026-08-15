@@ -50,7 +50,7 @@
       <div class="animate-spin rounded-full h-6 w-6 border-b-2 border-primary"></div>
     </div>
   {:else if auditEntries.length > 0}
-    <div class="max-h-[60vh] overflow-y-auto space-y-1">
+    <div class="max-h-[60vh] overflow-y-auto space-y-1 list-container">
       {#each auditEntries as entry}
         <div class="text-xs px-3 py-1.5 rounded bg-muted/20 bg-card font-mono border border-border/50 border-border">
           <span class="text-muted-foreground mr-2">{entry.timestamp}</span>
