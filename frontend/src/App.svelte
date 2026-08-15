@@ -215,6 +215,15 @@
       // Phase 1: preload adjacent lazy components in background for instant tab switch
       preloadComponent('profiles', lazyImporters.profiles)
       setTimeout(() => preloadComponent('path', lazyImporters.path), 300)
+  // Phase 4: silent performance telemetry — log view switch timing for developer diagnostics
+  let perfPrevView = 'variables'
+  let perfPrevTime = performance.now()
+  $: if ($activeView !== perfPrevView) {
+    const elapsed = performance.now() - perfPrevTime
+    void frontendLog('debug', 'perf.viewSwitch from=' + perfPrevView + ' to=' + $activeView + ' elapsedMs=' + elapsed.toFixed(0)).catch(() => {})
+    perfPrevView = $activeView
+    perfPrevTime = performance.now()
+  }
     } catch (err) {
       initError = err instanceof Error ? err.message : String(err)
     }
