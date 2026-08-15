@@ -1420,6 +1420,12 @@ fn update_tray_locale_impl(
         if let Err(e) = state.quit_item.set_text(quit_text) {
             warn!("[tray] set_text quit failed: {}", e);
         }
+        // After set_text, muda on Windows may rebuild the native HMENU item,
+        // losing the checked state. Re-sync the checkmark to the current
+        // lightweight state to prevent the "always checked" regression.
+        if let Err(e) = state.lightweight_item.set_checked(lightweight::is_in_lightweight_mode()) {
+            warn!("[tray] set_checked after set_text failed: {}", e);
+        }
     } else {
         warn!("[tray] LightMenuState not managed — menu text not updated");
     }
