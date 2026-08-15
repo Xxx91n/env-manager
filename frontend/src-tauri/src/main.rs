@@ -1228,6 +1228,11 @@ std::mem::forget(_guard);
                 quit_item: quit_item.clone(),
             });
 
+            // Register tray check callback so lightweight.rs can sync the checkmark.
+            lightweight::register_tray_check_callback(Box::new(move |app, checked| {
+                update_lightweight_check(app, checked);
+            }));
+
             // Create system tray icon
             let _tray = TrayIconBuilder::with_id("main")
                 .icon(app.default_window_icon().unwrap().clone())
@@ -1256,8 +1261,8 @@ std::mem::forget(_guard);
                                     warn!("[tray] enter lightweight failed: {}", e);
                                 }
                             }
-                            // Rebuild menu to update checkmark state.
-                            update_lightweight_check(app, false);
+                            // Update checkmark to reflect the new lightweight state.
+                            update_lightweight_check(app, lightweight::is_in_lightweight_mode());
                         }
                         "quit" => {
                             info!("[tray] quit requested — service stays alive (user-managed lifecycle)");
@@ -1424,4 +1429,47 @@ fn update_tray_locale_impl(
     } else {
         warn!("[tray] tray icon not found for locale update");
     }
+}
+
+// --- Lightweight mode IPC commands ---
+
+/// Enter lightweight mode: hide the main window to free memory.
+#[tauri::command]
+fn enter_lightweight_mode(app: tauri::AppHandle) -> Result<bool, String> {
+    lightweight::enter_lightweight(&app)?;
+    update_lightweight_check(&app, true);
+    Ok(true)
+}
+
+/// Exit lightweight mode: rebuild the main window from config.
+#[tauri::command]
+fn exit_lightweight_mode(app: tauri::AppHandle) -> Result<bool, String> {
+    lightweight::exit_lightweight(&app)?;
+    update_lightweight_check(&app, false);
+    Ok(true)
+}
+
+/// Read auto-lightweight config from gui-settings.json.
+/// Returns {enabled: bool, timeoutMinutes: u32}.
+#[tauri::command]
+fn get_lightweight_config() -> serde_json::Value {
+    let enabled = match read_gui_setting("autoLightweight".to_string()) {
+        serde_json::Value::Bool(b) => b,
+        serde_json::Value::String(s) => s == "true",
+        _ => true,
+    };
+    let timeout = match read_gui_setting("lightweightTimeout".to_string()) {
+        serde_json::Value::String(s) => s.parse::<u32>().unwrap_or(10),
+        serde_json::Value::Number(n) => n.as_u64().unwrap_or(10) as u32,
+        _ => 10,
+    };
+    serde_json::json!({ "enabled": enabled, "timeoutMinutes": timeout })
+}
+
+/// Persist auto-lightweight config to gui-settings.json.
+#[tauri::command]
+fn set_lightweight_config(enabled: bool, timeout_minutes: u32) -> bool {
+    let _ = write_gui_setting("autoLightweight".to_string(), if enabled { "true".to_string() } else { "false".to_string() });
+    let _ = write_gui_setting("lightweightTimeout".to_string(), timeout_minutes.to_string());
+    true
 }
