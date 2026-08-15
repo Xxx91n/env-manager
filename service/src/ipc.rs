@@ -50,6 +50,10 @@ impl IpcResponse {
 /// `use_first_pipe_instance`: true for Service mode (SCM guarantees single instance),
 /// false for Background mode (previous instance pipe handle may linger in OS kernel,
 /// PIPE_FIRST_PIPE_INSTANCE gets os error 5).
+
+// Phase 3: connection counter for leak diagnostics
+use std::sync::atomic::{AtomicU64, Ordering};
+static CONNECTION_COUNT: AtomicU64 = AtomicU64::new(0);
 pub async fn start_ipc_server(pipe_name: &str, shutdown: Arc<CancellationToken>, use_first_pipe_instance: bool) {
     tracing::info!("IPC server listening on {}", pipe_name);
 
@@ -130,6 +134,8 @@ pub async fn start_ipc_server(pipe_name: &str, shutdown: Arc<CancellationToken>,
 /// Handle a single client connection: read one request line, process, write one response line.
 async fn handle_connection(mut server: NamedPipeServer, _shutdown: Arc<CancellationToken>) -> io::Result<()> {
     tracing::info!("IPC connection accepted");
+    let conn_id = CONNECTION_COUNT.fetch_add(1, Ordering::Relaxed) + 1;
+    tracing::info!("IPC connection #{} (total: {})", conn_id, CONNECTION_COUNT.load(Ordering::Relaxed));
     let mut buf = Vec::with_capacity(4096);
     let mut byte = [0u8; 1];
     loop {
@@ -163,6 +169,7 @@ async fn handle_connection(mut server: NamedPipeServer, _shutdown: Arc<Cancellat
     let line = serde_json::to_string(&response).unwrap_or_default();
     server.write_all((line + "\n").as_bytes()).await?;
     server.flush().await?;
+    tracing::info!("IPC connection #{} closed (total remaining: {})", conn_id, CONNECTION_COUNT.load(Ordering::Relaxed) - 1);
     Ok(())
 }
 
