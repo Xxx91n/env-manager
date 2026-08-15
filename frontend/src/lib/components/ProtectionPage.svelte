@@ -256,7 +256,7 @@
         {#if filteredCustomVars.length === 0}
           <div class="px-4 py-6 text-center text-[10px] text-muted-foreground">{$t('protection.noCustomVars')}</div>
         {:else}
-          <div class="divide-y divide-gray-100 divide-border">
+          <div class="divide-y divide-border/50 divide-border">
             {#each filteredCustomVars as varName (varName)}
               <div class="flex items-center justify-between px-4 py-2">
                 <span class="text-xs font-mono text-foreground/80 text-foreground truncate" title={varName}>{varName}</span>
@@ -299,7 +299,7 @@
         <div class="px-4 py-2.5 border-b border-border bg-muted/20 bg-muted">
           <span class="text-xs font-medium text-muted-foreground text-foreground/80">{$t('protection.builtinPaths')}</span>
         </div>
-        <div class="divide-y divide-gray-100 divide-border">
+        <div class="divide-y divide-border/50 divide-border">
           {#each filteredBuiltinPaths as entry (entry)}
             <div class="flex items-center justify-between px-4 py-2">
               <span class="text-xs font-mono text-foreground/80 text-foreground truncate" title={entry}>{entry}</span>
@@ -317,7 +317,7 @@
         {#if filteredCustomPaths.length === 0}
           <div class="px-4 py-6 text-center text-[10px] text-muted-foreground">{$t('protection.noCustomPaths')}</div>
         {:else}
-          <div class="divide-y divide-gray-100 divide-border">
+          <div class="divide-y divide-border/50 divide-border">
             {#each filteredCustomPaths as entry (entry)}
               <div class="flex items-center justify-between px-4 py-2">
                 <span class="text-xs font-mono text-foreground/80 text-foreground truncate" title={entry}>{entry}</span>

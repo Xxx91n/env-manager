@@ -179,7 +179,7 @@
           <div class="flex items-center gap-2 text-xs px-2 py-1 rounded bg-muted/20 bg-card">
             <span class="font-mono" title={mount.provider}>{localizeProvider(mount.provider, $t)}</span>
             <span class="text-muted-foreground">{mount.name}</span>
-            <span class="px-1 rounded {mount.healthy ? 'text-green-600' : 'text-red-600'}">{mount.healthy ? $t('settings.service.healthy') : $t('settings.service.unhealthy')}</span>
+            <span class="px-1 rounded {mount.healthy ? 'text-green-600' : 'text-destructive'}">{mount.healthy ? $t('settings.service.healthy') : $t('settings.service.unhealthy')}</span>
             <span class="text-muted-foreground" title={mount.refreshPolicy}>{localizeRefreshPolicy(mount.refreshPolicy, $t)}</span>
             {#if mount.lastFetchedAt}
               <span class="text-muted-foreground ml-auto text-[10px] whitespace-nowrap truncate max-w-[180px]" title={mount.lastFetchedAt}>

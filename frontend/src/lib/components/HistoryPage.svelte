@@ -318,7 +318,7 @@
             <th class="px-3 py-2"></th>
           </tr>
         </thead>
-        <tbody class="divide-y divide-gray-100 divide-border">
+        <tbody class="divide-y divide-border/50 divide-border">
           {#each filteredHistory as entry (entry.id)}
             <tr class="hover:bg-muted/20 hover:bg-muted">
               <td class="px-3 py-2 text-[10px] text-muted-foreground">{new Date(entry.timestamp).toLocaleString()}</td>
@@ -327,7 +327,7 @@
                 {#if entry.scope === 'profile'}
                   <span class="px-1.5 py-0.5 rounded text-[9px] font-medium bg-amber-100 text-amber-800 bg-primary/15 text-primary">{$t('scope.profile')}</span>
                 {:else}
-                  <span class="px-1.5 py-0.5 rounded text-[9px] font-medium {entry.scope === 'user' ? 'bg-blue-100 text-primary bg-primary/20/40 text-primary' : 'bg-purple-100 text-purple-700 bg-primary/15 text-primary'}">{entry.scope === 'user' ? $t('scope.user') : $t('scope.system')}</span>
+                  <span class="px-1.5 py-0.5 rounded text-[9px] font-medium {entry.scope === 'user' ? 'bg-primary/10 text-primary bg-primary/20/40 text-primary' : 'bg-purple-100 text-purple-700 bg-primary/15 text-primary'}">{entry.scope === 'user' ? $t('scope.user') : $t('scope.system')}</span>
                 {/if}
               </td>
               <td class="px-3 py-2 text-xs font-mono truncate" title={entry.name}>{entry.name}</td>

@@ -649,7 +649,7 @@
         />
         <button
           on:click={handleBrowseTarget}
-          class="px-2 py-1 text-xs text-primary bg-blue-50 rounded-md hover:bg-primary/15 bg-primary/10"
+          class="px-2 py-1 text-xs text-primary bg-primary/5 rounded-md hover:bg-primary/15 bg-primary/10"
           title={$t('profiles.browse')}
         >
           {$t('profiles.browse')}
@@ -737,7 +737,7 @@
                   {$t('profiles.typeLocal')}
                 </span>
               {:else}
-                <span class="inline-flex px-1.5 py-0.5 rounded text-[10px] font-medium bg-blue-50 text-primary bg-primary/20/40">
+                <span class="inline-flex px-1.5 py-0.5 rounded text-[10px] font-medium bg-primary/5 text-primary bg-primary/20/40">
                   {$t('profiles.typeGlobal')}
                 </span>
               {/if}
@@ -806,8 +806,8 @@
           </div>
           <!-- Expanded detail panel -->
           {#if selectedProfile?.name === profile.name}
-            <div class="border-t border-gray-100 px-4 py-3 border-border">
-              <div class="grid grid-cols-2 gap-4 mb-3 pb-3 border-b border-gray-100 border-border">
+            <div class="border-t border-border/50 px-4 py-3 border-border">
+              <div class="grid grid-cols-2 gap-4 mb-3 pb-3 border-b border-border/50 border-border">
                 <div>
                   <div class="text-[10px] font-medium text-muted-foreground mb-1">{$t('profiles.inherits')}</div>
                   <div class="space-y-1 max-h-20 overflow-y-auto">
@@ -833,7 +833,7 @@
                          {#if (profile.pathScopes?.[i] ?? 'user') === 'system'}
                            <span class="text-[9px] px-1 rounded-full bg-orange-100 text-orange-800 bg-primary/15 text-primary/80">{$t('scope.system')}</span>
                          {:else}
-                           <span class="text-[9px] px-1 rounded-full bg-blue-100 text-blue-800 bg-primary/20/40 text-primary">{$t('scope.user')}</span>
+                           <span class="text-[9px] px-1 rounded-full bg-primary/10 text-primary bg-primary/20/40">{$t('scope.user')}</span>
                          {/if}
                          <button on:click={() => handleRemovePath(path)} disabled={profile.isEnabled} class="text-destructive disabled:opacity-30" aria-label={$t('buttons.delete')}>×</button>
                        </div>
@@ -875,7 +875,7 @@
                           {#if pv.scope === "system"}
                             <span class="text-[9px] px-1 rounded-full bg-orange-100 text-orange-800 bg-primary/15 text-primary/80">{$t("scope.system")}</span>
                           {:else}
-                            <span class="text-[9px] px-1 rounded-full bg-blue-100 text-blue-800 bg-primary/20/40 text-primary">{$t("scope.user")}</span>
+                            <span class="text-[9px] px-1 rounded-full bg-primary/10 text-primary bg-primary/20/40">{$t("scope.user")}</span>
                           {/if}
                           {#if pv.sourceProfile && pv.sourceProfile !== profile.name}
                             <span class="text-[9px] text-muted-foreground" title={pv.sourceProfile}>{$t("profiles.inheritsFrom")} {pv.sourceProfile}</span>
@@ -934,7 +934,7 @@
                 </button>
               {:else}
                 <!-- Add variable panel with clone-from-existing dropdown -->
-                <div class="space-y-1.5 pt-2 border-t border-gray-100 border-border">
+                <div class="space-y-1.5 pt-2 border-t border-border/50 border-border">
                   {#if profile.isEnabled}
                     <p class="text-[9px] text-primary/80">{$t('profiles.unapplyToEdit')}</p>
                   {/if}
@@ -1026,7 +1026,7 @@
                     {$t('profiles.addSecret')}
                   </button>
                 {:else}
-                  <div class="space-y-1.5 pt-2 border-t border-gray-100 border-border">
+                  <div class="space-y-1.5 pt-2 border-t border-border/50 border-border">
                     <input
                       type="text"
                       placeholder={$t('labels.name')}

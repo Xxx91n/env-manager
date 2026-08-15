@@ -135,7 +135,7 @@
 
     <div class="px-5 py-4 space-y-3">
       {#if localError}
-        <div class="bg-destructive/10 border border-red-200 text-red-800 px-3 py-2 rounded-md text-xs bg-destructive/15 border-destructive text-destructive">
+        <div class="bg-destructive/10 border border-destructive/30 text-destructive px-3 py-2 rounded-md text-xs bg-destructive/15 border-destructive">
           {localError}
         </div>
       {/if}

@@ -60,7 +60,7 @@
         <button
           on:click={handleConfirm}
           class="px-4 py-1.5 text-xs text-primary-foreground rounded-md transition {$modal.variant === 'danger'
-            ? 'bg-destructive hover:bg-red-700 bg-destructive hover:bg-destructive'
+            ? 'bg-destructive hover:bg-destructive bg-destructive hover:bg-destructive'
             : 'bg-primary hover:bg-primary bg-primary/80 hover:bg-primary'}"
         >
           {$modal.confirmLabel || $t('buttons.save')}

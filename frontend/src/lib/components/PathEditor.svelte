@@ -488,7 +488,7 @@
       on:click={() => handleHealthCheck(true)}
       disabled={actionLoading || healthLoading || entries.length === 0}
       title={$t('path.healthCheck')}
-      class="flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-primary bg-blue-50 rounded-md hover:bg-primary/15 transition disabled:opacity-50 bg-primary/10"
+      class="flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-primary bg-primary/5 rounded-md hover:bg-primary/15 transition disabled:opacity-50 bg-primary/10"
     >
           <ShieldCheck class="w-3.5 h-3.5" />
       {$t('path.healthCheck')}
@@ -514,7 +514,7 @@
     </div>
  {:else}
     {#if stagedActive}
-      <div class="flex items-center justify-between gap-2 px-3 py-2 mb-2 rounded-md bg-blue-50 border border-blue-200 bg-primary/10 border-primary">
+      <div class="flex items-center justify-between gap-2 px-3 py-2 mb-2 rounded-md bg-primary/5 border border-primary/30 bg-primary/10 border-primary">
         <span class="text-[11px] text-primary">{$t('path.stagedActive')}</span>
         <div class="flex items-center gap-2">
           <button
@@ -548,9 +548,9 @@
             <th class="px-2 py-1.5 text-right text-[10px] font-medium text-muted-foreground uppercase tracking-wide w-24">{$t('table.actions')}</th>
           </tr>
         </thead>
-        <tbody class="divide-y divide-gray-100 divide-border">
+        <tbody class="divide-y divide-border/50 divide-border">
           {#each displayEntries as entry, pos (entry.index)}
-            <tr class="hover:bg-muted/50 transition hover:bg-muted {entry.isDuplicate ? 'bg-amber-50/60/60 bg-primary/5' : ''} {!entry.exists ? 'bg-red-50/60 bg-destructive/20/10' : ''} {entry.isProtected ? 'bg-muted/60 bg-card/60' : ''}">
+            <tr class="hover:bg-muted/50 transition hover:bg-muted {entry.isDuplicate ? 'bg-amber-50/60/60 bg-primary/5' : ''} {!entry.exists ? 'bg-destructive/5/60 bg-destructive/20/10' : ''} {entry.isProtected ? 'bg-muted/60 bg-card/60' : ''}">
               <td class="px-2 py-1.5 text-[10px] text-muted-foreground align-top">{entry.index}</td>
               <td class="px-2 py-1.5 align-top">
                 {#if editingIndex === entry.index}
@@ -599,9 +599,9 @@
                     {#if healthMap.has(entry.path)}
                       {@const h = healthMap.get(entry.path)}
                       {#if h.isDead && h.isDuplicate}
-                        <span class="inline-flex items-center px-1.5 py-0.5 rounded bg-red-200 text-red-800 bg-destructive/20/60 text-destructive">{$t('path.dead')}+{$t('path.duplicate')}</span>
+                        <span class="inline-flex items-center px-1.5 py-0.5 rounded bg-destructive/20 text-destructive bg-destructive/20/60">{$t('path.dead')}+{$t('path.duplicate')}</span>
                       {:else if h.isDead && !h.isDuplicate}
-                        <span class="inline-flex items-center px-1.5 py-0.5 rounded bg-red-100 text-destructive bg-destructive/20/40">{$t('path.dead')}</span>
+                        <span class="inline-flex items-center px-1.5 py-0.5 rounded bg-destructive/10 text-destructive bg-destructive/20/40">{$t('path.dead')}</span>
                       {:else if !h.isDead && h.isDuplicate}
                         <span class="inline-flex items-center px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 bg-primary/15 text-primary/80">{$t('path.duplicate')}</span>
                       {:else}
@@ -609,14 +609,14 @@
                       {/if}
                     {:else}
                       {#if !entry.exists}
-                        <span class="inline-flex items-center px-1.5 py-0.5 rounded bg-red-100 text-destructive bg-destructive/20/40" title={$t('path.missing')}>{$t('path.dead')}</span>
+                        <span class="inline-flex items-center px-1.5 py-0.5 rounded bg-destructive/10 text-destructive bg-destructive/20/40" title={$t('path.missing')}>{$t('path.dead')}</span>
                       {/if}
                       {#if entry.isDuplicate}
                         <span class="inline-flex items-center px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 bg-primary/15 text-primary/80">{$t('path.duplicate')}</span>
                       {/if}
                     {/if}
                     {#if entry.expandedPath !== entry.path}<span class="font-mono text-muted-foreground truncate max-w-xs" title={entry.expandedPath}>{entry.expandedPath}</span>{/if}
-                     {#if pathIdx.has(entry.path.toLowerCase().replace(/\\+$/, ""))}<span class="text-[9px] text-blue-500 text-primary" title={pathIdx.get(entry.path.toLowerCase().replace(/\\+$/, ""))?.join(', ')}>{$t('profiles.fromProfile')} {pathIdx.get(entry.path.toLowerCase().replace(/\\+$/, ""))?.join(', ')}</span>{/if}
+                     {#if pathIdx.has(entry.path.toLowerCase().replace(/\\+$/, ""))}<span class="text-[9px] text-primary" title={pathIdx.get(entry.path.toLowerCase().replace(/\\+$/, ""))?.join(', ')}>{$t('profiles.fromProfile')} {pathIdx.get(entry.path.toLowerCase().replace(/\\+$/, ""))?.join(', ')}</span>{/if}
                   </div>
                 {/if}
               </td>

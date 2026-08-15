@@ -98,7 +98,7 @@
     <ul class="absolute z-30 left-0 right-0 mt-0.5 bg-card border border-border border-border/80 rounded shadow-lg max-h-40 overflow-auto">
       {#each filtered.slice(0, 10) as v, i (v.name)}
         <li
-          class="px-2 py-1 cursor-pointer text-[10px] flex items-center gap-2 {i === highlightIndex ? 'bg-blue-100 bg-primary/20/40' : 'hover:bg-muted/30 hover:bg-accent'}"
+          class="px-2 py-1 cursor-pointer text-[10px] flex items-center gap-2 {i === highlightIndex ? 'bg-primary/10 bg-primary/20/40' : 'hover:bg-muted/30 hover:bg-accent'}"
           on:mousedown={(e) => { e.preventDefault(); select(v) }}
           role="option"
           aria-selected={i === highlightIndex}

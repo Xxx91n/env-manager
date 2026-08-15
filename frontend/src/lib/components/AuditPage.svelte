@@ -41,7 +41,7 @@
   </div>
 
   <!-- Architecture distinction notice -->
-  <div class="px-3 py-2 rounded-md bg-blue-50 bg-primary/10 border border-blue-200 border-primary">
+  <div class="px-3 py-2 rounded-md bg-primary/5 bg-primary/10 border border-primary/30 border-primary">
     <p class="text-xs text-primary">{$t('audit.vsHistory')}</p>
   </div>
 
@@ -52,7 +52,7 @@
   {:else if auditEntries.length > 0}
     <div class="max-h-[60vh] overflow-y-auto space-y-1">
       {#each auditEntries as entry}
-        <div class="text-xs px-3 py-1.5 rounded bg-muted/20 bg-card font-mono border border-gray-100 border-border">
+        <div class="text-xs px-3 py-1.5 rounded bg-muted/20 bg-card font-mono border border-border/50 border-border">
           <span class="text-muted-foreground mr-2">{entry.timestamp}</span>
           <span class="text-foreground/80">{entry.command}</span>
         </div>

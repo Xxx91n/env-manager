@@ -253,7 +253,7 @@
             </th>
           </tr>
         </thead>
-        <tbody class="divide-y divide-gray-100 divide-border">
+        <tbody class="divide-y divide-border/50 divide-border">
           {#each filteredVars as variable (variable.name + variable.scope)}
             <tr class="hover:bg-muted/50 transition hover:bg-muted {variable.isDisabled ? 'opacity-50' : ''} {variable.isProtected ? 'bg-muted/60 bg-card/60' : ''}">
               <td class="px-3 py-2">
@@ -291,7 +291,7 @@
                 <span
                   class="inline-flex px-1.5 py-0.5 rounded text-xs font-medium {variable.scope ===
                   'user'
-                    ? 'bg-blue-50 text-primary bg-primary/20/40 text-primary'
+                    ? 'bg-primary/5 text-primary bg-primary/20/40 text-primary'
                     : 'bg-primary/10 text-amber-700 bg-primary/15 text-primary/80'}"
                 >
                   {variable.scope === 'user' ? $t('scope.user') : $t('scope.system')}
