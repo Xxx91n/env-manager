@@ -438,12 +438,12 @@
 <div class="space-y-3">
 
   <div class="flex items-center gap-2">
-    <label for="path-scope" class="text-xs font-medium text-muted-foreground text-muted-foreground">{$t('path.scope')}</label>
+    <label for="path-scope" class="text-xs font-medium text-muted-foreground">{$t('path.scope')}</label>
     <select
       id="path-scope"
       bind:value={scope}
       on:change={handleScopeChange}
-      class="px-2.5 py-1.5 text-xs border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-primary bg-card bg-accent border-border/80 text-foreground"
+      class="px-2.5 py-1.5 text-xs border border-border rounded-md focus:outline-none focus:ring-1 focus:ring-primary bg-card bg-accent border-border/80 text-foreground"
     >
       <option value="user">{$t('scope.user')}</option>
       <option value="system">{$t('scope.system')}</option>
@@ -456,12 +456,12 @@
       placeholder={$t('path.entryPlaceholder')}
       bind:value={newEntry}
       on:keydown={(e) => { if (e.key === 'Enter') handleAdd() }}
-      class="flex-1 px-3 py-1.5 text-xs border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary font-mono bg-card border-border/80 text-foreground"
+      class="flex-1 px-3 py-1.5 text-xs border border-border rounded-md focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary font-mono bg-card border-border/80 text-foreground"
     />
     <button
       on:click={handleAdd}
       disabled={actionLoading || !newEntry.trim()}
-      class="flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-white bg-primary rounded-md hover:bg-blue-700 transition disabled:opacity-50 bg-primary/80 hover:bg-primary"
+      class="flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-primary-foreground bg-primary rounded-md hover:bg-primary transition disabled:opacity-50 bg-primary/80"
     >
           <Plus class="w-3.5 h-3.5" />
       {$t('path.addEntry')}
@@ -470,7 +470,7 @@
       on:click={() => handleDedupe(true)}
       disabled={actionLoading || entries.length === 0}
       title={$t('path.dedupeDryRun')}
-      class="flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-foreground/80 bg-muted/30 rounded-md hover:bg-gray-200 transition disabled:opacity-50 bg-accent text-foreground hover:bg-muted"
+      class="flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-foreground/80 bg-muted/30 rounded-md hover:bg-muted transition disabled:opacity-50 bg-accent text-foreground"
     >
       <Eye class="w-3.5 h-3.5" />
       {$t('path.dedupeDryRun')}
@@ -479,7 +479,7 @@
       on:click={() => handleDedupe(false)}
       disabled={actionLoading || entries.length === 0}
       title={$t('path.dedupe')}
-      class="flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-amber-700 bg-primary/10 rounded-md hover:bg-amber-100 transition disabled:opacity-50 bg-primary/10 text-primary/80 hover:bg-primary/15"
+      class="flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-amber-700 bg-primary/10 rounded-md hover:bg-amber-100 transition disabled:opacity-50 text-primary/80 hover:bg-primary/15"
     >
           <Trash2 class="w-3.5 h-3.5" />
       {$t('path.dedupe')}
@@ -488,7 +488,7 @@
       on:click={() => handleHealthCheck(true)}
       disabled={actionLoading || healthLoading || entries.length === 0}
       title={$t('path.healthCheck')}
-      class="flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-primary bg-blue-50 rounded-md hover:bg-blue-100 transition disabled:opacity-50 bg-primary/10 text-primary hover:bg-primary/15"
+      class="flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-primary bg-blue-50 rounded-md hover:bg-primary/15 transition disabled:opacity-50 bg-primary/10"
     >
           <ShieldCheck class="w-3.5 h-3.5" />
       {$t('path.healthCheck')}
@@ -497,7 +497,7 @@
       on:click={handleRemoveDeadConfirm}
       disabled={actionLoading || healthLoading || !healthSummary || healthSummary.dead === 0}
       title={$t('path.removeDead')}
-      class="flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-red-700 bg-destructive/10 rounded-md hover:bg-red-100 transition disabled:opacity-30 disabled:cursor-not-allowed bg-destructive/10 text-destructive hover:bg-destructive/15"
+      class="flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-destructive bg-destructive/10 rounded-md hover:bg-destructive/15 transition disabled:opacity-30 disabled:cursor-not-allowed"
     >
           <Trash2 class="w-3.5 h-3.5" />
       {$t('path.removeDead')}{#if healthSummary && healthSummary.dead > 0} ({healthSummary.dead}){/if}
@@ -506,21 +506,21 @@
 
   {#if loading}
     <div class="flex justify-center py-8">
-      <div class="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-600"></div>
+      <div class="animate-spin rounded-full h-5 w-5 border-b-2 border-primary"></div>
     </div>
   {:else if entries.length === 0}
-    <div class="px-4 py-8 text-center text-gray-400 text-xs text-muted-foreground">
+    <div class="px-4 py-8 text-center text-muted-foreground text-xs">
       {$t('path.empty')}
     </div>
  {:else}
     {#if stagedActive}
       <div class="flex items-center justify-between gap-2 px-3 py-2 mb-2 rounded-md bg-blue-50 border border-blue-200 bg-primary/10 border-primary">
-        <span class="text-[11px] text-primary text-primary">{$t('path.stagedActive')}</span>
+        <span class="text-[11px] text-primary">{$t('path.stagedActive')}</span>
         <div class="flex items-center gap-2">
           <button
             on:click={applyStagedMoves}
             disabled={stagedApplyLoading}
-            class="inline-flex items-center gap-1 px-2.5 py-1 text-[11px] font-medium text-white bg-primary hover:bg-blue-700 rounded-md transition disabled:opacity-50"
+            class="inline-flex items-center gap-1 px-2.5 py-1 text-[11px] font-medium text-primary-foreground bg-primary hover:bg-primary rounded-md transition disabled:opacity-50"
             title={$t('path.applyMoves')}
             aria-label={$t('path.applyMoves')}
           >
@@ -539,19 +539,19 @@
         </div>
       </div>
     {/if}
-    <div class="overflow-x-auto bg-card rounded-md border border-border bg-card border-border">
+    <div class="overflow-x-auto bg-card rounded-md border border-border">
       <table class="w-full">
-        <thead class="bg-gray-50 border-b border-border bg-muted border-border/80">
+        <thead class="bg-muted/50 border-b border-border bg-muted border-border/80">
           <tr>
-            <th class="px-2 py-1.5 text-left text-[10px] font-medium text-gray-500 text-muted-foreground uppercase tracking-wide w-8">#</th>
-            <th class="px-2 py-1.5 text-left text-[10px] font-medium text-gray-500 text-muted-foreground uppercase tracking-wide">{$t('table.value')}</th>
-            <th class="px-2 py-1.5 text-right text-[10px] font-medium text-gray-500 text-muted-foreground uppercase tracking-wide w-24">{$t('table.actions')}</th>
+            <th class="px-2 py-1.5 text-left text-[10px] font-medium text-muted-foreground uppercase tracking-wide w-8">#</th>
+            <th class="px-2 py-1.5 text-left text-[10px] font-medium text-muted-foreground uppercase tracking-wide">{$t('table.value')}</th>
+            <th class="px-2 py-1.5 text-right text-[10px] font-medium text-muted-foreground uppercase tracking-wide w-24">{$t('table.actions')}</th>
           </tr>
         </thead>
         <tbody class="divide-y divide-gray-100 divide-border">
           {#each displayEntries as entry, pos (entry.index)}
-            <tr class="hover:bg-gray-50 transition hover:bg-muted {entry.isDuplicate ? 'bg-amber-50/60 bg-primary/5' : ''} {!entry.exists ? 'bg-red-50/60 bg-destructive/20/10' : ''} {entry.isProtected ? 'bg-gray-100/60 bg-card/60' : ''}">
-              <td class="px-2 py-1.5 text-[10px] text-gray-400 text-muted-foreground align-top">{entry.index}</td>
+            <tr class="hover:bg-muted/50 transition hover:bg-muted {entry.isDuplicate ? 'bg-amber-50/60/60 bg-primary/5' : ''} {!entry.exists ? 'bg-red-50/60 bg-destructive/20/10' : ''} {entry.isProtected ? 'bg-muted/60 bg-card/60' : ''}">
+              <td class="px-2 py-1.5 text-[10px] text-muted-foreground align-top">{entry.index}</td>
               <td class="px-2 py-1.5 align-top">
                 {#if editingIndex === entry.index}
                   <!-- Inline edit mode -->
@@ -561,13 +561,13 @@
                       bind:value={editValue}
                       on:keydown={(e) => handleEditKeydown(e, entry.path)}
                       on:blur={() => handleEditBlur(entry.path)}
-                      class="flex-1 px-2 py-1 text-[10px] font-mono border border-primary rounded-md focus:outline-none focus:ring-1 focus:ring-primary bg-background border-primary text-foreground"
+                      class="flex-1 px-2 py-1 text-[10px] font-mono border border-primary rounded-md focus:outline-none focus:ring-1 focus:ring-primary bg-background text-foreground"
                       spellcheck="false"
                     />
                     <button
                       on:click={() => confirmEdit(entry.path)}
                       disabled={actionLoading}
-                      class="inline-flex p-1 text-primary hover:bg-primary/10 rounded transition disabled:opacity-50 text-primary hover:bg-primary/15"
+                      class="inline-flex p-1 text-primary hover:bg-primary/10 rounded transition disabled:opacity-50 hover:bg-primary/15"
                       title={$t('buttons.save')}
                       aria-label={$t('buttons.save')}
                     >
@@ -576,7 +576,7 @@
                     <button
                       on:click={cancelEdit}
                       disabled={actionLoading}
-                      class="inline-flex p-1 text-gray-400 hover:text-muted-foreground hover:bg-muted/30 rounded transition disabled:opacity-50 hover:bg-accent"
+                      class="inline-flex p-1 text-muted-foreground hover:text-muted-foreground hover:bg-muted/30 rounded transition disabled:opacity-50 hover:bg-accent"
                       title={$t('buttons.cancel')}
                       aria-label={$t('buttons.cancel')}
                     >
@@ -584,12 +584,12 @@
                     </button>
                   </div>
                   {#if editError}
-                    <div class="mt-1 text-[10px] text-destructive text-destructive">{editError}</div>
+                    <div class="mt-1 text-[10px] text-destructive">{editError}</div>
                   {/if}
                 {:else}
                   <!-- Display mode: click to copy -->
                   <div
-                    class="text-[11px] font-mono text-foreground/80 text-foreground break-all cursor-pointer hover:text-primary hover:text-primary transition select-none leading-relaxed"
+                    class="text-[11px] font-mono text-foreground/80 text-foreground break-all cursor-pointer hover:text-primary transition select-none leading-relaxed"
                     title={$t('messages.clickToCopy')}
                     on:click={() => copyToClipboard(entry.path)}
                   >
@@ -601,7 +601,7 @@
                       {#if h.isDead && h.isDuplicate}
                         <span class="inline-flex items-center px-1.5 py-0.5 rounded bg-red-200 text-red-800 bg-destructive/20/60 text-destructive">{$t('path.dead')}+{$t('path.duplicate')}</span>
                       {:else if h.isDead && !h.isDuplicate}
-                        <span class="inline-flex items-center px-1.5 py-0.5 rounded bg-red-100 text-red-700 bg-destructive/20/40 text-destructive">{$t('path.dead')}</span>
+                        <span class="inline-flex items-center px-1.5 py-0.5 rounded bg-red-100 text-destructive bg-destructive/20/40">{$t('path.dead')}</span>
                       {:else if !h.isDead && h.isDuplicate}
                         <span class="inline-flex items-center px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 bg-primary/15 text-primary/80">{$t('path.duplicate')}</span>
                       {:else}
@@ -609,13 +609,13 @@
                       {/if}
                     {:else}
                       {#if !entry.exists}
-                        <span class="inline-flex items-center px-1.5 py-0.5 rounded bg-red-100 text-red-700 bg-destructive/20/40 text-destructive" title={$t('path.missing')}>{$t('path.dead')}</span>
+                        <span class="inline-flex items-center px-1.5 py-0.5 rounded bg-red-100 text-destructive bg-destructive/20/40" title={$t('path.missing')}>{$t('path.dead')}</span>
                       {/if}
                       {#if entry.isDuplicate}
                         <span class="inline-flex items-center px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 bg-primary/15 text-primary/80">{$t('path.duplicate')}</span>
                       {/if}
                     {/if}
-                    {#if entry.expandedPath !== entry.path}<span class="font-mono text-gray-400 truncate max-w-xs" title={entry.expandedPath}>{entry.expandedPath}</span>{/if}
+                    {#if entry.expandedPath !== entry.path}<span class="font-mono text-muted-foreground truncate max-w-xs" title={entry.expandedPath}>{entry.expandedPath}</span>{/if}
                      {#if pathIdx.has(entry.path.toLowerCase().replace(/\\+$/, ""))}<span class="text-[9px] text-blue-500 text-primary" title={pathIdx.get(entry.path.toLowerCase().replace(/\\+$/, ""))?.join(', ')}>{$t('profiles.fromProfile')} {pathIdx.get(entry.path.toLowerCase().replace(/\\+$/, ""))?.join(', ')}</span>{/if}
                   </div>
                 {/if}
@@ -626,7 +626,7 @@
                   <button
                     on:click={() => handlePathLockToggle(entry.path, !!entry.isProtected, !!entry.isBuiltinProtected)}
                     disabled={!!entry.isBuiltinProtected}
-                    class="inline-flex p-1 {entry.isProtected ? 'text-amber-500' : 'text-gray-400 hover:text-primary/80 hover:bg-amber-50'} rounded transition disabled:opacity-30 disabled:cursor-not-allowed hover:bg-primary/15"
+                    class="inline-flex p-1 {entry.isProtected ? 'text-amber-600' : 'text-muted-foreground hover:text-primary/80 hover:bg-amber-50/60'} rounded transition disabled:opacity-30 disabled:cursor-not-allowed hover:bg-primary/15"
                     title={entry.isProtected ? (entry.isBuiltinProtected ? $t('protection.lockedBuiltin') : $t('protection.unlockPath')) : $t('protection.lockPath')}
                     aria-label={entry.isProtected ? $t('protection.unlockPath') : $t('protection.lockPath')}
                   >
@@ -636,7 +636,7 @@
                   <button
                     on:click={() => startEdit(entry.index, entry.path)}
                     disabled={actionLoading || !!entry.isProtected}
-                    class="inline-flex p-1 text-gray-400 hover:text-primary hover:bg-blue-50 rounded transition disabled:opacity-30 hover:text-primary hover:bg-primary/15"
+                    class="inline-flex p-1 text-muted-foreground hover:text-primary hover:bg-primary/10 rounded transition disabled:opacity-30 hover:bg-primary/15"
                     title={entry.isProtected ? $t('protection.lockedCannotEdit') : $t('path.rename')}
                     aria-label={$t('path.rename')}
                   >
@@ -645,7 +645,7 @@
                   <button
                     on:click={() => handleMoveUp(entry.index)}
                     disabled={actionLoading || pos === 0 || entry.isProtected}
-                    class="inline-flex p-1 text-gray-400 hover:text-primary hover:bg-blue-50 rounded transition disabled:opacity-30 hover:text-primary hover:bg-primary/15"
+                    class="inline-flex p-1 text-muted-foreground hover:text-primary hover:bg-primary/10 rounded transition disabled:opacity-30 hover:bg-primary/15"
                     title={$t('path.moveUp')}
                     aria-label={$t('path.moveUp')}
                   >
@@ -654,7 +654,7 @@
                   <button
                     on:click={() => handleMoveDown(entry.index)}
                     disabled={actionLoading || pos === displayEntries.length - 1 || entry.isProtected}
-                    class="inline-flex p-1 text-gray-400 hover:text-primary hover:bg-blue-50 rounded transition disabled:opacity-30 hover:text-primary hover:bg-primary/15"
+                    class="inline-flex p-1 text-muted-foreground hover:text-primary hover:bg-primary/10 rounded transition disabled:opacity-30 hover:bg-primary/15"
                     title={$t('path.moveDown')}
                     aria-label={$t('path.moveDown')}
                   >
@@ -663,7 +663,7 @@
                   <button
                     on:click={() => handleRemove(entry.path)}
                     disabled={actionLoading || entry.isProtected}
-                    class="inline-flex p-1 text-gray-400 hover:text-destructive hover:bg-destructive/10 rounded transition disabled:opacity-30 disabled:cursor-not-allowed hover:text-destructive hover:bg-destructive/15"
+                    class="inline-flex p-1 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded transition disabled:opacity-30 disabled:cursor-not-allowed hover:bg-destructive/15"
                     title={$t('path.removeEntry')}
                     aria-label={$t('path.removeEntry')}
                   >

@@ -192,18 +192,18 @@
   <!-- Toolbar -->
   <div class="flex gap-2 items-center">
     <div class="relative flex-1">
-          <Search class="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
+          <Search class="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
       <input
         type="text"
         placeholder={$t('messages.searchPlaceholder')}
         bind:value={$search}
-        class="w-full pl-8 pr-3 py-1.5 text-xs border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary bg-card border-border/80 text-foreground"
+        class="w-full pl-8 pr-3 py-1.5 text-xs border border-border rounded-md focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary bg-card border-border/80 text-foreground"
       />
     </div>
 
     <select
       bind:value={$selectedScope}
-      class="px-2.5 py-1.5 text-xs border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-primary bg-card bg-card border-border/80 text-foreground"
+      class="px-2.5 py-1.5 text-xs border border-border rounded-md focus:outline-none focus:ring-1 focus:ring-primary bg-card border-border/80 text-foreground"
     >
       <option value="all">{$t('table.scope')}</option>
       <option value="user">{$t('scope.user')}</option>
@@ -212,7 +212,7 @@
 
     <button
       on:click={() => (showEditDialog = true)}
-      class="flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-white bg-primary rounded-md hover:bg-blue-700 transition bg-primary/80 hover:bg-primary"
+      class="flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-primary-foreground bg-primary rounded-md hover:bg-primary transition bg-primary/80"
     >
           <Plus class="w-3.5 h-3.5" />
       {$t('buttons.add')}
@@ -220,47 +220,47 @@
 
     <button
       on:click={handleShowBackup}
-      class="flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-foreground/80 bg-card border border-gray-300 rounded-md hover:bg-gray-50 transition text-foreground bg-card border-border/80 hover:bg-accent"
+      class="flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-foreground/80 bg-card border border-border rounded-md hover:bg-muted/50 transition text-foreground border-border/80 hover:bg-accent"
     >
       <Archive class="w-3.5 h-3.5" />
       {$t('buttons.backup')}
     </button>
   </div>
 
-  <div class="overflow-x-auto bg-card rounded-md border border-border bg-card border-border">
+  <div class="overflow-x-auto bg-card rounded-md border border-border">
     {#if filteredVars.length === 0}
-      <div class="px-4 py-8 text-center text-gray-400 text-xs text-muted-foreground">
+      <div class="px-4 py-8 text-center text-muted-foreground text-xs">
         {$t('messages.noData')}
       </div>
     {:else}
       <table class="w-full">
-        <thead class="bg-gray-50 border-b border-border bg-muted border-border/80">
+        <thead class="bg-muted/50 border-b border-border bg-muted border-border/80">
           <tr>
-            <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 text-muted-foreground uppercase tracking-wide w-12">
+            <th class="px-3 py-2 text-left text-xs font-medium text-muted-foreground uppercase tracking-wide w-12">
               {$t('table.enabled')}
             </th>
-            <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 text-muted-foreground uppercase tracking-wide">
+            <th class="px-3 py-2 text-left text-xs font-medium text-muted-foreground uppercase tracking-wide">
               {$t('table.name')}
             </th>
-            <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 text-muted-foreground uppercase tracking-wide w-20">
+            <th class="px-3 py-2 text-left text-xs font-medium text-muted-foreground uppercase tracking-wide w-20">
               {$t('table.scope')}
             </th>
-            <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 text-muted-foreground uppercase tracking-wide">
+            <th class="px-3 py-2 text-left text-xs font-medium text-muted-foreground uppercase tracking-wide">
               {$t('table.value')}
             </th>
-            <th class="px-3 py-2 text-right text-xs font-medium text-gray-500 text-muted-foreground uppercase tracking-wide w-24">
+            <th class="px-3 py-2 text-right text-xs font-medium text-muted-foreground uppercase tracking-wide w-24">
               {$t('table.actions')}
             </th>
           </tr>
         </thead>
         <tbody class="divide-y divide-gray-100 divide-border">
           {#each filteredVars as variable (variable.name + variable.scope)}
-            <tr class="hover:bg-gray-50 transition hover:bg-muted {variable.isDisabled ? 'opacity-50' : ''} {variable.isProtected ? 'bg-gray-100/60 bg-card/60' : ''}">
+            <tr class="hover:bg-muted/50 transition hover:bg-muted {variable.isDisabled ? 'opacity-50' : ''} {variable.isProtected ? 'bg-muted/60 bg-card/60' : ''}">
               <td class="px-3 py-2">
                 <button
                   on:click={() => handleToggle(variable.name, variable.scope)}
                   disabled={$isWriteInProgress || togglingKeys[variable.name + ':' + variable.scope] === true || !!variable.isProtected || !!variable.isBuiltinProtected}
-                  class="relative inline-flex h-4 w-7 items-center rounded-full transition disabled:opacity-30 disabled:cursor-not-allowed {variable.isDisabled ? 'bg-gray-300 bg-muted' : 'bg-primary bg-primary/80'}"
+                  class="relative inline-flex h-4 w-7 items-center rounded-full transition disabled:opacity-30 disabled:cursor-not-allowed {variable.isDisabled ? 'bg-border bg-muted' : 'bg-primary bg-primary/80'}"
                   role="switch"
                   aria-checked={!variable.isDisabled}
                   title={variable.isProtected ? $t('protection.lockedCannotToggle') : variable.isDisabled ? $t('messages.clickToEnable') : $t('messages.clickToDisable')}
@@ -271,7 +271,7 @@
                 </button>
               </td>
               <td
-                class="px-3 py-2 text-xs font-mono text-foreground text-foreground cursor-pointer hover:text-primary hover:text-primary transition select-none"
+                class="px-3 py-2 text-xs font-mono text-foreground cursor-pointer hover:text-primary transition select-none"
                 title={$t('messages.clickToCopy')}
                 on:click={() => copyToClipboard(variable.name)}
               >
@@ -298,14 +298,14 @@
                 </span>
               </td>
               <td
-                class="px-3 py-2 text-xs text-muted-foreground font-mono text-foreground/80 max-w-md truncate cursor-pointer hover:text-primary hover:text-primary transition select-none"
+                class="px-3 py-2 text-xs text-muted-foreground font-mono text-foreground/80 max-w-md truncate cursor-pointer hover:text-primary transition select-none"
                 title={previewTitle(variable)}
                 on:mouseenter={() => scheduleExpandedPreview(variable)}
                 on:click={() => copyToClipboard(variable.value)}
               >
                 {#each highlightParts(variable.value, $debouncedSearch) as part}<span class={part.match ? 'bg-yellow-200 text-foreground bg-primary/40 text-primary-foreground' : ''}>{part.text}</span>{/each}
                 {#if expandedValues[variable.scope + ':' + variable.name] && expandedValues[variable.scope + ':' + variable.name] !== variable.value}
-                  <div class="mt-0.5 text-[9px] text-gray-400 truncate" title={expandedValues[variable.scope + ':' + variable.name]}>
+                  <div class="mt-0.5 text-[9px] text-muted-foreground truncate" title={expandedValues[variable.scope + ':' + variable.name]}>
                     -> {expandedValues[variable.scope + ':' + variable.name]}
                   </div>
                 {/if}
@@ -314,7 +314,7 @@
                 <button
                   on:click={() => handleLockToggle(variable.name, !!variable.isProtected, !!variable.isBuiltinProtected)}
                   disabled={!!variable.isBuiltinProtected}
-                  class="inline-flex p-1 {variable.isProtected ? 'text-amber-500' : 'text-gray-400 hover:text-primary/80 hover:bg-amber-50'} rounded transition disabled:opacity-30 disabled:cursor-not-allowed hover:bg-primary/15"
+                  class="inline-flex p-1 {variable.isProtected ? 'text-amber-600' : 'text-muted-foreground hover:text-primary/80 hover:bg-amber-50/60'} rounded transition disabled:opacity-30 disabled:cursor-not-allowed hover:bg-primary/15"
                   title={variable.isProtected ? (variable.isBuiltinProtected ? $t('protection.lockedBuiltin') : $t('protection.unlockVar')) : $t('protection.lockVar')}
                   aria-label={variable.isProtected ? $t('protection.unlockVar') : $t('protection.lockVar')}
                 >
@@ -326,7 +326,7 @@
                   on:focus={() => ensureNotesLoaded()}
                   on:mouseenter={() => { hoveredNoteVar = variable.name; ensureNotesLoaded() }}
                   on:mouseleave={() => hoveredNoteVar = null}
-                  class="inline-flex p-1 text-gray-400 hover:text-primary/80 hover:bg-primary/10 rounded transition hover:text-primary/80 hover:bg-primary/15"
+                  class="inline-flex p-1 text-muted-foreground hover:text-primary/80 hover:bg-primary/10 rounded transition hover:bg-primary/15"
                   title={getNoteSync(variable.name) ? $t('notes.editNote') : $t('notes.addNote')}
                 >
                   {#if getNoteSync(variable.name)}
@@ -336,7 +336,7 @@
                   {/if}
                 </button>
                   {#if hoveredNoteVar === variable.name && getNoteSync(variable.name)}
-                    <div class="absolute bottom-full left-0 mb-1 px-2.5 py-1.5 bg-gray-800 text-white text-[10px] rounded shadow-lg whitespace-pre-wrap max-w-[240px] break-words z-50 pointer-events-none bg-accent">
+                    <div class="absolute bottom-full left-0 mb-1 px-2.5 py-1.5 bg-card text-primary-foreground text-[10px] rounded shadow-lg whitespace-pre-wrap max-w-[240px] break-words z-50 pointer-events-none bg-accent">
                       {getNoteSync(variable.name)?.note}
                     </div>
                   {/if}
@@ -344,7 +344,7 @@
                 <button
                   on:click={() => handleEdit(variable)}
                   disabled={$isWriteInProgress || togglingKeys[variable.name + ':' + variable.scope] === true || !!variable.isProtected}
-                  class="inline-flex p-1 text-gray-400 hover:text-primary hover:bg-blue-50 rounded transition disabled:opacity-30 disabled:cursor-not-allowed hover:text-primary hover:bg-primary/15"
+                  class="inline-flex p-1 text-muted-foreground hover:text-primary hover:bg-primary/10 rounded transition disabled:opacity-30 disabled:cursor-not-allowed hover:bg-primary/15"
                   title={variable.isProtected ? $t('protection.lockedCannotEdit') : $t('buttons.edit')}
                   aria-label={$t('buttons.edit')}
                 >
@@ -353,7 +353,7 @@
                 <button
                   on:click={() => handleDelete(variable.name, variable.scope)}
                   disabled={$isWriteInProgress || togglingKeys[variable.name + ':' + variable.scope] === true || !!variable.isProtected}
-                  class="inline-flex p-1 text-gray-400 hover:text-destructive hover:bg-destructive/10 rounded transition disabled:opacity-30 disabled:cursor-not-allowed hover:text-destructive hover:bg-destructive/15"
+                  class="inline-flex p-1 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded transition disabled:opacity-30 disabled:cursor-not-allowed hover:bg-destructive/15"
                   title={variable.isProtected ? $t('protection.lockedCannotDelete') : $t('buttons.delete')}
                   aria-label={$t('buttons.delete')}
                 >

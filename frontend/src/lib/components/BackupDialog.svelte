@@ -46,14 +46,14 @@
 </script>
 
 <div
-  class="fixed inset-0 bg-black/40 flex items-center justify-center z-50"
+  class="fixed inset-0 bg-background/40 flex items-center justify-center z-50"
   on:click={handleClose}
   on:keydown={(e) => { if (e.key === 'Escape') handleClose() }}
   role="presentation"
   tabindex="-1">
-  <div class="bg-card rounded-lg shadow-xl max-w-md w-full mx-4 bg-card" on:click|stopPropagation>
-    <div class="px-5 py-3 border-b border-border border-border">
-      <h2 class="text-sm font-semibold text-foreground text-foreground">
+  <div class="bg-card rounded-lg shadow-xl max-w-md w-full mx-4" on:click|stopPropagation>
+    <div class="px-5 py-3 border-b border-border">
+      <h2 class="text-sm font-semibold text-foreground">
         {$t('dialogs.backupCreate')}
       </h2>
     </div>
@@ -80,25 +80,25 @@
       </div>
 
       {#if mode === 'export'}
-        <p class="text-xs text-muted-foreground text-muted-foreground mb-3">
+        <p class="text-xs text-muted-foreground mb-3">
           {$t('messages.exportDescription')}
         </p>
         <button
           on:click={handleExport}
           disabled={saving}
-          class="w-full flex items-center justify-center gap-1.5 px-4 py-2 text-xs font-medium text-white bg-primary rounded-md hover:bg-green-700 transition disabled:opacity-50 bg-primary hover:bg-primary"
+          class="w-full flex items-center justify-center gap-1.5 px-4 py-2 text-xs font-medium text-primary-foreground bg-primary rounded-md hover:bg-green-700 transition disabled:opacity-50 hover:bg-primary"
         >
           <Download class="w-3.5 h-3.5" />
           {saving ? $t('messages.loading') : $t('buttons.export')}
         </button>
       {:else}
-        <p class="text-xs text-muted-foreground text-muted-foreground mb-3">
+        <p class="text-xs text-muted-foreground mb-3">
           {$t('messages.importDescription')}
         </p>
         <button
           on:click={handleRestore}
           disabled={saving}
-          class="w-full flex items-center justify-center gap-1.5 px-4 py-2 text-xs font-medium text-white bg-primary rounded-md hover:bg-green-700 transition disabled:opacity-50 bg-primary hover:bg-primary"
+          class="w-full flex items-center justify-center gap-1.5 px-4 py-2 text-xs font-medium text-primary-foreground bg-primary rounded-md hover:bg-green-700 transition disabled:opacity-50 hover:bg-primary"
         >
           <Download class="w-3.5 h-3.5" />
           {saving ? $t('messages.loading') : $t('buttons.restore')}
@@ -107,10 +107,10 @@
 
       </div>
 
-    <div class="px-5 py-3 border-t border-border flex justify-end border-border">
+    <div class="px-5 py-3 border-t border-border flex justify-end">
       <button
         on:click={handleClose}
-        class="px-4 py-1.5 text-xs text-foreground/80 border border-gray-300 rounded-md hover:bg-muted/20 transition text-foreground border-border/80 hover:bg-accent"
+        class="px-4 py-1.5 text-xs text-foreground/80 border border-border rounded-md hover:bg-muted/20 transition text-foreground border-border/80 hover:bg-accent"
       >
         {$t('buttons.close')}
       </button>

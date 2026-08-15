@@ -121,14 +121,14 @@
 </script>
 
 <div
-  class="fixed inset-0 bg-black/40 flex items-center justify-center z-50"
+  class="fixed inset-0 bg-background/40 flex items-center justify-center z-50"
   on:click={handleClose}
   on:keydown={(e) => { if (e.key === 'Escape') handleClose() }}
   role="presentation"
   tabindex="-1">
-  <div class="bg-card rounded-lg shadow-xl max-w-md w-full mx-4 bg-card" on:click|stopPropagation>
-    <div class="px-5 py-3 border-b border-border border-border">
-      <h2 class="text-sm font-semibold text-foreground text-foreground">
+  <div class="bg-card rounded-lg shadow-xl max-w-md w-full mx-4" on:click|stopPropagation>
+    <div class="px-5 py-3 border-b border-border">
+      <h2 class="text-sm font-semibold text-foreground">
         {variable ? $t('dialogs.editVariable') : $t('dialogs.addVariable')}
       </h2>
     </div>
@@ -141,7 +141,7 @@
       {/if}
 
       <div>
-        <label for="edit-name" class="block text-xs font-medium text-muted-foreground text-muted-foreground mb-1">
+        <label for="edit-name" class="block text-xs font-medium text-muted-foreground mb-1">
           {$t('labels.name')}
         </label>
         <input
@@ -149,36 +149,36 @@
           type="text"
           bind:value={name}
           spellcheck="false"
-          class="w-full px-3 py-1.5 text-xs border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary font-mono bg-accent border-border/80 text-foreground"
+          class="w-full px-3 py-1.5 text-xs border border-border rounded-md focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary font-mono bg-accent border-border/80 text-foreground"
         />
         {#if nameChanged}
-          <p class="mt-1 text-[10px] text-primary/80 text-primary/80">
+          <p class="mt-1 text-[10px] text-primary/80">
             {$t('messages.renameWarning')}
           </p>
         {/if}
       </div>
 
       <div>
-        <label for="edit-value" class="block text-xs font-medium text-muted-foreground text-muted-foreground mb-1">
+        <label for="edit-value" class="block text-xs font-medium text-muted-foreground mb-1">
           {$t('labels.value')}
         </label>
         <textarea
           id="edit-value"
           bind:value={value}
           rows="4"
-          class="w-full px-3 py-1.5 text-xs border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary font-mono bg-accent border-border/80 text-foreground"
+          class="w-full px-3 py-1.5 text-xs border border-border rounded-md focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary font-mono bg-accent border-border/80 text-foreground"
         />
       </div>
 
       <div>
-        <label for="edit-scope" class="block text-xs font-medium text-muted-foreground text-muted-foreground mb-1">
+        <label for="edit-scope" class="block text-xs font-medium text-muted-foreground mb-1">
           {$t('labels.scope')}
         </label>
         <select
           id="edit-scope"
           bind:value={scope}
           disabled={!!(variable && variable.isProtected)}
-          class="w-full px-3 py-1.5 text-xs border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-primary bg-card disabled:bg-muted/30 bg-accent border-border/80 text-foreground"
+          class="w-full px-3 py-1.5 text-xs border border-border rounded-md focus:outline-none focus:ring-1 focus:ring-primary bg-card disabled:bg-muted/30 bg-accent border-border/80 text-foreground"
         >
           <option value="user">{$t('scope.user')}</option>
           <option value="system">{$t('scope.system')}</option>
@@ -186,18 +186,18 @@
       </div>
     </div>
 
-    <div class="px-5 py-3 border-t border-border flex gap-2 justify-end border-border">
+    <div class="px-5 py-3 border-t border-border flex gap-2 justify-end">
       <button
         on:click={handleClose}
         disabled={saving}
-        class="px-4 py-1.5 text-xs text-foreground/80 border border-gray-300 rounded-md hover:bg-muted/20 transition disabled:opacity-50 text-foreground border-border/80 hover:bg-accent"
+        class="px-4 py-1.5 text-xs text-foreground/80 border border-border rounded-md hover:bg-muted/20 transition disabled:opacity-50 text-foreground border-border/80 hover:bg-accent"
       >
         {$t('buttons.cancel')}
       </button>
       <button
         on:click={handleSave}
         disabled={saving}
-        class="px-4 py-1.5 text-xs text-white bg-primary rounded-md hover:bg-blue-700 transition disabled:opacity-50 bg-primary/80 hover:bg-primary"
+        class="px-4 py-1.5 text-xs text-primary-foreground bg-primary rounded-md hover:bg-primary transition disabled:opacity-50 bg-primary/80"
       >
         {saving ? $t('messages.loading') : $t('buttons.save')}
       </button>

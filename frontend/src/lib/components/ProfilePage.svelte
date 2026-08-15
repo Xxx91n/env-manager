@@ -634,10 +634,10 @@
    <!-- Choose scope of effect before naming the profile. Global writes the user registry;
         Launch applies only to the selected child process. -->
     <div class="flex items-start gap-1 flex-wrap py-0.5 min-h-[36px]">
-     <label class="text-[11px] font-medium text-muted-foreground text-muted-foreground">
+     <label class="text-[11px] font-medium text-muted-foreground">
        <input type="radio" bind:group={newProfileType} value="global" class="mr-1" /> {$t('profiles.typeGlobal')}
       </label>
-      <label class="text-[11px] font-medium text-muted-foreground text-muted-foreground">
+      <label class="text-[11px] font-medium text-muted-foreground">
         <input type="radio" bind:group={newProfileType} value="launch" class="mr-1" /> {$t('profiles.typeLocal')}
       </label>
       {#if newProfileType === 'launch'}
@@ -645,11 +645,11 @@
           type="text"
           placeholder={$t('profiles.targetExecutable')}
           bind:value={newProfileTarget}
-          class="flex-1 min-w-[200px] px-2 py-1 text-xs border border-gray-300 rounded-md font-mono bg-card border-border/80 text-foreground"
+          class="flex-1 min-w-[200px] px-2 py-1 text-xs border border-border rounded-md font-mono bg-card border-border/80 text-foreground"
         />
         <button
           on:click={handleBrowseTarget}
-          class="px-2 py-1 text-xs text-primary bg-blue-50 rounded-md hover:bg-blue-100 bg-primary/10 text-primary"
+          class="px-2 py-1 text-xs text-primary bg-blue-50 rounded-md hover:bg-primary/15 bg-primary/10"
           title={$t('profiles.browse')}
         >
           {$t('profiles.browse')}
@@ -658,13 +658,13 @@
           type="text"
           placeholder={$t('profiles.localArgs')}
           bind:value={newProfileArgs}
-          class="flex-1 min-w-[160px] px-2 py-1 text-xs border border-gray-300 rounded-md font-mono bg-card border-border/80 text-foreground"
+          class="flex-1 min-w-[160px] px-2 py-1 text-xs border border-border rounded-md font-mono bg-card border-border/80 text-foreground"
         />
         <input
           type="text"
           placeholder={$t('profiles.workingDir')}
           bind:value={newProfileCwd}
-          class="flex-1 min-w-[160px] px-2 py-1 text-xs border border-gray-300 rounded-md font-mono bg-card border-border/80 text-foreground"
+          class="flex-1 min-w-[160px] px-2 py-1 text-xs border border-border rounded-md font-mono bg-card border-border/80 text-foreground"
         />
       {/if}
     </div>
@@ -674,12 +674,12 @@
         placeholder={$t('profiles.createPrompt')}
         bind:value={newProfileName}
         on:keydown={(event) => { if (event.key === 'Enter') handleCreate() }}
-        class="flex-1 px-3 py-1.5 text-xs border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary bg-card border-border/80 text-foreground"
+        class="flex-1 px-3 py-1.5 text-xs border border-border rounded-md focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary bg-card border-border/80 text-foreground"
       />
       <button
         on:click={handleCreate}
         disabled={actionLoading || !newProfileName.trim()}
-        class="flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-white bg-primary rounded-md hover:bg-blue-700 transition disabled:opacity-50 bg-primary/80 hover:bg-primary"
+        class="flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-primary-foreground bg-primary rounded-md hover:bg-primary transition disabled:opacity-50 bg-primary/80"
       >
           <Plus class="w-3.5 h-3.5" />
         {$t('dialogs.createProfile')}
@@ -687,7 +687,7 @@
       <button
         on:click={handleImport}
         disabled={actionLoading}
-        class="flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-foreground/80 bg-card border border-gray-300 rounded-md hover:bg-gray-50 transition disabled:opacity-50 text-foreground bg-card border-border/80 hover:bg-accent"
+        class="flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-foreground/80 bg-card border border-border rounded-md hover:bg-muted/50 transition disabled:opacity-50 text-foreground border-border/80 hover:bg-accent"
         title={$t('profiles.import')}
       >
           <Download class="w-3.5 h-3.5" />
@@ -697,10 +697,10 @@
   </div>
   {#if loading}
     <div class="flex justify-center py-8">
-      <div class="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-600"></div>
+      <div class="animate-spin rounded-full h-5 w-5 border-b-2 border-primary"></div>
     </div>
   {:else if profileList.length === 0}
-    <div class="px-4 py-8 text-center text-gray-400 text-xs text-muted-foreground">
+    <div class="px-4 py-8 text-center text-muted-foreground text-xs">
       {$t('profiles.empty')}
     </div>
   {:else}
@@ -718,7 +718,7 @@
           <div class="flex items-center justify-between px-4 py-2.5">
             <button
               type="button"
-              class="profile-drag-handle flex items-center gap-1 cursor-grab active:cursor-grabbing touch-none text-gray-300 hover:text-gray-500 text-muted-foreground/80"
+              class="profile-drag-handle flex items-center gap-1 cursor-grab active:cursor-grabbing touch-none text-border hover:text-muted-foreground text-muted-foreground/80"
               title={$t('profiles.dragToSort')}
               aria-label={$t('profiles.dragToSort')}
               data-testid={`profile-drag-handle-${i}`}
@@ -731,17 +731,17 @@
               on:click={() => selectProfile(profile)}
               class="flex items-center gap-3 flex-1 text-left"
             >
-              <span class="text-xs font-medium text-foreground text-foreground">{profile.name}</span>
+              <span class="text-xs font-medium text-foreground">{profile.name}</span>
               {#if profile.profileType === 'launch'}
                 <span class="inline-flex px-1.5 py-0.5 rounded text-[10px] font-medium bg-purple-50 text-purple-700 bg-primary/15 text-primary" title={profile.targetExecutable || ''}>
                   {$t('profiles.typeLocal')}
                 </span>
               {:else}
-                <span class="inline-flex px-1.5 py-0.5 rounded text-[10px] font-medium bg-blue-50 text-primary bg-primary/20/40 text-primary">
+                <span class="inline-flex px-1.5 py-0.5 rounded text-[10px] font-medium bg-blue-50 text-primary bg-primary/20/40">
                   {$t('profiles.typeGlobal')}
                 </span>
               {/if}
-              <span class="text-[10px] text-gray-400 text-muted-foreground">{profile.variables.length} {$t('profiles.variables')}</span>
+              <span class="text-[10px] text-muted-foreground">{profile.variables.length} {$t('profiles.variables')}</span>
               {#if profile.isEnabled}
                 <span class="inline-flex px-1.5 py-0.5 rounded text-[10px] font-medium bg-primary/10 text-green-700 bg-primary/15 text-primary">
                   {$t('profiles.applied')}
@@ -753,7 +753,7 @@
               <button
                 on:click={() => handleToggleProfile(profile)}
                 disabled={actionLoading || profile.profileType === 'launch'}
-                class="relative inline-flex h-4 w-7 items-center rounded-full transition disabled:opacity-40 disabled:cursor-not-allowed {profile.isEnabled ? 'bg-primary bg-primary/80' : 'bg-gray-300 bg-muted'}"
+                class="relative inline-flex h-4 w-7 items-center rounded-full transition disabled:opacity-40 disabled:cursor-not-allowed {profile.isEnabled ? 'bg-primary bg-primary/80' : 'bg-border bg-muted'}"
                 role="switch"
                 aria-checked={profile.isEnabled}
                 title={profile.profileType === 'launch' ? $t('profiles.launchApplyDisabled') : (profile.isEnabled ? $t('profiles.unapply') : $t('profiles.apply'))}
@@ -765,7 +765,7 @@
                 <button
                   on:click={() => handleLaunchProfile(profile)}
                   disabled={actionLoading}
-                  class="p-1 text-primary hover:bg-primary/10 rounded transition text-primary hover:bg-primary/15"
+                  class="p-1 text-primary hover:bg-primary/10 rounded transition hover:bg-primary/15"
                   title={$t('profiles.localLaunch')}
                   aria-label={$t('profiles.localLaunch')}
                 >
@@ -776,7 +776,7 @@
               <button
                 on:click={() => handleExport(profile)}
                 disabled={actionLoading}
-                class="p-1 text-gray-400 hover:text-primary rounded transition hover:text-primary"
+                class="p-1 text-muted-foreground hover:text-primary rounded transition"
                 title={$t('profiles.export')}
                 aria-label={$t('profiles.export')}
               >
@@ -786,7 +786,7 @@
               <button
                 on:click={() => handleRename(profile)}
                 disabled={actionLoading}
-                class="p-1 text-gray-400 hover:text-primary rounded transition hover:text-primary"
+                class="p-1 text-muted-foreground hover:text-primary rounded transition"
                 title={$t('profiles.rename')}
                 aria-label={$t('profiles.rename')}
               >
@@ -796,7 +796,7 @@
               <button
                 on:click={() => handleDelete(profile)}
                 disabled={actionLoading}
-                class="p-1 text-gray-400 hover:text-destructive rounded transition hover:text-destructive"
+                class="p-1 text-muted-foreground hover:text-destructive rounded transition"
                 title={$t('buttons.delete')}
                 aria-label={$t('buttons.delete')}
               >
@@ -809,7 +809,7 @@
             <div class="border-t border-gray-100 px-4 py-3 border-border">
               <div class="grid grid-cols-2 gap-4 mb-3 pb-3 border-b border-gray-100 border-border">
                 <div>
-                  <div class="text-[10px] font-medium text-gray-500 mb-1">{$t('profiles.inherits')}</div>
+                  <div class="text-[10px] font-medium text-muted-foreground mb-1">{$t('profiles.inherits')}</div>
                   <div class="space-y-1 max-h-20 overflow-y-auto">
                     {#each profileList.filter(candidate => candidate.name !== profile.name) as parent (parent.name)}
                     {@const inheritBlocked = (profile.profileType === 'global' && parent.profileType === 'launch')
@@ -825,7 +825,7 @@
                   </div>
                 </div>
                 <div>
-                  <div class="text-[10px] font-medium text-gray-500 mb-1">{$t('profiles.pathEntries')}</div>
+                  <div class="text-[10px] font-medium text-muted-foreground mb-1">{$t('profiles.pathEntries')}</div>
                   <div class="space-y-1 mb-1">
                      {#each profile.pathEntries ?? [] as path, i (path)}
                        <div class="flex items-center gap-1 text-[10px] font-mono">
@@ -840,7 +840,7 @@
                      {/each}
                   </div>
                  <div class="flex gap-1 items-center">
-                   <select bind:value={newPathScope} disabled={profile.isEnabled} class="px-1.5 py-1 text-[10px] border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-primary bg-accent border-border/80 text-foreground">
+                   <select bind:value={newPathScope} disabled={profile.isEnabled} class="px-1.5 py-1 text-[10px] border border-border rounded focus:outline-none focus:ring-1 focus:ring-primary bg-accent border-border/80 text-foreground">
                      <option value="user">{$t('scope.user')}</option>
                      <option value="system">{$t('scope.system')}</option>
                    </select>
@@ -856,34 +856,34 @@
                    <button on:click={handleAddPath} disabled={profile.isEnabled || !newPathEntry.trim()} class="px-2 text-[10px] text-primary disabled:opacity-30">{$t('buttons.add')}</button>
                  </div>
                   {#if profile.isEnabled}
-                    <p class="text-[9px] text-primary/80 text-primary/80 mt-1">{$t('profiles.unapplyToEdit')}</p>
+                    <p class="text-[9px] text-primary/80 mt-1">{$t('profiles.unapplyToEdit')}</p>
                   {/if}
                </div>
              </div>
              {#if profile.variables.length === 0}
-               <p class="text-[10px] text-gray-400 text-muted-foreground py-2">{$t('profiles.noVariables')}</p>
+               <p class="text-[10px] text-muted-foreground py-2">{$t('profiles.noVariables')}</p>
              {:else}
                 <!-- Regular variables section -->
                 {#if profile.variables.filter(pv => !selectedProfile?.secretVariables?.includes(pv.name)).length > 0}
                   <div class="mt-1 mb-1">
-                    <div class="text-[10px] font-semibold text-gray-500 text-muted-foreground mb-1">{$t('profiles.regularVariables')}</div>
+                    <div class="text-[10px] font-semibold text-muted-foreground mb-1">{$t('profiles.regularVariables')}</div>
                     <div class="space-y-1 mb-2">
                       {#each profile.variables.filter(pv => !selectedProfile?.secretVariables?.includes(pv.name)) as pv (pv.name)}
-                        <div class="flex items-center gap-2 px-2 py-1 rounded bg-gray-50 bg-accent/50">
-                          <span class="text-[10px] font-mono text-foreground/80 text-foreground/80 flex-1 truncate">{pv.name}</span>
-                          <span class="text-[10px] font-mono text-gray-400 text-muted-foreground flex-1 truncate">{pv.value}</span>
+                        <div class="flex items-center gap-2 px-2 py-1 rounded bg-muted/50 bg-accent/50">
+                          <span class="text-[10px] font-mono text-foreground/80 flex-1 truncate">{pv.name}</span>
+                          <span class="text-[10px] font-mono text-muted-foreground flex-1 truncate">{pv.value}</span>
                           {#if pv.scope === "system"}
                             <span class="text-[9px] px-1 rounded-full bg-orange-100 text-orange-800 bg-primary/15 text-primary/80">{$t("scope.system")}</span>
                           {:else}
                             <span class="text-[9px] px-1 rounded-full bg-blue-100 text-blue-800 bg-primary/20/40 text-primary">{$t("scope.user")}</span>
                           {/if}
                           {#if pv.sourceProfile && pv.sourceProfile !== profile.name}
-                            <span class="text-[9px] text-gray-400 text-muted-foreground" title={pv.sourceProfile}>{$t("profiles.inheritsFrom")} {pv.sourceProfile}</span>
+                            <span class="text-[9px] text-muted-foreground" title={pv.sourceProfile}>{$t("profiles.inheritsFrom")} {pv.sourceProfile}</span>
                           {/if}
                           <button
                             on:click={() => handleRemoveVar(pv.name)}
                             disabled={actionLoading}
-                            class="p-0.5 text-gray-400 hover:text-destructive rounded transition hover:text-destructive"
+                            class="p-0.5 text-muted-foreground hover:text-destructive rounded transition"
                             title={$t('buttons.delete')}
                             aria-label={$t('buttons.delete')}
                           >
@@ -897,20 +897,20 @@
                 <!-- Secret variables section -->
                 {#if profile.variables.filter(pv => selectedProfile?.secretVariables?.includes(pv.name)).length > 0}
                   <div class="mt-1 mb-1">
-                    <div class="text-[10px] font-semibold text-primary/80 text-primary/80 mb-1 flex items-center gap-1">
+                    <div class="text-[10px] font-semibold text-primary/80 mb-1 flex items-center gap-1">
           <Power class="w-3 h-3" />
                       {$t('profiles.secretVariables')}
                     </div>
                     <div class="space-y-1 mb-2">
                       {#each profile.variables.filter(pv => selectedProfile?.secretVariables?.includes(pv.name)) as pv (pv.name)}
-                        <div class="flex items-center gap-2 px-2 py-1 rounded bg-primary/10 bg-primary/10">
-                          <span class="text-[10px] font-mono text-foreground/80 text-foreground/80 flex-1 truncate">{pv.name}</span>
-                          <span class="text-[10px] font-mono text-gray-400 text-muted-foreground flex-1 truncate">{'<encrypted>'}</span>
-          <Power class="w-3 h-3 text-amber-500" />
+                        <div class="flex items-center gap-2 px-2 py-1 rounded bg-primary/10">
+                          <span class="text-[10px] font-mono text-foreground/80 flex-1 truncate">{pv.name}</span>
+                          <span class="text-[10px] font-mono text-muted-foreground flex-1 truncate">{'<encrypted>'}</span>
+          <Power class="w-3 h-3 text-amber-600" />
                           <button
                             on:click={() => handleRemoveSecret(pv.name)}
                             disabled={actionLoading}
-                            class="p-0.5 text-gray-400 hover:text-destructive rounded transition hover:text-destructive"
+                            class="p-0.5 text-muted-foreground hover:text-destructive rounded transition"
                             title={$t('buttons.delete')}
                             aria-label={$t('buttons.delete')}
                           >
@@ -927,7 +927,7 @@
                 <button
                   on:click={() => (showAddVarPanel = true)}
                   disabled={profile.isEnabled}
-                  class="flex items-center gap-1 text-[10px] font-medium text-primary hover:text-primary text-primary disabled:opacity-40 disabled:cursor-not-allowed"
+                  class="flex items-center gap-1 text-[10px] font-medium text-primary hover:text-primary disabled:opacity-40 disabled:cursor-not-allowed"
                 >
           <Plus class="w-3 h-3" />
                   {$t('profiles.addVariable')}
@@ -936,7 +936,7 @@
                 <!-- Add variable panel with clone-from-existing dropdown -->
                 <div class="space-y-1.5 pt-2 border-t border-gray-100 border-border">
                   {#if profile.isEnabled}
-                    <p class="text-[9px] text-primary/80 text-primary/80">{$t('profiles.unapplyToEdit')}</p>
+                    <p class="text-[9px] text-primary/80">{$t('profiles.unapplyToEdit')}</p>
                   {/if}
                   <!-- Clone from existing variable (reusable CloneCombobox) -->
                   <CloneCombobox
@@ -946,14 +946,14 @@
                   />
                                     <!-- Scope selector: user vs system -->
                   <div class="flex items-center gap-2 mb-1">
-                    <label for="profile-var-scope" class="text-[10px] font-medium text-gray-500 text-muted-foreground">
+                    <label for="profile-var-scope" class="text-[10px] font-medium text-muted-foreground">
                       {$t('labels.scope')}
                     </label>
                     <select
                       id="profile-var-scope"
                       value={newVarScope}
                       on:change={(e) => newVarScope = e.currentTarget.value}
-                      class="px-2 py-1 text-[10px] border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-primary bg-accent border-border/80 text-foreground"
+                      class="px-2 py-1 text-[10px] border border-border rounded focus:outline-none focus:ring-1 focus:ring-primary bg-accent border-border/80 text-foreground"
                     >
                       <option value="user">{$t('scope.user')}</option>
                       <option value="system">{$t('scope.system')}</option>
@@ -963,25 +963,25 @@
                     type="text"
                     placeholder={$t('labels.name')}
                     bind:value={newVarName}
-                    class="w-full px-2 py-1 text-[10px] border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-primary bg-accent border-border/80 text-foreground"
+                    class="w-full px-2 py-1 text-[10px] border border-border rounded focus:outline-none focus:ring-1 focus:ring-primary bg-accent border-border/80 text-foreground"
                   />
                   <input
                     type="text"
                     placeholder={$t('labels.value')}
                     bind:value={newVarValue}
-                    class="w-full px-2 py-1 text-[10px] border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-primary bg-accent border-border/80 text-foreground"
+                    class="w-full px-2 py-1 text-[10px] border border-border rounded focus:outline-none focus:ring-1 focus:ring-primary bg-accent border-border/80 text-foreground"
                   />
                   <div class="flex gap-1">
                     <button
                       on:click={handleAddVar}
                       disabled={actionLoading || !newVarName.trim() || profile.isEnabled}
-                      class="flex-1 px-2 py-1 text-[10px] font-medium text-white bg-primary rounded hover:bg-blue-700 transition disabled:opacity-50 bg-primary/80 hover:bg-primary"
+                      class="flex-1 px-2 py-1 text-[10px] font-medium text-primary-foreground bg-primary rounded hover:bg-primary transition disabled:opacity-50 bg-primary/80"
                     >
                       {$t('buttons.save')}
                     </button>
                     <button
                       on:click={() => { showAddVarPanel = false; newVarName = ''; newVarValue = ''; newVarScope = 'user' }}
-                      class="px-2 py-1 text-[10px] text-muted-foreground border border-gray-300 rounded hover:bg-gray-50 transition text-foreground/80 border-border/80 hover:bg-accent"
+                      class="px-2 py-1 text-[10px] text-muted-foreground border border-border rounded hover:bg-muted/50 transition text-foreground/80 border-border/80 hover:bg-accent"
                     >
                       {$t('buttons.cancel')}
                     </button>
@@ -991,9 +991,9 @@
               {#if profile.profileType === 'launch' && !profile.isEnabled}
                 <!-- v0.8 secret provider indicator -->
                 <div class="flex items-center gap-1.5 mt-2">
-                 <span class="text-[9px] text-gray-400 text-muted-foreground">{$t('secrets.activeProvider')}:</span>
+                 <span class="text-[9px] text-muted-foreground">{$t('secrets.activeProvider')}:</span>
                      <select
-                     class="text-[9px] px-1.5 py-0.5 rounded bg-muted/30 bg-accent text-muted-foreground text-foreground/80 border border-gray-300 border-border/80 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                     class="text-[9px] px-1.5 py-0.5 rounded bg-muted/30 bg-accent text-muted-foreground text-foreground/80 border border-border border-border/80 focus:outline-none focus:ring-1 focus:ring-primary"
                      value={activeProvider}
                      on:change={(e) => {
                        const next = e.currentTarget.value;
@@ -1011,16 +1011,16 @@
           <Power class="animate-spin inline-block w-3 h-3" />
                     {/if}
                    {#if providerErrorMessage}
-                      <div class="mt-1 p-1.5 rounded-md bg-primary/10 border border-amber-200 text-[10px] text-amber-700 bg-primary/10 border-primary/40 text-primary/80">
+                      <div class="mt-1 p-1.5 rounded-md bg-primary/10 border border-amber-200 text-[10px] text-amber-700 border-primary/40 text-primary/80">
                         <span class="font-medium">{$t('secrets.activeProvider')}:</span> {providerErrorMessage}
-                        <button type="button" class="ml-1 underline text-primary/80 text-primary/80" on:click={() => providerErrorMessage = null}>{$t('buttons.close')}</button>
+                        <button type="button" class="ml-1 underline text-primary/80" on:click={() => providerErrorMessage = null}>{$t('buttons.close')}</button>
                       </div>
                     {/if}
                 </div>
                 {#if !showAddSecretPanel}
                   <button
                     on:click={() => (showAddSecretPanel = true)}
-                    class="flex items-center gap-1 text-[10px] font-medium text-primary/80 hover:text-amber-700 text-primary/80 mt-2"
+                    class="flex items-center gap-1 text-[10px] font-medium text-primary/80 hover:text-amber-700 mt-2"
                   >
           <Plus class="w-3 h-3" />
                     {$t('profiles.addSecret')}
@@ -1031,30 +1031,30 @@
                       type="text"
                       placeholder={$t('labels.name')}
                       bind:value={newSecretName}
-                      class="w-full px-2 py-1 text-[10px] border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-amber-500 bg-accent border-border/80 text-foreground"
+                      class="w-full px-2 py-1 text-[10px] border border-border rounded focus:outline-none focus:ring-1 focus:ring-amber-500 bg-accent border-border/80 text-foreground"
                     />
                     <input
                       type="password"
                       placeholder={$t('profiles.secretValue')}
                       bind:value={newSecretValue}
-                      class="w-full px-2 py-1 text-[10px] border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-amber-500 bg-accent border-border/80 text-foreground"
+                      class="w-full px-2 py-1 text-[10px] border border-border rounded focus:outline-none focus:ring-1 focus:ring-amber-500 bg-accent border-border/80 text-foreground"
                     />
                     <div class="flex gap-1">
                       <button
                         on:click={handleAddSecret}
                         disabled={actionLoading || !newSecretName.trim() || !newSecretValue}
-                        class="flex-1 px-2 py-1 text-[10px] font-medium text-white bg-primary/80 rounded hover:bg-amber-700 transition disabled:opacity-50 bg-primary/60 hover:bg-primary/80"
+                        class="flex-1 px-2 py-1 text-[10px] font-medium text-primary-foreground bg-primary/80 rounded hover:bg-amber-700 transition disabled:opacity-50 bg-primary/60 hover:bg-primary/80"
                       >
                         {$t('profiles.addSecret')}
                       </button>
                       <button
                         on:click={() => { showAddSecretPanel = false; newSecretName = ''; newSecretValue = '' }}
-                        class="px-2 py-1 text-[10px] text-muted-foreground border border-gray-300 rounded hover:bg-gray-50 transition text-foreground/80 border-border/80 hover:bg-accent"
+                        class="px-2 py-1 text-[10px] text-muted-foreground border border-border rounded hover:bg-muted/50 transition text-foreground/80 border-border/80 hover:bg-accent"
                       >
                         {$t('buttons.cancel')}
                       </button>
                     </div>
-                    <p class="text-[9px] text-gray-400 text-muted-foreground">{$t('profiles.secretHint')}</p>
+                    <p class="text-[9px] text-muted-foreground">{$t('profiles.secretHint')}</p>
                   </div>
                 {/if}
               {/if}
@@ -1065,15 +1065,15 @@
     </div>
   {/if}
   {#if pendingProvider}
-    <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/40" role="dialog" aria-modal="true">
-      <div class="bg-card bg-card rounded-lg shadow-xl max-w-sm w-full mx-4 p-4">
-        <h3 class="text-sm font-semibold text-gray-800 text-foreground mb-2">{$t('secrets.providerChangeTitle')}</h3>
+    <div class="fixed inset-0 z-50 flex items-center justify-center bg-background/40" role="dialog" aria-modal="true">
+      <div class="bg-card rounded-lg shadow-xl max-w-sm w-full mx-4 p-4">
+        <h3 class="text-sm font-semibold text-foreground mb-2">{$t('secrets.providerChangeTitle')}</h3>
         <p class="text-[11px] text-muted-foreground text-foreground/80 mb-3">{$t('secrets.providerChangeWarning')}</p>
         <div class="flex justify-end gap-2">
           <button
             type="button"
             on:click={cancelChangeProvider}
-            class="px-3 py-1 text-[11px] text-muted-foreground border border-gray-300 rounded hover:bg-gray-50 transition text-foreground/80 border-border/80 hover:bg-accent"
+            class="px-3 py-1 text-[11px] text-muted-foreground border border-border rounded hover:bg-muted/50 transition text-foreground/80 border-border/80 hover:bg-accent"
           >
             {$t('buttons.cancel')}
           </button>
@@ -1081,7 +1081,7 @@
             type="button"
             on:click={confirmChangeProvider}
             disabled={providerChanging}
-            class="px-3 py-1 text-[11px] font-medium text-white bg-primary/80 rounded hover:bg-amber-700 transition bg-primary/60 hover:bg-primary/80 disabled:opacity-50 disabled:cursor-wait"
+            class="px-3 py-1 text-[11px] font-medium text-primary-foreground bg-primary/80 rounded hover:bg-amber-700 transition bg-primary/60 hover:bg-primary/80 disabled:opacity-50 disabled:cursor-wait"
           >
             {#if providerChanging}
           <Power class="animate-spin inline-block w-3 h-3 mr-1" />

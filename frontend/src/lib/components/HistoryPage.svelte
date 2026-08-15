@@ -279,25 +279,25 @@
 </style>
 <div class="space-y-3">
   <div class="flex items-center gap-2">
-    <select bind:value={scope} on:change={refresh} class="px-2.5 py-1.5 text-xs border border-gray-300 rounded-md bg-card bg-card border-border/80 text-foreground">
+    <select bind:value={scope} on:change={refresh} class="px-2.5 py-1.5 text-xs border border-border rounded-md bg-card border-border/80 text-foreground">
       <option value="all">{$t('scope.all')}</option>
       <option value="user">{$t('scope.user')}</option>
       <option value="system">{$t('scope.system')}</option>
       <option value="profile">{$t('scope.profile')}</option>
     </select>
-    <button on:click={handleImport} class="px-3 py-1.5 text-xs font-medium text-white bg-primary rounded-md hover:bg-blue-700">{$t('bulk.import')}</button>
-    <button on:click={handleExport} class="px-3 py-1.5 text-xs font-medium border border-gray-300 rounded-md hover:bg-muted/20 border-border/80 hover:bg-accent">{$t('bulk.export')}</button>
+    <button on:click={handleImport} class="px-3 py-1.5 text-xs font-medium text-primary-foreground bg-primary rounded-md hover:bg-primary">{$t('bulk.import')}</button>
+    <button on:click={handleExport} class="px-3 py-1.5 text-xs font-medium border border-border rounded-md hover:bg-muted/20 border-border/80 hover:bg-accent">{$t('bulk.export')}</button>
     {#if filteredHistory.length > 0}
-      <button on:click={handleClearAll} class="px-3 py-1.5 text-xs font-medium text-destructive border border-red-300 rounded-md hover:bg-destructive/10 border-destructive hover:bg-destructive/15">{$t('history.clearAll')}</button>
+      <button on:click={handleClearAll} class="px-3 py-1.5 text-xs font-medium text-destructive border border-destructive/30 rounded-md hover:bg-destructive/10 border-destructive hover:bg-destructive/15">{$t('history.clearAll')}</button>
     {/if}
     <button on:click={refresh} class="ml-auto px-3 py-1.5 text-xs text-muted-foreground hover:bg-muted/30 rounded-md text-foreground/80 hover:bg-accent">{$t('buttons.refresh')}</button>
   </div>
 
-  <div class="history-table-root bg-card border border-border rounded-md overflow-auto bg-card border-border">
+  <div class="history-table-root bg-card border border-border rounded-md overflow-auto">
     {#if loading}
-      <div class="p-8 text-center text-xs text-gray-400">{$t('messages.loading')}</div>
+      <div class="p-8 text-center text-xs text-muted-foreground">{$t('messages.loading')}</div>
     {:else if filteredHistory.length === 0}
-      <div class="p-8 text-center text-xs text-gray-400">{$t('history.empty')}</div>
+      <div class="p-8 text-center text-xs text-muted-foreground">{$t('history.empty')}</div>
     {:else}
       <table class="w-full table-fixed">
         <colgroup>
@@ -308,7 +308,7 @@
           <col style="width: var(--col-change, 240px);">
           <col style="width: var(--col-ops, 96px);">
         </colgroup>
-        <thead class="bg-muted/20 border-b border-border bg-muted border-border">
+        <thead class="bg-muted/20 border-b border-border bg-muted">
           <tr>
             <th data-col="time" on:mousedown={startResize} class="resize px-3 py-2 text-left text-[10px] text-muted-foreground select-none cursor-col-resize">{$t('history.time')}</th>
             <th data-col="action" on:mousedown={startResize} class="resize px-3 py-2 text-left text-[10px] text-muted-foreground select-none cursor-col-resize">{$t('history.action')}</th>
@@ -321,7 +321,7 @@
         <tbody class="divide-y divide-gray-100 divide-border">
           {#each filteredHistory as entry (entry.id)}
             <tr class="hover:bg-muted/20 hover:bg-muted">
-              <td class="px-3 py-2 text-[10px] text-gray-500">{new Date(entry.timestamp).toLocaleString()}</td>
+              <td class="px-3 py-2 text-[10px] text-muted-foreground">{new Date(entry.timestamp).toLocaleString()}</td>
               <td class="px-3 py-2 text-[10px] font-mono break-all whitespace-normal" title={entry.command}>{getOperationLabel(entry.command, $t)}</td>
               <td class="px-3 py-2 text-[10px]">
                 {#if entry.scope === 'profile'}

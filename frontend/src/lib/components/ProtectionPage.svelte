@@ -166,11 +166,11 @@
 <div class="space-y-3">
   <!-- Tab selector + scope filter + refresh -->
   <div class="flex items-center gap-2 flex-wrap">
-    <div class="inline-flex rounded-md border border-border border-border overflow-hidden">
+    <div class="inline-flex rounded-md border border-border overflow-hidden">
       <button
         on:click={() => activeTab = 'vars'}
         class="px-4 py-1.5 text-xs font-medium transition {activeTab === 'vars'
-          ? 'bg-primary text-white bg-primary/80'
+          ? 'bg-primary text-primary-foreground bg-primary/80'
           : 'bg-card text-muted-foreground hover:bg-muted/20 bg-card text-foreground/80 hover:bg-accent'}"
       >
         {$t('protection.protectedVars')}
@@ -178,7 +178,7 @@
       <button
         on:click={() => activeTab = 'paths'}
         class="px-4 py-1.5 text-xs font-medium transition {activeTab === 'paths'
-          ? 'bg-primary text-white bg-primary/80'
+          ? 'bg-primary text-primary-foreground bg-primary/80'
           : 'bg-card text-muted-foreground hover:bg-muted/20 bg-card text-foreground/80 hover:bg-accent'}"
       >
         {$t('protection.protectedPaths')}
@@ -187,7 +187,7 @@
 
     <select
       bind:value={$selectedScope}
-      class="px-2.5 py-1.5 text-xs border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-primary bg-card bg-card border-border/80 text-foreground"
+      class="px-2.5 py-1.5 text-xs border border-border rounded-md focus:outline-none focus:ring-1 focus:ring-primary bg-card border-border/80 text-foreground"
     >
       <option value="all">{$t('table.scope')}</option>
       <option value="user">{$t('scope.user')}</option>
@@ -201,10 +201,10 @@
 
   {#if loading}
     <div class="flex justify-center py-8">
-      <div class="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-600"></div>
+      <div class="animate-spin rounded-full h-5 w-5 border-b-2 border-primary"></div>
     </div>
   {:else if !data}
-    <div class="px-4 py-8 text-center text-gray-400 text-xs">{$t('messages.loading')}</div>
+    <div class="px-4 py-8 text-center text-muted-foreground text-xs">{$t('messages.loading')}</div>
   {:else if activeTab === 'vars'}
     <!-- Protected Variables Tab -->
     <div class="space-y-4">
@@ -220,19 +220,19 @@
         <button
           on:click={handleAddVar}
           disabled={!selectedVarName.trim()}
-          class="px-3 py-1.5 text-xs font-medium text-white bg-primary rounded-md hover:bg-blue-700 transition disabled:opacity-50 bg-primary/80 hover:bg-primary"
+          class="px-3 py-1.5 text-xs font-medium text-primary-foreground bg-primary rounded-md hover:bg-primary transition disabled:opacity-50 bg-primary/80"
         >
           {$t('protection.lockVar')}
         </button>
       </div>
 
       <!-- Built-in protected vars -->
-      <div class="bg-card border border-border rounded-md overflow-hidden bg-card border-border">
-        <div class="px-4 py-2.5 border-b border-border bg-muted/20 bg-muted border-border">
+      <div class="bg-card border border-border rounded-md overflow-hidden">
+        <div class="px-4 py-2.5 border-b border-border bg-muted/20 bg-muted">
           <span class="text-xs font-medium text-muted-foreground text-foreground/80">{$t('protection.builtinVars')} ({filteredBuiltinVars.length})</span>
         </div>
         {#if scopeFilter === 'user'}
-          <div class="px-4 py-6 text-center text-[10px] text-gray-400">{$t('protection.builtinSystemOnly')}</div>
+          <div class="px-4 py-6 text-center text-[10px] text-muted-foreground">{$t('protection.builtinSystemOnly')}</div>
         {:else}
           <div class="max-h-64 overflow-y-auto">
             <div class="grid grid-cols-2 sm:grid-cols-3 gap-1 p-3">
@@ -246,15 +246,15 @@
           </div>
         {/if}
       </div>
-      <div class="text-[10px] text-gray-400 px-1">{$t('protection.varsNote')}</div>
+      <div class="text-[10px] text-muted-foreground px-1">{$t('protection.varsNote')}</div>
 
       <!-- Custom protected vars (user-locked) -->
-      <div class="bg-card border border-border rounded-md overflow-hidden bg-card border-border">
-        <div class="px-4 py-2.5 border-b border-border bg-muted/20 bg-muted border-border">
+      <div class="bg-card border border-border rounded-md overflow-hidden">
+        <div class="px-4 py-2.5 border-b border-border bg-muted/20 bg-muted">
           <span class="text-xs font-medium text-muted-foreground text-foreground/80">{$t('protection.customVars')} ({filteredCustomVars.length})</span>
         </div>
         {#if filteredCustomVars.length === 0}
-          <div class="px-4 py-6 text-center text-[10px] text-gray-400">{$t('protection.noCustomVars')}</div>
+          <div class="px-4 py-6 text-center text-[10px] text-muted-foreground">{$t('protection.noCustomVars')}</div>
         {:else}
           <div class="divide-y divide-gray-100 divide-border">
             {#each filteredCustomVars as varName (varName)}
@@ -262,7 +262,7 @@
                 <span class="text-xs font-mono text-foreground/80 text-foreground truncate" title={varName}>{varName}</span>
                 <button
                   on:click={() => handleRemoveVar(varName)}
-                  class="text-destructive hover:text-red-700 transition flex-shrink-0 ml-2"
+                  class="text-destructive hover:text-destructive transition flex-shrink-0 ml-2"
                   title={$t('protection.unlockVar')}
                   aria-label={$t('protection.unlockVar')}
                 >
@@ -289,33 +289,33 @@
         <button
           on:click={handleAddPath}
           disabled={!selectedPathEntry.trim()}
-          class="px-3 py-1.5 text-xs font-medium text-white bg-primary rounded-md hover:bg-blue-700 transition disabled:opacity-50 bg-primary/80 hover:bg-primary"
+          class="px-3 py-1.5 text-xs font-medium text-primary-foreground bg-primary rounded-md hover:bg-primary transition disabled:opacity-50 bg-primary/80"
         >
           {$t('protection.lockPath')}
         </button>
       </div>
       <!-- Built-in protected path entries -->
-      <div class="bg-card border border-border rounded-md overflow-hidden bg-card border-border">
-        <div class="px-4 py-2.5 border-b border-border bg-muted/20 bg-muted border-border">
+      <div class="bg-card border border-border rounded-md overflow-hidden">
+        <div class="px-4 py-2.5 border-b border-border bg-muted/20 bg-muted">
           <span class="text-xs font-medium text-muted-foreground text-foreground/80">{$t('protection.builtinPaths')}</span>
         </div>
         <div class="divide-y divide-gray-100 divide-border">
           {#each filteredBuiltinPaths as entry (entry)}
             <div class="flex items-center justify-between px-4 py-2">
               <span class="text-xs font-mono text-foreground/80 text-foreground truncate" title={entry}>{entry}</span>
-              <span class="text-[10px] text-gray-400 flex-shrink-0 ml-2">{$t('protection.builtin')}</span>
+              <span class="text-[10px] text-muted-foreground flex-shrink-0 ml-2">{$t('protection.builtin')}</span>
             </div>
           {/each}
         </div>
       </div>
 
       <!-- Custom protected path entries -->
-      <div class="bg-card border border-border rounded-md overflow-hidden bg-card border-border">
-        <div class="px-4 py-2.5 border-b border-border bg-muted/20 bg-muted border-border flex items-center justify-between">
+      <div class="bg-card border border-border rounded-md overflow-hidden">
+        <div class="px-4 py-2.5 border-b border-border bg-muted/20 bg-muted flex items-center justify-between">
           <span class="text-xs font-medium text-muted-foreground text-foreground/80">{$t('protection.customPaths')}</span>
         </div>
         {#if filteredCustomPaths.length === 0}
-          <div class="px-4 py-6 text-center text-[10px] text-gray-400">{$t('protection.noCustomPaths')}</div>
+          <div class="px-4 py-6 text-center text-[10px] text-muted-foreground">{$t('protection.noCustomPaths')}</div>
         {:else}
           <div class="divide-y divide-gray-100 divide-border">
             {#each filteredCustomPaths as entry (entry)}
@@ -323,7 +323,7 @@
                 <span class="text-xs font-mono text-foreground/80 text-foreground truncate" title={entry}>{entry}</span>
                 <button
                   on:click={() => handleRemovePath(entry, false)}
-                  class="text-destructive hover:text-red-700 transition flex-shrink-0 ml-2"
+                  class="text-destructive hover:text-destructive transition flex-shrink-0 ml-2"
                   title={$t('protection.unlockPath')}
                   aria-label={$t('protection.unlockPath')}
                 >

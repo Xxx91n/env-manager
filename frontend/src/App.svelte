@@ -314,7 +314,7 @@
     {#if $activeView === 'variables'}
       {#if $loading}
         <div class="flex justify-center py-8">
-          <div class="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
+          <div class="animate-spin rounded-full h-6 w-6 border-b-2 border-primary"></div>
         </div>
       {:else}
         <Variables />
@@ -357,9 +357,9 @@
     {#each $toasts as toast (toast.id)}
       <div
         class="px-3.5 py-2 rounded-md text-xs shadow-lg pointer-events-auto cursor-pointer transition-all {toast.type === 'success'
-          ? 'bg-green-600 text-white'
+          ? 'bg-green-600 text-primary-foreground'
           : toast.type === 'error'
-            ? 'bg-red-600 text-white'
+            ? 'bg-destructive text-primary-foreground'
             : 'bg-primary text-primary-foreground'}"
         on:click={() => dismissToast(toast.id)}
       >
