@@ -1,6 +1,6 @@
 <script lang="ts">
   import { Plus, Trash2, ShieldCheck, Check, X, Power, Pencil, ChevronUp, ChevronDown, Eye, Loader2, StickyNote, FileText, Tag } from 'lucide-svelte'
-  import { loadNotes, getNoteSync, upsertNote } from '../notesStore'
+  import { loadNotes, getNoteSync, upsertNote, notesStore } from '../notesStore'
   import { onMount } from 'svelte'
   import { frontendLog } from '../settingsStore'
   import { openInputDialog } from '../stores'
@@ -49,11 +49,13 @@
   // operate on the visual position `pos` (NOT entry.index, which is the
   // original registry index used as the stable key).
   $: displayEntries = stagedActive ? stagedEntries : entries
+  $: liveDeadCount = displayEntries.filter((e: any) => !e.exists && !e.isProtected).length  // v0.9.25 — WCAG 4.1.2: disabled reflects real data
   
   // Notes (sticky-note) — shared notesStore, key prefixed with path:
   let notesLoaded = false
   let notesTick = writable(0)  // store: async-safe re-render trigger (Svelte 4 await limitation)
   let hoveredNotePath: string | null = null
+  let lastMovedKey: number | null = null  // v0.9.25 — moved entry highlight (W3C APG listbox-rearrangeable)
 
   async function ensureNotesLoaded() {
     if (!notesLoaded) {
@@ -305,11 +307,18 @@
     ensureStagedActive()
     const arr = stagedEntries
     if (arr[pos].isProtected) return
+    const movedKey = arr[pos].index
     const tmp = arr[pos - 1]
     arr[pos - 1] = arr[pos]
     arr[pos] = tmp
-    stagedEntries = arr
-    stagedEntries = stagedEntries // reactivity poke
+    stagedEntries = [...arr]  // v0.9.25 — new array ref for Svelte 4 keyed each reactivity
+    lastMovedKey = movedKey
+    // W3C APG listbox-rearrangeable: focus follows the moved option so consecutive moves don't require re-finding the row
+    queueMicrotask(() => {
+      const btn = document.querySelector('[data-move-up-key="' + movedKey + '"]') as HTMLButtonElement | null
+      if (btn) btn.focus()
+    })
+    setTimeout(() => { if (lastMovedKey === movedKey) lastMovedKey = null }, 800)
   }
 
   function handleMoveDown(pos: number) {
@@ -317,11 +326,17 @@
     ensureStagedActive()
     const arr = stagedEntries
     if (arr[pos].isProtected) return
+    const movedKey = arr[pos].index
     const tmp = arr[pos + 1]
     arr[pos + 1] = arr[pos]
     arr[pos] = tmp
-    stagedEntries = arr
-    stagedEntries = stagedEntries // reactivity poke
+    stagedEntries = [...arr]  // v0.9.25 — new array ref for Svelte 4 keyed each reactivity
+    lastMovedKey = movedKey
+    queueMicrotask(() => {
+      const btn = document.querySelector('[data-move-down-key="' + movedKey + '"]') as HTMLButtonElement | null
+      if (btn) btn.focus()
+    })
+    setTimeout(() => { if (lastMovedKey === movedKey) lastMovedKey = null }, 800)
   }
 
   function cancelStagedMoves() {
@@ -541,12 +556,12 @@
     </button>
     <button
       on:click={handleRemoveDeadConfirm}
-      disabled={actionLoading || healthLoading || !healthSummary || healthSummary.dead === 0}
+      disabled={actionLoading || liveDeadCount === 0}
       title={$t('path.removeDead')}
       class="flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-destructive bg-destructive/10 rounded-md hover:bg-destructive/15 transition disabled:opacity-30 disabled:cursor-not-allowed"
     >
           <Trash2 class="w-3.5 h-3.5" />
-      {$t('path.removeDead')}{#if healthSummary && healthSummary.dead > 0} ({healthSummary.dead}){/if}
+      {$t('path.removeDead')}{#if liveDeadCount > 0} ({liveDeadCount}){/if}
     </button>
   </div>
 
@@ -596,7 +611,7 @@
         </thead>
         <tbody class="divide-y divide-border/50 divide-border">
           {#each displayEntries as entry, pos (entry.index)}
-            <tr class="hover:bg-muted/50 transition hover:bg-muted {entry.isDuplicate ? 'bg-amber-50/60/60 bg-primary/5' : ''} {!entry.exists ? 'bg-destructive/5/60 bg-destructive/20/10' : ''} {entry.isProtected ? 'bg-muted/60 bg-card/60' : ''}">
+            <tr class="hover:bg-muted/50 transition hover:bg-muted {entry.isDuplicate ? 'bg-amber-50/60/60 bg-primary/5' : ''} {!entry.exists ? 'bg-destructive/5/60 bg-destructive/20/10' : ''} {entry.isProtected ? 'bg-muted/60 bg-card/60' : ''} {lastMovedKey === entry.index ? 'just-moved' : ''}">
               <td class="px-2 py-1.5 text-[10px] text-muted-foreground align-top">{pos + 1}</td>
               <td class="px-2 py-1.5 align-top">
                 {#if editingIndex === entry.index}
@@ -636,7 +651,7 @@
                   <!-- Display mode: click to copy -->
                   <div
                     class="text-[11px] font-mono text-foreground/80 text-foreground break-all cursor-pointer hover:text-primary transition select-none leading-relaxed"
-                    title={getNoteSync(pathNoteKey(scope, entry.path)) ? getNoteSync(pathNoteKey(scope, entry.path))?.note : $t('messages.clickToCopy')}
+                    title={$notesStore[pathNoteKey(scope, entry.path)]?.note || $t('messages.clickToCopy')}
                     on:click={() => copyToClipboard(entry.path)}
                   >
                     {entry.path}
@@ -673,20 +688,22 @@
                     <button
                       on:click={() => handlePathNote(scope, entry.path)}
                       on:focus={() => ensureNotesLoaded()}
-                      on:mouseenter={() => { hoveredNotePath = entry.path; notesTick.update(n => n + 1); if (!notesLoaded) void ensureNotesLoaded().then(() => { notesTick.update(n => n + 1) }) }}
+                      on:mouseenter={() => { hoveredNotePath = entry.path; if (!notesLoaded) void ensureNotesLoaded() }}
                       on:mouseleave={() => hoveredNotePath = null}
+                      on:keydown={(e) => { if (e.key === 'Escape') hoveredNotePath = null }}
                       class="inline-flex p-1 text-muted-foreground hover:text-primary/80 hover:bg-primary/10 rounded transition hover:bg-primary/15"
-                      title={($notesTick, getNoteSync(pathNoteKey(scope, entry.path)) ? $t('notes.editNote') : $t('notes.addNote'))}
+                      title={$notesStore[pathNoteKey(scope, entry.path)] ? $t('notes.editNote') : $t('notes.addNote')}
+                      aria-describedby={hoveredNotePath === entry.path && $notesStore[pathNoteKey(scope, entry.path)] ? 'path-tip-' + entry.index : undefined}
                     >
-                      {#if ($notesTick, getNoteSync(pathNoteKey(scope, entry.path)))}
+                      {#if $notesStore[pathNoteKey(scope, entry.path)]}
                         <Tag class="w-3.5 h-3.5" />
                       {:else}
                         <FileText class="w-3.5 h-3.5" />
                       {/if}
                     </button>
-                    {#if hoveredNotePath === entry.path && $notesTick && getNoteSync(pathNoteKey(scope, entry.path))}
-                      <div class="absolute bottom-full right-0 mb-1 px-2.5 py-1.5 bg-card text-primary-foreground text-[10px] rounded shadow-lg whitespace-pre-wrap max-w-[240px] break-words z-50 pointer-events-none bg-accent">
-                        {getNoteSync(pathNoteKey(scope, entry.path))?.note}
+                    {#if hoveredNotePath === entry.path && $notesStore[pathNoteKey(scope, entry.path)]}
+                      <div id={'path-tip-' + entry.index} role="tooltip" class="absolute bottom-full right-0 mb-1 px-2.5 py-1.5 bg-card text-foreground text-[10px] rounded shadow-lg whitespace-pre-wrap max-w-[240px] break-words z-50 pointer-events-none border border-border">
+                        {$notesStore[pathNoteKey(scope, entry.path)]?.note}
                       </div>
                     {/if}
                   </div>
@@ -713,6 +730,7 @@
                   <button
                     on:click={() => handleMoveUp(pos)}
                     disabled={actionLoading || pos === 0 || entry.isProtected}
+                    data-move-up-key={entry.index}
                     class="inline-flex p-1 text-muted-foreground hover:text-primary hover:bg-primary/10 rounded transition disabled:opacity-30 hover:bg-primary/15"
                     title={$t('path.moveUp')}
                     aria-label={$t('path.moveUp')}
@@ -722,6 +740,7 @@
                   <button
                     on:click={() => handleMoveDown(pos)}
                     disabled={actionLoading || pos === displayEntries.length - 1 || entry.isProtected}
+                    data-move-down-key={entry.index}
                     class="inline-flex p-1 text-muted-foreground hover:text-primary hover:bg-primary/10 rounded transition disabled:opacity-30 hover:bg-primary/15"
                     title={$t('path.moveDown')}
                     aria-label={$t('path.moveDown')}

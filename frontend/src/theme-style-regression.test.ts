@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { readFileSync } from 'fs'
-import { join, dirname } from 'path'
+import { join, dirname, resolve } from 'path'
 import { fileURLToPath } from 'url'
 
 const __dirname2 = typeof __dirname !== 'undefined' ? __dirname : dirname(fileURLToPath(import.meta.url))
@@ -185,5 +185,20 @@ describe('v0.9.21 CSS containment for performance', () => {
   it('AuditPage has list-container class', () => {
     const src = readFileSync(join(__dirname2, 'lib', 'components', 'AuditPage.svelte'), 'utf8')
     expect(src).toContain('list-container')
+  })
+})
+
+
+describe('v0.9.25 dark destructive red-400 alignment (shadcn v4 / WCAG AA)', () => {
+  it('all 7 dark theme blocks in app.css use --destructive: 0 91% 71% (red-400 level)', () => {
+    const css = readFileSync(resolve(__dirname, 'app.css'), 'utf8')
+    // Count dark blocks: they should all now use 0 91% 71%
+    const matches = css.match(/--destructive: 0 91% 71%/g) || []
+    expect(matches.length).toBe(7)
+  })
+
+  it('no dark block still uses the prior 0 84% 67% value', () => {
+    const css = readFileSync(resolve(__dirname, 'app.css'), 'utf8')
+    expect(css).not.toMatch(/--destructive: 0 84% 67%/)
   })
 })

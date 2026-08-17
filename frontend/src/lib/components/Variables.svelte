@@ -8,7 +8,7 @@
   import { highlightParts } from '../features'
   import EditDialog from './EditDialog.svelte'
   import BackupDialog from './BackupDialog.svelte'
-  import { loadNotes, getNoteSync, upsertNote } from '../notesStore'
+  import { loadNotes, getNoteSync, upsertNote, notesStore } from '../notesStore'
   import { openInputDialog } from '../stores'
   import { writable } from 'svelte/store'
 
@@ -273,7 +273,7 @@
               </td>
               <td
                 class="px-3 py-2 text-xs font-mono text-foreground cursor-pointer hover:text-primary transition select-none"
-                title={getNoteSync(variable.name) ? getNoteSync(variable.name)?.note : $t('messages.clickToCopy')}
+                title={$notesStore[variable.name]?.note || $t('messages.clickToCopy')}
                 on:click={() => copyToClipboard(variable.name)}
               >
                 <div class="flex items-center gap-1.5">
@@ -325,20 +325,22 @@
                   <button
                   on:click={() => handleNote(variable.name)}
                   on:focus={() => ensureNotesLoaded()}
-                  on:mouseenter={() => { hoveredNoteVar = variable.name; notesTick.update(n => n + 1); if (!notesLoaded) void ensureNotesLoaded().then(() => { notesTick.update(n => n + 1) }) }}
+                  on:mouseenter={() => { hoveredNoteVar = variable.name; if (!notesLoaded) void ensureNotesLoaded() }}
                   on:mouseleave={() => hoveredNoteVar = null}
+                  on:keydown={(e) => { if (e.key === 'Escape') hoveredNoteVar = null }}
                   class="inline-flex p-1 text-muted-foreground hover:text-primary/80 hover:bg-primary/10 rounded transition hover:bg-primary/15"
-                  title={($notesTick, getNoteSync(variable.name) ? $t('notes.editNote') : $t('notes.addNote'))}
+                  title={$notesStore[variable.name] ? $t('notes.editNote') : $t('notes.addNote')}
+                  aria-describedby={hoveredNoteVar === variable.name && $notesStore[variable.name] ? 'note-tip-' + variable.name.replace(/[^a-zA-Z0-9_-]/g, '_') : undefined}
                 >
-                  {#if ($notesTick, getNoteSync(variable.name))}
+                  {#if $notesStore[variable.name]}
           <Tag class="w-3.5 h-3.5" />
                   {:else}
           <FileText class="w-3.5 h-3.5" />
                   {/if}
                 </button>
-                  {#if hoveredNoteVar === variable.name && $notesTick && getNoteSync(variable.name)}
-                    <div class="absolute bottom-full left-0 mb-1 px-2.5 py-1.5 bg-card text-primary-foreground text-[10px] rounded shadow-lg whitespace-pre-wrap max-w-[240px] break-words z-50 pointer-events-none bg-accent">
-                      {getNoteSync(variable.name)?.note}
+                  {#if hoveredNoteVar === variable.name && $notesStore[variable.name]}
+                    <div id={'note-tip-' + variable.name.replace(/[^a-zA-Z0-9_-]/g, '_')} role="tooltip" class="absolute bottom-full left-0 mb-1 px-2.5 py-1.5 bg-card text-foreground text-[10px] rounded shadow-lg whitespace-pre-wrap max-w-[240px] break-words z-50 pointer-events-none border border-border">
+                      {$notesStore[variable.name]?.note}
                     </div>
                   {/if}
                 </div>
