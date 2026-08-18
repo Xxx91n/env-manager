@@ -285,3 +285,19 @@ _Avoid_: secure string, encrypted wrapper, secret holder
 **Redaction Vocabulary**:
 The canonical set of 22 secret-bearing string patterns recognized by all three tiers. Patterns: Bearer, token=, Token=, password=, Password=, setx, OP_SERVICE_ACCOUNT_TOKEN=, VAULT_TOKEN=, AWS_SECRET_ACCESS_KEY=, AWS_SESSION_TOKEN=, client_secret=, connection_string=, subscription_key=, api_key=, apikey=, client_id=, tenant_id=, access_token=, refresh_token=, Authorization:, X-Vault-Token:, x-api-key:. A new pattern must be added to all three code sites simultaneously.
 _Avoid_: mask list, secret patterns, redaction rules
+
+## GUI Layer Terms (v0.9.26)
+
+Resolved during grill-with-docs session 2026-08-19 (5 GUI bug fixes, see .codex-tmp/grill-plan-path-move-dead-zindex-radio-input.md).
+
+- **Staged Move**: The PathEditor reorder pattern where move-up/move-down clicks accumulate adjacent swaps locally on `stagedEntries` (new array ref per swap) without per-click IPC. The Apply button commits the whole sequence via `applyStagedMoves()` which re-reads live registry order and calls `movePathEntryUp` repeatedly. `ensureStagedActive()` is the single init entry that copies `entries.slice()` into `stagedEntries` and sets `stagedActive=true`. Guard order matters: the boundary guard MUST run after `ensureStagedActive()`, not before, or it reads an empty array and blocks the only init path.
+_Avoid_: staged reorder, pending moves, buffer reorder
+
+- **Live Dead Count**: The reactive derived value `displayEntries.filter(e => !e.exists && !e.isProtected).length` that drives the "Remove dead entries" button `disabled` state. It is the single source of truth for dead-entry visibility; the confirm handler MUST read the same value, not `healthSummary` (which is only filled by the manual health-check click and resets to null on every refresh).
+_Avoid_: dead count, health dead, stale dead count
+
+- **z-index Layering**: The GUI overlay stacking convention: titlebar `z-index: 50` (navbar level), modal dialogs and toast notifications `z-[100]`. The titlebar stays above scrolling content but never suppresses overlays. See ADR 0006.
+_Avoid_: z-index scale, overlay stack, layer order
+
+- **Form Control color-scheme Override**: The element-level `color-scheme: light` on `input, select, textarea` that overrides the `:root` `color-scheme: light dark` (v0.9.24 scrollbar hard boundary). Binds form control fill/outline to app `data-theme` instead of Windows `prefers-color-scheme`. Paired with `accent-color: hsl(var(--primary))` for radio/checkbox fill and `outline: none` on focus (Tailwind `focus:ring` takes over). See ADR 0007.
+_Avoid_: form theme binding, control theme override, light-only controls

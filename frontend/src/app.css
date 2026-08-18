@@ -227,7 +227,7 @@
   top: 0;
   left: 0;
   right: 0;
-  z-index: 100;
+  z-index: 50; /* v0.9.26: navbar level — modal/toast z-[100] stays above (ADR 0006) */
 }
 .titlebar-drag {
   flex: 1;
@@ -265,6 +265,23 @@
 .titlebar-btn.close:hover {
   background: hsl(var(--destructive));
   color: hsl(var(--destructive-foreground));
+}
+
+/* v0.9.26 — ADR 0007: form controls override :root color-scheme to follow app theme, not system */
+input[type="radio"],
+input[type="checkbox"] {
+  accent-color: hsl(var(--primary));
+  color-scheme: light;
+}
+input,
+select,
+textarea {
+  color-scheme: light;
+}
+input:focus,
+select:focus,
+textarea:focus {
+  outline: none;
 }
 
 

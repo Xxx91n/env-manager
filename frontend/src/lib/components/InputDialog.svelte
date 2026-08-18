@@ -54,7 +54,7 @@
 
 {#if $inputModal}
   <div
-    class="fixed inset-0 bg-background/40 flex items-center justify-center z-[60]"
+    class="fixed inset-0 bg-background/40 flex items-center justify-center z-[100]"
     on:click={handleCancel}
     role="presentation"
   >

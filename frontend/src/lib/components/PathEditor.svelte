@@ -215,7 +215,7 @@
 
   function handleRemoveDeadConfirm() {
     if (actionLoading || healthLoading) return
-    const deadCount = healthSummary?.dead ?? 0
+    const deadCount = liveDeadCount  // v0.9.26 — same source as button disabled (WCAG 4.1.2)
     if (deadCount === 0) {
       showToast($t('messages.pathNoDead'), 'info')
       return
@@ -322,9 +322,9 @@
   }
 
   function handleMoveDown(pos: number) {
-    if (pos >= stagedEntries.length - 1) return
     ensureStagedActive()
     const arr = stagedEntries
+    if (pos >= arr.length - 1) return
     if (arr[pos].isProtected) return
     const movedKey = arr[pos].index
     const tmp = arr[pos + 1]

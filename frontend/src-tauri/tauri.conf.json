@@ -1,6 +1,6 @@
 {
   "productName": "Env Manager",
-  "version": "0.9.25",
+  "version": "0.9.26",
   "identifier": "com.envmanager.desktop",
   "build": {
     "beforeDevCommand": "npm run dev",

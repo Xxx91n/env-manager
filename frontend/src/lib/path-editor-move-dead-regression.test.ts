@@ -69,3 +69,35 @@ describe('v0.9.25 PathEditor dead-entries button reactive disabled (WCAG 4.1.2)'
     expect(src.includes('({healthSummary.dead})')).toBe(false)
   })
 })
+
+describe('v0.9.26 PathEditor move-down guard order fix (first-click no-op)', () => {
+  it('handleMoveDown calls ensureStagedActive BEFORE the pos guard (not after)', () => {
+    const fn = findFn('handleMoveDown')
+    expect(fn.length).toBeGreaterThan(0)
+    const ensureIdx = fn.indexOf('ensureStagedActive()')
+    const guardIdx = fn.indexOf('if (pos >= arr.length - 1)')
+    expect(ensureIdx).toBeGreaterThan(-1)
+    expect(guardIdx).toBeGreaterThan(-1)
+    expect(ensureIdx).toBeLessThan(guardIdx)
+  })
+
+  it('handleMoveDown guard uses arr.length (post-init) not stagedEntries.length (pre-init)', () => {
+    const fn = findFn('handleMoveDown')
+    expect(fn.includes('arr.length - 1')).toBe(true)
+    expect(fn.includes('stagedEntries.length - 1')).toBe(false)
+  })
+
+  it('handleMoveUp still has pos <= 0 guard (not removed by symmetry unification)', () => {
+    const fn = findFn('handleMoveUp')
+    expect(fn.includes('if (pos <= 0) return')).toBe(true)
+  })
+})
+
+describe('v0.9.26 PathEditor dead-entries confirm handler uses liveDeadCount (ADR 0007)', () => {
+  it('handleRemoveDeadConfirm reads liveDeadCount (not healthSummary)', () => {
+    const fn = findFn('handleRemoveDeadConfirm')
+    expect(fn.length).toBeGreaterThan(0)
+    expect(fn.includes('const deadCount = liveDeadCount')).toBe(true)
+    expect(fn.includes('healthSummary?.dead')).toBe(false)
+  })
+})

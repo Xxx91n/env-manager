@@ -202,3 +202,50 @@ describe('v0.9.25 dark destructive red-400 alignment (shadcn v4 / WCAG AA)', () 
     expect(css).not.toMatch(/--destructive: 0 84% 67%/)
   })
 })
+
+describe('v0.9.26 z-index layering (ADR 0006: titlebar z-50, modal/toast z-100)', () => {
+  it('app.css titlebar z-index is 50 (navbar level)', () => {
+    const css = readFileSync(join(__dirname2, 'app.css'), 'utf8')
+    expect(css).toMatch(/\.titlebar\s*\{[^}]*z-index:\s*50/s)
+  })
+
+  it('ConfirmDialog overlay uses z-[100] (above titlebar)', () => {
+    const src = readFileSync(join(__dirname2, 'lib', 'components', 'ConfirmDialog.svelte'), 'utf8')
+    expect(src.includes('z-[100]')).toBe(true)
+    expect(src.includes('z-[60]')).toBe(false)
+  })
+
+  it('InputDialog overlay uses z-[100] (above titlebar)', () => {
+    const src = readFileSync(join(__dirname2, 'lib', 'components', 'InputDialog.svelte'), 'utf8')
+    expect(src.includes('z-[100]')).toBe(true)
+    expect(src.includes('z-[60]')).toBe(false)
+  })
+
+  it('App.svelte Toast container uses z-[100] (above titlebar)', () => {
+    const src = readFileSync(join(__dirname2, 'App.svelte'), 'utf8')
+    expect(src.includes('z-[100]')).toBe(true)
+    expect(src.includes('z-[60]')).toBe(false)
+  })
+})
+
+describe('v0.9.26 form control color-scheme override (ADR 0007)', () => {
+  it('app.css has accent-color on radio/checkbox bound to --primary', () => {
+    const css = readFileSync(join(__dirname2, 'app.css'), 'utf8')
+    expect(css).toMatch(/input\[type=.radio.\]\s*,\s*input\[type=.checkbox.\]\s*\{[^}]*accent-color:\s*hsl\(var\(--primary\)\)/s)
+  })
+
+  it('app.css has color-scheme: light on radio/checkbox', () => {
+    const css = readFileSync(join(__dirname2, 'app.css'), 'utf8')
+    expect(css).toMatch(/input\[type=.radio.\]\s*,\s*input\[type=.checkbox.\]\s*\{[^}]*color-scheme:\s*light/s)
+  })
+
+  it('app.css has color-scheme: light on input/select/textarea', () => {
+    const css = readFileSync(join(__dirname2, 'app.css'), 'utf8')
+    expect(css).toMatch(/input\s*,\s*select\s*,\s*textarea\s*\{[^}]*color-scheme:\s*light/s)
+  })
+
+  it('app.css has outline: none on input:focus/select:focus/textarea:focus', () => {
+    const css = readFileSync(join(__dirname2, 'app.css'), 'utf8')
+    expect(css).toMatch(/input:focus\s*,\s*select:focus\s*,\s*textarea:focus\s*\{[^}]*outline:\s*none/s)
+  })
+})
