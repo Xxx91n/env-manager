@@ -52,7 +52,7 @@ Four layers:
 1. **CLI backend** (`Program.cs`) - C# .NET 10 console app, reads/writes Windows Registry directly, compiles to `env-manager-cli.exe`.
 2. **Tauri shell** (`frontend/src-tauri/`) - Rust app, embeds CLI as bundled resource, spawns CLI subprocesses, returns JSON via Tauri IPC.
 3. **Svelte frontend** (`frontend/src/`) - TypeScript + Svelte 4 + TailwindCSS in WebView2. Talks to Rust only via `invoke('run_cli', ...)`.
-4. **Service crate** (`service/`) - Rust standalone binary (`env-manager-service.exe`), manages secret mount lifecycle via named pipe IPC. Optional: runs as Windows service (`--mode=service`) or background process (`--mode=background`). The CLI `service` subcommand is a thin IPC gateway to this binary. See ADR 0001 and `docs/secret-architecture-blueprint.md` for the grill-with-docs roadmap.
+4. **Service crate** (`service/`) - Rust standalone binary (`env-manager-service.exe`), manages secret mount lifecycle via named pipe IPC. Optional: runs as Windows service (`--mode=service`) or background process (`--mode=background`). The CLI `service` subcommand is a thin IPC gateway to this binary. See ADR 0001 and `docs/secret-architecture-blueprint.md` for the design review roadmap.
 
 The GUI has NO local web server. Dev: Vite at `localhost:5173`. Production: Tauri embeds static assets via its `tauri://` custom protocol.
 
@@ -67,8 +67,10 @@ env-manager/
 +- AGENTS.md                   # This file (project-level operating instructions)
 +- AGENTS.cli.md               # CLI-level agent guide (distributed with CLI binary)
 +- README.md / README_CN.md    # English / Chinese documentation
-+- CONTEXT.md                  # Grill-with-docs session decisions (A1-A11 + Risk Matrix)
-+- docs/                       # Detailed reference (cli-commands, architecture, build-and-release, backup-and-profiles, secret-architecture-blueprint, secret-providers-guide, adr/)
++- CONTEXT.md                  # Internal development process record (design review session decisions A1-A11 + Risk Matrix)
++- docs/                       # User documentation (cli-commands, architecture, build-and-release, backup-and-profiles, secret-architecture-blueprint, secret-providers-guide, adr/)
++- docs/agents/                # Agent-specific reference (issue-tracker, domain)
++- docs/history/              # Process artifacts (ui-audit, session records)
 +- scripts/                    # Build orchestrator (build.mjs), test harness, migration scripts, snapshot scripts
 +- service/                    # Rust service crate (env-manager-service.exe, named pipe IPC, reconcile loop, audit ledger)
 +- frontend/                   # Tauri GUI application (src/, src-tauri/, tests/)
@@ -377,8 +379,8 @@ A commit that does not update AGENTS.md (and the relevant `docs/` file) when the
 | Secrets architecture blueprint: current capabilities, limitations, v0.8-v1.0 phased roadmap, anti-rejection checklist, risk counter-decisions | [docs/secret-architecture-blueprint.md](docs/secret-architecture-blueprint.md) |
 | Secret providers user-facing setup guide: prerequisites, one-time install, activation errors and fixes for all 8 providers (DPAPI, Credential Manager, PowerShell SecretManagement, Vault KV v2, SOPS, Azure Key Vault, 1Password CLI, AWS Secrets Manager) | [docs/secret-providers-guide.md](docs/secret-providers-guide.md) |
 | ADR 0001: Secret architecture revision decisions A1-A11, Phase A-E roadmap | [docs/adr/0001-secret-architecture-revision.md](docs/adr/0001-secret-architecture-revision.md) |
-| Secret architecture decision summary (single-page distillation of grill-with-docs) | [docs/secret-architecture-decision-summary.md](docs/secret-architecture-decision-summary.md) |
-| Grill-with-docs full interview context + risk matrix | [CONTEXT.md](CONTEXT.md) |
+| Secret architecture decision summary (single-page distillation of design review) | [docs/secret-architecture-decision-summary.md](docs/secret-architecture-decision-summary.md) |
+| Internal development process record + design review risk matrix | [CONTEXT.md](CONTEXT.md) |
 - **v0.9.2 CancellationToken graceful shutdown (hard boundary)**: `service/src/main.rs` MUST create a `tokio_util::sync::CancellationToken` (wrapped in `Arc`) and pass clones to both `reconcile::reconcile_loop(token)` and `ipc::start_ipc_server(pipe, token)`. The IPC `shutdown` method MUST call `shutdown.cancel()` to trigger cooperative cancellation. The reconcile loop uses `tokio::select!` between `interval.tick()` and `shutdown.cancelled()` so it exits cleanly between ticks. The IPC server uses `tokio::select!` between `server.connect()` and `shutdown.cancelled()` so it exits cleanly during connection wait. Both tasks log a distinct "cancelled" message before returning. The main `tokio::select!` detecting task exit logs "service shutting down (all tasks exited)". Without this, `shutdown` IPC returned ok but the service kept running — stale pipe prevented restart. Never revert to the no-token pattern where `shutdown` is a no-op that only returns `{"shuttingDown":true}` without actually stopping the service.
 
 - **v0.9.2 CLI pipe no-more using-var (hard boundary)**: `RunServiceCommand` in `Program.cs` MUST NOT use `using var` for `StreamWriter`/`StreamReader` wrapping the `NamedPipeClientStream`. The `using var` pattern calls `Dispose` at scope exit (LIFO with other using-vars), AFTER `return 0` — but the service has already closed its end of the pipe by then, so `Dispose` throws `IOException: Cannot access a closed pipe` which propagates to stderr and makes the CLI exit code 1 even though the response was `{"ok":true}`. The fix uses explicit `var` (not `using var`) with `leaveOpen: true` on both `StreamWriter` and `StreamReader`, and wraps each `Dispose()` in `try { } catch { }` so teardown failures are swallowed. The response is already read and printed before any Dispose runs; the exit code is determined solely by the response content. Never re-introduce `using var` for pipe-wrapping readers/writers when the remote end may close the pipe first.
