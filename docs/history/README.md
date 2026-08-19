@@ -1,13 +1,10 @@
-# Process Artifacts
+# History
 
-This directory holds development process records — UI audit logs, session
-summaries, technical debt ledgers, and other artifacts produced during
-development sessions that are not part of user-facing documentation.
+This directory holds process artifacts — internal records that are not user
+documentation and not agent instruction. Files here are append-only archives.
 
-These files are **internal process records**, not user documentation. They are
-retained for historical traceability and may reference sessions, tools, or
-workflows that are no longer active.
+- `ui-audit.md` — UI audit results from v0.9.21 audit round
+- `design-review-research.md` — design review session research notes and risk matrix (2026-08-02), archived from CONTEXT.md per 3-layer documentation governance
 
-## Current contents
-
-- `ui-audit.md` — UI audit log (v0.9.21 audit round: 6-color theme, custom titlebar, CSS containment)
+These files are **not user documentation** and **not agent instructions**.
+Decisions from these sessions are sedimented into `../adr/`.
