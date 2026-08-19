@@ -161,11 +161,11 @@ Rejected alternative: command-string allow-list. Already what AGENTS.md document
 ## Phased roadmap — SUPERSEDED
 
 > **This section is superseded by ADR 0001 and the Decision Summary.**
-> The grill-with-docs session on 2026-08-02 revised four of the five phases after external research and codebase cross-validation. The authoritative decisions now live in:
+> The design review (2026-08-02) revised four of the five phases after external research and codebase cross-validation. The authoritative decisions now live in:
 >
 > - **ADR**: [docs/adr/0001-secret-architecture-revision.md](adr/0001-secret-architecture-revision.md)
 > - **Decision Summary**: [docs/secret-architecture-decision-summary.md](secret-architecture-decision-summary.md)
-> - **Full interview context + risk matrix**: [CONTEXT.md](../CONTEXT.md)
+> - **Full design context + risk matrix**: [CONTEXT.md](../CONTEXT.md)
 
 ### What changed and why
 

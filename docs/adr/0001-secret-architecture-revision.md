@@ -1,6 +1,6 @@
 # 0001: Secret Architecture Revision (v0.8.0 to v1.0.0)
 
-The env-manager secret architecture blueprint (`docs/secret-architecture-blueprint.md`, v1.0 dated 2026-07-26) proposed a linear Phase A-E roadmap. A grill-with-docs session on 2026-08-02 (see `CONTEXT.md` Decisions A1-A11 and Risk Matrix) revised four of the five phases based on external research and codebase cross-validation. This ADR records the non-obvious, hard-to-reverse trade-offs.
+The env-manager secret architecture blueprint (`docs/secret-architecture-blueprint.md`, v1.0 dated 2026-07-26) proposed a linear Phase A-E roadmap. A design review session on 2026-08-02 (see `CONTEXT.md` Decisions A1-A11 and Risk Matrix) revised four of the five phases based on external research and codebase cross-validation. This ADR records the non-obvious, hard-to-reverse trade-offs.
 
 ## Status: accepted
 

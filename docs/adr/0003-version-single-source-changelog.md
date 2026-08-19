@@ -2,7 +2,7 @@
 
 - Status: Accepted
 - Date: 2026-08-06
-- Deciders: grill-with-docs session
+- Deciders: design review session
 - Supersedes: None
 - Related: None
 

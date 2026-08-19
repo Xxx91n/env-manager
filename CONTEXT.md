@@ -1,4 +1,8 @@
 # Env Manager
+> **Internal development process record — not user documentation.**
+> Architectural decisions are distilled into `docs/adr/`. Domain glossary
+> terms in `## Language` are canonical vocabulary; other sections are
+> session records.
 
 Env Manager is a Windows environment variable manager with a CLI backend (C# .NET 10), a Tauri/Rust shell, and a Svelte 4 frontend. This CONTEXT.md captures the domain language specific to the secrets architecture, resolved during the grill-with-docs session on the Phase A–E roadmap (docs/secret-architecture-blueprint.md).
 
