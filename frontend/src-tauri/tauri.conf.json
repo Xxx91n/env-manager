@@ -51,8 +51,6 @@
       "bin/env-manager-cli.deps.json",
       "bin/AGENTS.cli.md"
     ],
-    "windows": {
-      "createUpdaterArtifacts": true
-    }
+    "createUpdaterArtifacts": true
   }
 }
