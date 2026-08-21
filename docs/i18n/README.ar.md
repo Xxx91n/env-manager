@@ -5,6 +5,10 @@
   <source media="(prefers-color-scheme: light)" srcset="../../docs/assets/logo-light-theme.png">
   <img src="../../docs/assets/logo.png" alt="Env Manager 标志" width="120" height="120">
 </picture>
+<p align="center">
+  <img src="../../docs/assets/brand/hero.svg" alt="Env Manager mini hero" width="100%">
+</p>
+
 
 # Env Manager
 
@@ -22,9 +26,6 @@
 
 </div>
 
-<p align="center">
-  <img src="../../docs/assets/env_variants_showcase.png" alt="一套变量，全环境覆盖 —— dev / staging / prod 变色龙变体" width="720">
-</p>
 
 ---
 

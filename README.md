@@ -6,6 +6,10 @@
   <img src="docs/assets/logo.png" alt="Env Manager logo" width="120" height="120">
 </picture>
 
+<p align="center">
+  <img src="docs/assets/brand/hero.svg" alt="Env Manager mini hero: terminal prompt with three-peak crest in Dev/Staging/Prod color tokens" width="100%">
+</p>
+
 # Env Manager
 
 A modern, lightweight **Windows environment-variable manager** — CLI and GUI dual-mode, inspired by Microsoft PowerToys but standalone and agent-friendly.

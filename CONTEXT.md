@@ -118,6 +118,30 @@ _Avoid_: IPC whitelist, permission audit, capability gap
 _Avoid_: content security, CSP policy, style policy
 
 - **Named Pipe DACL**: Explicit Discretionary Access Control List on `\\.\pipe\EnvManager.Service` and `\\.\pipe\EnvManager.Background` named pipe endpoints. Restricts pipe access to the current user SID only. Complements existing `PIPE_FIRST_PIPE_INSTANCE` anti-squatting flag. Implemented via `SECURITY_ATTRIBUTES` with explicit DACL in Rust `ipc.rs`.
+
+## Brand & Asset Terms (v0.9.26+)
+
+Resolved during grill-with-docs session 2026-08-22 (Q1-Q8 on the README/icon work; palette A chosen, icon A chosen).
+
+- **Install Icon**:
+  The family of icons Windows shows **after install**: the Desktop shortcut icon, the exe file icon (Win32 resource), the MSI installer icon, and the system tray icon. All four share a **single source file** — `frontend/src-tauri/icons/icon.ico` (multi-resolution: 16/32/48/256) — from which Tauri derives the rest.
+  _Avoid_: logo (that's the brand layer), app icon (ambiguous), favicon (browser concept).
+
+- **Brand Iconset**:
+  All visual assets under `docs/assets/brand/` (logo, theme variants, chameleon env variants, favicons, social preview). Audience: README, docs, sharing. Not the Windows system surface.
+  _Avoid_: logo assets (plural, unsorted), icons (too vague).
+
+- **Environment Color Token**:
+  The three-color mapping derived from the chameleon variants: Dev ↔ emerald `#10B981`, Staging ↔ cyan `#06B6D4`, Prod ↔ amber `#F59E0B`. Constrains **Brand Iconset** and README hero background only. Install Icon is **not** bound to env color (single emerald icon for all users). Channel-specific swapping is a future build-time concern.
+  _Avoid_: theme (user GUI setting), color scheme (unspecified).
+
+- **Hero Board**:
+  The first-screen visual asset of README (and of each i18n variant). In v0.9.26 the chosen form is **mini hero**: chameleon motif + metadata (version / license / platform), no project name, no tagline; obsidian `#111318` base with the three-token gradient as motif. The logo itself stays in the separate `<picture>` slot, not inside the hero.
+  _Avoid_: banner (overloaded), cover, header (layout term).
+
+- **Variant Chameleon**:
+  Any single member of the per-environment chameleon set (`env-chameleon-dev.png` / `env-chameleon-staging.png` / `env-chameleon-prod.png`). The grouped board is `env_variants_showcase.png`.
+  _Avoid_: logo variant (confused with light/dark logo variants).
 _Avoid_: pipe ACL, pipe permissions, pipe security descriptor
 
 - **Code Signing (Phase 2)**: Authenticode signing of `env-manager.exe`, `env-manager-cli.exe`, `env-manager-service.exe`, and MSI installer with an OV (Organization Validation) code signing certificate. Eliminates SmartScreen "unrecognized app" warning after reputation builds. EV certificates no longer guarantee instant SmartScreen bypass as of 2025. Deferred to Phase 2.

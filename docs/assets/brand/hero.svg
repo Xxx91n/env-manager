@@ -1,0 +1,57 @@
+<svg xmlns="http://www.w3.org/2000/svg"
+     width="1200" height="220" viewBox="0 0 1200 220"
+     role="img" aria-labelledby="title desc">
+  <title id="title">Env Manager — mini hero</title>
+  <desc id="desc">Terminal prompt with a three-peak crest in the three environment color tokens (emerald for Dev, cyan for Staging, amber for Prod).</desc>
+
+  <defs>
+    <linearGradient id="crest" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0"    stop-color="#10B981"/>
+      <stop offset="0.5"  stop-color="#06B6D4"/>
+      <stop offset="1"    stop-color="#F59E0B"/>
+    </linearGradient>
+  </defs>
+
+  <!-- obsidian base -->
+  <rect width="1200" height="220" rx="14" fill="#111318"/>
+
+  <!-- terminal slot: evoke the CLI layer -->
+  <g id="terminal-cue" transform="translate(64 100)">
+    <text font-family="Consolas, 'Cascadia Mono', Menlo, monospace"
+          font-size="44" fill="#F2F4F7" dominant-baseline="middle">
+      <tspan fill="#10B981">$</tspan>
+      <tspan dx="18">env</tspan>
+    </text>
+    <!-- blinking cursor block -->
+    <rect x="120" y="-22" width="22" height="44" fill="#10B981" opacity="0.9" rx="2"/>
+  </g>
+
+  <!-- three-peak crest: Dev / Staging / Prod -->
+  <g id="crest" transform="translate(420 60)">
+    <!-- peak 1 (Dev) -->
+    <path d="M 0 100 L 60 0 L 120 100 Z" fill="url(#crest)" opacity="0.95"/>
+    <!-- peak 2 (Staging) -->
+    <path d="M 160 100 L 220 0 L 280 100 Z" fill="url(#crest)" opacity="0.95"/>
+    <!-- peak 3 (Prod) -->
+    <path d="M 320 100 L 380 0 L 440 100 Z" fill="url(#crest)" opacity="0.95"/>
+  </g>
+
+  <!-- metadata strip: version · license · platform -->
+  <g id="meta" transform="translate(64 184)">
+    <text font-family="Segoe UI, -apple-system, BlinkMacSystemFont, sans-serif"
+          font-size="20" fill="#9CA3AF">
+      <tspan fill="#10B981">v0.9.26</tspan>
+      <tspan dx="14" fill="#4B5563">·</tspan>
+      <tspan dx="14">Apache-2.0</tspan>
+      <tspan dx="14" fill="#4B5563">·</tspan>
+      <tspan dx="14">Windows 10+</tspan>
+      <tspan dx="14" fill="#4B5563">·</tspan>
+      <tspan dx="14">CLI + GUI</tspan>
+    </text>
+  </g>
+
+  <!-- sand-hair spiral cue (closed-loop .env lifecycle shorthand), far right -->
+  <g id="spiral" transform="translate(1080 110)" fill="none" stroke="url(#crest)" stroke-width="6" stroke-linecap="round">
+    <path d="M 40 0 A 40 40 0 1 1 0 -40 A 30 30 0 1 0 30 0 A 20 20 0 1 1 10 -20"/>
+  </g>
+</svg>
