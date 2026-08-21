@@ -145,9 +145,10 @@ The harness uses an exact transaction: it snapshots all HKCU values plus accessi
 ## How to Release
 
 1. Update version in `env-manager.csproj`, `frontend/package.json`, `frontend/src-tauri/tauri.conf.json`, `frontend/src-tauri/Cargo.toml`
-2. Update `README.md` and `README_CN.md` if features changed
+2. Update `README.md` and `docs/i18n/README.zh_CN.md` if features changed (README_CN.md was superseded by `docs/i18n/`)
 3. Update `AGENTS.md` if structure or commands changed
 4. Run `node scripts/build.mjs --arch x64` (or per-arch: `--arch x86`, `--arch arm64`)
+   - Brand assets (logo, variants, favicons, social preview) live in `docs/assets/`; the brand guide is `docs/assets/brand/index.md`.
 5. Verify `release/portable/env-manager.exe` launches and shows variables
 6. Verify MSI installs and the app works
 7. Commit: `chore: release vX.Y.Z`

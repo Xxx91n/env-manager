@@ -66,7 +66,7 @@ env-manager/
 +- env-manager.csproj          # .NET 10 project (AssemblyName: env-manager-cli)
 +- AGENTS.md                   # This file (project-level operating instructions)
 +- AGENTS.cli.md               # CLI-level agent guide (distributed with CLI binary)
-+- README.md / README_CN.md    # English / Chinese documentation
++- README.md / docs/i18n/      # English landing README + localized translations (docs/i18n/README.<locale>.md; zh_CN is the complete reference, others track it)
 +- CONTEXT.md                  # Internal development process record (design review session decisions A1-A11 + Risk Matrix)
 +- docs/                       # User documentation (cli-commands, architecture, build-and-release, backup-and-profiles, secret-architecture-blueprint, secret-providers-guide, adr/)
 +- docs/agents/                # Agent-specific reference (issue-tracker, domain)
@@ -139,12 +139,12 @@ When the project changes, update files in the same commit:
 
 | Event | Files to update |
 |-------|----------------|
-| New CLI command | AGENTS.md (quick reference), docs/cli-commands.md, README.md, README_CN.md, docs/architecture.md alignment table |
-| Changed command args | AGENTS.md, docs/cli-commands.md, README.md, README_CN.md |
-| New GUI feature | AGENTS.md, docs/architecture.md alignment table, README.md, README_CN.md, all 10 translation files |
+| New CLI command | AGENTS.md (quick reference), docs/cli-commands.md, README.md, docs/i18n/README.zh_CN.md, docs/architecture.md alignment table |
+| Changed command args | AGENTS.md, docs/cli-commands.md, README.md, docs/i18n/README.zh_CN.md |
+| New GUI feature | AGENTS.md, docs/architecture.md alignment table, README.md, docs/i18n/README.zh_CN.md, all 10 app translation JSON files |
 | New debug log point | docs/build-and-release.md (Logging section) |
 | Dependency update | docs/build-and-release.md, AGENTS.md if it affects build/architecture |
-| Build change | AGENTS.md, docs/build-and-release.md, README.md, README_CN.md |
+| Build change | AGENTS.md, docs/build-and-release.md, README.md, docs/i18n/README.zh_CN.md |
 | Directory structure change | AGENTS.md |
 | CodeGraph index change | docs/build-and-release.md (CodeGraph section) |
 | Code change (any) | Run `node scripts/build.mjs --arch x64`, verify release/ artifacts |
@@ -161,7 +161,7 @@ A commit that does not update AGENTS.md (and the relevant `docs/` file) when the
 4. Add to the command table in [docs/cli-commands.md](docs/cli-commands.md) and the quick reference in AGENTS.md.
 5. If write command: add to `WRITE_COMMANDS` in `frontend/src-tauri/src/main.rs`. If read command: add to `READ_COMMANDS`.
 6. Update `ALLOWED_COMMANDS` in `main.rs`.
-7. Update `README.md` and `README_CN.md`.
+7. Update `README.md` and `docs/i18n/README.zh_CN.md`.
 8. Add the API function in `frontend/src/lib/api.ts` and the GUI surface in the appropriate `.svelte` component.
 9. Add i18n strings to all 10 translation files.
 10. Update the alignment table in [docs/architecture.md](docs/architecture.md).
@@ -181,4 +181,3 @@ Topic-to-file index in [docs/agents/reference-index.md](docs/agents/reference-in
 | Secrets architecture roadmap, Phase A-E | [docs/secret-architecture-blueprint.md](docs/secret-architecture-blueprint.md) |
 | Secret providers setup guide (all 8 providers) | [docs/secret-providers-guide.md](docs/secret-providers-guide.md) |
 | CLI-level agent guide (distributed with binary) | [AGENTS.cli.md](AGENTS.cli.md) |
-

@@ -10,11 +10,15 @@
 
 A modern, lightweight **Windows environment-variable manager** — CLI and GUI dual-mode, inspired by Microsoft PowerToys but standalone and agent-friendly.
 
+**"Adapts seamlessly to every environment."**
+
 [![Release](https://img.shields.io/badge/Release-v0.9.26-blue)](https://github.com/Xxx91n/env-manager/releases)
 [![License](https://img.shields.io/badge/License-Apache--2.0-yellow.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/Platform-Windows%2010%2B-brightgreen?logo=windows&logoColor=white)](#install)
 [![.NET 10](https://img.shields.io/badge/.NET-10-512BD4?logo=dotnet&logoColor=white)](#prerequisites)
 [![Tauri](https://img.shields.io/badge/Tauri-2-24C8D8?logo=tauri&logoColor=white)](#architecture)
+
+[Install](#install) · [Features](#features) · [CLI Reference](docs/cli-commands.md) · [Architecture](#architecture)
 
 <!-- README-I18N:START -->
 **Languages:** **English** · [简体中文](docs/i18n/README.zh_CN.md) · [日本語](docs/i18n/README.ja.md) · [한국어](docs/i18n/README.ko.md) · [Deutsch](docs/i18n/README.de.md) · [Français](docs/i18n/README.fr.md) · [Español](docs/i18n/README.es.md) · [Português](docs/i18n/README.pt.md) · [Русский](docs/i18n/README.ru.md) · [العربية](docs/i18n/README.ar.md)
@@ -25,6 +29,16 @@ A modern, lightweight **Windows environment-variable manager** — CLI and GUI d
 <p align="center">
   <img src="docs/assets/env_variants_showcase.png" alt="One variable, every environment — dev / staging / prod chameleon variants" width="720">
 </p>
+
+## Features
+
+- **CLI + GUI dual-mode** — 18+ C# CLI commands for scripting/CI; native Tauri 2 + Svelte GUI for interactive editing. Both route through the same registry contracts.
+- **Protected by default** — system variables and PATH entries cannot be deleted or renamed; every write is a three-layer serialized contract (mutex + write lock + verify-before-swap).
+- **Launch profiles** — inject a clean env block into a single process; never touches the registry, never broadcasts `WM_SETTINGCHANGE`.
+- **8 secret providers** — DPAPI, CredMan, SecretStore, Vault, SOPS, Azure KV, 1Password, AWS SM. Plaintext never persists to disk.
+- **PATH health** — detects duplicates and dead entries, with `--fix` / `--dry-run`.
+- **Audit ledger** — append-only, SHA256 hash-chained history with rollback and disaster-recovery export.
+- **10-language i18n** — English, 简体中文, 日本語, 한국어, Deutsch, Français, Español, Português, Русский, العربية.
 
 ---
 
@@ -41,7 +55,7 @@ Protected variables and PATH entries are disabled before deletion, with exact re
 - [Background](#background)
 - [Install](#install)
 - [Usage](#usage)
-- [Features](#features)
+- [Feature & Version History](#feature--version-history)
 - [Architecture](#architecture)
 - [Secret Providers](#secret-providers)
 - [Service Mode](#service-mode)
@@ -153,9 +167,9 @@ See [docs/cli-commands.md](docs/cli-commands.md) for the full command reference.
 
 Run `env-manager.exe`. The GUI provides real-time variable list with search, scope filtering, inline edit, PATH editor with drag-and-drop reordering, profile management, secret provider selection, service control panel, audit history, and 10-language i18n.
 
-## Features
+### Feature & Version History
 
-### CLI Mode
+#### CLI Mode
 
 - 18+ commands for complete environment variable management
 - Profiles with inheritance, conflict previews, PATH fragments, and safe reverse-order rollback
@@ -184,7 +198,7 @@ Run `env-manager.exe`. The GUI provides real-time variable list with search, sco
 - **v0.9.21 Performance Phase 2 — Process Lifecycle + Lazy Loading + Telemetry**: 6 tabs move from static import to dynamic `import()` with Vite code-splitting (lazy `loadComponent`/`preloadComponent` activated, no longer dead code). Process leak prevention + IPC connection counter + drain verification. Silent performance telemetry (view switch timing + `run_cli` elapsed). Secret provider timeout + long-session memory safety. Titlebar button tooltips + dead i18n key cleanup. ThemeStyle allow-list fix (was stale, blocking non-slate themes on restart).
 - User and System scope support, no admin required for user scope
 
-### GUI Mode
+#### GUI Mode
 
 - Native desktop app built with Tauri 2.0 (WebView2)
 - Real-time variable list with highlighted search, scope filtering, `%VAR%` expansion preview
