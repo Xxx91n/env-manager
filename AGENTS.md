@@ -131,15 +131,7 @@ Verify: `release/portable/env-manager.exe`, `release/portable/env-manager-cli.ex
 
 ## Mandatory Git Push After Code Changes (Provenance)
 
-Every commit that modifies CLI, GUI, build code, or documentation MUST also `git push` to the remote immediately after the local commit is created and the build artifacts are produced. This is a provenance mandate: the project has had real incidents (see `v0.7.1 Incident: CommonProgramW6432 disabled via toggle` above) where_after a fix was implemented locally but never pushed, another agent resumed work and re-introduced the bug because the remote lagged. Local-only commits are invisible to the next agent and the remote is the only authoritative time-ordered history.
-
-The mandate numbers two paths:
-
-1. **Path A (preferred): remote push succeeds** -- after `node scripts/build.mjs --arch x64`, `git add`, `git commit`, then `git push origin main`. The PAT pattern at the bottom of this file is used, then the PAT is immediately cleared from the remote URL.
-2. **Path B (fallback): remote push fails** -- if the remote is unreachable or the PAT is exhausted, the local commit is STILL authoritative and the push is retried at the next opportunity. The local branch MUST be left in a pushable state (clean tree, fast-forwardable). Never use `git reset --hard` to "clean up" a failed-push commit; that erases the local provenance trail. Document the failed push in the commit message body if applicable.
-
-Nothing in this section weakens the live-test harness mandate or the mandatory build-after-code-changes mandate; it complements them with a remote-provenance guarantee.
-
+After code changes, commit and push to GitHub (`git push origin main`). Authentication uses the global SSH config (`git@github-Xxx91n:...`), not PAT over HTTPS. The push requirement still applies: local-only commits are invisible to other agents. If a push fails, keep the branch pushable (clean tree, fast-forwardable) and retry next opportunity—never `git reset --hard`.
 
 ## Documentation Maintenance
 

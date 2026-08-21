@@ -26,6 +26,16 @@
       "csp": "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self'"
     }
   },
+  "plugins": {
+    "updater": {
+      "active": true,
+      "dialog": false,
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDVCQUQ1NTJCMThEREJBRjkKUldUNXV0MFlLMVd0VzVNZWxIU1VaWTM4NkZGUENhTmZmTVJPYU5lWFViVjZZbUZUbmN6RWc0V2cK",
+      "endpoints": [
+        "https://github.com/Xxx91n/env-manager/releases/latest/download/latest.json"
+      ]
+    }
+  },
   "bundle": {
     "active": true,
     "targets": [
@@ -40,6 +50,9 @@
       "bin/env-manager-cli.runtimeconfig.json",
       "bin/env-manager-cli.deps.json",
       "bin/AGENTS.cli.md"
-    ]
+    ],
+    "windows": {
+      "createUpdaterArtifacts": true
+    }
   }
 }

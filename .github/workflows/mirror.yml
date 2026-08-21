@@ -1,0 +1,27 @@
+name: Mirror to GitLab and Codeberg
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  codeberg:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: qte77/gha-github-mirror-action@main
+        with:
+          dst-url: 'https://codeberg.org/${{ vars.CODEBERG_USER }}/env-manager.git'
+          dst-token: ${{ secrets.CODEBERG_TOKEN }}
+          account-type: user
+
+  gitlab:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: qte77/gha-github-mirror-action@main
+        with:
+          dst-url: 'https://gitlab.com/${{ vars.GITLAB_USER }}/env-manager.git'
+          dst-token: ${{ secrets.GITLAB_TOKEN }}
+          account-type: user

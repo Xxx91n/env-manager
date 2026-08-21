@@ -157,3 +157,10 @@ _Avoid_: z-index scale, overlay stack, layer order
 - **Form Control color-scheme Override**: The element-level `color-scheme: light` on `input, select, textarea` that overrides the `:root` `color-scheme: light dark` (v0.9.24 scrollbar hard boundary). Binds form control fill/outline to app `data-theme` instead of Windows `prefers-color-scheme`. Paired with `accent-color: hsl(var(--primary))` for radio/checkbox fill and `outline: none` on focus (Tailwind `focus:ring` takes over). See ADR 0007.
 _Avoid_: form theme binding, control theme override, light-only controls
 
+
+## Public Release & Mirror Terms (v0.9.26+)
+
+- **Public Visibility Gate**: `gitleaks git .` clean (exit 0) required before flipping repo public; PAT mode retired in favor of global SSH.
+- **Release Gate**: The phrase "开始发布" is the explicit user authorization required before creating any git tag, GitHub Release, or external channel submission (winget/Scoop/Chocolatey).
+- **Mirror Topology**: GitHub is canonical; GitLab + Codeberg are read-only mirrors updated by `qte77/gha-github-mirror-action` on push to `main`.
+- **README-i18n root**: Root README.md is the English landing page; translations live under `docs/i18n/README.<locale>.md` with an `<!-- README-I18N:START/END -->` switcher block.

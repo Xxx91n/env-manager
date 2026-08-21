@@ -7,6 +7,140 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.26] - 2026-08-19
+
+### Fixed
+- GUI: 5 bugs — path move-down guard, dead-entries source column, z-index layering, radio color-scheme, input focus outline
+
+### Added
+- ADR 0006: GUI z-index layering contract
+- ADR 0007: Form control color-scheme override
+
+## [0.9.25] - 2026-08-17
+
+### Fixed
+- GUI: notes reactive store + WAI-ARIA tooltip, path move new-array reference + focus/highlight, dead-entries reactive disabled state, dark destructive red-400 alignment
+
+## [0.9.24] - 2026-08-16
+
+### Fixed
+- GUI: 5 bugs — CSS-only tab indicator, dark mode flash fix, color-scheme, destructive contrast, titlebar sticky
+
+### Added
+- 5 new hard boundaries; supersede stale v0.9.20 indicator boundary
+
+## [0.9.23] - 2026-08-16
+
+### Fixed
+- GUI: 5 bugs — titlebar bottom truncation, notes async reactivity, path move index, dark mode white flash, dark destructive red
+
+## [0.9.22] - 2026-08-15
+
+### Fixed
+- GUI: titlebar fixed + smooth scroll + dark mode toggle + font slider + notes fix + path move bidirectional
+- i18n: add missing settings.lightMode to all 10 locales
+
+## [0.9.21] - 2026-08-15
+
+### Added
+- UI-AUDIT.md v0.9.21 audit round — 6-color theme + custom titlebar + CSS containment
+
+### Fixed
+- themeStyle allow-list was stale — blocked non-slate themes on restart
+- titlebar button tooltips + dead i18n key cleanup
+
+## [0.9.20] - 2026-08-15
+
+### Added
+- UI design system — dual-axis theme tokens + lucide icons + 275 dark: class migration
+
+### Fixed
+- 5 UI bugs (theme style toggle/i18n/layout/jank/indicator) + regression tests
+- dedup CSS classes, tokenize 180 residual gray/hardcoded colors
+
+## [0.9.19] - 2026-08-14
+
+### Added
+- SWR caching + listProfiles cache + Tab preload + ProtectionPage concurrent
+
+### Fixed
+- tab indicator uses transform:translateX instead of left, rAF instead of setTimeout
+
+## [0.9.18] - 2026-08-14
+
+### Fixed
+- service rotate CREATE_NO_WINDOW + refresh timestamp format + WebView2 context menu disabled
+
+## [0.9.17] - 2026-08-14
+
+### Fixed
+- ProfilePage pathScopes badge + PathEditor reverse index + IPC mount_id snake_case
+
+## [0.9.16] - 2026-08-14
+
+### Added
+- ProfileShow source-aware output + path scope badge + ServicePage i18n
+
+## [0.9.14] - 2026-08-13
+
+### Added
+- InputDialog replaces window.prompt + sticky-note annotations + Material 3 ARIA tablist
+
+### Fixed
+- ProfilePage addVar inputs, note hover preview, tab indicator initial width
+- add-var inputs use bind:value (Svelte 4 two-way binding) + tab indicator transition suppression
+- i18n locale loader uses static import map instead of runtime path concat
+- tauri.conf.json version sync to match csproj/package.json
+
+### Added
+- AGENTS.md hard boundary: PATH scope-aware apply/unapply
+
+## [0.9.13] - 2026-08-12
+
+### Added
+- Process security hardening: process_guard.rs (crash dialogs, binary hash verify, pagefile protection, process mitigations, module enumeration, authenticode stub)
+- 12 unit tests in process_guard::tests
+
+## [0.9.12] - 2026-08-08
+
+### Added
+- GitHub release readiness Phase 1 — community health files + README rewrite + CSP hardening + Named Pipe DACL hardening
+- Sensitive data redaction architecture — 22-pattern unified scrubbing across CLI/GUI/service tiers
+
+### Fixed
+- i18n settings.drTitle path mismatch + .NET 10 runtime fencing
+- embed .NET 10 runtime detection in Tauri Rust shell
+
+## [0.9.11] - 2026-08-07
+
+### Fixed
+- audit security hardening — atomic writes, path fix, transactional import, lock classification
+
+### Added
+- Final alignment — docs sync, security audit, CLI command ref update
+
+## [0.9.10] - 2026-08-07
+
+### Added
+- Phase E audit ledger unification — migrate, verify, export, recover
+
+## [0.9.9] - 2026-08-07
+
+### Added
+- Versioned schema migration + full-state export/import + GUI DR entry
+
+## [0.9.8] - 2026-08-07
+
+### Added
+- Industrial logging backend — tracing+tracing-appender, request_id, service status enum
+
+## [0.9.7] - 2026-08-07
+
+### Fixed
+- Service probe fast-fail — 18s to 2s when service down
+
+## [0.9.6] - 2026-08-06
+
 ### Added
 - ADR 0002: Service Watchdog & Heartbeat (two-layer watchdog: SCM recovery + GUI 30s ping)
 - ADR 0003: Version Single Source & CHANGELOG (build.mjs version sync)
@@ -17,6 +151,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - build.mjs: reads <Version> from env-manager.csproj, syncs to frontend/package.json before every build
+
+### Fixed
+- watchdog activation + doc-sync regex + build.yml EOF
+- service read/write lock classification — fix GUI page block
 
 ## [0.9.5] - 2026-08-02
 

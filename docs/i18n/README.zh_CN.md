@@ -1,12 +1,30 @@
-# Env Manager _(env-manager)_
+<div align="center">
 
-现代、轻量的 Windows 环境变量管理器，支持 CLI 和 GUI 双模式。灵感来自 Microsoft PowerToys，独立开发，追求速度与简洁。
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="../../docs/assets/logo-dark-theme.png">
+  <source media="(prefers-color-scheme: light)" srcset="../../docs/assets/logo-light-theme.png">
+  <img src="../../docs/assets/logo.png" alt="Env Manager 标志" width="120" height="120">
+</picture>
 
-**[English](README.md)** | **简体中文**
+# Env Manager
 
-<!-- 截图：主界面 — 请替换为主变量列表视图的截图 -->
-<!-- 截图：配置文件编辑器 — 请替换为带机密提供者选择器的配置文件编辑器截图 -->
-<!-- 截图：服务管理 — 请替换为服务管理面板截图 -->
+现代、轻量的 **Windows 环境变量管理器**——支持 CLI 和 GUI 双模式。灵感来自 Microsoft PowerToys，独立开发，追求速度、简洁与自动化友好。
+
+[![Release](https://img.shields.io/badge/Release-v0.9.26-blue)](https://github.com/Xxx91n/env-manager/releases)
+[![License](https://img.shields.io/badge/License-Apache--2.0-yellow.svg)](../../LICENSE)
+[![Platform](https://img.shields.io/badge/Platform-Windows%2010%2B-brightgreen?logo=windows&logoColor=white)](#install)
+[![.NET 10](https://img.shields.io/badge/.NET-10-512BD4?logo=dotnet&logoColor=white)](#prerequisites)
+[![Tauri](https://img.shields.io/badge/Tauri-2-24C8D8?logo=tauri&logoColor=white)](#architecture)
+
+<!-- README-I18N:START -->
+**语言:** [English](../../README.md) · **简体中文** · [日本語](README.ja.md) · [한국어](README.ko.md) · [Deutsch](README.de.md) · [Français](README.fr.md) · [Español](README.es.md) · [Português](README.pt.md) · [Русский](README.ru.md) · [العربية](README.ar.md)
+<!-- README-I18N:END -->
+
+</div>
+
+<p align="center">
+  <img src="../../docs/assets/env_variants_showcase.png" alt="一套变量，全环境覆盖 —— dev / staging / prod 变色龙变体" width="720">
+</p>
 
 ---
 
@@ -15,7 +33,7 @@
 > [!WARNING]
 > Env Manager **未经代码签名**。Windows SmartScreen 可能会在首次启动时显示“未知应用”警告。点击“更多信息”然后选择“仍要运行”即可继续。代码签名计划在未来版本中实现。
 
-受保护的环境变量和 PATH 条目在删除前会被禁用，恢复时进行精确的注册表值类型验证。机密值通过各提供者专用机制加密（DPAPI、CredMan、Vault、SOPS、Azure KV、1Password、AWS SM）— 明文绝不持久化到磁盘或日志。命名管道 IPC 使用防劫持标志和输入验证（最大 64 参数，32767 字符上限，拒绝空字节）。漏洞报告请参见 [SECURITY.md](SECURITY.md)。
+受保护的环境变量和 PATH 条目在删除前会被禁用，恢复时进行精确的注册表值类型验证。机密值通过各提供者专用机制加密（DPAPI、CredMan、Vault、SOPS、Azure KV、1Password、AWS SM）— 明文绝不持久化到磁盘或日志。命名管道 IPC 使用防劫持标志和输入验证（最大 64 参数，32767 字符上限，拒绝空字节）。漏洞报告请参见 [SECURITY.md](../../SECURITY.md)。
 
 ## 目录
 
@@ -58,7 +76,7 @@ Windows 内置的环境变量编辑器笨重且易出错。Env Manager 提供了
 >
 > **WebView2 运行时**（GUI 所需）已预装于 Windows 11，Windows 10 21H2+ 可从 <https://developer.microsoft.com/microsoft-edge/webview/> 下载。
 
-可选的外部机密提供者工具（SOPS、1Password CLI、Vault CLI、AWS CLI、Azure CLI、PowerShell 7）的下载链接和配置说明，请参阅 [机密提供者指南](docs/secret-providers-guide.md)。
+可选的外部机密提供者工具（SOPS、1Password CLI、Vault CLI、AWS CLI、Azure CLI、PowerShell 7）的下载链接和配置说明，请参阅 [机密提供者指南](../../docs/secret-providers-guide.md)。
 
 ### MSI 安装包
 
@@ -82,7 +100,7 @@ cd frontend && npm ci && cd ..
 node scripts/build.mjs --arch x64
 ```
 
-需要 .NET 10 SDK、Node.js 20+、Rust 稳定版（MSVC 目标）。详见 [docs/build-and-release.md](docs/build-and-release.md)。
+需要 .NET 10 SDK、Node.js 20+、Rust 稳定版（MSVC 目标）。详见 [docs/build-and-release.md](../../docs/build-and-release.md)。
 
 ## 用法
 
@@ -129,7 +147,7 @@ env-manager-cli.exe audit migrate-audit
 env-manager-cli.exe audit verify-ledger
 ```
 
-完整命令参考请见 [docs/cli-commands.md](docs/cli-commands.md)。
+完整命令参考请见 [docs/cli-commands.md](../../docs/cli-commands.md)。
 
 ### GUI
 
@@ -188,7 +206,7 @@ env-manager-cli.exe audit verify-ledger
 3. **Svelte 前端**（`frontend/src/`）— TypeScript + Svelte 4 + TailwindCSS，运行于 WebView2，仅通过 `invoke('run_cli', ...)` 调用 Rust
 4. **服务 crate**（`service/`）— Rust 独立二进制（`env-manager-service.exe`），通过命名管道 IPC 管理机密挂载生命周期
 
-详见 [docs/architecture.md](docs/architecture.md)。
+详见 [docs/architecture.md](../../docs/architecture.md)。
 
 ## 机密提供者
 
@@ -196,16 +214,16 @@ env-manager-cli.exe audit verify-ledger
 
 | 提供者 | 认证方式 | 定期刷新 | 文档 |
 |---|---|---|---|
-| DPAPI CurrentUser | Windows DPAPI | 否（用户绑定） | [指南](docs/secret-providers-guide.md) |
-| Windows Credential Manager | CredMan + DPAPI | 否（用户绑定） | [指南](docs/secret-providers-guide.md) |
-| PowerShell SecretManagement | SecretStore 保险库 | 尽力而为 | [指南](docs/secret-providers-guide.md) |
-| HashiCorp Vault KV v2 | VAULT_TOKEN / AppRole 证书 | 是 | [指南](docs/secret-providers-guide.md) |
-| SOPS | Age / PGP / KMS | 是 | [指南](docs/secret-providers-guide.md) |
-| Azure Key Vault | SP 证书 / 托管标识 | 是 | [指南](docs/secret-providers-guide.md) |
-| 1Password CLI | OP_SERVICE_ACCOUNT_TOKEN | 是 | [指南](docs/secret-providers-guide.md) |
-| AWS Secrets Manager | SigV4 + 访问密钥 | 是 | [指南](docs/secret-providers-guide.md) |
+| DPAPI CurrentUser | Windows DPAPI | 否（用户绑定） | [指南](../../docs/secret-providers-guide.md) |
+| Windows Credential Manager | CredMan + DPAPI | 否（用户绑定） | [指南](../../docs/secret-providers-guide.md) |
+| PowerShell SecretManagement | SecretStore 保险库 | 尽力而为 | [指南](../../docs/secret-providers-guide.md) |
+| HashiCorp Vault KV v2 | VAULT_TOKEN / AppRole 证书 | 是 | [指南](../../docs/secret-providers-guide.md) |
+| SOPS | Age / PGP / KMS | 是 | [指南](../../docs/secret-providers-guide.md) |
+| Azure Key Vault | SP 证书 / 托管标识 | 是 | [指南](../../docs/secret-providers-guide.md) |
+| 1Password CLI | OP_SERVICE_ACCOUNT_TOKEN | 是 | [指南](../../docs/secret-providers-guide.md) |
+| AWS Secrets Manager | SigV4 + 访问密钥 | 是 | [指南](../../docs/secret-providers-guide.md) |
 
-详见 [docs/secret-providers-guide.md](docs/secret-providers-guide.md)。
+详见 [docs/secret-providers-guide.md](../../docs/secret-providers-guide.md)。
 
 ## 服务模式
 
@@ -219,7 +237,7 @@ env-manager-cli.exe audit verify-ledger
 - **v0.9.6 看门狗**：双层恢复 — SCM 自动重启（Service 模式）+ GUI 30s ping 看门狗（Background 模式）
 - **v0.9.7 快速失败**：服务探测 2s 快速失败（之前 18s）
 
-详见 [docs/secret-architecture-blueprint.md](docs/secret-architecture-blueprint.md) 和 [docs/secret-architecture-decision-summary.md](docs/secret-architecture-decision-summary.md)。
+详见 [docs/secret-architecture-blueprint.md](../../docs/secret-architecture-blueprint.md) 和 [docs/secret-architecture-decision-summary.md](../../docs/secret-architecture-decision-summary.md)。
 
 ## 维护者
 
@@ -227,8 +245,8 @@ env-manager-cli.exe audit verify-ledger
 
 ## 贡献
 
-欢迎贡献！请参阅 [CONTRIBUTING.md](.github/CONTRIBUTING.md) 了解开发设置、测试和 PR 流程。Bug 报告和功能请求请使用 [Issue 模板](https://github.com/Xxx91n/env-manager/issues)。安全报告请参见 [SECURITY.md](SECURITY.md)。
+欢迎贡献！请参阅 [CONTRIBUTING.md](../../.github/CONTRIBUTING.md) 了解开发设置、测试和 PR 流程。Bug 报告和功能请求请使用 [Issue 模板](https://github.com/Xxx91n/env-manager/issues)。安全报告请参见 [SECURITY.md](../../SECURITY.md)。
 
 ## 许可证
 
-Apache-2.0 — 详见 [LICENSE](LICENSE)。
+Apache-2.0 — 详见 [LICENSE](../../LICENSE)。

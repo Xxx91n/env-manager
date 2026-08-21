@@ -1,12 +1,30 @@
-# Env Manager _(env-manager)_
+<div align="center">
 
-Modern, lightweight Windows environment variable manager with CLI and GUI dual-mode support. Inspired by Microsoft PowerToys, built standalone for speed and simplicity.
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/logo-dark-theme.png">
+  <source media="(prefers-color-scheme: light)" srcset="docs/assets/logo-light-theme.png">
+  <img src="docs/assets/logo.png" alt="Env Manager logo" width="120" height="120">
+</picture>
 
-**[简体中文](README_CN.md)** | **English**
+# Env Manager
 
-<!-- screenshot: main-ui -- replace with screenshot of main variable list view -->
-<!-- screenshot: profile-editor -- replace with screenshot of profile editor with secret provider selector -->
-<!-- screenshot: service-manager -- replace with screenshot of service management panel -->
+A modern, lightweight **Windows environment-variable manager** — CLI and GUI dual-mode, inspired by Microsoft PowerToys but standalone and agent-friendly.
+
+[![Release](https://img.shields.io/badge/Release-v0.9.26-blue)](https://github.com/Xxx91n/env-manager/releases)
+[![License](https://img.shields.io/badge/License-Apache--2.0-yellow.svg)](LICENSE)
+[![Platform](https://img.shields.io/badge/Platform-Windows%2010%2B-brightgreen?logo=windows&logoColor=white)](#install)
+[![.NET 10](https://img.shields.io/badge/.NET-10-512BD4?logo=dotnet&logoColor=white)](#prerequisites)
+[![Tauri](https://img.shields.io/badge/Tauri-2-24C8D8?logo=tauri&logoColor=white)](#architecture)
+
+<!-- README-I18N:START -->
+**Languages:** **English** · [简体中文](docs/i18n/README.zh_CN.md) · [日本語](docs/i18n/README.ja.md) · [한국어](docs/i18n/README.ko.md) · [Deutsch](docs/i18n/README.de.md) · [Français](docs/i18n/README.fr.md) · [Español](docs/i18n/README.es.md) · [Português](docs/i18n/README.pt.md) · [Русский](docs/i18n/README.ru.md) · [العربية](docs/i18n/README.ar.md)
+<!-- README-I18N:END -->
+
+</div>
+
+<p align="center">
+  <img src="docs/assets/env_variants_showcase.png" alt="One variable, every environment — dev / staging / prod chameleon variants" width="720">
+</p>
 
 ---
 

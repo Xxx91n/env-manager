@@ -1,0 +1,19 @@
+name: release-please
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  release-please:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: googleapis/release-please-action@16a8f267863b8b80a2986bcd22ae6b5b440e0b1c  # v4.4.0
+        id: release
+        with:
+          release-type: simple
+          package-name: env-manager
