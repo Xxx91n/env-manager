@@ -218,3 +218,10 @@ These invariants must never be violated by any code change:
 - **MajorUpgrade MUST pin `Schedule="afterInstallExecute"`** so `RemoveExistingProducts` runs after `InstallExecute`; the old product's files never disappear while its service is still running.
 - **Old-service stop on upgrade MUST be a dedicated component** conditioned on `WIX_UPGRADE_DETECTED` (current: `StopOldServiceOnUpgrade`), not the sibling `ServiceControl Stop="both"` in the new-service component.
 - Any installer change must pass `frontend/src/installer-wxs-msi-0.9.27.test.ts` (Vitest string-gate) AND the 4-step silent msiexec runbook in `docs/build-and-release.md` before commit.
+
+### MSI hygiene (v0.9.28, extends ADR-0010)
+
+- **`Guid="*"` on non-renameable components only**: the three binaries (`GuiExecutable`, `CliExecutable`, `ServiceExecutable`) pin explicit GUIDs; every other component (libraries, JSON, AGENTS.cli.md, shortcuts, registry keypaths, WebView loader) keeps `Guid="*"`. WiX v3 `Guid="*"` is RFC 4122 v3 name-based over (install dir + keypath filename) and is build-stable; pinning only the rename-prone three covers the only failure mode that matters (rename / arch flip across releases).
+- **Per-component `RemoveFile Name="*.*" On="uninstall"` on every INSTALLDIR file component**, plus ONE unconditional `RemoveFolder On="uninstall"` on INSTALLDIR itself (currently owned by `EnvManagerDataComponent`, *not* the WIX_UPGRADE_DETECTED-conditional `StopOldServiceOnUpgrade`). **NEVER use `util:RemoveFolderEx`** anywhere in this project: CVE-2024-29188 junction-traversal makes recursive folder removal dangerous; the wildcard `RemoveFile` set is the correct power level for a fixed known payload.
+- **`AGENTS.cli.md` stays in INSTALLDIR root** (Decision 3 of grill-plan-msi-residual-guid-v0928). It is a 5 KB payload file, not state; P0 wildcard wipes it with everything else on uninstall.
+- Any change to `installer.wxs` repasses **both** string-gate suites (`installer-wxs-msi-0.9.27.test.ts` AND `installer-wxs-msi-0.9.28.test.ts`) AND the 4-step silent msiexec runbook asserting zero-residue under `%ProgramFiles%\Env Manager` after the final uninstall.

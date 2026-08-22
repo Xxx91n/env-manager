@@ -54,6 +54,9 @@ redaction, GUI z-index layering, and form control color-scheme override. ADR 000
 public release and mirror topologies. [ADR 0009](docs/adr/0009-stay-on-tauri-bundled-wix-v3.md)
 covers packaging: stay on Tauri-bundled WiX v3.14.1 and repair installer.wxs semantics
 (MajorUpgrade schedule + util:ServiceConfig + WIX_UPGRADE_DETECTED service stop).
+[ADR 0010](docs/adr/0010-msi-hygiene-guid-pinning-eol-test-pyramid.md) covers MSI hygiene:
+per-component RemoveFile residue wipe, pinned GUIDs on the three binaries, WiX EOL supply-chain
+watchdog, line-ending normalization chore, and the GUI test pyramid (Vitest + WDIO + MSI matrix).
 
 ## Language (continued)
 

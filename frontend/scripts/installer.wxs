@@ -28,27 +28,34 @@
     </Directory>
 
     <DirectoryRef Id="INSTALLDIR">
-      <Component Id="GuiExecutable" Guid="*" Win64="$(var.Win64)">
+      <Component Id="GuiExecutable" Guid="5138848f-6498-4896-805f-26a0004665c7" Win64="$(var.Win64)">
         <File Id="GuiFile" Source="$(var.SourceDir)\env-manager.exe" KeyPath="yes" />
+        <RemoveFile Id="RemoveResidue_GuiExecutable" Name="*.*" On="uninstall" />
       </Component>
-      <Component Id="CliExecutable" Guid="*" Win64="$(var.Win64)">
+      <Component Id="CliExecutable" Guid="a690f1b0-3987-450e-a4c0-4d8f7f478f1f" Win64="$(var.Win64)">
         <File Id="CliFile" Source="$(var.SourceDir)\env-manager-cli.exe" KeyPath="yes" />
+        <RemoveFile Id="RemoveResidue_CliExecutable" Name="*.*" On="uninstall" />
       </Component>
       <Component Id="CliLibrary" Guid="*" Win64="$(var.Win64)">
         <File Id="CliLibraryFile" Source="$(var.SourceDir)\env-manager-cli.dll" KeyPath="yes" />
+        <RemoveFile Id="RemoveResidue_CliLibrary" Name="*.*" On="uninstall" />
       </Component>
       <Component Id="CliDeps" Guid="*" Win64="$(var.Win64)">
         <File Id="CliDepsFile" Source="$(var.SourceDir)\env-manager-cli.deps.json" KeyPath="yes" />
+        <RemoveFile Id="RemoveResidue_CliDeps" Name="*.*" On="uninstall" />
       </Component>
       <Component Id="CliRuntime" Guid="*" Win64="$(var.Win64)">
         <File Id="CliRuntimeFile" Source="$(var.SourceDir)\env-manager-cli.runtimeconfig.json" KeyPath="yes" />
+        <RemoveFile Id="RemoveResidue_CliRuntime" Name="*.*" On="uninstall" />
       </Component>
       <Component Id="AgentGuide" Guid="*" Win64="$(var.Win64)">
         <File Id="AgentGuideFile" Source="$(var.SourceDir)\AGENTS.cli.md" KeyPath="yes" />
+        <RemoveFile Id="RemoveResidue_AgentGuide" Name="*.*" On="uninstall" />
       </Component>
       <!-- v0.9.0 Phase B+C: env-manager-service.exe — Windows service binary for secret mount lifecycle -->
-      <Component Id="ServiceExecutable" Guid="*" Win64="$(var.Win64)">
+      <Component Id="ServiceExecutable" Guid="e61585c6-4c5b-437c-be39-082f8b64bade" Win64="$(var.Win64)">
         <File Id="ServiceFile" Source="$(var.SourceDir)\env-manager-service.exe" KeyPath="yes" />
+        <RemoveFile Id="RemoveResidue_ServiceExecutable" Name="*.*" On="uninstall" />
         <ServiceInstall Id="EnvManagerService" Name="EnvManagerService" Type="ownProcess"
                         Start="auto" ErrorControl="normal" Description="Env Manager secret mount lifecycle service"
                         Arguments="--mode=service">
@@ -80,6 +87,7 @@
       <?if "$(var.WebViewLoaderPresent)" = "1" ?>
       <Component Id="WebViewLoader" Guid="*" Win64="$(var.Win64)">
         <File Id="WebViewLoaderFile" Source="$(var.SourceDir)\WebView2Loader.dll" KeyPath="yes" />
+        <RemoveFile Id="RemoveResidue_WebViewLoader" Name="*.*" On="uninstall" />
       </Component>
       <?endif ?>
     </DirectoryRef>
@@ -99,6 +107,7 @@
         <CreateFolder />
         <RegistryValue Root="HKLM" Key="Software\EnvManager" Name="DataDir"
                        Type="integer" Value="1" KeyPath="yes" />
+        <RemoveFolder Id="RemoveInstallDir" Directory="INSTALLDIR" On="uninstall" />
       </Component>
     </DirectoryRef>
 
