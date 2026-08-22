@@ -1,6 +1,6 @@
 {
   "productName": "Env Manager",
-  "version": "0.9.26",
+  "version": "0.9.27",
   "identifier": "com.envmanager.desktop",
   "build": {
     "beforeDevCommand": "npm run dev",
@@ -51,8 +51,6 @@
       "bin/env-manager-cli.deps.json",
       "bin/AGENTS.cli.md"
     ],
-    "windows": {
-      "createUpdaterArtifacts": true
-    }
+    "createUpdaterArtifacts": true
   }
 }

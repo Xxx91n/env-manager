@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
+<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi"
+     xmlns:util="http://schemas.microsoft.com/wix/UtilExtension">
   <Product Id="*" Name="Env Manager" Language="1033" Version="$(var.Version)"
            Manufacturer="Env Manager" UpgradeCode="349fb993-98bf-5bf6-984a-dae0cc68cbbb">
     <Package InstallerVersion="450" Compressed="yes" InstallScope="perMachine" />
@@ -50,6 +51,13 @@
         <ServiceInstall Id="EnvManagerService" Name="EnvManagerService" Type="ownProcess"
                         Start="auto" ErrorControl="normal" Description="Env Manager secret mount lifecycle service"
                         Arguments="--mode=service">
+        >
+          <util:ServiceConfig
+            FirstFailureActionType="restart"
+            SecondFailureActionType="restart"
+            ThirdFailureActionType="restart"
+            RestartServiceDelayInSeconds="60"
+            ResetPeriodInDays="1" />
         </ServiceInstall>
         <ServiceControl Id="EnvManagerServiceControl" Name="EnvManagerService"
                         Start="install" Stop="both" Remove="uninstall" Wait="yes" />
@@ -96,16 +104,5 @@
     </Feature>
 
     <!-- v0.9.6 SCM failure recovery: restart 3x at 60s intervals, reset after 24h -->
-    <CustomAction Id="SetServiceFailureActions" Directory="INSTALLDIR"
-                  Execute="deferred" Impersonate="no" Return="check"
-                  ExeCommand="[SystemFolder]sc.exe failure EnvManagerService reset= 86400 actions= restart/60000/restart/60000/restart/60000" />
-    <CustomAction Id="SetServiceDelayedAutoStart" Directory="INSTALLDIR"
-                  Execute="deferred" Impersonate="no" Return="check"
-                  ExeCommand="[SystemFolder]sc.exe config EnvManagerService start= delayed-auto" />
-
-    <InstallExecuteSequence>
-      <Custom Action="SetServiceDelayedAutoStart" After="InstallServices">NOT Installed</Custom>
-      <Custom Action="SetServiceFailureActions" After="SetServiceDelayedAutoStart">NOT Installed</Custom>
-    </InstallExecuteSequence>
   </Product>
 </Wix>

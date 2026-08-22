@@ -268,6 +268,37 @@ This exports both `HKCU\Environment` and `HKLM\SYSTEM\CurrentControlSet\Control\
 
 The live CLI smoke test harness `scripts/test-with-restore.ps1` snapshots every value name, unexpanded value, and registry value kind in HKCU plus accessible HKLM, byte-snapshots the test-owned Env Manager internal configuration, verifies exact post-test equality, and transactionally reconciles both hives on any failure or drift. It restores internal configuration after the suite and exercises both the raw trailing-backslash PATH command-line regression and disabled-variable exact raw-value/RegistryValueKind recovery. This snapshot script is the per-session complement: run it once before you start work, so if any change mutates the host registry or internal configs, you have a rollback artifact.
 
+
+## MSI Silent-Install Validation Runbook (v0.9.27+, ADR-0009)
+
+Any change to `frontend/scripts/installer.wxs` MUST pass this local 4-step silent msiexec proof before commit. Runs on the build machine; takes under 2 minutes total when green.
+
+Prereqs: elevated shell; no env-manager process running (`Get-Process -Name 'env-manager*' | Stop-Process -Force`); WiX logs land in `%TEMP%`.
+
+```powershell
+# Step 0 (RED, only once per regression): prove the broken baseline hangs
+# Build the previous-tag MSI (e.g. v0.9.26 with the old installer.wxs) and run:
+$elapsed = Measure-Command { msiexec /i "<prev>.msi" /quiet /norestart /L*v "$env:TEMP\msi-prev-install.log" }
+if ($elapsed.TotalMilliseconds -gt 60000) { "BASELINE REPRODUCED (hang)" }   # expected for v0.9.26
+
+# Step 1: silent install of the fixed MSI
+$msi = "release/msi/Env Manager_0.9.27_x64.msi"
+$elapsed = Measure-Command { msiexec /i $msi /quiet /norestart /L*v "$env:TEMP\msi-install.log" }
+$elapsed.TotalMilliseconds -lt 10000  # expect ~1.1s; must be green
+(Get-Service EnvManagerService).Status  # 'Stopped' is CORRECT (Start=auto -> next boot); 'Running' also acceptable
+
+# Step 2: silent upgrade over the previous version
+msiexec /i $msi /quiet /norestart /L*v "$env:TEMP\msi-upgrade.log"
+$LASTEXITCODE -eq 0
+
+# Step 3: silent uninstall
+msiexec /x $msi /quiet /norestart /L*v "$env:TEMP\msi-uninstall.log"
+$LASTEXITCODE -eq 0
+Get-Service EnvManagerService -ErrorAction SilentlyContinue  # must be $null (SCM entry removed)
+```
+
+Failure triage: hang at `InstallFinalize` -> `StartServices` with lowest `ActionStart` op = service-start blocking regression (check `ServiceControl/@Start` is absent and `Wait="no"` in installer.wxs). See ADR-0009 for the validated root cause.
+
 ## Public Flip and Mirror Sync (v0.9.26+)
 
 1. Run `gitleaks git .` (must exit 0) before flipping the repository to public.

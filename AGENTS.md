@@ -40,7 +40,7 @@ CodeGraph is the project's indexed code intelligence layer. The index lives at `
 ## Project Overview
 
 - **Name**: Env Manager
-- **Version**: 0.9.26
+- **Version**: 0.9.27
 - **License**: Apache-2.0
 - **Repository**: https://github.com/Xxx91n/env-manager
 - **Languages**: C# (.NET 10), TypeScript, Svelte 4, Rust

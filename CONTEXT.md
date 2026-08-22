@@ -50,7 +50,10 @@ _Avoid_: agent gate, capability filter, agent whitelist
 Key decisions: [ADR 0001](docs/adr/0001-secret-architecture-revision.md) (Secret Architecture Revision)
 covers Phase A-E trade-offs (A5/A7/A8/A9 revised). ADR 0002-0007 cover
 service watchdog, version single-source, release readiness, sensitive data
-redaction, GUI z-index layering, and form control color-scheme override.
+redaction, GUI z-index layering, and form control color-scheme override. ADR 0008 covers
+public release and mirror topologies. [ADR 0009](docs/adr/0009-stay-on-tauri-bundled-wix-v3.md)
+covers packaging: stay on Tauri-bundled WiX v3.14.1 and repair installer.wxs semantics
+(MajorUpgrade schedule + util:ServiceConfig + WIX_UPGRADE_DETECTED service stop).
 
 ## Language (continued)
 
@@ -164,3 +167,21 @@ _Avoid_: form theme binding, control theme override, light-only controls
 - **Release Gate**: The phrase "开始发布" is the explicit user authorization required before creating any git tag, GitHub Release, or external channel submission (winget/Scoop/Chocolatey).
 - **Mirror Topology**: GitHub is canonical; GitLab + Codeberg are read-only mirrors updated by `qte77/gha-github-mirror-action` on push to `main`.
 - **README-i18n root**: Root README.md is the English landing page; translations live under `docs/i18n/README.<locale>.md` with an `<!-- README-I18N:START/END -->` switcher block.
+## MSI Packaging & Toolchain Terms (v0.9.27)
+
+Resolved during grill-with-docs session 2026-08-22 on MSI install-hang fix on frozen WiX v3.
+
+- **Tauri-Bundled WiX**: The WiX v3.14.1 RTM toolchain pinned inside `tauri-bundler` (`WIX_URL` points at `wix314-binaries.zip`, cached under `~/.cache/tauri/WixTools314`); the project deliberately stays on this frozen chain because Tauri v2 has officially declined to migrate (issue #10348). MajorUpgrade semantics, ICE rules, and ServiceInstall behaviour are bounded by WiX v3 only.
+_Avoid_: modern WiX toolchain, v5+ toolchain
+
+- **WixUtilExtension-ServiceConfig**: The transactional inline replacement for the deprecated `sc.exe failure/config` custom-action pair. Nested inside `ServiceInstall`, runs inside the MSI transaction with native rollback.
+_Avoid_: sc.exe CA, deferred sc.exe
+
+- **Upgrade-Stage Service Stop**: The pattern of placing a separate `ServiceControl` in its own component, gated on `WIX_UPGRADE_DETECTED`, with only `Stop="uninstall"` (no Start/Remove), so the old version's service is stopped before its files are removed. Decouples "stop the previous version" from "install the new version".
+_Avoid_: inline upgrade stop, mixed-purpose service control
+
+- **MajorUpgrade Schedule (afterInstallExecute)**: The explicit schedule where `RemoveExistingProducts` is deferred until after `InstallExecute`, preventing file-in-use reboot prompts during silent install. Replaces the WiX v3 default `afterInstallValidate` for service-shipping MSI projects.
+_Avoid_: default schedule, afterInstallValidate
+
+- **ServiceInstall Vital Flag**: `ServiceInstall ... Vital="yes"` so a failed service install rolls the transaction back rather than leaving a half-installed product. Pair with `ServiceControl ... Wait="yes"` (30-second hard cap per MSDN).
+_Avoid_: Vital="no", Wait="no"

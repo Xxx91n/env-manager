@@ -210,4 +210,11 @@ These invariants must never be violated by any code change:
 5. Profile names: 1-255 chars, no null bytes, newlines, carriage returns. Variable names in profiles: no `=`.
 6. Backup files: `.json` extension, not in system directories, under 50 MB.
 
+### MSI installer (ADR-0009, v0.9.27)
 
+- **No `ServiceControl/@Start="install"`**: silent install must not block on the EnvManager service's first boot (DPAPI + named-pipe init can exceed the 30-s SCM handshake ceiling, producing an apparent hang in `StartServices`). Service is `Start="auto"` (next boot) or started on demand from the GUI.
+- **No `ServiceControl/@Wait="yes"` on `Stop`/`Remove`**: all stop/remove actions must be `Wait="no"` so silent uninstall and silent upgrade stay non-blocking.
+- **No `sc.exe` deferred CustomActions**: failure/restart policy must be declared via `util:ServiceConfig` inside `ServiceInstall` so it lives inside the MSI transaction.
+- **MajorUpgrade MUST pin `Schedule="afterInstallExecute"`** so `RemoveExistingProducts` runs after `InstallExecute`; the old product's files never disappear while its service is still running.
+- **Old-service stop on upgrade MUST be a dedicated component** conditioned on `WIX_UPGRADE_DETECTED` (current: `StopOldServiceOnUpgrade`), not the sibling `ServiceControl Stop="both"` in the new-service component.
+- Any installer change must pass `frontend/src/installer-wxs-msi-0.9.27.test.ts` (Vitest string-gate) AND the 4-step silent msiexec runbook in `docs/build-and-release.md` before commit.
