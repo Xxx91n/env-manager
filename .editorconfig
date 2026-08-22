@@ -1,0 +1,17 @@
+root = true
+
+[*]
+end_of_line = lf
+charset = utf-8
+insert_final_newline = true
+trim_trailing_whitespace = true
+
+[*.{bat,ps1,cmd}]
+end_of_line = crlf
+
+[*.{png,ico,icns,jpg,jpeg,gif,webp,exe,dll,node,pdb,msi,so,dylib,bin,zip,gz,tar,7z}]
+insert_final_newline = false
+trim_trailing_whitespace = false
+
+[Makefile]
+indent_style = tab
