@@ -4,7 +4,8 @@
   <Product Id="*" Name="Env Manager" Language="1033" Version="$(var.Version)"
            Manufacturer="Env Manager" UpgradeCode="349fb993-98bf-5bf6-984a-dae0cc68cbbb">
     <Package InstallerVersion="450" Compressed="yes" InstallScope="perMachine" />
-    <MajorUpgrade DowngradeErrorMessage="A newer version of Env Manager is already installed." />
+    <MajorUpgrade Schedule="afterInstallExecute"
+                  DowngradeErrorMessage="A newer version of Env Manager is already installed." />
     <MediaTemplate EmbedCab="yes" />
 
     <Directory Id="TARGETDIR" Name="SourceDir">
@@ -51,7 +52,6 @@
         <ServiceInstall Id="EnvManagerService" Name="EnvManagerService" Type="ownProcess"
                         Start="auto" ErrorControl="normal" Description="Env Manager secret mount lifecycle service"
                         Arguments="--mode=service">
-        >
           <util:ServiceConfig
             FirstFailureActionType="restart"
             SecondFailureActionType="restart"
@@ -59,8 +59,22 @@
             RestartServiceDelayInSeconds="60"
             ResetPeriodInDays="1" />
         </ServiceInstall>
+        <!-- Wait=no: service does DPAPI+named-pipe boot and can exceed the 30s SCM handshake ceiling;
+             blocking the install on it re-creates the v0.9.26 hang. Service still starts asynchronously. -->
+        <!-- v0.9.27: do not block silent install on service boot (slow DPAPI+pipe init).
+             ServiceInstall Start="auto" lets SCM bring it up at next boot; GUI exposes manual start. -->
         <ServiceControl Id="EnvManagerServiceControl" Name="EnvManagerService"
-                        Start="install" Stop="both" Remove="uninstall" Wait="yes" />
+                        Stop="both" Remove="uninstall" Wait="no" />
+      </Component>
+
+      <!-- v0.9.27: stop the OLD EnvManagerService during MajorUpgrade (afterInstallExecute runs after RemoveExistingProducts) -->
+      <Component Id="StopOldServiceOnUpgrade" Guid="*" Win64="$(var.Win64)">
+        <Condition>WIX_UPGRADE_DETECTED</Condition>
+        <CreateFolder />
+        <RegistryValue Root="HKLM" Key="Software\EnvManager" Name="StopOldServiceOnUpgrade"
+                       Type="integer" Value="1" KeyPath="yes" />
+        <ServiceControl Id="StopOldServiceControl" Name="EnvManagerService"
+                        Stop="uninstall" Wait="no" />
       </Component>
 
       <?if "$(var.WebViewLoaderPresent)" = "1" ?>
@@ -100,9 +114,9 @@
       <?endif ?>
       <ComponentRef Id="ServiceExecutable" />
       <ComponentRef Id="EnvManagerDataComponent" />
+      <ComponentRef Id="StopOldServiceOnUpgrade" />
       <ComponentRef Id="StartMenuShortcut" />
     </Feature>
 
-    <!-- v0.9.6 SCM failure recovery: restart 3x at 60s intervals, reset after 24h -->
   </Product>
 </Wix>
