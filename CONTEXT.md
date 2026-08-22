@@ -185,3 +185,19 @@ _Avoid_: default schedule, afterInstallValidate
 
 - **ServiceInstall Vital Flag**: `ServiceInstall ... Vital="yes"` so a failed service install rolls the transaction back rather than leaving a half-installed product. Pair with `ServiceControl ... Wait="yes"` (30-second hard cap per MSDN).
 _Avoid_: Vital="no", Wait="no"
+
+- **Per-Component RemoveFile**: `<RemoveFile Name="*.*" On="uninstall"/>` placed inside each file component removes *all* files the component ever dropped in that directory on uninstall. Idempotent (file absent = no-op), transactional via MSI engine, junction-safe by construction (no recursion). This is the inverse of relying on GUID-matched component tracking — it is *what makes unstable Heat-generated GUIDs survivable*.
+  _Avoid_: util:RemoveFolderEx (CVE-2024-29188 junction traversal, transactional-rollback burden, unnecessary power here).
+
+- **Component GUID Stability (`Guid="*"`)**: In WiX v3, `Component/@Guid="*"` generates a *deterministic* GUID via RFC 4122 v3 over (install directory + KeyPath filename). It is stable across rebuilds *unless* (a) the file is renamed, (b) its install directory changes, (c) Win64-ness switches `ProgramFilesFolder` ↔ `ProgramFiles64Folder`. Components keyed on file path cannot be renamed without an ORPHAN component (old GUID never matches, new GUID never cleans). Pin explicit GUIDs only on the three components most likely to change identity (GuiExecutable, CliExecutable, ServiceExecutable); leave utility/registry/shortcut components on `*` — matches Tauri's own `main.wxs` pattern.
+  _Avoid_: `Guid="*"` on components whose file the project may one day rename (any new .exe / .dll).
+
+- **Line-Ending Normalization**: A single `chore(repo)` commit running `git add --renormalize .` against the root, *plus* a `.editorconfig` at the root with `end_of_line = lf`. `.gitattributes` is already in place (`*.md text eol=lf` etc.); renormalize makes the index match it. `core.autocrlf` is a local trap, never a fix; VS Code `files.eol = auto` is the default Windows trap. Cured once, governed forever by the two repo-level files.
+  _Avoid_: dos2unix, git filter-repo, per-branch rebase-fixes.
+
+- **GUI Test Pyramid (1.0 gate)**: Vitest + mockIPC for IPC contract unit tests (existing 37 files stay). WebdriverIO + `@wdio/tauri-service` for 8-12 critical-flow e2e on Windows CI (no xvfb needed on windows-latest). MSI upgrade matrix (default-path + custom-path, empty-install + with-prior-install) runs in GitHub Actions via `tauri-action`. Coverage gates: CLI ≥ 80%, Rust service ≥ 80%, frontend unit ≥ 70%, e2e flow-count only (no line-coverage target — registry writes are mock-only in unit tests by design). Playwright stays for browser-mode layout/a11y, never drives Tauri IPC.
+  _Avoid_: Playwright-as-e2e-driver for Tauri (no CDP on macOS/Linux WebViews), chasing e2e line coverage, mocking the registry-write layer.
+
+- **WiX v3 EOL Supply-Chain Watch**: Weekly GitHub Actions workflow runs on `schedule: cron: '0 0 * * 1'` + `workflow_dispatch`. Fails the run and files an issue if any of: (a) `wixtoolset/wix3` publishes a release newer than 3.14.1, (b) a new GHSA is filed against `wixtoolset`, (c) Tauri dev-branch `crates/tauri-bundler/src/bundle/windows/msi/mod.rs` stops pointing `WIX_URL` at `wix3141rtm/wix314-binaries.zip`. Zero runtime cost, detects silent upstream drift before it contaminates the next release build.
+  _Avoid_: vendoring the 26MB WixTools314 zip into git LFS.
+
