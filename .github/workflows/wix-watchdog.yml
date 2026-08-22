@@ -19,19 +19,19 @@ jobs:
   watch:
     runs-on: ubuntu-latest
     steps:
-      - name: Check WiX v3 latest release
-        id: wix
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const r = await github.rest.repos.getLatestRelease({
-              owner: 'wixtoolset', repo: 'wix3',
-            });
-            const tag = r.data.tag_name;
-            console.log('wix3 latest:', tag);
-            const isPinned = tag === 'v3.14.1' || tag === '3.14.1';
-            core.setOutput('changed', isPinned ? 'false' : 'true');
-            core.setOutput('tag', tag);
+      # WiX v3 was archived 2025-02-14; v3.14.1 is final. The "new release"
+      # signal is permanently dead. Instead watch FireGiant's blog RSS for
+      # any post-3.14.1 security advisory touching WiX v3.
+      - name: Check FireGiant blog for new WiX v3 security advisories
+        id: firegiant
+        run: |
+          RSS=$(curl -fsSL https://www.firegiant.com/blog/rss/ || true)
+          # Recent posts (last 12) mentioning WiX v3 / wix3 / security
+          HITS=$(echo "$RSS" | grep -Eio 'wix[[:space:]]*v?3|security' | head -20 || true)
+          COUNT=$(echo "$RSS" | grep -Eioi 'wix[[:space:]]*v?3' | wc -l)
+          echo "firegiant_recent_wix3_mentions=$COUNT" >> "$GITHUB_OUTPUT"
+          echo "count=$COUNT" >> "$GITHUB_OUTPUT"
+          echo "FireGiant RSS scan: $COUNT WiX-v3 mentions in recent posts"
 
       - name: Check wixtoolset advisories
         id: ghsa
@@ -65,13 +65,13 @@ jobs:
           fi
 
       - name: File issue on drift
-        if: steps.wix.outputs.changed == 'true' || steps.ghsa.outputs.count != '0' || steps.tauri.outputs.pin_drift == 'true'
+        if: steps.firegiant.outputs.count != '0' || steps.ghsa.outputs.count != '0' || steps.tauri.outputs.pin_drift == 'true'
         uses: actions/github-script@v7
         with:
           script: |
             const lines = [];
-            if ('${{ steps.wix.outputs.changed }}' === 'true')
-              lines.push('- wix3 latest release drifted from pin: ' + '${{ steps.wix.outputs.tag }}');
+            if ('${{ steps.firegiant.outputs.count }}' !== '0')
+              lines.push('- FireGiant RSS mentions WiX v3 ' + '${{ steps.firegiant.outputs.count }}' + ' times in recent posts - inspect for new WiX v3 security advisory');
             if ('${{ steps.ghsa.outputs.count }}' !== '0')
               lines.push('- ' + '${{ steps.ghsa.outputs.count }}' + ' wixtoolset GHSA(s) sighted');
             if ('${{ steps.tauri.outputs.pin_drift }}' === 'true')
