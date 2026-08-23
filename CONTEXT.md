@@ -60,6 +60,9 @@ watchdog, line-ending normalization chore, and the GUI test pyramid (Vitest + WD
 [ADR 0011](docs/adr/0011-msi-ui-wixui-installdir-desktop-shortcut.md) covers MSI UI:
 WixUI_InstallDir with en-US localization, optional desktop shortcut, ARPPRODUCTICON,
 MSI string-gate tests, and ICE suppression list. Cherry-picked from f073733.
+
+
+**ADR-0011 Decision 2 follow-up ponytail debt (added 2026-08-23 maintenance pass):** the InstallDir-dialog desktop-shortcut **checkbox UI** is deliberately not implemented in the v0.9.29 MSI — only the `INSTALLDESKTOPSHORTCUT` public property + component Condition ship. Rationale: minimizing WixUI Extension surface (frozen WiX v3.14.1, EOL); a dialog fork is a high-risk change touching localized UI strings. If GUI surfacing becomes a requirement, implement it as a vendored `WixUI_InstallDir` fragment copy with renamed dialog IDs (e.g. `EnvMgrInstallDirDlg`) and a `<UI>` element in `frontend/scripts/`, never by mutating `WixUIExtension.dll` state.
 watchdog covers WixUI_InstallDir localization asset availability.
 
 ## Language (continued)

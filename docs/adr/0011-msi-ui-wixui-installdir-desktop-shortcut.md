@@ -6,8 +6,10 @@ Context: codex/v1.0.0, post-f073733 icon cherry-pick (fb164b9). The previous v0.
 ## Decision 1 — WixUI_InstallDir 4-dialog sequence, no license page
 Sequence: Welcome → InstallDir → VerifyReady → Finish. Apache-2.0 has no consent requirement, so no License dialog. Source: FireGiant WiX v3 manual documents this as the standard minimal WixUI_InstallDir set.
 
-## Decision 2 — Desktop shortcut checkbox
-A VerifyReadyDlg-pattern checkbox on the InstallDir dialog, bound to `INSTALLDESKTOPSHORTCUT=1|0`. When 1, creates a Desktop shortcut; when 0, only Start Menu shortcut. This is a custom control on a cloned dialog, following the CustomizeDlg pattern. No new dialog files.
+## Decision 2 — Desktop shortcut (property + component Condition; UI checkbox deferred)
+Secure public property `INSTALLDESKTOPSHORTCUT` (default `1`) gates the `DesktopShortcut` component via `<Condition>INSTALLDESKTOPSHORTCUT = "1"</Condition>`.
+
+**As built differs from the original plan:** the original plan called for a cloned `VerifyReadyDlg` (custom dialog fork adding a checkbox). During implementation, forking the WixUI dialog set produced `CNDL0104`/`LGHT0091` (duplicate dialog symbols) because `WixUIExtension.dll` already exports the `InstallDirDlg`/`VerifyReadyDlg` symbol table. Rather than fight the linker with further symbol collisions, the final implementation opts for the minimal-change route: no dialog fork, the property defaults to `1`, and power users can control it via the msiexec command line (`INSTALLDESKTOPSHORTCUT=0`) or Group Policy. The GUI checkbox on `InstallDirDlg` is **deferred to a follow-up release** (tracked as ponytail debt: requires vendored `InstallDirDlg.wxs` + `VerifyReadyDlg.wxs` fragments with renamed dialog IDs; see CONTEXT.md ponytail-debt ledger).
 
 ## Decision 3 — ARPPRODUCTICON
 `<Icon Id="ProductIcon" SourceFile="$(var.IconPath)"/>` + `<Property Id="ARPPRODUCTICON" Value="ProductIcon"/>`, where IconPath is the cherry-picked icon.ico. Two-line change.
