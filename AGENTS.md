@@ -1,4 +1,4 @@
-# Env Manager - Project Operating Instructions
+﻿# Env Manager - Project Operating Instructions
 
 This document is the single source of truth for the Env Manager project. All developers, AI agents, and LLMs must follow this specification. When any project feature or structure changes, update this file in the same commit. Detailed references live in `docs/` - keep this file concise; link out instead of inlining large tables.
 
@@ -40,7 +40,7 @@ CodeGraph is the project's indexed code intelligence layer. The index lives at `
 ## Project Overview
 
 - **Name**: Env Manager
-- **Version**: 0.9.29
+- **Version**: 0.9.30
 - **License**: Apache-2.0
 - **Repository**: https://github.com/Xxx91n/env-manager
 - **Languages**: C# (.NET 10), TypeScript, Svelte 4, Rust

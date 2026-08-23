@@ -222,3 +222,19 @@ _Avoid_: blanket `-sice` suppression without per-ICE comments.
 - **MSI String-Gate Tests**: Three canonical assertions on installer.wxs source: (1) `WIXUI_INSTALLDIR=INSTALLDIR`, (2) `<UIRef Id="WixUI_InstallDir"/>`, (3) `-ext WixUIExtension.dll` present in build.mjs candle/light args. These close the ICE blind spot that build+validate green but runtime error 2819.
 - **ICE Suppression List**: An inline-commented array in build.mjs naming every suppressed ICE with its rationale (e.g., ICE91 perMachine benign warning). Survives extensions by adding `// <ICE_ID> <reason>` lines.
 _Avoid_: blanket -sice suppression without per-ICE comments.
+
+## MSI Lifecycle & Logging Terms (v0.9.30)
+
+Resolved during grill-with-docs session 2026-08-24 on two user-reported MSI bugs (no uninstall entry; logs residue in INSTALLDIR).
+
+- **In-INSTALLDIR Uninstall Shortcut**: A WiX non-advertised Shortcut component inside `DirectoryRef Id="INSTALLDIR"` targeting `[System64Folder]msiexec.exe /x [ProductCode]`, paired with a `RegistryValue KeyPath` under **HKMU** (HKCU would trip ICE37/ICE57 on per-machine installs). This is the FireGiant How-To / Rob Mensching canonical pattern. Safe under MajorUpgrade because `[ProductCode]` evaluates at *runtime* against the currently installed product, not at build time.
+  _Avoid_: Start Menu uninstall entry (less discoverable); appwiz.cpl shortcut (just opens the ARP list, not a real uninstall); ARP-only (fails user expectation).
+
+- **Log Directory Externalization**: GUI logs live at `%LOCALAPPDATA%\<App>\logs` (PowerToys, 1Password 8, Chrome, tauri-plugin-log v2 defaults; VS Code/Discord still on Roaming are legacy). Service logs (`env-manager-service.exe`) continue under `%ProgramData%\<App>\` because service accounts have no meaningful LocalAppData. MSI never touches LocalAppData on uninstall (industry default = keep user logs; Chrome offers it as opt-in only).
+  _Avoid_: writing logs inside INSTALLDIR (Program Files is read-only for standard users; MSI treats runtime files as orphans; never upgraded cleanly).
+
+- **Legacy INSTALLDIR Logs Backstop**: A single paired `CreateFolder` + `RemoveFile Name="*.log*"` + `RemoveFolder` component inside a dedicated `LogsDir` directory reference. Closes pre-v0.9.30 installs' residue without touching other components. Explicitly NOT `util:RemoveFolderEx` (CVE-2024-29188 junction traversal when per-machine MSI touches per-user data; needs WiX ≥ 3.14.1).
+  _Avoid_: bare `CreateFolder` component (wixsharp #1114 — removes empty skeleton but not the parent dir); `*.*` wildcard on INSTALLDIR itself (risky on shared Program Files).
+
+- **Date-Based Log Retention (14-day sweep)**: GUI startup spawns a fire-and-forget thread walking `%LOCALAPPDATA%\<App>\logs` and removing files whose `metadata.modified() < now - 14 days`. Daily rotation already bounds per-run volume; the sweep keeps total directory age bounded. Aligns with 1Password 8 exactly. Per-file **size** cap is explicitly *rejected*: tracing-appender doesn't support it natively, switching to tauri-plugin-log (40KB KeepOne) is a larger stack change for marginal benefit.
+  _Avoid_: rewriting to tauri-plugin-log for retention alone; default tracing-appender `rolling::daily` without any retention sweep (industry default logs-out-of-folder, unbounded growth).

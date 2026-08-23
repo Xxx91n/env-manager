@@ -19,11 +19,15 @@
     <Directory Id="TARGETDIR" Name="SourceDir">
       <?if $(var.Win64) = "yes" ?>
         <Directory Id="ProgramFiles64Folder">
-          <Directory Id="INSTALLDIR" Name="Env Manager" />
+          <Directory Id="INSTALLDIR" Name="Env Manager">
+            <Directory Id="LogsDir" Name="logs" />
+          </Directory>
         </Directory>
       <?else ?>
         <Directory Id="ProgramFilesFolder">
-          <Directory Id="INSTALLDIR" Name="Env Manager" />
+          <Directory Id="INSTALLDIR" Name="Env Manager">
+            <Directory Id="LogsDir" Name="logs" />
+          </Directory>
         </Directory>
       <?endif ?>
       <!-- v0.9.0 Phase B+C: ProgramData directory for machine-level secret mount files -->
@@ -37,6 +41,17 @@
     </Directory>
 
     <DirectoryRef Id="INSTALLDIR">
+      <!-- v0.9.30 (ADR-0012 D1): Uninstall shortcut in INSTALLDIR, next to the exe.
+           Per user request (cc-swich / ZCode parity). FireGiant How-To pattern:
+           non-advertised shortcut to [System64Folder]msiexec.exe /x [ProductCode],
+           paired with RegistryValue KeyPath for ICE compliance. -->
+      <Component Id="UninstallShortcut" Guid="*" Win64="$(var.Win64)">
+        <Shortcut Id="UninstallShortcutLnk" Name="Uninstall Env Manager"
+                  Target="[System64Folder]msiexec.exe" Arguments="/x [ProductCode]"
+                  Description="Uninstall Env Manager" Icon="ProductIcon" IconIndex="0" />
+        <RegistryValue Root="HKMU" Key="Software\EnvManager" Name="UninstallShortcut"
+                       Type="integer" Value="1" KeyPath="yes" />
+      </Component>
       <Component Id="GuiExecutable" Guid="5138848f-6498-4896-805f-26a0004665c7" Win64="$(var.Win64)">
         <File Id="GuiFile" Source="$(var.SourceDir)\env-manager.exe" KeyPath="yes" />
         <RemoveFile Id="RemoveResidue_GuiExecutable" Name="*.*" On="uninstall" />
@@ -121,6 +136,20 @@
       </Component>
     </DirectoryRef>
 
+    <!-- v0.9.30 (ADR-0012 D3): backstop cleanup for legacy INSTALLDIR\logs residue.
+         Prior versions wrote GUI logs under [INSTALLDIR]\logs. Wildcard RemoveFile only
+         matches the specific logs subdirectory (not the whole INSTALLDIR — wixsharp
+         #1114 anti-pattern avoided). RemoveFolder removes the empty dir afterwards. -->
+    <DirectoryRef Id="LogsDir">
+      <Component Id="LegacyLogsCleanup" Guid="*" Win64="$(var.Win64)">
+        <CreateFolder />
+        <RemoveFile Id="RemoveLegacyLogsFiles" Name="*.log*" On="uninstall" />
+        <RemoveFolder Id="RemoveLegacyLogsDir" On="uninstall" />
+        <RegistryValue Root="HKCU" Key="Software\EnvManager" Name="LegacyLogsCleanup"
+                       Type="integer" Value="1" KeyPath="yes" />
+      </Component>
+    </DirectoryRef>
+
     <DirectoryRef Id="EnvManagerDataDir">
       <Component Id="EnvManagerDataComponent" Guid="*" Win64="$(var.Win64)">
         <CreateFolder />
@@ -132,6 +161,7 @@
 
     <Feature Id="MainFeature" Title="Env Manager" Level="1">
       <ComponentRef Id="GuiExecutable" />
+      <ComponentRef Id="UninstallShortcut" />
       <ComponentRef Id="CliExecutable" />
       <ComponentRef Id="CliLibrary" />
       <ComponentRef Id="CliDeps" />
@@ -145,6 +175,7 @@
       <ComponentRef Id="StopOldServiceOnUpgrade" />
       <ComponentRef Id="StartMenuShortcut" />
       <ComponentRef Id="DesktopShortcut" />
+      <ComponentRef Id="LegacyLogsCleanup" />
     </Feature>
 
   </Product>
