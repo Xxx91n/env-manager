@@ -8,6 +8,14 @@
                   DowngradeErrorMessage="A newer version of Env Manager is already installed." />
     <MediaTemplate EmbedCab="yes" />
 
+    <!-- v0.9.29 (ADR-0011): WixUI_InstallDir (browse dir + desktop-shortcut property) -->
+    <Property Id="WIXUI_INSTALLDIR" Value="INSTALLDIR" />
+    <UIRef Id="WixUI_InstallDir" />
+    <UIRef Id="WixUI_ErrorProgressText" />
+    <Icon Id="ProductIcon" SourceFile="$(var.IconPath)" />
+    <Property Id="ARPPRODUCTICON" Value="ProductIcon" />
+    <Property Id="INSTALLDESKTOPSHORTCUT" Value="1" Secure="yes" />
+
     <Directory Id="TARGETDIR" Name="SourceDir">
       <?if $(var.Win64) = "yes" ?>
         <Directory Id="ProgramFiles64Folder">
@@ -22,6 +30,7 @@
       <Directory Id="ProgramDataFolder">
         <Directory Id="EnvManagerDataDir" Name="EnvManager" />
       </Directory>
+      <Directory Id="DesktopFolder" />
       <Directory Id="ProgramMenuFolder">
         <Directory Id="ApplicationProgramsFolder" Name="Env Manager" />
       </Directory>
@@ -102,6 +111,16 @@
       </Component>
     </DirectoryRef>
 
+    <DirectoryRef Id="DesktopFolder">
+      <Component Id="DesktopShortcut" Guid="*" Win64="$(var.Win64)">
+        <Shortcut Id="DesktopShortcut" Name="Env Manager" Target="[INSTALLDIR]env-manager.exe"
+                  WorkingDirectory="INSTALLDIR" Icon="ProductIcon" IconIndex="0" />
+        <RegistryValue Root="HKCU" Key="Software\EnvManager" Name="DesktopShortcut"
+                       Type="integer" Value="1" KeyPath="yes" />
+        <Condition>INSTALLDESKTOPSHORTCUT = "1"</Condition>
+      </Component>
+    </DirectoryRef>
+
     <DirectoryRef Id="EnvManagerDataDir">
       <Component Id="EnvManagerDataComponent" Guid="*" Win64="$(var.Win64)">
         <CreateFolder />
@@ -125,6 +144,7 @@
       <ComponentRef Id="EnvManagerDataComponent" />
       <ComponentRef Id="StopOldServiceOnUpgrade" />
       <ComponentRef Id="StartMenuShortcut" />
+      <ComponentRef Id="DesktopShortcut" />
     </Feature>
 
   </Product>

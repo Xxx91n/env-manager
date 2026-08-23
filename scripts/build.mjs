@@ -304,9 +304,9 @@ async function buildArch(targetArch) {
       try {
         const webviewLoaderPath = join(archPortableDir, 'WebView2Loader.dll')
         const webviewPresent = existsSync(webviewLoaderPath) ? '1' : '0'
-        const candleResult = spawnSync(candle, ['-nologo', '-arch', wixArch, '-ext', 'WixUtilExtension.dll', '-dVersion=' + version, '-dSourceDir=' + archPortableDir, '-dWin64=' + win64Val, '-dWebViewLoaderPresent=' + webviewPresent, '-out', wixObject, wixSource], { stdio: 'inherit' })
+        const candleResult = spawnSync(candle, ['-nologo', '-arch', wixArch, '-ext', 'WixUtilExtension.dll', '-ext', 'WixUIExtension.dll', '-dVersion=' + version, '-dSourceDir=' + archPortableDir, '-dWin64=' + win64Val, '-dWebViewLoaderPresent=' + webviewPresent, '-dIconPath=' + join(projectRoot, 'frontend', 'src-tauri', 'icons', 'icon.ico'), '-out', wixObject, wixSource], { stdio: 'inherit' })
         if (candleResult.status !== 0) throw new Error('WiX candle failed (exit ' + candleResult.status + ')')
-        const lightResult = spawnSync(light, ['-nologo', '-spdb', '-ext', 'WixUtilExtension.dll', '-out', msiPath, wixObject], { stdio: 'inherit' })
+        const lightResult = spawnSync(light, ['-nologo', '-spdb', '-ext', 'WixUtilExtension.dll', '-ext', 'WixUIExtension.dll', '-cultures:en-US', '-loc', join(projectRoot, 'frontend', 'scripts', 'WixUI_en-US.wxl'), '-out', msiPath, wixObject], { stdio: 'inherit' })
         if (lightResult.status !== 0) throw new Error('WiX light failed (exit ' + lightResult.status + ')')
         if (!existsSync(msiPath)) throw new Error('WiX light failed - MSI not created')
         console.log('[build] MSI: ' + basename(msiPath))
