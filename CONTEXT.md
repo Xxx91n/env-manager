@@ -57,7 +57,7 @@ covers packaging: stay on Tauri-bundled WiX v3.14.1 and repair installer.wxs sem
 [ADR 0010](docs/adr/0010-msi-hygiene-guid-pinning-eol-test-pyramid.md) covers MSI hygiene:
 per-component RemoveFile residue wipe, pinned GUIDs on the three binaries, WiX EOL supply-chain
 watchdog, line-ending normalization chore, and the GUI test pyramid (Vitest + WDIO + MSI matrix).
-[ADR 0011](docs/adr/0011-wixui-installdir-desktop-shortcut-checkbox.md) covers MSI UI:
+[ADR 0011](docs/adr/0011-msi-ui-wixui-installdir-desktop-shortcut.md) covers MSI UI:
 WixUI_InstallDir with en-US localization, optional desktop shortcut, ARPPRODUCTICON,
 MSI string-gate tests, and ICE suppression list. Cherry-picked from f073733.
 watchdog covers WixUI_InstallDir localization asset availability.

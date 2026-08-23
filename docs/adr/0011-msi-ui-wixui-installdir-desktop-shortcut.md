@@ -1,6 +1,6 @@
 # MSI UI — WixUI_InstallDir + Desktop Shortcut + en-US wxl (v0.9.29 Grill)
 
-Status: accepted (2026-08-23)
+Status: implemented (2026-08-23, commit 54fd6b0)
 Context: codex/v1.0.0, post-f073733 icon cherry-pick (fb164b9). The previous v0.9.27/v0.9.28 MSI had NO UI sequence — users saw a silent-install-like black screen with no progress, no direction. User acceptance testing on the 0.9.28 MSI surfaced this absence as "MSI installs without a user interface" and "no desktop shortcut option". This ADR locks the six implementation decisions that follow from accepting the WixUI_InstallDir pattern.
 
 ## Decision 1 — WixUI_InstallDir 4-dialog sequence, no license page
