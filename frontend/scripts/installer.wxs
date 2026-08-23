@@ -51,6 +51,11 @@
                   Description="Uninstall Env Manager" Icon="ProductIcon" IconIndex="0" />
         <RegistryValue Root="HKMU" Key="Software\EnvManager" Name="UninstallShortcut"
                        Type="integer" Value="1" KeyPath="yes" />
+        <!-- RemoveFolder must live in a component rooted at INSTALLDIR, not in
+             EnvManagerDataComponent (which is rooted at ProgramData). Placing it
+             there silently produces no FolderRemove op for INSTALLDIR on
+             uninstall (regression observed in v0.9.30 smoke test). -->
+        <RemoveFolder Id="RemoveInstallDir" On="uninstall" />
       </Component>
       <Component Id="GuiExecutable" Guid="5138848f-6498-4896-805f-26a0004665c7" Win64="$(var.Win64)">
         <File Id="GuiFile" Source="$(var.SourceDir)\env-manager.exe" KeyPath="yes" />
@@ -155,7 +160,6 @@
         <CreateFolder />
         <RegistryValue Root="HKLM" Key="Software\EnvManager" Name="DataDir"
                        Type="integer" Value="1" KeyPath="yes" />
-        <RemoveFolder Id="RemoveInstallDir" Directory="INSTALLDIR" On="uninstall" />
       </Component>
     </DirectoryRef>
 

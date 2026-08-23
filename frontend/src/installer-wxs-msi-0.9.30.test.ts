@@ -45,4 +45,20 @@ describe('installer.wxs v0.9.30 MSI uninstall + logs externalization', () => {
   it('uninstall shortcut named "Uninstall Env Manager"', () => {
     expect(wxs).toContain('Name="Uninstall Env Manager"')
   })
+
+  it('RemoveInstallDir lives on a component rooted at INSTALLDIR (regression v0.9.30)', () => {
+    // Smoke-test evidence: v0.9.30 initial wiring put RemoveInstallDir inside
+    // EnvManagerDataComponent (rooted at ProgramData\EnvManager). The RemoveFolder's
+    // effective Directory defaulted to that component's directory, NOT INSTALLDIR,
+    // so uninstall left an empty INSTALLDIR behind. Fix: move to UninstallShortcut
+    // component (rooted at INSTALLDIR via <DirectoryRef Id="INSTALLDIR">) and let
+    // RemoveFolder default its Directory to that component's directory.
+    const uninstallShortcutBody = wxs.match(/<Component Id="UninstallShortcut"[\s\S]*?<\/Component>/)
+    expect(uninstallShortcutBody).not.toBeNull()
+    expect(uninstallShortcutBody![0]).toMatch(/<RemoveFolder Id="RemoveInstallDir"/)
+
+    const dataComponentBody = wxs.match(/<Component Id="EnvManagerDataComponent"[\s\S]*?<\/Component>/)
+    expect(dataComponentBody).not.toBeNull()
+    expect(dataComponentBody![0]).not.toMatch(/<RemoveFolder Id="RemoveInstallDir"/)
+  })
 })

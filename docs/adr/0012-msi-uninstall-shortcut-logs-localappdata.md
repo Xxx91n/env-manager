@@ -50,6 +50,21 @@ New WiX component `LegacyLogsCleanup` targeting the nested `LogsDir` directory i
 
 Avoids the wixsharp #1114 anti-pattern (componentized empty directory without file cleanup) by pairing `CreateFolder` with a scoped wildcard `RemoveFile` — the wildcard only matches `*.log*` inside this specific logs subdir, NOT the whole INSTALLDIR (which would be the other classic bug).
 
+**Post-ship amendment (same-day smoke test):** the original wiring placed
+`<RemoveFolder Id="RemoveInstallDir" Directory="INSTALLDIR" On="uninstall"/>`
+inside `EnvManagerDataComponent` (rooted at `ProgramData\EnvManager`). XML
+compiled, install/uninstall both exited 0, but `INSTALLDIR` was left behind
+because each `RemoveFolder`'s effective directory is the **hosting component's
+parent directory** — `Directory="INSTALLDIR"` was silently ignored when the
+component lived under `EnvManagerDataDir`. Live evidence: the MSI log only
+contained `FolderRemove` ops for `INSTALLDIR\logs`, never for `INSTALLDIR`.
+Fixed by moving the `RemoveFolder` element into the `UninstallShortcut`
+component (which IS rooted at `INSTALLDIR` via `<DirectoryRef Id="INSTALLDIR">`)
+and omitting the explicit `Directory=` attribute so the default (the component's
+directory) is used. New stringgate in `installer-wxs-msi-0.9.30.test.ts`:
+`RemoveInstallDir lives on a component rooted at INSTALLDIR`. Memory aid for
+future WiX edits: `<RemoveFolder>` **`Directory` is default, not override**.
+
 ### D4 — Log retention: 14-day sweep, no per-file size cap
 
 GUI startup spawns a fire-and-forget thread that walks `%LOCALAPPDATA%\EnvManager\logs` and removes any `env-manager.log*` whose `metadata.modified()` is older than 14 days.

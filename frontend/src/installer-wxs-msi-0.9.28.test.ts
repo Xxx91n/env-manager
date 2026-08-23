@@ -43,24 +43,41 @@ describe('installer.wxs v0.9.28 MSI residue / GUID hygiene invariants (ADR-0010)
     expect(wxs).toMatch(/<Component Id="ServiceExecutable" Guid="e61585c6-4c5b-437c-be39-082f8b64bade"/)
   })
 
-  it('INSTALLDIR RemoveFolder is on an UNCONDITIONAL component (not gated on WIX_UPGRADE_DETECTED)', () => {
-    // Ponytail + Decision 1 (P0 / A): the install-dir wipe must run on clean uninstall,
-    // not only during upgrades. EnvManagerDataComponent is unconditional and runs every time.
-    expect(wxs).toMatch(/<Component Id="EnvManagerDataComponent"[\s\S]*?<RemoveFolder Id="RemoveInstallDir"[\s\S]*?On="uninstall"[\s\S]*?<\/Component>/)
-    // And StopOldServiceOnUpgrade (the conditional component) must NOT own RemoveInstallDir.
+  it('INSTALLDIR RemoveFolder lives on a component rooted at INSTALLDIR (not EnvManagerDataComponent)', () => {
+    // WiX RemoveFolder element: the effective Directory defaults to the parent
+    // component's directory. Placing RemoveInstallDir inside EnvManagerDataComponent
+    // (rooted at ProgramData\EnvManager) silently produces NO FolderRemove op for
+    // INSTALLDIR on uninstall -- observed as residual INSTALLDIR in v0.9.30 smoke
+    // test. ADR-0012 amendment: the RemoveFolder must live on the UninstallShortcut
+    // component, which is rooted at INSTALLDIR via <DirectoryRef Id="INSTALLDIR">.
+    const uninstallShortcutBody = wxs.match(/<Component Id="UninstallShortcut"[\s\S]*?<\/Component>/)
+    expect(uninstallShortcutBody).not.toBeNull()
+    expect(uninstallShortcutBody![0]).toMatch(/<RemoveFolder Id="RemoveInstallDir"[^>]*On="uninstall"[^>]*\/>/)
+    // And it must NOT carry an explicit Directory= attribute (default = INSTALLDIR via the component)
+    expect(uninstallShortcutBody![0]).toMatch(/<RemoveFolder Id="RemoveInstallDir"(?![^>]*\bDirectory=)[^>]*\/>/)
+    // StopOldServiceOnUpgrade (the conditional component) must NOT own RemoveInstallDir.
     const stopOldBody = wxs.match(/<Component Id="StopOldServiceOnUpgrade"[\s\S]*?<\/Component>/)
     expect(stopOldBody).not.toBeNull()
     expect(stopOldBody![0]).not.toMatch(/<RemoveFolder Id="RemoveInstallDir"/)
+    // EnvManagerDataComponent also must NOT own RemoveInstallDir anymore.
+    const dataDirBody = wxs.match(/<Component Id="EnvManagerDataComponent"[\s\S]*?<\/Component>/)
+    expect(dataDirBody).not.toBeNull()
+    expect(dataDirBody![0]).not.toMatch(/<RemoveFolder Id="RemoveInstallDir"/)
   })
 
   it('no util:RemoveFolderEx anywhere (CVE-2024-29188 junction traversal)', () => {
     expect(wxs).not.toMatch(/util:RemoveFolderEx/)
   })
 
-  it('version bumped to 0.9.28 in csproj and package.json', () => {
+  it('version bumped to 0.9.28 or later in csproj and package.json', () => {
     const csproj = readFileSync(join(__dirname2, '..', '..', 'env-manager.csproj'), 'utf8')
     const pkg = JSON.parse(readFileSync(join(__dirname2, '..', 'package.json'), 'utf8'))
-    expect(csproj).toMatch(/<Version>0\.9\.28<\/Version>/)
-    expect(pkg.version).toBe('0.9.28')
+    // Allow >= 0.9.28 so later patch versions don't re-trip this assertion.
+    const csMatch = csproj.match(/<Version>(\d+)\.(\d+)\.(\d+)<\/Version>/)
+    expect(csMatch).not.toBeNull()
+    const [mj, mn, pt] = [Number(csMatch![1]), Number(csMatch![2]), Number(csMatch![3])]
+    const versionOk = mj > 0 || (mj === 0 && mn > 9) || (mj === 0 && mn === 9 && pt >= 28)
+    expect(versionOk).toBe(true)
+    expect(pkg.version).toBe(`${mj}.${mn}.${pt}`)
   })
 })
