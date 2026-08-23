@@ -57,6 +57,10 @@ covers packaging: stay on Tauri-bundled WiX v3.14.1 and repair installer.wxs sem
 [ADR 0010](docs/adr/0010-msi-hygiene-guid-pinning-eol-test-pyramid.md) covers MSI hygiene:
 per-component RemoveFile residue wipe, pinned GUIDs on the three binaries, WiX EOL supply-chain
 watchdog, line-ending normalization chore, and the GUI test pyramid (Vitest + WDIO + MSI matrix).
+[ADR 0011](docs/adr/0011-wixui-installdir-desktop-shortcut-checkbox.md) covers MSI UI:
+WixUI_InstallDir with en-US localization, optional desktop shortcut, ARPPRODUCTICON,
+MSI string-gate tests, and ICE suppression list. Cherry-picked from f073733.
+watchdog covers WixUI_InstallDir localization asset availability.
 
 ## Language (continued)
 
@@ -140,7 +144,8 @@ The v0.9.12 C# helper that masks 22 secret-bearing patterns from exception messa
 _Avoid_: error scrubber, message filter, log sanitizer
 
 **SecretString (C#)**:
-A ef struct wrapping a decrypted secret value. Zeroes the underlying char[] on Dispose() to minimize plaintext lifetime in heap memory. Used at ProfileRevealSecret and ProfileLaunch decrypt sites. The Rust equivalent uses the secrecy crate's SecretString with zeroize on drop.
+A 
+ef struct wrapping a decrypted secret value. Zeroes the underlying char[] on Dispose() to minimize plaintext lifetime in heap memory. Used at ProfileRevealSecret and ProfileLaunch decrypt sites. The Rust equivalent uses the secrecy crate's SecretString with zeroize on drop.
 _Avoid_: secure string, encrypted wrapper, secret holder
 
 **Redaction Vocabulary**:
@@ -203,4 +208,14 @@ _Avoid_: Vital="no", Wait="no"
 
 - **WiX v3 EOL Supply-Chain Watch**: Weekly GitHub Actions workflow runs on `schedule: cron: '0 0 * * 1'` + `workflow_dispatch`. Fails the run and files an issue if any of: (a) `wixtoolset/wix3` publishes a release newer than 3.14.1, (b) a new GHSA is filed against `wixtoolset`, (c) Tauri dev-branch `crates/tauri-bundler/src/bundle/windows/msi/mod.rs` stops pointing `WIX_URL` at `wix3141rtm/wix314-binaries.zip`. Zero runtime cost, detects silent upstream drift before it contaminates the next release build.
   _Avoid_: vendoring the 26MB WixTools314 zip into git LFS.
+- **ICE Suppression List**: An inline-commented array in build.mjs (`ICE_SUPPRESSIONS`) naming every suppressed ICE with its one-line rationale (e.g., `// ICE91 perMachine benign warning`). Survives extension by appending `// <ICE_ID> <reason>`. Aligns with WiX v3 industry practice (VSCodium, PowerToys).
+_Avoid_: blanket `-sice` suppression without per-ICE comments.
 
+- **MSI UI Dialog Set**: The chosen WixUI_InstallDir dialog sequence for Env Manager: Welcome → InstallDir (with optional desktop shortcut checkbox) → VerifyReady → Finish. No License page (Apache-2.0, no consent requirement). `WIXUI_INSTALLDIR` must point to an all-uppercase Directory Id (`INSTALLDIR`) — ICE does not validate this pair, and missing it causes runtime error 2819.
+- **Desktop Shortcut Checkbox**: A `VerifyReadyDlg`-pattern checkbox on the InstallDir dialog bound to `INSTALLDESKTOPSHORTCUT=1|0`. When 1, MSI creates a Desktop folder shortcut; when 0, only Start Menu shortcut is installed. Follows the WiX v3 `CustomizeDlg` pattern.
+- **ARPPRODUCTICON**: MSI property pointing to the product's icon resource (`ProductIcon`) shown in Windows Control Panel "Programs and Features". References the icon.ico from `frontend/src-tauri/icons/` (cherry-picked from f073733).
+- **Icon Cherry-Pick (f073733)**: The frontend/src-tauri/icons emerald icon family (icon.ico, icon.png, 32x32.png, 128x128.png, 128x128@2x.png) plus docs/assets/brand/hero.svg, cherry-picked from main to codex/v1.0.0 as commit fb164b9. The icon.ico is the ARPPRODUCTICON source.
+- **WiX UI Extension Integration**: Adding WixUI_InstallDir requires `-ext WixUIExtension.dll` on both candle and light. The extension does NOT include .wxl files — `sdk\wixui\WixUI_en-US.wxl` must exist physically under the WiX toolchain directory or light will fail with LGHT0103.
+- **MSI String-Gate Tests**: Three canonical assertions on installer.wxs source: (1) `WIXUI_INSTALLDIR=INSTALLDIR`, (2) `<UIRef Id="WixUI_InstallDir"/>`, (3) `-ext WixUIExtension.dll` present in build.mjs candle/light args. These close the ICE blind spot that build+validate green but runtime error 2819.
+- **ICE Suppression List**: An inline-commented array in build.mjs naming every suppressed ICE with its rationale (e.g., ICE91 perMachine benign warning). Survives extensions by adding `// <ICE_ID> <reason>` lines.
+_Avoid_: blanket -sice suppression without per-ICE comments.
