@@ -7,11 +7,16 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: env-manager-mirror-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   codeberg:
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
-      - uses: qte77/gha-github-mirror-action@main
+      - uses: qte77/gha-github-mirror-action@72829a031ed7d581f4c1061a8863e88ff3cfefd8 # main@2026-08-27
         with:
           source_repo: https://github.com/Xxx91n/env-manager.git
           codeberg_url: 'https://codeberg.org/${{ vars.CODEBERG_USER }}/env-manager.git'
@@ -19,8 +24,9 @@ jobs:
 
   gitlab:
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
-      - uses: qte77/gha-github-mirror-action@main
+      - uses: qte77/gha-github-mirror-action@72829a031ed7d581f4c1061a8863e88ff3cfefd8 # main@2026-08-27
         with:
           source_repo: https://github.com/Xxx91n/env-manager.git
           gitlab_url: 'https://gitlab.com/${{ vars.GITLAB_USER }}/env-manager.git'

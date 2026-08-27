@@ -17,6 +17,7 @@ concurrency:
 jobs:
   verify:
     runs-on: windows-latest
+    timeout-minutes: 30
     steps:
       # All actions are pinned to immutable commit SHAs for supply-chain integrity.
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
@@ -72,6 +73,12 @@ jobs:
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4
+      - uses: Swatinem/rust-cache@bc2d2e71bd35c5549942babaa51a89c586b981d1 # v2.8.1
+        with:
+          workspaces: |
+            frontend/src-tauri -> target
+            service -> target
+          save-if: ${{ github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v') }}
 
       - name: Install frontend dependencies
         working-directory: frontend
@@ -120,6 +127,7 @@ jobs:
 
   package:
     runs-on: windows-latest
+    timeout-minutes: 45
     needs: verify
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
@@ -135,6 +143,12 @@ jobs:
           cache-dependency-path: frontend/package-lock.json
 
       - uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4
+      - uses: Swatinem/rust-cache@bc2d2e71bd35c5549942babaa51a89c586b981d1 # v2.8.1
+        with:
+          workspaces: |
+            frontend/src-tauri -> target
+            service -> target
+          save-if: ${{ github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v') }}
 
       - name: Install frontend dependencies
         working-directory: frontend
@@ -196,6 +210,7 @@ jobs:
 
   verify-arch:
     runs-on: windows-latest
+    timeout-minutes: 25
     needs: verify
     strategy:
       matrix:
@@ -220,6 +235,7 @@ jobs:
   release:
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: windows-latest
+    timeout-minutes: 45
     needs: package
     permissions:
       contents: write
