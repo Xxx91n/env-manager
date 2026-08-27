@@ -10,6 +10,9 @@
     <PackageProjectUrl>https://github.com/Xxx91n/env-manager</PackageProjectUrl>
     <Copyright>Copyright (c) 2026 Env Manager Contributors</Copyright>
     <Version>0.9.30</Version>
+    <Product>Env Manager</Product>
+    <AssemblyTitle>Env Manager CLI</AssemblyTitle>
+    <Description>Modern Windows environment variable manager with CLI + GUI</Description>
   </PropertyGroup>
 
   <ItemGroup>

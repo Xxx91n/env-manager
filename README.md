@@ -31,7 +31,7 @@ A modern, lightweight **Windows environment-variable manager** — CLI and GUI d
 ## Security
 
 > [!WARNING]
-> Env Manager is **not code-signed**. Windows SmartScreen may show an "unrecognized app" warning on first launch. Click "More info" then "Run anyway" to proceed. Code signing is planned for a future release.
+> Env Manager builds up to v0.9.30 are **not code-signed**. Windows SmartScreen may show an "unrecognized app" warning on first launch — click "More info" then "Run anyway". We have applied for free open-source code signing via the SignPath Foundation; starting with the first approved release all artifacts (MSI + EXE) will be signed. See [Code signing policy](docs/code-signing-policy.md).
 
 Protected variables and PATH entries are disabled before deletion, with exact registry value-kind verification on restore. Secret values are encrypted via provider-specific mechanisms (DPAPI, CredMan, Vault, SOPS, Azure KV, 1Password, AWS SM) — plaintext never persists to disk or logs. Named pipe IPC uses anti-squatting flags and input validation (64 arg max, 32767 char cap, null byte rejection). See [SECURITY.md](SECURITY.md) for vulnerability reporting.
 
