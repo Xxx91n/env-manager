@@ -173,6 +173,19 @@ function Test-SnapshotValueEqual($Expected, $Actual) {
   return [string]$Expected.Data.Value -ceq [string]$Actual.Data.Value
 }
 
+# PATH-only semantic equality: the CLI folds empty segments (";;", trailing ";") on
+# write (Split RemoveEmptyEntries + Join). Registry images on CI runners
+# (windows-latest = Windows Server 2025) ship "dirty" PATH values with empty
+# segments, so byte equality after a legit normalize round-trip is impossible.
+# Entry list (order + case) must match; empty-segment noise is folded out.
+function Test-PathValueEqual([string]$Before, [string]$After) {
+  $b = $Before.Split(';', [StringSplitOptions]::RemoveEmptyEntries)
+  $a = $After.Split(';', [StringSplitOptions]::RemoveEmptyEntries)
+  if ($b.Count -ne $a.Count) { return $false }
+  for ($i = 0; $i -lt $b.Count; $i++) { if ($b[$i] -cne $a[$i]) { return $false } }
+  return $true
+}
+
 function Compare-RegistrySnapshot([Microsoft.Win32.RegistryHive]$Hive, [string]$SubKey, [string]$SnapshotPath) {
   if (-not (Test-Path $SnapshotPath)) { return @{ Match = $false; Diff = "snapshot missing" } }
   try {
@@ -189,6 +202,7 @@ function Compare-RegistrySnapshot([Microsoft.Win32.RegistryHive]$Hive, [string]$
   $changed = @()
   foreach ($name in $beforeKeys) {
     if ($name -in $afterKeys -and -not (Test-SnapshotValueEqual $before.Values[$name] $after.Values[$name])) {
+      if ($name -ieq 'PATH' -and (Test-PathValueEqual ([string]$before.Values[$name].Data.Value) ([string]$after.Values[$name].Data.Value))) { continue }
       $changed += $name
     }
   }
