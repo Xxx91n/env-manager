@@ -13,7 +13,9 @@ $keyFiles = @(
     'CONTEXT.md',
     'CHANGELOG.md',
     'README.md',
-    'README_CN.md',
+    # Chinese README lives in the i18n tree since the multi-locale README suite was
+    # introduced (zh_CN + 7 others); top-level README_CN.md was superseded.
+    'docs/i18n/README.zh_CN.md',
     'docs/cli-commands.md',
     'docs/architecture.md',
     'docs/build-and-release.md',
