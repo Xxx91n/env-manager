@@ -39,7 +39,7 @@
     "@tauri-apps/plugin-dialog": "^2.7.1",
     "bits-ui": "^0.22.0",
     "clsx": "^2.1.1",
-    "lucide-svelte": "^0.479.0",
+    "lucide-svelte": "^1.0.1",
     "tailwind-merge": "^2.6.1",
     "tailwindcss-animate": "^1.0.7"
   },
