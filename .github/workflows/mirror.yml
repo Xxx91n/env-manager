@@ -13,15 +13,15 @@ jobs:
     steps:
       - uses: qte77/gha-github-mirror-action@main
         with:
-          dst-url: 'https://codeberg.org/${{ vars.CODEBERG_USER }}/env-manager.git'
-          dst-token: ${{ secrets.CODEBERG_TOKEN }}
-          account-type: user
+          source_repo: https://github.com/Xxx91n/env-manager.git
+          codeberg_url: 'https://codeberg.org/${{ vars.CODEBERG_USER }}/env-manager.git'
+          codeberg_pat: ${{ secrets.CODEBERG_TOKEN }}
 
   gitlab:
     runs-on: ubuntu-latest
     steps:
       - uses: qte77/gha-github-mirror-action@main
         with:
-          dst-url: 'https://gitlab.com/${{ vars.GITLAB_USER }}/env-manager.git'
-          dst-token: ${{ secrets.GITLAB_TOKEN }}
-          account-type: user
+          source_repo: https://github.com/Xxx91n/env-manager.git
+          gitlab_url: 'https://gitlab.com/${{ vars.GITLAB_USER }}/env-manager.git'
+          gitlab_pat: ${{ secrets.GITLAB_TOKEN }}
