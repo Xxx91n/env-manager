@@ -91,7 +91,7 @@ jobs:
           # Build CLI step above has produced the binary;
           # the unit-test step has run vitest (mocked, no binary).
           # This step runs Pester 5 + the raw ps1 harnesses.
-          ./scripts/run-ci-tests.ps1 -ResultsDir test-results
+          ./scripts/run-ci-tests.ps1 -ResultsDir test-results -CliExe (Join-Path $PWD 'bin\Release\net10.0-windows\env-manager-cli.exe')
 
       - name: Upload Pester JUnit results
         if: always()
