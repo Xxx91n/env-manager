@@ -210,8 +210,9 @@ jobs:
           foreach ($f in @('env-manager.exe', 'env-manager-cli.exe')) {
             if (-not (Test-Path (Join-Path $installDir $f))) { throw "Installed file missing: $f" }
           }
-          & (Join-Path $installDir 'env-manager-cli.exe') --version | Out-Host
-          if ($LASTEXITCODE -ne 0) { throw 'Installed CLI --version failed' }
+          $probe = & (Join-Path $installDir 'env-manager-cli.exe') 2>&1
+          if ($LASTEXITCODE -ne 0) { throw "Installed CLI probe failed: $probe" }
+          if (-not ("$probe" -match 'v\d+\.\d+\.\d+')) { throw "Installed CLI probe missing version banner: $probe" }
           $uninstall = Start-Process msiexec.exe -ArgumentList '/x', "`"$msi`"", '/qn', '/norestart', '/log', "`"$log.uninstall.log`"" -Wait -PassThru
           if ($uninstall.ExitCode -ne 0) { throw "MSI uninstall failed (exit $($uninstall.ExitCode))" }
           if (Test-Path (Join-Path $installDir 'env-manager.exe')) { throw 'Uninstall left env-manager.exe behind' }
