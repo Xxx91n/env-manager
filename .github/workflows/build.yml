@@ -143,6 +143,16 @@ jobs:
       - name: Install root build tooling (archiver etc.)
         run: npm ci
 
+      - name: Install WiX 3.14 tools
+        shell: pwsh
+        run: |
+          $wixDir = Join-Path $env:LOCALAPPDATA 'tauri\WixTools314'
+          if (-not (Test-Path (Join-Path $wixDir 'candle.exe'))) {
+            $zip = Join-Path $env:TEMP 'wix314-binaries.zip'
+            Invoke-WebRequest -Uri 'https://github.com/wixtoolset/wix3/releases/download/wix3141rtm/wix314-binaries.zip' -OutFile $zip
+            Expand-Archive -Path $zip -DestinationPath $wixDir -Force
+          }
+
       - name: Build portable, CLI-only, and MSI distributions
         run: node scripts/build.mjs --arch x64
 

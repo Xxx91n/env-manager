@@ -328,6 +328,11 @@ async function buildArch(targetArch) {
   await makeZip(archPortableDir, portableZip)
   await makeZip(archCliOnlyDir, cliOnlyZip)
 
+  // Copy loose files alongside ZIPs (release layout contract: release/portable env-manager.exe etc.)
+  for (const [src, dst] of [[archPortableDir, portableDir], [archCliOnlyDir, cliOnlyDir]]) {
+    for (const f of readdirSync(src)) copyFileSync(join(src, f), join(dst, f))
+  }
+
   // --- Clean staging dirs ---
   for (const d of [archPortableDir, archCliOnlyDir]) {
     if (existsSync(d)) rmSync(d, { recursive: true, force: true })
