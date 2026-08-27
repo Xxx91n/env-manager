@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { readFileSync } from 'fs'
+import { resolve } from 'path'
 
 // Regression tests for secret provider safety - motivated by the past incident
 // where a toggle bug corrupted system environment variables. These tests
@@ -8,7 +9,7 @@ import { readFileSync } from 'fs'
 describe('Secret provider regression safety', () => {
 
   it('SecretProviderManager: Decrypt routes by provider name, never falls back silently', () => {
-    const src = readFileSync('D:/Aworker/env-manager/SecretProvider.cs', 'utf8')
+    const src = readFileSync(resolve(__dirname, '..', '..', '..', 'SecretProvider.cs'), 'utf8')
     // The Decrypt method must parse the envelope and route to the correct provider.
     // Unknown providers must throw (fail-closed), NOT silently fall back to DPAPI.
     expect(src).toContain('Secret provider')
@@ -17,13 +18,13 @@ describe('Secret provider regression safety', () => {
   })
 
   it('Bare base64 blob backwards compat: pre-v0.8 secrets still decrypt', () => {
-    const src = readFileSync('D:/Aworker/env-manager/SecretProvider.cs', 'utf8')
+    const src = readFileSync(resolve(__dirname, '..', '..', '..', 'SecretProvider.cs'), 'utf8')
     expect(src).toContain('IsBareBase64Blob')
     expect(src).toContain('DEFAULT_PROVIDER')
   })
 
   it('Rotation never deletes failed secrets: failed decrypt = skip + count, never delete', () => {
-    const src = readFileSync('D:/Aworker/env-manager/SecretProvider.cs', 'utf8')
+    const src = readFileSync(resolve(__dirname, '..', '..', '..', 'SecretProvider.cs'), 'utf8')
     const rotateSection = src.slice(src.indexOf('RotateAll'), src.indexOf('ExportSecrets'))
     expect(rotateSection).toContain('failed')
     expect(rotateSection).toContain('catch')
@@ -32,13 +33,13 @@ describe('Secret provider regression safety', () => {
   })
 
   it('Export secrets: the backup is DPAPI-encrypted regardless of source provider', () => {
-    const src = readFileSync('D:/Aworker/env-manager/SecretProvider.cs', 'utf8')
+    const src = readFileSync(resolve(__dirname, '..', '..', '..', 'SecretProvider.cs'), 'utf8')
     const exportSection = src.slice(src.indexOf('ExportSecrets'), src.indexOf('ImportSecrets'))
     expect(exportSection).toContain('DpapiHelper.EncryptSecret')
   })
 
   it('Import secrets: trial-decryption before writing to profile', () => {
-    const src = readFileSync('D:/Aworker/env-manager/SecretProvider.cs', 'utf8')
+    const src = readFileSync(resolve(__dirname, '..', '..', '..', 'SecretProvider.cs'), 'utf8')
     const importSection = src.slice(src.indexOf('ImportSecrets'))
     expect(importSection).toContain('Decrypt')
     expect(importSection).toContain('Decrypt')
@@ -46,7 +47,7 @@ describe('Secret provider regression safety', () => {
   })
 
   it('All 8 providers: Encrypt produces a valid JSON envelope with provider field', () => {
-    const src = readFileSync('D:/Aworker/env-manager/SecretProvider.cs', 'utf8')
+    const src = readFileSync(resolve(__dirname, '..', '..', '..', 'SecretProvider.cs'), 'utf8')
     // Every provider Encrypt must create a SecretEnvelope with Provider = Name
     const providers = ['DpapiCurrentUserProvider', 'CredentialManagerProvider',
       'PowerShellSecretManagementProvider', 'VaultKV2Provider', 'SopsProvider',
@@ -60,7 +61,7 @@ describe('Secret provider regression safety', () => {
   })
 
   it('Temp file cleanup: all providers that use temp files have finally blocks', () => {
-    const src = readFileSync('D:/Aworker/env-manager/SecretProvider.cs', 'utf8')
+    const src = readFileSync(resolve(__dirname, '..', '..', '..', 'SecretProvider.cs'), 'utf8')
     // SopsProvider uses temp files and must clean up in finally
     const sopsSection = src.slice(src.indexOf('class SopsProvider'), src.indexOf('class AzureKeyVaultProvider'))
     expect(sopsSection).toContain('Directory.Delete(tempDir, true)')
@@ -68,7 +69,7 @@ describe('Secret provider regression safety', () => {
   })
 
   it('All network providers enforce TLS (HTTPS)', () => {
-    const src = readFileSync('D:/Aworker/env-manager/SecretProvider.cs', 'utf8')
+    const src = readFileSync(resolve(__dirname, '..', '..', '..', 'SecretProvider.cs'), 'utf8')
     // Vault, Azure, AWS all enforce HTTPS
     const vaultSection = src.slice(src.indexOf('class VaultKV2Provider'), src.indexOf('class SopsProvider'))
     expect(vaultSection).toContain('https://')
@@ -80,7 +81,7 @@ describe('Secret provider regression safety', () => {
   })
 
   it('All subprocess providers use CREATE_NO_WINDOW', () => {
-    const src = readFileSync('D:/Aworker/env-manager/SecretProvider.cs', 'utf8')
+    const src = readFileSync(resolve(__dirname, '..', '..', '..', 'SecretProvider.cs'), 'utf8')
     // Sops, 1Password, PowerShell all spawn processes and must hide window
     const sopsSection = src.slice(src.indexOf('class SopsProvider'), src.indexOf('class AzureKeyVaultProvider'))
     expect(sopsSection).toContain('CreateNoWindow = true')
@@ -91,7 +92,7 @@ describe('Secret provider regression safety', () => {
   })
 
   it('All subprocess providers have timeouts to prevent indefinite hangs', () => {
-    const src = readFileSync('D:/Aworker/env-manager/SecretProvider.cs', 'utf8')
+    const src = readFileSync(resolve(__dirname, '..', '..', '..', 'SecretProvider.cs'), 'utf8')
     const sopsSection = src.slice(src.indexOf('class SopsProvider'), src.indexOf('class AzureKeyVaultProvider'))
     expect(sopsSection).toContain('WaitForExit(30000)')
     const opSection = src.slice(src.indexOf('class OnePasswordProvider'), src.indexOf('class AwsSecretsManagerProvider'))
@@ -108,7 +109,7 @@ describe('Secret provider regression safety', () => {
   })
 
   it('AWS SigV4: canonical request includes all required components', () => {
-    const src = readFileSync('D:/Aworker/env-manager/SecretProvider.cs', 'utf8')
+    const src = readFileSync(resolve(__dirname, '..', '..', '..', 'SecretProvider.cs'), 'utf8')
     const awsSection = src.slice(src.indexOf('class AwsSecretsManagerProvider'))
     expect(awsSection).toContain('canonicalRequest')
     expect(awsSection).toContain('stringToSign')
@@ -119,7 +120,7 @@ describe('Secret provider regression safety', () => {
   })
 
   it('Azure Key Vault: token cache is memory-only with expiry check', () => {
-    const src = readFileSync('D:/Aworker/env-manager/SecretProvider.cs', 'utf8')
+    const src = readFileSync(resolve(__dirname, '..', '..', '..', 'SecretProvider.cs'), 'utf8')
     const azureSection = src.slice(src.indexOf('class AzureKeyVaultProvider'), src.indexOf('class OnePasswordProvider'))
     expect(azureSection).toContain('_cachedToken')
     expect(azureSection).toContain('_tokenExpiry')
@@ -127,14 +128,14 @@ describe('Secret provider regression safety', () => {
   })
 
   it('Logs never record secret values - audit records only names and markers', () => {
-    const programSrc = readFileSync('D:/Aworker/env-manager/Program.cs', 'utf8')
+    const programSrc = readFileSync(resolve(__dirname, '..' , '..', '..', 'Program.cs'), 'utf8')
     // Audit records for secret operations should use <redacted> or <encrypted>
     expect(programSrc).toContain('<redacted>')
     expect(programSrc).toContain('<encrypted>')
   })
 
   it('Profile launch decrypts secrets in-process and never logs plaintext', () => {
-    const programSrc = readFileSync('D:/Aworker/env-manager/Program.cs', 'utf8')
+    const programSrc = readFileSync(resolve(__dirname, '..' , '..', '..', 'Program.cs'), 'utf8')
     expect(programSrc).toContain('SecretProviderManager.Decrypt')
     expect(programSrc).toContain('SecretVariables.Contains(v.Name, StringComparer.OrdinalIgnoreCase)')
   })
