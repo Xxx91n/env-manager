@@ -152,6 +152,9 @@ jobs:
             Invoke-WebRequest -Uri 'https://github.com/wixtoolset/wix3/releases/download/wix3141rtm/wix314-binaries.zip' -OutFile $zip
             Expand-Archive -Path $zip -DestinationPath $wixDir -Force
           }
+          # windows-2025 image preset WIX points to a removed dir; pin our extracted path
+          Add-Content $env:GITHUB_ENV "WIX=$wixDir"
+          Test-Path (Join-Path $wixDir 'candle.exe') | Out-Host
 
       - name: Build portable, CLI-only, and MSI distributions
         run: node scripts/build.mjs --arch x64
