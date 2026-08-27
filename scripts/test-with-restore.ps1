@@ -342,7 +342,9 @@ function Run-Test([string]$Name, [scriptblock]$Body) {
 }
 
 function Test-RawTrailingBackslashInvocation {
-  $value = 'C:\Program Files\PowerShell\7\'
+  # ponytail: unique fixture path guaranteed absent on any host (esp. CI runners where
+  # C:\Program Files\PowerShell\7\ may already be in PATH, causing dedupe/normalize drift).
+  $value = 'C:\EM_TEST_TRAILING_BACKSLASH\'
   $key = [Microsoft.Win32.Registry]::CurrentUser.OpenSubKey($UserEnvSubKey, $false)
   try {
     $beforePath = if ($key) { [string]$key.GetValue("PATH", "", [Microsoft.Win32.RegistryValueOptions]::DoNotExpandEnvironmentNames) } else { "" }
@@ -354,7 +356,7 @@ function Test-RawTrailingBackslashInvocation {
   # Invoke through cmd.exe to preserve the raw command-line form that caused the bug.
   # The outer PowerShell process never reparses the target CLI argument list.
   $escapedCli = '"' + $CliPath.Replace('"', '""') + '"'
-  $raw = $escapedCli + ' path add "C:\Program Files\PowerShell\7\" --scope user'
+  $raw = $escapedCli + ' path add "C:\EM_TEST_TRAILING_BACKSLASH\" --scope user'
   cmd.exe /d /s /c $raw | Out-Null
   if ($LASTEXITCODE -ne 0) { throw "raw trailing-backslash path add failed (exit $LASTEXITCODE)" }
 
@@ -370,7 +372,7 @@ function Test-RawTrailingBackslashInvocation {
 
   $currentPath = ($entries | ForEach-Object path) -join ';'
   if ($beforePath -notmatch [regex]::Escape($value)) {
-    $removeRaw = $escapedCli + ' path remove "C:\Program Files\PowerShell\7\" --scope user'
+    $removeRaw = $escapedCli + ' path remove "C:\EM_TEST_TRAILING_BACKSLASH\" --scope user'
     cmd.exe /d /s /c $removeRaw | Out-Null
     if ($LASTEXITCODE -ne 0) { throw "raw trailing-backslash cleanup failed (exit $LASTEXITCODE)" }
   }
