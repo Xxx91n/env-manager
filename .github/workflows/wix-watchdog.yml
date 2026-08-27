@@ -26,8 +26,6 @@ jobs:
         id: firegiant
         run: |
           RSS=$(curl -fsSL https://www.firegiant.com/blog/rss/ || true)
-          # Recent posts (last 12) mentioning WiX v3 / wix3 / security
-          HITS=$(echo "$RSS" | grep -Eio 'wix[[:space:]]*v?3|security' | head -20 || true)
           COUNT=$(echo "$RSS" | grep -Eioi 'wix[[:space:]]*v?3' | wc -l)
           echo "firegiant_recent_wix3_mentions=$COUNT" >> "$GITHUB_OUTPUT"
           echo "count=$COUNT" >> "$GITHUB_OUTPUT"
