@@ -5,13 +5,26 @@ updates:
     schedule:
       interval: weekly
     open-pull-requests-limit: 5
+    groups:
+      # minor/patch 聚为一组；major 保留单 PR 逐个评审（GitHub 官方 Example 3 模式）
+      actions-minor-patch:
+        applies-to: version-updates
+        update-types: ["minor", "patch"]
   - package-ecosystem: cargo
     directory: /frontend/src-tauri
     schedule:
       interval: weekly
     open-pull-requests-limit: 5
+    groups:
+      cargo-minor-patch:
+        applies-to: version-updates
+        update-types: ["minor", "patch"]
   - package-ecosystem: npm
     directory: /frontend
     schedule:
       interval: weekly
     open-pull-requests-limit: 5
+    groups:
+      npm-minor-patch:
+        applies-to: version-updates
+        update-types: ["minor", "patch"]
