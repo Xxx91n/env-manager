@@ -210,4 +210,18 @@ These invariants must never be violated by any code change:
 5. Profile names: 1-255 chars, no null bytes, newlines, carriage returns. Variable names in profiles: no `=`.
 6. Backup files: `.json` extension, not in system directories, under 50 MB.
 
+### MSI installer (ADR-0009, v0.9.27)
 
+- **No `ServiceControl/@Start="install"`**: silent install must not block on the EnvManager service's first boot (DPAPI + named-pipe init can exceed the 30-s SCM handshake ceiling, producing an apparent hang in `StartServices`). Service is `Start="auto"` (next boot) or started on demand from the GUI.
+- **No `ServiceControl/@Wait="yes"` on `Stop`/`Remove`**: all stop/remove actions must be `Wait="no"` so silent uninstall and silent upgrade stay non-blocking.
+- **No `sc.exe` deferred CustomActions**: failure/restart policy must be declared via `util:ServiceConfig` inside `ServiceInstall` so it lives inside the MSI transaction.
+- **MajorUpgrade MUST pin `Schedule="afterInstallExecute"`** so `RemoveExistingProducts` runs after `InstallExecute`; the old product's files never disappear while its service is still running.
+- **Old-service stop on upgrade MUST be a dedicated component** conditioned on `WIX_UPGRADE_DETECTED` (current: `StopOldServiceOnUpgrade`), not the sibling `ServiceControl Stop="both"` in the new-service component.
+- Any installer change must pass `frontend/src/installer-wxs-msi-0.9.27.test.ts` (Vitest string-gate) AND the 4-step silent msiexec runbook in `docs/build-and-release.md` before commit.
+
+### MSI hygiene (v0.9.28, extends ADR-0010)
+
+- **`Guid="*"` on non-renameable components only**: the three binaries (`GuiExecutable`, `CliExecutable`, `ServiceExecutable`) pin explicit GUIDs; every other component (libraries, JSON, AGENTS.cli.md, shortcuts, registry keypaths, WebView loader) keeps `Guid="*"`. WiX v3 `Guid="*"` generates a deterministic, path-derived GUID (FireGiant docs: from install dir + KeyPath filename) that is build-stable; pinning only the rename-prone three covers the only failure mode that matters (rename / arch flip across releases).
+- **Per-component `RemoveFile Name="*.*" On="uninstall"` on every INSTALLDIR file component**, plus ONE unconditional `RemoveFolder On="uninstall"` on INSTALLDIR itself (currently owned by `EnvManagerDataComponent`, *not* the WIX_UPGRADE_DETECTED-conditional `StopOldServiceOnUpgrade`). **NEVER use `util:RemoveFolderEx`** anywhere in this project: recursive traversal is excessive power for a fixed known INSTALLDIR payload (MSI component ref-counting already cleans installed files; the wildcard `RemoveFile` set is only a residue backstop). The pre-3.14.1 CVE-2024-29188 junction-traversal risk IS patched at our pinned 3.14.1 - decision is power-vs-need, not CVE-driven.
+- **`AGENTS.cli.md` stays in INSTALLDIR root** (Decision 3 of grill-plan-msi-residual-guid-v0928). It is a 5 KB payload file, not state; P0 wildcard wipes it with everything else on uninstall.
+- Any change to `installer.wxs` repasses **both** string-gate suites (`installer-wxs-msi-0.9.27.test.ts` AND `installer-wxs-msi-0.9.28.test.ts`) AND the 4-step silent msiexec runbook asserting zero-residue under `%ProgramFiles%\Env Manager` after the final uninstall.

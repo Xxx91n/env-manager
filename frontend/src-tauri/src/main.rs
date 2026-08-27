@@ -1179,14 +1179,48 @@ fn version_is_newer(remote: &str, local: &str) -> bool {
 }
 
 fn main() {
-// v0.9.8: tracing + tracing-appender unified logging backend.
-// Replaces tauri-plugin-log with daily rotation + 7-day retention + 50MB cap.
-// Per-module filtering via RUST_LOG env var (e.g. RUST_LOG=env_manager=debug).
-let log_dir = std::env::current_exe()
-    .ok()
-    .and_then(|p| p.parent().map(|d| d.join("logs")))
-    .unwrap_or_else(|| std::path::PathBuf::from("logs"));
+// v0.9.30 (ADR-0012 D2): GUI logs now go to %LOCALAPPDATA%\\EnvManager\\logs (NOT
+// INSTALLDIR\\logs). Per-machine log placement was wix#1114 anti-pattern + Program Files
+// is read-only for standard users; industry default (PowerToys, 1Password 8, Chrome,
+// tauri-plugin-log v2) is LocalAppData. Service side unchanged: %ProgramData%\\EnvManager.
+let log_dir = std::env::var("LOCALAPPDATA")
+    .map(|la| std::path::PathBuf::from(la).join("EnvManager").join("logs"))
+    .unwrap_or_else(|_| std::path::PathBuf::from("logs"));
 let _ = std::fs::create_dir_all(&log_dir);
+
+// v0.9.30 (ADR-0012 D4): 14-day log retention sweep. Aligns with 1Password 8 (14 days).
+// Ponytail: tracing-appender daily rotation already bounds a single run to ~24h per file;
+// sweep deletes stale ones at startup. Fire-and-forget on a helper thread.
+{
+    let log_dir_for_sweep = log_dir.clone();
+    std::thread::spawn(move || {
+        use std::time::{Duration, SystemTime};
+        let cutoff = SystemTime::now()
+            .checked_sub(Duration::from_secs(14 * 24 * 60 * 60))
+            .unwrap_or(SystemTime::UNIX_EPOCH);
+        let rd = match std::fs::read_dir(&log_dir_for_sweep) {
+            Ok(r) => r,
+            Err(_) => return,
+        };
+        for entry in rd.flatten() {
+            let path = entry.path();
+            let name = match path.file_name().and_then(|n| n.to_str()) {
+                Some(s) => s,
+                None => continue,
+            };
+            if !(name == "env-manager.log" || name.starts_with("env-manager.log.")) {
+                continue;
+            }
+            if let Ok(meta) = entry.metadata() {
+                if let Ok(mtime) = meta.modified() {
+                    if mtime < cutoff {
+                        let _ = std::fs::remove_file(&path);
+                    }
+                }
+            }
+        }
+    });
+}
 
 // Daily rotation: env-manager.log -> env-manager.log.2026-08-07
 let file_appender = tracing_appender::rolling::daily(&log_dir, "env-manager.log");

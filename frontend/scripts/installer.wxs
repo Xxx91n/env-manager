@@ -1,63 +1,122 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
+<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi"
+     xmlns:util="http://schemas.microsoft.com/wix/UtilExtension">
   <Product Id="*" Name="Env Manager" Language="1033" Version="$(var.Version)"
            Manufacturer="Env Manager" UpgradeCode="349fb993-98bf-5bf6-984a-dae0cc68cbbb">
     <Package InstallerVersion="450" Compressed="yes" InstallScope="perMachine" />
-    <MajorUpgrade DowngradeErrorMessage="A newer version of Env Manager is already installed." />
+    <MajorUpgrade Schedule="afterInstallExecute"
+                  DowngradeErrorMessage="A newer version of Env Manager is already installed." />
     <MediaTemplate EmbedCab="yes" />
+
+    <!-- v0.9.29 (ADR-0011): WixUI_InstallDir (browse dir + desktop-shortcut property) -->
+    <Property Id="WIXUI_INSTALLDIR" Value="INSTALLDIR" />
+    <UIRef Id="WixUI_InstallDir" />
+    <UIRef Id="WixUI_ErrorProgressText" />
+    <Icon Id="ProductIcon" SourceFile="$(var.IconPath)" />
+    <Property Id="ARPPRODUCTICON" Value="ProductIcon" />
+    <Property Id="INSTALLDESKTOPSHORTCUT" Value="1" Secure="yes" />
 
     <Directory Id="TARGETDIR" Name="SourceDir">
       <?if $(var.Win64) = "yes" ?>
         <Directory Id="ProgramFiles64Folder">
-          <Directory Id="INSTALLDIR" Name="Env Manager" />
+          <Directory Id="INSTALLDIR" Name="Env Manager">
+            <Directory Id="LogsDir" Name="logs" />
+          </Directory>
         </Directory>
       <?else ?>
         <Directory Id="ProgramFilesFolder">
-          <Directory Id="INSTALLDIR" Name="Env Manager" />
+          <Directory Id="INSTALLDIR" Name="Env Manager">
+            <Directory Id="LogsDir" Name="logs" />
+          </Directory>
         </Directory>
       <?endif ?>
       <!-- v0.9.0 Phase B+C: ProgramData directory for machine-level secret mount files -->
       <Directory Id="ProgramDataFolder">
         <Directory Id="EnvManagerDataDir" Name="EnvManager" />
       </Directory>
+      <Directory Id="DesktopFolder" />
       <Directory Id="ProgramMenuFolder">
         <Directory Id="ApplicationProgramsFolder" Name="Env Manager" />
       </Directory>
     </Directory>
 
     <DirectoryRef Id="INSTALLDIR">
-      <Component Id="GuiExecutable" Guid="*" Win64="$(var.Win64)">
-        <File Id="GuiFile" Source="$(var.SourceDir)\env-manager.exe" KeyPath="yes" />
+      <!-- v0.9.30 (ADR-0012 D1): Uninstall shortcut in INSTALLDIR, next to the exe.
+           Per user request (cc-swich / ZCode parity). FireGiant How-To pattern:
+           non-advertised shortcut to [System64Folder]msiexec.exe /x [ProductCode],
+           paired with RegistryValue KeyPath for ICE compliance. -->
+      <Component Id="UninstallShortcut" Guid="*" Win64="$(var.Win64)">
+        <Shortcut Id="UninstallShortcutLnk" Name="Uninstall Env Manager"
+                  Target="[System64Folder]msiexec.exe" Arguments="/x [ProductCode]"
+                  Description="Uninstall Env Manager" Icon="ProductIcon" IconIndex="0" />
+        <RegistryValue Root="HKMU" Key="Software\EnvManager" Name="UninstallShortcut"
+                       Type="integer" Value="1" KeyPath="yes" />
+        <!-- RemoveFolder must live in a component rooted at INSTALLDIR, not in
+             EnvManagerDataComponent (which is rooted at ProgramData). Placing it
+             there silently produces no FolderRemove op for INSTALLDIR on
+             uninstall (regression observed in v0.9.30 smoke test). -->
+        <RemoveFolder Id="RemoveInstallDir" On="uninstall" />
       </Component>
-      <Component Id="CliExecutable" Guid="*" Win64="$(var.Win64)">
+      <Component Id="GuiExecutable" Guid="5138848f-6498-4896-805f-26a0004665c7" Win64="$(var.Win64)">
+        <File Id="GuiFile" Source="$(var.SourceDir)\env-manager.exe" KeyPath="yes" />
+        <RemoveFile Id="RemoveResidue_GuiExecutable" Name="*.*" On="uninstall" />
+      </Component>
+      <Component Id="CliExecutable" Guid="a690f1b0-3987-450e-a4c0-4d8f7f478f1f" Win64="$(var.Win64)">
         <File Id="CliFile" Source="$(var.SourceDir)\env-manager-cli.exe" KeyPath="yes" />
+        <RemoveFile Id="RemoveResidue_CliExecutable" Name="*.*" On="uninstall" />
       </Component>
       <Component Id="CliLibrary" Guid="*" Win64="$(var.Win64)">
         <File Id="CliLibraryFile" Source="$(var.SourceDir)\env-manager-cli.dll" KeyPath="yes" />
+        <RemoveFile Id="RemoveResidue_CliLibrary" Name="*.*" On="uninstall" />
       </Component>
       <Component Id="CliDeps" Guid="*" Win64="$(var.Win64)">
         <File Id="CliDepsFile" Source="$(var.SourceDir)\env-manager-cli.deps.json" KeyPath="yes" />
+        <RemoveFile Id="RemoveResidue_CliDeps" Name="*.*" On="uninstall" />
       </Component>
       <Component Id="CliRuntime" Guid="*" Win64="$(var.Win64)">
         <File Id="CliRuntimeFile" Source="$(var.SourceDir)\env-manager-cli.runtimeconfig.json" KeyPath="yes" />
+        <RemoveFile Id="RemoveResidue_CliRuntime" Name="*.*" On="uninstall" />
       </Component>
       <Component Id="AgentGuide" Guid="*" Win64="$(var.Win64)">
         <File Id="AgentGuideFile" Source="$(var.SourceDir)\AGENTS.cli.md" KeyPath="yes" />
+        <RemoveFile Id="RemoveResidue_AgentGuide" Name="*.*" On="uninstall" />
       </Component>
       <!-- v0.9.0 Phase B+C: env-manager-service.exe — Windows service binary for secret mount lifecycle -->
-      <Component Id="ServiceExecutable" Guid="*" Win64="$(var.Win64)">
+      <Component Id="ServiceExecutable" Guid="e61585c6-4c5b-437c-be39-082f8b64bade" Win64="$(var.Win64)">
         <File Id="ServiceFile" Source="$(var.SourceDir)\env-manager-service.exe" KeyPath="yes" />
+        <RemoveFile Id="RemoveResidue_ServiceExecutable" Name="*.*" On="uninstall" />
         <ServiceInstall Id="EnvManagerService" Name="EnvManagerService" Type="ownProcess"
                         Start="auto" ErrorControl="normal" Description="Env Manager secret mount lifecycle service"
                         Arguments="--mode=service">
+          <util:ServiceConfig
+            FirstFailureActionType="restart"
+            SecondFailureActionType="restart"
+            ThirdFailureActionType="restart"
+            RestartServiceDelayInSeconds="60"
+            ResetPeriodInDays="1" />
         </ServiceInstall>
+        <!-- Wait=no: service does DPAPI+named-pipe boot and can exceed the 30s SCM handshake ceiling;
+             blocking the install on it re-creates the v0.9.26 hang. Service still starts asynchronously. -->
+        <!-- v0.9.27: do not block silent install on service boot (slow DPAPI+pipe init).
+             ServiceInstall Start="auto" lets SCM bring it up at next boot; GUI exposes manual start. -->
         <ServiceControl Id="EnvManagerServiceControl" Name="EnvManagerService"
-                        Start="install" Stop="both" Remove="uninstall" Wait="yes" />
+                        Stop="both" Remove="uninstall" Wait="no" />
+      </Component>
+
+      <!-- v0.9.27: stop the OLD EnvManagerService during MajorUpgrade (afterInstallExecute runs after RemoveExistingProducts) -->
+      <Component Id="StopOldServiceOnUpgrade" Guid="*" Win64="$(var.Win64)">
+        <Condition>WIX_UPGRADE_DETECTED</Condition>
+        <CreateFolder />
+        <RegistryValue Root="HKLM" Key="Software\EnvManager" Name="StopOldServiceOnUpgrade"
+                       Type="integer" Value="1" KeyPath="yes" />
+        <ServiceControl Id="StopOldServiceControl" Name="EnvManagerService"
+                        Stop="uninstall" Wait="no" />
       </Component>
 
       <?if "$(var.WebViewLoaderPresent)" = "1" ?>
       <Component Id="WebViewLoader" Guid="*" Win64="$(var.Win64)">
         <File Id="WebViewLoaderFile" Source="$(var.SourceDir)\WebView2Loader.dll" KeyPath="yes" />
+        <RemoveFile Id="RemoveResidue_WebViewLoader" Name="*.*" On="uninstall" />
       </Component>
       <?endif ?>
     </DirectoryRef>
@@ -72,6 +131,30 @@
       </Component>
     </DirectoryRef>
 
+    <DirectoryRef Id="DesktopFolder">
+      <Component Id="DesktopShortcut" Guid="*" Win64="$(var.Win64)">
+        <Shortcut Id="DesktopShortcut" Name="Env Manager" Target="[INSTALLDIR]env-manager.exe"
+                  WorkingDirectory="INSTALLDIR" Icon="ProductIcon" IconIndex="0" />
+        <RegistryValue Root="HKCU" Key="Software\EnvManager" Name="DesktopShortcut"
+                       Type="integer" Value="1" KeyPath="yes" />
+        <Condition>INSTALLDESKTOPSHORTCUT = "1"</Condition>
+      </Component>
+    </DirectoryRef>
+
+    <!-- v0.9.30 (ADR-0012 D3): backstop cleanup for legacy INSTALLDIR\logs residue.
+         Prior versions wrote GUI logs under [INSTALLDIR]\logs. Wildcard RemoveFile only
+         matches the specific logs subdirectory (not the whole INSTALLDIR — wixsharp
+         #1114 anti-pattern avoided). RemoveFolder removes the empty dir afterwards. -->
+    <DirectoryRef Id="LogsDir">
+      <Component Id="LegacyLogsCleanup" Guid="*" Win64="$(var.Win64)">
+        <CreateFolder />
+        <RemoveFile Id="RemoveLegacyLogsFiles" Name="*.log*" On="uninstall" />
+        <RemoveFolder Id="RemoveLegacyLogsDir" On="uninstall" />
+        <RegistryValue Root="HKCU" Key="Software\EnvManager" Name="LegacyLogsCleanup"
+                       Type="integer" Value="1" KeyPath="yes" />
+      </Component>
+    </DirectoryRef>
+
     <DirectoryRef Id="EnvManagerDataDir">
       <Component Id="EnvManagerDataComponent" Guid="*" Win64="$(var.Win64)">
         <CreateFolder />
@@ -82,6 +165,7 @@
 
     <Feature Id="MainFeature" Title="Env Manager" Level="1">
       <ComponentRef Id="GuiExecutable" />
+      <ComponentRef Id="UninstallShortcut" />
       <ComponentRef Id="CliExecutable" />
       <ComponentRef Id="CliLibrary" />
       <ComponentRef Id="CliDeps" />
@@ -92,20 +176,11 @@
       <?endif ?>
       <ComponentRef Id="ServiceExecutable" />
       <ComponentRef Id="EnvManagerDataComponent" />
+      <ComponentRef Id="StopOldServiceOnUpgrade" />
       <ComponentRef Id="StartMenuShortcut" />
+      <ComponentRef Id="DesktopShortcut" />
+      <ComponentRef Id="LegacyLogsCleanup" />
     </Feature>
 
-    <!-- v0.9.6 SCM failure recovery: restart 3x at 60s intervals, reset after 24h -->
-    <CustomAction Id="SetServiceFailureActions" Directory="INSTALLDIR"
-                  Execute="deferred" Impersonate="no" Return="check"
-                  ExeCommand="[SystemFolder]sc.exe failure EnvManagerService reset= 86400 actions= restart/60000/restart/60000/restart/60000" />
-    <CustomAction Id="SetServiceDelayedAutoStart" Directory="INSTALLDIR"
-                  Execute="deferred" Impersonate="no" Return="check"
-                  ExeCommand="[SystemFolder]sc.exe config EnvManagerService start= delayed-auto" />
-
-    <InstallExecuteSequence>
-      <Custom Action="SetServiceDelayedAutoStart" After="InstallServices">NOT Installed</Custom>
-      <Custom Action="SetServiceFailureActions" After="SetServiceDelayedAutoStart">NOT Installed</Custom>
-    </InstallExecuteSequence>
   </Product>
 </Wix>

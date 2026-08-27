@@ -65,7 +65,13 @@ describe('v0.7 secrets design invariants', () => {
 
   it('ProfileShow masks secret values by default (CLI contract)', () => {
     const src = require('fs').readFileSync('D:/Aworker/env-manager/Program.cs', 'utf8')
-    expect(src).toContain('revealSecrets ? TryDecryptSafe(v.Value) : "<encrypted>"')
+    // Contract check (loosened from a literal `v.Value` reference): the source
+    // has evolved to look up via `profile.Variables.First(...)`. The invariant
+    // that must NOT regress is "masked by default, unmasked only when
+    // revealSecrets is true" on profile secrets.
+    expect(src).toMatch(/ProfileShow[\s\S]*revealSecrets[\s\S]*TryDecryptSafe[\s\S]*"<encrypted>"/)
+    expect(src).toContain('revealSecrets ? TryDecryptSafe(')
+    expect(src).toContain('"<encrypted>"')
   })
 
   it('DpapiHelper uses P/Invoke crypt32 (no NuGet dependency)', () => {

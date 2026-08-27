@@ -1,0 +1,85 @@
+name: WiX v3 EOL supply-chain watch
+
+# Weekly cron (Mon 00:00 UTC) + manual dispatch. Exits non-zero and opens/updates
+# an issue if any of the three monitored signals change:
+#   1. wixtoolset/wix3 releases beyond 3.14.1 (current pin)
+#   2. any new GHSA on wixtoolset
+#   3. Tauri tauri-bundler dev-branch WIX_URL stops pointing at wix314-binaries.zip
+# ADR-0010 Decision 4. Read-only: does not modify the repo.
+
+on:
+  schedule:
+    - cron: '0 0 * * 1'
+  workflow_dispatch:
+
+permissions:
+  issues: write
+
+jobs:
+  watch:
+    runs-on: ubuntu-latest
+    steps:
+      # WiX v3 was archived 2025-02-14; v3.14.1 is final. The "new release"
+      # signal is permanently dead. Instead watch FireGiant's blog RSS for
+      # any post-3.14.1 security advisory touching WiX v3.
+      - name: Check FireGiant blog for new WiX v3 security advisories
+        id: firegiant
+        run: |
+          RSS=$(curl -fsSL https://www.firegiant.com/blog/rss/ || true)
+          # Recent posts (last 12) mentioning WiX v3 / wix3 / security
+          HITS=$(echo "$RSS" | grep -Eio 'wix[[:space:]]*v?3|security' | head -20 || true)
+          COUNT=$(echo "$RSS" | grep -Eioi 'wix[[:space:]]*v?3' | wc -l)
+          echo "firegiant_recent_wix3_mentions=$COUNT" >> "$GITHUB_OUTPUT"
+          echo "count=$COUNT" >> "$GITHUB_OUTPUT"
+          echo "FireGiant RSS scan: $COUNT WiX-v3 mentions in recent posts"
+
+      - name: Check wixtoolset advisories
+        id: ghsa
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const r = await github.rest.securityAdvisories.listGlobalAdvisories({
+              ecosystem: 'nuget',
+              per_page: 100,
+            });
+            const hits = (r.data || []).filter(a =>
+              (a.summary || '').toLowerCase().includes('wix') ||
+              (a.description || '').toLowerCase().includes('wixtoolset')
+            );
+            console.log('wix advisories found:', hits.length);
+            for (const h of hits) console.log('-', h.ghsa_id, h.summary);
+            core.setOutput('count', String(hits.length));
+
+      - name: Check Tauri WIX_URL pin
+        id: tauri
+        run: |
+          URL=$(curl -fsSL \
+            https://raw.githubusercontent.com/tauri-apps/tauri/dev/crates/tauri-bundler/src/bundle/windows/msi/mod.rs \
+            | grep -oE 'wix[0-9]+rtm/wix[0-9]+-binaries\.zip' | head -1 || echo MISSING)
+          echo "wix_url_token=$URL" >> "$GITHUB_OUTPUT"
+          echo "Tauri WIX_URL token: $URL"
+          if [ "$URL" != "wix3141rtm/wix314-binaries.zip" ]; then
+            echo "pin_drift=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "pin_drift=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: File issue on drift
+        if: steps.firegiant.outputs.count != '0' || steps.ghsa.outputs.count != '0' || steps.tauri.outputs.pin_drift == 'true'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const lines = [];
+            if ('${{ steps.firegiant.outputs.count }}' !== '0')
+              lines.push('- FireGiant RSS mentions WiX v3 ' + '${{ steps.firegiant.outputs.count }}' + ' times in recent posts - inspect for new WiX v3 security advisory');
+            if ('${{ steps.ghsa.outputs.count }}' !== '0')
+              lines.push('- ' + '${{ steps.ghsa.outputs.count }}' + ' wixtoolset GHSA(s) sighted');
+            if ('${{ steps.tauri.outputs.pin_drift }}' === 'true')
+              lines.push('- Tauri WIX_URL no longer points at wix3141rtm/wix314-binaries.zip (saw: ' + '${{ steps.tauri.outputs.wix_url_token }}' + ')');
+            const body = '### WiX v3 EOL supply-chain watch alert\n\n' + lines.join('\n') +
+              '\n\nSee ADR-0010 (Decision 4). Investigate before next release.';
+            await github.rest.issues.create({
+              owner: context.repo.owner, repo: context.repo.repo,
+              title: '[watchdog] WiX v3 EOL signal drift',
+              body, labels: ['supply-chain'],
+            });

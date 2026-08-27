@@ -50,7 +50,20 @@ _Avoid_: agent gate, capability filter, agent whitelist
 Key decisions: [ADR 0001](docs/adr/0001-secret-architecture-revision.md) (Secret Architecture Revision)
 covers Phase A-E trade-offs (A5/A7/A8/A9 revised). ADR 0002-0007 cover
 service watchdog, version single-source, release readiness, sensitive data
-redaction, GUI z-index layering, and form control color-scheme override.
+redaction, GUI z-index layering, and form control color-scheme override. ADR 0008 covers
+public release and mirror topologies. [ADR 0009](docs/adr/0009-stay-on-tauri-bundled-wix-v3.md)
+covers packaging: stay on Tauri-bundled WiX v3.14.1 and repair installer.wxs semantics
+(MajorUpgrade schedule + util:ServiceConfig + WIX_UPGRADE_DETECTED service stop).
+[ADR 0010](docs/adr/0010-msi-hygiene-guid-pinning-eol-test-pyramid.md) covers MSI hygiene:
+per-component RemoveFile residue wipe, pinned GUIDs on the three binaries, WiX EOL supply-chain
+watchdog, line-ending normalization chore, and the GUI test pyramid (Vitest + WDIO + MSI matrix).
+[ADR 0011](docs/adr/0011-msi-ui-wixui-installdir-desktop-shortcut.md) covers MSI UI:
+WixUI_InstallDir with en-US localization, optional desktop shortcut, ARPPRODUCTICON,
+MSI string-gate tests, and ICE suppression list. Cherry-picked from f073733.
+
+
+**ADR-0011 Decision 2 follow-up ponytail debt (added 2026-08-23 maintenance pass):** the InstallDir-dialog desktop-shortcut **checkbox UI** is deliberately not implemented in the v0.9.29 MSI — only the `INSTALLDESKTOPSHORTCUT` public property + component Condition ship. Rationale: minimizing WixUI Extension surface (frozen WiX v3.14.1, EOL); a dialog fork is a high-risk change touching localized UI strings. If GUI surfacing becomes a requirement, implement it as a vendored `WixUI_InstallDir` fragment copy with renamed dialog IDs (e.g. `EnvMgrInstallDirDlg`) and a `<UI>` element in `frontend/scripts/`, never by mutating `WixUIExtension.dll` state.
+watchdog covers WixUI_InstallDir localization asset availability.
 
 ## Language (continued)
 
@@ -108,7 +121,7 @@ _Avoid_: post-release, remote phase, stage two
 - **Community Health Files**: The standard set of GitHub repository files that signal project maturity and enable safe external contribution: `CONTRIBUTING.md`, `SECURITY.md`, `CODE_OF_CONDUCT.md`, `.github/ISSUE_TEMPLATE/` (bug report + feature request forms), `.github/PULL_REQUEST_TEMPLATE.md`. All UTF-8 without BOM, placed under `.github/`.
 _Avoid_: community templates, repo metadata, social files
 
-- **Standard README Compliance**: README.md adheres to the `standard-readme` npm specification: required sections in fixed order (Title, Short Description, Table of Contents, Security, Install, Usage, Extra Sections, API, Maintainers, Contributing, License), optional sections (Banner, Badges, Long Description, Background, Thanks). Translations live under `docs/i18n/` (README.zh_CN.md is the complete reference). Root `README_CN.md` was superseded.
+- **Standard README Compliance**: README.md adheres to the `standard-readme` npm specification: required sections in fixed order (Title, Short Description, Table of Contents, Security, Install, Usage, Extra Sections, API, Maintainers, Contributing, License), optional sections (Banner, Badges, Long Description, Background, Thanks). Bilingual variant `README_CN.md` mirrors structure with translated headings. i18n file naming: `README.md` is English, `README_CN.md` is Chinese.
 _Avoid_: readme spec, readme standard
 
 - **Tauri Capability Coverage**: Every custom Tauri IPC command (`run_cli`, `read_gui_setting`, `write_gui_setting`, `frontend_log`) must be explicitly listed in `frontend/src-tauri/capabilities/default.json` permissions. Tauri 2.0 deny-by-default model means unlisted commands are inaccessible from the frontend. Audit verifies no command is silently unguarded.
@@ -118,30 +131,6 @@ _Avoid_: IPC whitelist, permission audit, capability gap
 _Avoid_: content security, CSP policy, style policy
 
 - **Named Pipe DACL**: Explicit Discretionary Access Control List on `\\.\pipe\EnvManager.Service` and `\\.\pipe\EnvManager.Background` named pipe endpoints. Restricts pipe access to the current user SID only. Complements existing `PIPE_FIRST_PIPE_INSTANCE` anti-squatting flag. Implemented via `SECURITY_ATTRIBUTES` with explicit DACL in Rust `ipc.rs`.
-
-## Brand & Asset Terms (v0.9.26+)
-
-Resolved during grill-with-docs session 2026-08-22 (Q1-Q8 on the README/icon work; palette A chosen, icon A chosen).
-
-- **Install Icon**:
-  The family of icons Windows shows **after install**: the Desktop shortcut icon, the exe file icon (Win32 resource), the MSI installer icon, and the system tray icon. All four share a **single source file** — `frontend/src-tauri/icons/icon.ico` (multi-resolution: 16/32/48/256) — from which Tauri derives the rest.
-  _Avoid_: logo (that's the brand layer), app icon (ambiguous), favicon (browser concept).
-
-- **Brand Iconset**:
-  All visual assets under `docs/assets/brand/` (logo, theme variants, chameleon env variants, favicons, social preview). Audience: README, docs, sharing. Not the Windows system surface.
-  _Avoid_: logo assets (plural, unsorted), icons (too vague).
-
-- **Environment Color Token**:
-  The three-color mapping derived from the chameleon variants: Dev ↔ emerald `#10B981`, Staging ↔ cyan `#06B6D4`, Prod ↔ amber `#F59E0B`. Constrains **Brand Iconset** and README hero background only. Install Icon is **not** bound to env color (single emerald icon for all users). Channel-specific swapping is a future build-time concern.
-  _Avoid_: theme (user GUI setting), color scheme (unspecified).
-
-- **Hero Board**:
-  The first-screen visual asset of README (and of each i18n variant). In v0.9.26 the chosen form is **mini hero**: chameleon motif + metadata (version / license / platform), no project name, no tagline; obsidian `#111318` base with the three-token gradient as motif. The logo itself stays in the separate `<picture>` slot, not inside the hero.
-  _Avoid_: banner (overloaded), cover, header (layout term).
-
-- **Variant Chameleon**:
-  Any single member of the per-environment chameleon set (`env-chameleon-dev.png` / `env-chameleon-staging.png` / `env-chameleon-prod.png`). The grouped board is `env_variants_showcase.png`.
-  _Avoid_: logo variant (confused with light/dark logo variants).
 _Avoid_: pipe ACL, pipe permissions, pipe security descriptor
 
 - **Code Signing (Phase 2)**: Authenticode signing of `env-manager.exe`, `env-manager-cli.exe`, `env-manager-service.exe`, and MSI installer with an OV (Organization Validation) code signing certificate. Eliminates SmartScreen "unrecognized app" warning after reputation builds. EV certificates no longer guarantee instant SmartScreen bypass as of 2025. Deferred to Phase 2.
@@ -158,7 +147,8 @@ The v0.9.12 C# helper that masks 22 secret-bearing patterns from exception messa
 _Avoid_: error scrubber, message filter, log sanitizer
 
 **SecretString (C#)**:
-A ef struct wrapping a decrypted secret value. Zeroes the underlying char[] on Dispose() to minimize plaintext lifetime in heap memory. Used at ProfileRevealSecret and ProfileLaunch decrypt sites. The Rust equivalent uses the secrecy crate's SecretString with zeroize on drop.
+A
+ef struct wrapping a decrypted secret value. Zeroes the underlying char[] on Dispose() to minimize plaintext lifetime in heap memory. Used at ProfileRevealSecret and ProfileLaunch decrypt sites. The Rust equivalent uses the secrecy crate's SecretString with zeroize on drop.
 _Avoid_: secure string, encrypted wrapper, secret holder
 
 **Redaction Vocabulary**:
@@ -188,3 +178,63 @@ _Avoid_: form theme binding, control theme override, light-only controls
 - **Release Gate**: The phrase "开始发布" is the explicit user authorization required before creating any git tag, GitHub Release, or external channel submission (winget/Scoop/Chocolatey).
 - **Mirror Topology**: GitHub is canonical; GitLab + Codeberg are read-only mirrors updated by `qte77/gha-github-mirror-action` on push to `main`.
 - **README-i18n root**: Root README.md is the English landing page; translations live under `docs/i18n/README.<locale>.md` with an `<!-- README-I18N:START/END -->` switcher block.
+## MSI Packaging & Toolchain Terms (v0.9.27)
+
+Resolved during grill-with-docs session 2026-08-22 on MSI install-hang fix on frozen WiX v3.
+
+- **Tauri-Bundled WiX**: The WiX v3.14.1 RTM toolchain pinned inside `tauri-bundler` (`WIX_URL` points at `wix314-binaries.zip`, cached under `~/.cache/tauri/WixTools314`); the project deliberately stays on this frozen chain because Tauri v2 has officially declined to migrate (issue #10348). MajorUpgrade semantics, ICE rules, and ServiceInstall behaviour are bounded by WiX v3 only.
+_Avoid_: modern WiX toolchain, v5+ toolchain
+
+- **WixUtilExtension-ServiceConfig**: The transactional inline replacement for the deprecated `sc.exe failure/config` custom-action pair. Nested inside `ServiceInstall`, runs inside the MSI transaction with native rollback.
+_Avoid_: sc.exe CA, deferred sc.exe
+
+- **Upgrade-Stage Service Stop**: The pattern of placing a separate `ServiceControl` in its own component, gated on `WIX_UPGRADE_DETECTED`, with only `Stop="uninstall"` (no Start/Remove), so the old version's service is stopped before its files are removed. Decouples "stop the previous version" from "install the new version".
+_Avoid_: inline upgrade stop, mixed-purpose service control
+
+- **MajorUpgrade Schedule (afterInstallExecute)**: The explicit schedule where `RemoveExistingProducts` is deferred until after `InstallExecute`, preventing file-in-use reboot prompts during silent install. Replaces the WiX v3 default `afterInstallValidate` for service-shipping MSI projects.
+_Avoid_: default schedule, afterInstallValidate
+
+- **ServiceInstall Vital Flag**: `ServiceInstall ... Vital="yes"` so a failed service install rolls the transaction back rather than leaving a half-installed product. Pair with `ServiceControl ... Wait="yes"` (30-second hard cap per MSDN).
+_Avoid_: Vital="no", Wait="no"
+
+- **Per-Component RemoveFile**: `<RemoveFile Name="*.*" On="uninstall"/>` placed inside each file component removes *all* files the component ever dropped in that directory on uninstall. Idempotent (file absent = no-op), transactional via MSI engine, junction-safe by construction (no recursion). This is the inverse of relying on GUID-matched component tracking — it is *what makes unstable Heat-generated GUIDs survivable*.
+  _Avoid_: util:RemoveFolderEx (CVE-2024-29188 junction traversal, transactional-rollback burden, unnecessary power here).
+
+- **Component GUID Stability (`Guid="*"`)**: In WiX v3, `Component/@Guid="*"` generates a *deterministic* GUID via RFC 4122 v3 over (install directory + KeyPath filename). It is stable across rebuilds *unless* (a) the file is renamed, (b) its install directory changes, (c) Win64-ness switches `ProgramFilesFolder` ↔ `ProgramFiles64Folder`. Components keyed on file path cannot be renamed without an ORPHAN component (old GUID never matches, new GUID never cleans). Pin explicit GUIDs only on the three components most likely to change identity (GuiExecutable, CliExecutable, ServiceExecutable); leave utility/registry/shortcut components on `*` — matches Tauri's own `main.wxs` pattern.
+  _Avoid_: `Guid="*"` on components whose file the project may one day rename (any new .exe / .dll).
+
+- **Line-Ending Normalization**: A single `chore(repo)` commit running `git add --renormalize .` against the root, *plus* a `.editorconfig` at the root with `end_of_line = lf`. `.gitattributes` is already in place (`*.md text eol=lf` etc.); renormalize makes the index match it. `core.autocrlf` is a local trap, never a fix; VS Code `files.eol = auto` is the default Windows trap. Cured once, governed forever by the two repo-level files.
+  _Avoid_: dos2unix, git filter-repo, per-branch rebase-fixes.
+
+- **GUI Test Pyramid (1.0 gate)**: Vitest + mockIPC for IPC contract unit tests (existing 37 files stay). WebdriverIO + `@wdio/tauri-service` for 8-12 critical-flow e2e on Windows CI (no xvfb needed on windows-latest). MSI upgrade matrix (default-path + custom-path, empty-install + with-prior-install) runs in GitHub Actions via `tauri-action`. Coverage gates: CLI ≥ 80%, Rust service ≥ 80%, frontend unit ≥ 70%, e2e flow-count only (no line-coverage target — registry writes are mock-only in unit tests by design). Playwright stays for browser-mode layout/a11y, never drives Tauri IPC.
+  _Avoid_: Playwright-as-e2e-driver for Tauri (no CDP on macOS/Linux WebViews), chasing e2e line coverage, mocking the registry-write layer.
+
+- **WiX v3 EOL Supply-Chain Watch**: Weekly GitHub Actions workflow runs on `schedule: cron: '0 0 * * 1'` + `workflow_dispatch`. Fails the run and files an issue if any of: (a) `wixtoolset/wix3` publishes a release newer than 3.14.1, (b) a new GHSA is filed against `wixtoolset`, (c) Tauri dev-branch `crates/tauri-bundler/src/bundle/windows/msi/mod.rs` stops pointing `WIX_URL` at `wix3141rtm/wix314-binaries.zip`. Zero runtime cost, detects silent upstream drift before it contaminates the next release build.
+  _Avoid_: vendoring the 26MB WixTools314 zip into git LFS.
+- **ICE Suppression List**: An inline-commented array in build.mjs (`ICE_SUPPRESSIONS`) naming every suppressed ICE with its one-line rationale (e.g., `// ICE91 perMachine benign warning`). Survives extension by appending `// <ICE_ID> <reason>`. Aligns with WiX v3 industry practice (VSCodium, PowerToys).
+_Avoid_: blanket `-sice` suppression without per-ICE comments.
+
+- **MSI UI Dialog Set**: The chosen WixUI_InstallDir dialog sequence for Env Manager: Welcome → InstallDir (with optional desktop shortcut checkbox) → VerifyReady → Finish. No License page (Apache-2.0, no consent requirement). `WIXUI_INSTALLDIR` must point to an all-uppercase Directory Id (`INSTALLDIR`) — ICE does not validate this pair, and missing it causes runtime error 2819.
+- **Desktop Shortcut Checkbox**: A `VerifyReadyDlg`-pattern checkbox on the InstallDir dialog bound to `INSTALLDESKTOPSHORTCUT=1|0`. When 1, MSI creates a Desktop folder shortcut; when 0, only Start Menu shortcut is installed. Follows the WiX v3 `CustomizeDlg` pattern.
+- **ARPPRODUCTICON**: MSI property pointing to the product's icon resource (`ProductIcon`) shown in Windows Control Panel "Programs and Features". References the icon.ico from `frontend/src-tauri/icons/` (cherry-picked from f073733).
+- **Icon Cherry-Pick (f073733)**: The frontend/src-tauri/icons emerald icon family (icon.ico, icon.png, 32x32.png, 128x128.png, 128x128@2x.png) plus docs/assets/brand/hero.svg, cherry-picked from main to codex/v1.0.0 as commit fb164b9. The icon.ico is the ARPPRODUCTICON source.
+- **WiX UI Extension Integration**: Adding WixUI_InstallDir requires `-ext WixUIExtension.dll` on both candle and light. The extension does NOT include .wxl files — `sdk\wixui\WixUI_en-US.wxl` must exist physically under the WiX toolchain directory or light will fail with LGHT0103.
+- **MSI String-Gate Tests**: Three canonical assertions on installer.wxs source: (1) `WIXUI_INSTALLDIR=INSTALLDIR`, (2) `<UIRef Id="WixUI_InstallDir"/>`, (3) `-ext WixUIExtension.dll` present in build.mjs candle/light args. These close the ICE blind spot that build+validate green but runtime error 2819.
+- **ICE Suppression List**: An inline-commented array in build.mjs naming every suppressed ICE with its rationale (e.g., ICE91 perMachine benign warning). Survives extensions by adding `// <ICE_ID> <reason>` lines.
+_Avoid_: blanket -sice suppression without per-ICE comments.
+
+## MSI Lifecycle & Logging Terms (v0.9.30)
+
+Resolved during grill-with-docs session 2026-08-24 on two user-reported MSI bugs (no uninstall entry; logs residue in INSTALLDIR).
+
+- **In-INSTALLDIR Uninstall Shortcut**: A WiX non-advertised Shortcut component inside `DirectoryRef Id="INSTALLDIR"` targeting `[System64Folder]msiexec.exe /x [ProductCode]`, paired with a `RegistryValue KeyPath` under **HKMU** (HKCU would trip ICE37/ICE57 on per-machine installs). This is the FireGiant How-To / Rob Mensching canonical pattern. Safe under MajorUpgrade because `[ProductCode]` evaluates at *runtime* against the currently installed product, not at build time.
+  _Avoid_: Start Menu uninstall entry (less discoverable); appwiz.cpl shortcut (just opens the ARP list, not a real uninstall); ARP-only (fails user expectation).
+
+- **Log Directory Externalization**: GUI logs live at `%LOCALAPPDATA%\<App>\logs` (PowerToys, 1Password 8, Chrome, tauri-plugin-log v2 defaults; VS Code/Discord still on Roaming are legacy). Service logs (`env-manager-service.exe`) continue under `%ProgramData%\<App>\` because service accounts have no meaningful LocalAppData. MSI never touches LocalAppData on uninstall (industry default = keep user logs; Chrome offers it as opt-in only).
+  _Avoid_: writing logs inside INSTALLDIR (Program Files is read-only for standard users; MSI treats runtime files as orphans; never upgraded cleanly).
+
+- **Legacy INSTALLDIR Logs Backstop**: A single paired `CreateFolder` + `RemoveFile Name="*.log*"` + `RemoveFolder` component inside a dedicated `LogsDir` directory reference. Closes pre-v0.9.30 installs' residue without touching other components. Explicitly NOT `util:RemoveFolderEx` (CVE-2024-29188 junction traversal when per-machine MSI touches per-user data; needs WiX ≥ 3.14.1).
+  _Avoid_: bare `CreateFolder` component (wixsharp #1114 — removes empty skeleton but not the parent dir); `*.*` wildcard on INSTALLDIR itself (risky on shared Program Files).
+
+- **Date-Based Log Retention (14-day sweep)**: GUI startup spawns a fire-and-forget thread walking `%LOCALAPPDATA%\<App>\logs` and removing files whose `metadata.modified() < now - 14 days`. Daily rotation already bounds per-run volume; the sweep keeps total directory age bounded. Aligns with 1Password 8 exactly. Per-file **size** cap is explicitly *rejected*: tracing-appender doesn't support it natively, switching to tauri-plugin-log (40KB KeepOne) is a larger stack change for marginal benefit.
+  _Avoid_: rewriting to tauri-plugin-log for retention alone; default tracing-appender `rolling::daily` without any retention sweep (industry default logs-out-of-folder, unbounded growth).
