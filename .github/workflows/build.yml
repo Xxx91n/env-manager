@@ -154,7 +154,7 @@ jobs:
           if (-not (Test-Path 'release/cli-only/Env-Manager_cli-only_*_x64.zip')) { throw 'CLI-only ZIP missing' }
           $msi = Get-ChildItem 'release/msi/*.msi'
           if ($msi.Count -ne 1) { throw 'Expected exactly one MSI' }
-          if ($msi.Name -match '_[a-zA-Z]{2}-[a-zA-Z]{2,3}\.msi
+          if ($msi.Name -match '_[a-zA-Z]{2}-[a-zA-Z]{2,3}\.msi') { throw 'Localized MSI suffix is forbidden' }
 
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
@@ -226,16 +226,3 @@ jobs:
           files: artifacts/*
           draft: true
           generate_release_notes: true
-) { throw 'Localized MSI suffix is forbidden' }
-
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
-        with:
-          name: env-manager-portable
-          path: release/portable/*
-          if-no-files-found: error
-
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
-        with:
-          name: env-manager-msi
-          path: release/msi/*.msi
-          if-no-files-found: error
