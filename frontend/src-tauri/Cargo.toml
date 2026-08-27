@@ -20,7 +20,7 @@ tauri-plugin-dialog = "2.0"
 tauri-plugin-single-instance = "2.0"
 secrecy = "0.10"
 zeroize = { version = "1", features = ["derive"] }
-windows-sys = { version = "0.59", features = [
+windows-sys = { version = "0.61", features = [
     "Win32_Foundation",
     "Win32_Security",
     "Win32_System_JobObjects",
