@@ -91,17 +91,15 @@ jobs:
         working-directory: frontend
         run: npx vitest run
 
-      - name: Audit Rust dependencies (src-tauri)
-        uses: rustsec/audit-check@69366f33c96575abad1ee0dba8212993eecbe998 # v2.0.0
+      - name: Install cargo-audit
+        uses: taiki-e/install-action@fcf5432d9f50d67e37ee6e29bdb7a224ff67b4a7 # v2.86.8
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          path: frontend/src-tauri
+          tool: cargo-audit
 
-      - name: Audit Rust dependencies (service)
-        uses: rustsec/audit-check@69366f33c96575abad1ee0dba8212993eecbe998 # v2.0.0
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          path: service
+      - name: Audit Rust dependencies
+        run: |
+          cargo audit --file frontend/src-tauri/Cargo.lock
+          cargo audit --file service/Cargo.lock
 
       - name: Audit NuGet dependencies
         run: dotnet list package --vulnerable --include-transitive
