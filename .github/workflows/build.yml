@@ -91,6 +91,21 @@ jobs:
         working-directory: frontend
         run: npx vitest run
 
+      - name: Audit Rust dependencies (src-tauri)
+        uses: rustsec/audit-check@69366f33c96575abad1ee0dba8212993eecbe998 # v2.0.0
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          path: frontend/src-tauri
+
+      - name: Audit Rust dependencies (service)
+        uses: rustsec/audit-check@69366f33c96575abad1ee0dba8212993eecbe998 # v2.0.0
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          path: service
+
+      - name: Audit NuGet dependencies
+        run: dotnet list package --vulnerable --include-transitive
+
       - name: Run Pester integration tests
         shell: pwsh
         run: |
@@ -186,6 +201,23 @@ jobs:
           if ($msi.Count -ne 1) { throw 'Expected exactly one MSI' }
           if ($msi.Name -match '_[a-zA-Z]{2}-[a-zA-Z]{2,3}\.msi') { throw 'Localized MSI suffix is forbidden' }
 
+      - name: MSI install/uninstall smoke test
+        shell: pwsh
+        run: |
+          $msi = (Get-ChildItem 'release/msi/*.msi')[0].FullName
+          $log = Join-Path $env:TEMP 'env-manager-msi-smoke.log'
+          $install = Start-Process msiexec.exe -ArgumentList '/i', "`"$msi`"", '/qn', '/norestart', '/log', "`"$log`"" -Wait -PassThru
+          if ($install.ExitCode -ne 0) { Get-Content $log -Tail 40; throw "MSI install failed (exit $($install.ExitCode))" }
+          $installDir = 'C:\Program Files\Env Manager'
+          foreach ($f in @('env-manager.exe', 'env-manager-cli.exe')) {
+            if (-not (Test-Path (Join-Path $installDir $f))) { throw "Installed file missing: $f" }
+          }
+          & (Join-Path $installDir 'env-manager-cli.exe') --version | Out-Host
+          if ($LASTEXITCODE -ne 0) { throw 'Installed CLI --version failed' }
+          $uninstall = Start-Process msiexec.exe -ArgumentList '/x', "`"$msi`"", '/qn', '/norestart', '/log', "`"$log.uninstall.log`"" -Wait -PassThru
+          if ($uninstall.ExitCode -ne 0) { throw "MSI uninstall failed (exit $($uninstall.ExitCode))" }
+          if (Test-Path (Join-Path $installDir 'env-manager.exe')) { throw 'Uninstall left env-manager.exe behind' }
+
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: env-manager-portable
@@ -242,6 +274,20 @@ jobs:
       id-token: write
       attestations: write
     steps:
+      - uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4.3.0
+
+      - name: Verify tag matches project versions
+        shell: pwsh
+        run: |
+          $tag = '${{ github.ref_name }}' -replace '^v', ''
+          $csproj = ([xml](Get-Content env-manager.csproj)).Project.PropertyGroup.Version
+          $tauri = (Get-Content frontend/src-tauri/tauri.conf.json -Raw | ConvertFrom-Json).version
+          $pkg = (Get-Content frontend/package.json -Raw | ConvertFrom-Json).version
+          if ($tag -ne $csproj -or $tag -ne $tauri -or $tag -ne $pkg) {
+            throw "Version mismatch: tag=$tag csproj=$csproj tauri=$tauri package.json=$pkg"
+          }
+          "Version gate OK: $tag"
+
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
         with:
           pattern: env-manager-*
