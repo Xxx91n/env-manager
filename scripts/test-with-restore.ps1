@@ -383,17 +383,19 @@ function Test-RawTrailingBackslashInvocation {
   } finally {
     if ($afterKey) { $afterKey.Dispose() }
   }
-  if ($afterPath -cne $beforePath) {
-    $i = 0; $max = [Math]::Min($beforePath.Length, $afterPath.Length)
-    while ($i -lt $max -and $beforePath[$i] -eq $afterPath[$i]) { $i++ }
-    $start = [Math]::Max(0, $i - 30)
-    $beforeFrag = if ($beforePath.Length -gt $start) { $beforePath.Substring($start, [Math]::Min(80, $beforePath.Length - $start)) } else { '' }
-    $afterFrag  = if ($afterPath.Length  -gt $start) { $afterPath.Substring($start,  [Math]::Min(80, $afterPath.Length  - $start)) } else { '' }
-    Write-Host "[diag] before len=$($beforePath.Length) after len=$($afterPath.Length) firstDiff@$i" -ForegroundColor Yellow
-    Write-Host "[diag] before@$start: $beforeFrag" -ForegroundColor Yellow
-    Write-Host "[diag] after@$start:  $afterFrag" -ForegroundColor Yellow
-    throw "trailing-backslash test did not restore the original user PATH"
+  # CLI normalizes on write (Split RemoveEmptyEntries + Join ';'), so a dirty image
+  # PATH (double/trailing ";") cannot round-trip byte-identically on CI runners.
+  # Compare semantically: same entries, same order, case-sensitive, empty segments
+  # folded out on both sides.
+  $beforeEntries = $beforePath.Split(';', [StringSplitOptions]::RemoveEmptyEntries)
+  $afterEntries  = $afterPath.Split(';', [StringSplitOptions]::RemoveEmptyEntries)
+  $pathSemanticsEqual = ($beforeEntries.Count -eq $afterEntries.Count)
+  if ($pathSemanticsEqual) {
+    for ($i = 0; $i -lt $beforeEntries.Count; $i++) {
+      if ($beforeEntries[$i] -cne $afterEntries[$i]) { $pathSemanticsEqual = $false; break }
+    }
   }
+  if (-not $pathSemanticsEqual) { throw "trailing-backslash test did not restore the original user PATH" }
 }
 
 if (-not (Test-Path $CliPath)) {
