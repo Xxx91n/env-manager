@@ -210,7 +210,7 @@ Failure triage: hang at `InstallFinalize` -> `StartServices` with lowest `Action
 | jsdom 25.x | DOM environment for tests |
 | @testing-library/svelte 5.x | Svelte component testing utilities |
 | @playwright/test 1.x | E2E browser testing |
-| archiver 7.x | ZIP archive creation for portable/CLI-only builds |
+| archiver 8.x | ZIP archive creation (ESM named exports; use `new ZipArchive(...)`, no default export) |
 
 ### Cargo (Rust)
 
