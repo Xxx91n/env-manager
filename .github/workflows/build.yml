@@ -115,7 +115,7 @@ jobs:
 
       - name: Upload Pester JUnit results
         if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: pester-junit-results
           path: test-results/*.junit.xml
@@ -217,7 +217,7 @@ jobs:
           if ($uninstall.ExitCode -ne 0) { throw "MSI uninstall failed (exit $($uninstall.ExitCode))" }
           if (Test-Path (Join-Path $installDir 'env-manager.exe')) { throw 'Uninstall left env-manager.exe behind' }
 
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: env-manager-portable
           path: |
@@ -225,7 +225,7 @@ jobs:
             release/portable/Env-Manager_portable_*_x64.zip
           if-no-files-found: error
 
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: env-manager-cli-only
           path: |
@@ -233,7 +233,7 @@ jobs:
             release/cli-only/Env-Manager_cli-only_*_x64.zip
           if-no-files-found: error
 
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: env-manager-msi
           path: release/msi/*.msi
