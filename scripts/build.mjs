@@ -21,7 +21,7 @@ import {
 import { resolve, join, dirname, basename } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { arch, tmpdir } from 'node:os'
-import archiver from 'archiver'
+import { ZipArchive } from 'archiver'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const projectRoot = resolve(__dirname, '..')
@@ -160,7 +160,7 @@ function makeZip(sourceDir, zipPath) {
   if (existsSync(zipPath)) rmSync(zipPath, { force: true })
   return new Promise((resolveP, reject) => {
     const output = createWriteStream(zipPath)
-    const archive = archiver('zip', { zlib: { level: 6 }, forceLocalTime: true })
+    const archive = new ZipArchive({ zlib: { level: 6 }, forceLocalTime: true })
     output.on('close', () => {
       console.log('[build] ZIP created: ' + zipPath + ' (' + archive.pointer() + ' bytes)')
       resolveP()
