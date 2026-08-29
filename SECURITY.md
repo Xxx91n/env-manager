@@ -31,3 +31,16 @@ Env Manager handles environment variable mutation and secret provider integratio
 - **Input validation**: CLI command whitelist, max 64 args, max 32767 chars per arg, null bytes and control characters rejected.
 
 See `AGENTS.md` for the complete list of 40+ hard boundaries.
+
+## Known Dependency Advisories & Disposition
+
+As of 2026-08-29, all 11 open Dependabot advisories were triaged using a reachability-based pyramid (runtime-risk first; dev-only / SSR-only / platform-unreachable second). All 11 were assessed as **VEX: Not Affected** and dismissed with per-alert comments in the GitHub alert timeline (audit-visible). Summary:
+
+| Alerts | Package (installed) | Reason | Tracking |
+|--------|--------------------|--------|----------|
+| 7 (medium) | `svelte 4.2.20` | SSR-only XSS family; env-manager is a purely client-side SPA inside WebView2 (no SSR rendering path). Fixes exist only on Svelte 5.x. | Svelte 5 migration: issue #28 |
+| 3 (1 high, 2 medium) | `vite 5.4.21` | Dev-server-only advisories (require `--host` network exposure); production artifacts ship via `tauri://` with no dev server. Vite 5 is EOL upstream. | Vite 6.4.3+ upgrade: issue #29 |
+| 1 (medium) | `esbuild 0.19.12` | Dev-server CORS advisory; not present in production builds. | Same as above |
+| 1 (medium) | Rust `glib 0.18.5` (Tauri transitive) | gtk-rs stack is not compiled on Windows builds. Same disposition as tauri-apps/tauri#12048 (`status: upstream`). | — |
+
+Production application code carries no runtime vulnerability among these. If the architecture changes (e.g., SSR or network-exposed dev server is introduced), these dispositions must be re-evaluated.
