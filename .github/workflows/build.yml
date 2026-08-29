@@ -126,6 +126,11 @@ jobs:
         run: |
           ./scripts/check-doc-sync.ps1
 
+      - name: i18n README drift check
+        shell: pwsh
+        run: |
+          ./scripts/check-readme-i18n.ps1
+
       - name: Build frontend
         working-directory: frontend
         run: npm run build
