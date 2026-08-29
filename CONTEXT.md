@@ -65,6 +65,10 @@ MSI string-gate tests, and ICE suppression list. Cherry-picked from f073733.
 **ADR-0011 Decision 2 follow-up ponytail debt (added 2026-08-23 maintenance pass):** the InstallDir-dialog desktop-shortcut **checkbox UI** is deliberately not implemented in the v0.9.29 MSI — only the `INSTALLDESKTOPSHORTCUT` public property + component Condition ship. Rationale: minimizing WixUI Extension surface (frozen WiX v3.14.1, EOL); a dialog fork is a high-risk change touching localized UI strings. If GUI surfacing becomes a requirement, implement it as a vendored `WixUI_InstallDir` fragment copy with renamed dialog IDs (e.g. `EnvMgrInstallDirDlg`) and a `<UI>` element in `frontend/scripts/`, never by mutating `WixUIExtension.dll` state.
 watchdog covers WixUI_InstallDir localization asset availability.
 
+[ADR 0012](docs/adr/0012-msi-uninstall-shortcut-logs-localappdata.md) covers MSI lifecycle: in-INSTALLDIR uninstall shortcut, log directory externalization to LocalAppData, legacy INSTALLDIR logs backstop, and 14-day log retention sweep.
+
+[ADR 0013](docs/adr/0013-resvg-js-for-svg-rendering.md) covers README asset rendering: use @resvg/resvg-js as committed npm devDependency instead of native rsvg-convert (Windows stdout corruption, no winget package). resvg does not support animation; the hero-motion.json per-frame composition architecture handles this.
+
 ## Language (continued)
 
 **Mount Refresh Policy**:
@@ -121,7 +125,7 @@ _Avoid_: post-release, remote phase, stage two
 - **Community Health Files**: The standard set of GitHub repository files that signal project maturity and enable safe external contribution: `CONTRIBUTING.md`, `SECURITY.md`, `CODE_OF_CONDUCT.md`, `.github/ISSUE_TEMPLATE/` (bug report + feature request forms), `.github/PULL_REQUEST_TEMPLATE.md`. All UTF-8 without BOM, placed under `.github/`.
 _Avoid_: community templates, repo metadata, social files
 
-- **Standard README Compliance**: README.md adheres to the `standard-readme` npm specification: required sections in fixed order (Title, Short Description, Table of Contents, Security, Install, Usage, Extra Sections, API, Maintainers, Contributing, License), optional sections (Banner, Badges, Long Description, Background, Thanks). Bilingual variant `README_CN.md` mirrors structure with translated headings. i18n file naming: `README.md` is English, `README_CN.md` is Chinese.
+- **Standard README Compliance**: README.md adheres to the `standard-readme` npm specification: required sections in fixed order (Title, Short Description, Table of Contents, Security, Install, Usage, Extra Sections, API, Maintainers, Contributing, License), optional sections (Banner, Badges, Long Description, Background, Thanks). i18n file naming: `README.md` is English (sole authority), translations live under `docs/i18n/README.<locale>.md` (zh_CN is the complete reference).
 _Avoid_: readme spec, readme standard
 
 - **Tauri Capability Coverage**: Every custom Tauri IPC command (`run_cli`, `read_gui_setting`, `write_gui_setting`, `frontend_log`) must be explicitly listed in `frontend/src-tauri/capabilities/default.json` permissions. Tauri 2.0 deny-by-default model means unlisted commands are inaccessible from the frontend. Audit verifies no command is silently unguarded.
@@ -238,3 +242,43 @@ Resolved during grill-with-docs session 2026-08-24 on two user-reported MSI bugs
 
 - **Date-Based Log Retention (14-day sweep)**: GUI startup spawns a fire-and-forget thread walking `%LOCALAPPDATA%\<App>\logs` and removing files whose `metadata.modified() < now - 14 days`. Daily rotation already bounds per-run volume; the sweep keeps total directory age bounded. Aligns with 1Password 8 exactly. Per-file **size** cap is explicitly *rejected*: tracing-appender doesn't support it natively, switching to tauri-plugin-log (40KB KeepOne) is a larger stack change for marginal benefit.
   _Avoid_: rewriting to tauri-plugin-log for retention alone; default tracing-appender `rolling::daily` without any retention sweep (industry default logs-out-of-folder, unbounded growth).
+## README Display Terms (v0.9.30+)
+
+Resolved during readme-display-grill session 2026-08-29 (follow-up branch:
+rsvg-convert dependency formalization + i18n native-quality translation).
+
+- **rsvg-convert Wrapper**: A Node.js CLI wrapper script (`scripts/rsvg-convert.js`)
+  using `@resvg/resvg-js` (napi-rs prebuilt) that provides `rsvg-convert`
+  CLI compatibility for Python skill scripts. Replaces the native
+  `rsvg-convert` binary on Windows where it has known stdout binary
+  corruption issues (librsvg#676, #812). Discovered by `shutil.which()`
+  in `render_motion_gif.py`. See ADR-0013.
+  _Avoid_: installing native `rsvg-convert` via winget/MSYS2/choco on
+  Windows; placing the wrapper in `.codex-tmp/` (ephemeral, gitignored,
+  not reproducible).
+
+- **i18n README Drift Check**: A CI guard (`scripts/check-readme-i18n.ps1`)
+  that verifies structural consistency between the English README (sole
+  authority) and all 9 locale files: H2 heading count match, i18n switcher
+  block present, no inline version strings, hero.gif + demo.gif referenced,
+  For AI Agents section present. Exits non-zero on drift.
+  _Avoid_: relying on human review for locale consistency; omitting the
+  negative-test injection before shipping.
+
+- **atomcode-assisted Translation**: Using the `atomcode` CLI with `[fast]`
+  mode hint to produce native-quality translations of README content from
+  English to locale languages (ja, ko, de, fr, es, pt, ru, ar). Technical
+  terms (Env Manager, CLI, GUI, Tauri, DPAPI, PATH, etc.) are preserved
+  untranslated; only prose and section headings are translated.
+  _Avoid_: mechanical/copy-based translation without native-quality review;
+  translating technical identifiers and command names.
+
+- **hero-motion.json Motion Spec**: A JSON specification describing
+  per-frame animation of SVG layers for GitHub-safe GIF output. Defines
+  width, fps, duration, color/dither settings, reveal clips, and layer
+  enter/exit transitions. Rendered via `render_motion_gif.py` (Python +
+  Pillow + ffmpeg + rsvg-convert wrapper) into `hero.gif`. resvg core
+  does not support SMIL animation; the per-frame composition architecture
+  is the correct static-renderer path.
+  _Avoid_: animated SVG with SMIL/CSS (GitHub camo proxy breaks it);
+  hardcoding version strings in hero.svg (use shields.io dynamic badge).

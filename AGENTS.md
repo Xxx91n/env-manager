@@ -71,7 +71,7 @@ env-manager/
 +- docs/                       # User documentation (cli-commands, architecture, build-and-release, backup-and-profiles, secret-architecture-blueprint, secret-providers-guide, adr/)
 +- docs/agents/                # Agent-specific reference (issue-tracker, domain)
 +- docs/history/              # Process artifacts (ui-audit, session records)
-+- scripts/                    # Build orchestrator (build.mjs), test harness, migration scripts, snapshot scripts
++- scripts/                    # Build orchestrator (build.mjs), test harness, rsvg-convert wrapper, migration scripts, snapshot scripts
 +- service/                    # Rust service crate (env-manager-service.exe, named pipe IPC, reconcile loop, audit ledger)
 +- frontend/                   # Tauri GUI application (src/, src-tauri/, tests/)
 +- release/                    # Build output (gitignored): portable/, cli-only/, msi/

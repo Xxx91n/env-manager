@@ -278,7 +278,7 @@ Problem solved: L9, L10 (fully), L8 (fully).
 2. Per-session host snapshot (`snapshot-host-env.ps1`) still runs before any dev session that touches the CLI.
 3. Existing tests pass without modification unless the test file documented the breaking change in the AGENTS.md hard-boundaries ledger.
 4. Build artifacts land in `release/portable`, `release/cli-only`, `release/msi` per the AGENTS.md mandatory build-after-code-changes rule.
-5. AGENTS.md hard-boundaries ledger updated in the same commit; README + README_CN updated for any user-visible CLI or GUI change.
+5. AGENTS.md hard-boundaries ledger updated in the same commit; README.md + docs/i18n/README.zh_CN.md updated for any user-visible CLI or GUI change.
 6. i18n: every new user-facing string lands in all 10 locales.
 7. CodeGraph index rebuilt after any code change.
 8. No new dependencies without explicit user request.

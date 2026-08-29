@@ -7,6 +7,42 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- CI hardening (P0): actionlint gate, dependency-review on PRs, Dependabot for GitHub Actions/cargo/npm, `timeout-minutes` on all jobs, `Swatinem/rust-cache` in verify + package jobs
+- CI hardening (P1): RustSec audit (src-tauri + service), NuGet vulnerability audit, MSI quiet install/run/uninstall smoke test, release version-consistency gate (tag vs csproj vs tauri.conf vs package.json)
+
+### Fixed
+- CI: replace `rustsec/audit-check` (v2.0.0 JSON bug) with `taiki-e/install-action` + `cargo audit`
+- CI: MSI smoke probes installed CLI with bare args per build.mjs version-probe protocol
+- Tests: replace hardcoded `D:/Aworker` paths with repo-relative resolve; fix trailing-backslash PATH round-trip in snapshot tests
+- Frontend: regenerate `package-lock.json` against registry.npmjs.org (npmmirror cache broke `npm ci` in CI)
+- Deps: archiver v8 (ESM named exports — use `ZipArchive` class)
+
+## [0.9.30] - 2026-08-27
+
+### Added
+- MSI: uninstall shortcut next to the EXE; GUI logs externalized to `%LOCALAPPDATA%\EnvManager\logs`; clean uninstall removes the entire install dir (ADR 0012)
+- Brand icons applied to exe, MSI, and installer
+- SignPath signing prep: code-signing policy page and artifact metadata alignment
+
+### Fixed
+- Release published to GitHub with MSI, portable zip, CLI-only zip, and `SHA256SUMS.txt`
+
+## [0.9.29] - 2026-08-23
+
+### Added
+- MSI UI: custom install directory (`WixUI_InstallDir`), `ARPPRODUCTICON`, optional desktop shortcut property (ADR 0011)
+
+## [0.9.28] - 2026-08-23
+
+### Added
+- MSI hygiene: per-component `RemoveFile` residue wipe, pinned GUIDs on the three binaries, WiX EOL supply-chain watchdog (ADR 0010)
+
+## [0.9.27] - 2026-08-22
+
+### Fixed
+- MSI: replace `sc.exe` custom actions with WiX `util:ServiceConfig` for service stop/config (ADR 0009)
+
 ## [0.9.26] - 2026-08-19
 
 ### Fixed
