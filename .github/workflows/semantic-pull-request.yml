@@ -1,0 +1,33 @@
+name: Lint PR Title
+
+# Guard release-please's input: squash-merge uses the PR title as the final
+# commit message, so validating the title here governs what release-please
+# will treat as a releasable unit (feat / fix only). CI and dependency churn
+# must use non-bumping types (ci / chore / docs / build / refactor / test).
+
+on:
+  pull_request:
+    types: [opened, edited, synchronize]
+
+permissions:
+  pull-requests: read
+
+jobs:
+  validate-pr-title:
+    runs-on: windows-latest
+    steps:
+      - uses: amannn/action-semantic-pull-request@v5.5.3
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          types: |
+            feat
+            fix
+            perf
+            docs
+            ci
+            build
+            chore
+            refactor
+            test
+            revert
