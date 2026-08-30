@@ -120,6 +120,8 @@ Default locale (en) loads synchronously via `addMessages()` so the UI renders un
 
 Frontend unit tests use Vitest with jsdom. Tests live alongside source as `*.test.ts`. Setup at `frontend/tests/setup.ts` mocks `@tauri-apps/api/core` `invoke` and `svelte-i18n`.
 
+C# engine unit tests use xUnit in `tests/EnvManager.Engine.Tests/`, covering the pure-logic domains: argument tokenizing (`LenientArgs.Tokenize`), exception message scrubbing (`ScrubExceptionMessage`), and PATH entry normalization (`NormalizePathEntry`). Run `dotnet test tests/EnvManager.Engine.Tests/EnvManager.Engine.Tests.csproj`; the same step runs in the `build.yml` `verify` job and gates PRs. Tests never touch the real registry and never depend on machine environment state (any env var use is Process-scoped and cleared in-test). `env-manager.csproj` grants `InternalsVisibleTo` only to `EnvManager.Engine.Tests` and excludes `tests/**` from its compile glob, so release artifacts are unchanged.
+
 ```bash
 Get-Process -Name 'env-manager*' -ErrorAction SilentlyContinue | Stop-Process - Force
 node scripts/build.mjs --arch x64

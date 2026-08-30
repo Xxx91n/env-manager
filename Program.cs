@@ -342,7 +342,7 @@ partial class Program
     /// writing to stderr or logs. Masks common secret-bearing patterns so provider
     /// error messages are traceable without leaking credentials. Bounded + best-effort.
     /// </summary>
-    static string ScrubExceptionMessage(string msg)
+    internal static string ScrubExceptionMessage(string msg)
     {
         if (string.IsNullOrEmpty(msg)) return msg;
         var result = msg.Length > 512 ? msg[..512] : msg;
@@ -357,13 +357,22 @@ partial class Program
         };
         foreach (var pat in patterns)
         {
-            int i = result.IndexOf(pat, StringComparison.OrdinalIgnoreCase);
-            if (i >= 0)
+            int searchFrom = 0;
+            while (searchFrom < result.Length)
             {
+                int i = result.IndexOf(pat, searchFrom, StringComparison.OrdinalIgnoreCase);
+                if (i < 0) break;
                 int start = i + pat.Length;
                 int tailLen = Math.Min(8, result.Length - start);
                 if (tailLen > 0)
+                {
                     result = result[..start] + "<redacted>" + result[(start + tailLen)..];
+                    searchFrom = start + "<redacted>".Length;
+                }
+                else
+                {
+                    searchFrom = start;
+                }
             }
         }
         return result;

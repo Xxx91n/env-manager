@@ -30,13 +30,22 @@ namespace EnvManager;
 static partial class LenientArgs
 {
     /// <summary>
+    /// Pure overload for tests/diagnostics holding an explicit command line.
+    /// </summary>
+    public static string[] Tokenize(string commandLine) => TokenizeCore(commandLine);
+
+    /// <summary>
     /// Re-tokenize <see cref="Environment.CommandLine"/> leniently.
     /// Returns all tokens after the program path (i.e., matching the shape
     /// of Main(string[] args)) but with the trailing-backslash recovery.
     /// </summary>
     public static string[] Tokenize()
     {
-        string raw = Environment.CommandLine;
+        return TokenizeCore(Environment.CommandLine);
+    }
+
+    private static string[] TokenizeCore(string raw)
+    {
         if (string.IsNullOrEmpty(raw)) return Array.Empty<string>();
 
         var tokens = new List<string>();

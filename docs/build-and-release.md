@@ -18,6 +18,18 @@ dotnet publish -c Release -r win-x64 --no-self-contained -p:PublishSingleFile=tr
 # Output: bin/Release/net10.0-windows/win-x64/env-manager-cli.exe
 ```
 
+## C# engine unit tests (xUnit)
+
+```bash
+dotnet test tests/EnvManager.Engine.Tests/EnvManager.Engine.Tests.csproj
+```
+
+- Test project: `tests/EnvManager.Engine.Tests/` (xUnit 2.9.3, Microsoft.NET.Test.Sdk 17.14.1, xunit.runner.visualstudio 3.1.5).
+- Covers the pure-logic engine domains: argument tokenizing (`LenientArgs.Tokenize`), exception message scrubbing (`ScrubExceptionMessage`), PATH entry normalization/dedupe (`NormalizePathEntry`).
+- Tests are pure: no real registry access and no machine environment dependency (env vars used by tests are Process-scoped and cleared in-test).
+- CI: the `build.yml` `verify` job runs this suite after `Build CLI` and gates pull requests.
+- Isolation: `env-manager.csproj` excludes `tests/**` from its compile glob (`Compile Remove`) and grants `InternalsVisibleTo` only to `EnvManager.Engine.Tests`; the release artifact list is unchanged.
+
 ## Build GUI (development with hot reload)
 
 ```powershell

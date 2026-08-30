@@ -23,4 +23,11 @@
   <ItemGroup>
     <PackageReference Include="Microsoft.Extensions.Compliance.Redaction" Version="9.0.0" />
   </ItemGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="EnvManager.Engine.Tests" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Remove="tests\**\*.cs" />
+  </ItemGroup>
+
 </Project>

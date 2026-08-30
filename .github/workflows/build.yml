@@ -87,6 +87,9 @@ jobs:
       - name: Build CLI
         run: dotnet build -c Release
 
+      - name: Run C# engine unit tests
+        run: dotnet test tests/EnvManager.Engine.Tests/EnvManager.Engine.Tests.csproj -c Release --nologo
+
       - name: Run unit tests
         working-directory: frontend
         run: npx vitest run

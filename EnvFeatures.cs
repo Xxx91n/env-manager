@@ -454,7 +454,7 @@ static void AtomicWriteJson<T>(string path, T value)
         if (IsProtectedVariable(name, scope)) throw new UnauthorizedAccessException("Protected system variable");
     }
 
-    static string NormalizePathEntry(string path) => Environment.ExpandEnvironmentVariables(path).Trim().TrimEnd('\\', '/');
+    internal static string NormalizePathEntry(string path) => Environment.ExpandEnvironmentVariables(path).Trim().TrimEnd('\\', '/');
 
     /// <summary>
     /// Removes the Windows \\?\ verbatim prefix that `Path.GetFullPath` can append.
