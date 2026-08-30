@@ -63,6 +63,9 @@ See [docs/architecture.md](docs/architecture.md) for IPC bridge, race condition 
 ```
 env-manager/
 +- Program.cs                  # C# CLI implementation
++- EngineScope.cs              # IEnvironmentScope engine seam (architecture-recovery issue 01, expand phase)
++- RegistryScope.cs            # Production IEnvironmentScope: registry + WM_SETTINGCHANGE P/Invoke (pure move)
++- InMemoryScope.cs            # In-memory IEnvironmentScope test double (user/system isolated, broadcast counter)
 +- env-manager.csproj          # .NET 10 project (AssemblyName: env-manager-cli)
 +- AGENTS.md                   # This file (project-level operating instructions)
 +- AGENTS.cli.md               # CLI-level agent guide (distributed with CLI binary)
