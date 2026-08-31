@@ -94,6 +94,14 @@ jobs:
         working-directory: frontend
         run: npx vitest run
 
+      - name: Run service crate tests (IPC schema contract)
+        working-directory: service
+        run: cargo test --locked
+
+      - name: Run Tauri crate tests (IPC payload contract)
+        working-directory: frontend/src-tauri
+        run: cargo test --locked
+
       - name: Install cargo-audit
         uses: taiki-e/install-action@fcf5432d9f50d67e37ee6e29bdb7a224ff67b4a7 # v2.86.8
         with:
