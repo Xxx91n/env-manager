@@ -257,6 +257,17 @@ internal sealed class RegistryScope : IEnvironmentScope
         return true;
     }
 
+    /// <summary>Raw delete without backup cleanup or broadcast (moved DeleteVariableWithoutNotify mechanics).</summary>
+    public void DeleteValueWithoutNotify(string name, string scope)
+    {
+        var (hive, path) = GetScopeTarget(scope);
+        using (var key = hive?.OpenSubKey(path, true))
+        {
+            if (key == null) return;
+            key.DeleteValue(name, false);
+        }
+    }
+
     public ToggleResult Toggle(string name, string scope)
     {
         string backupName = name + "_EnvManager_disabled";

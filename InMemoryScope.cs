@@ -18,6 +18,9 @@ internal sealed class InMemoryScope : IEnvironmentScope
     /// <summary>Number of BroadcastSettingChange calls; asserted by tests instead of WM_SETTINGCHANGE.</summary>
     public int BroadcastCount { get; private set; }
 
+    /// <summary>Test-only: zeroes the broadcast counter between assertion phases.</summary>
+    internal void ResetBroadcastCount() => BroadcastCount = 0;
+
     Dictionary<string, EnvValueSnapshot> Store(string scope) => scope == "system" ? _system : _user;
 
     public IReadOnlyList<EnvVariable> ListVariables(string scope)
@@ -133,6 +136,11 @@ internal sealed class InMemoryScope : IEnvironmentScope
 
         BroadcastSettingChange();
         return true;
+    }
+
+    public void DeleteValueWithoutNotify(string name, string scope)
+    {
+        Store(scope).Remove(name);
     }
 
     public ToggleResult Toggle(string name, string scope)

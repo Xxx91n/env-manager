@@ -56,8 +56,7 @@ internal sealed record ToggleResult(bool Success, bool IsDisabled, string? Error
 /// - ListVariables may propagate UnauthorizedAccessException on the system scope; the command layer
 ///   keeps that catch (mirrors ListEnvironment).
 /// - The profile batch delete mechanics (DeleteVariableWithoutNotify: raw delete without backup
-///   cleanup or broadcast) are not yet on the seam; extraction tickets add them when rewiring
-///   profile paths.
+///   cleanup or broadcast) are on the seam as DeleteValueWithoutNotify (issue 03); profile call-site rewiring is issue 04.
 /// </summary>
 internal interface IEnvironmentScope
 {
@@ -76,6 +75,11 @@ internal interface IEnvironmentScope
     /// <summary>Blind write preserving the existing kind (moved SetVariableWithoutNotify mechanics; no verify, no broadcast).</summary>
     void WriteValuePreservingKind(string name, string value, string scope);
 
+    /// <summary>Raw delete without toggle-backup/profile-backup cleanup or broadcast (moved
+    /// DeleteVariableWithoutNotify mechanics); lets rename/change-scope batch steps under one
+    /// explicit broadcast, mirroring the pre-seam WithoutNotify helpers.</summary>
+    void DeleteValueWithoutNotify(string name, string scope);
+
     /// <summary>Delete mechanics incl. toggle-backup and _PowerToys_ cleanup, broadcast at end (moved DeleteVariable mechanics).</summary>
     bool DeleteValue(string name, string scope);
 
@@ -85,3 +89,4 @@ internal interface IEnvironmentScope
     /// <summary>Change-broadcast signal: WM_SETTINGCHANGE HWND_BROADCAST in production; counted in the in-memory double.</summary>
     void BroadcastSettingChange();
 }
+
