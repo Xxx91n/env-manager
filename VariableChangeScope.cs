@@ -11,8 +11,10 @@ partial class Program
     /// lost if any step fails. Hooks into the standard audit snapshot so the
     /// change appears in history with the correct before/after values.
     /// </summary>
-    static int RunChangeScope(string[] args)
+    internal static int RunChangeScope(string[] args, IEnvironmentScope? env = null, Func<string, string, bool>? isProtectedVariable = null)
     {
+        IEnvironmentScope engine = env ?? Engine;
+        Func<string, string, bool> isProtected = isProtectedVariable ?? IsProtectedVariable;
         if (args.Length < 3)
             return ArgError("Usage: env-manager change-scope <name> <new-scope> [--scope user|system] [--overwrite]");
 
@@ -39,8 +41,8 @@ partial class Program
         // Reviewed by code-reviewer lane (MEDIUM finding).
         if (oldScope == null)
         {
-            bool inUser = GetVariableValue(name, "user") != null;
-            bool inSystem = GetVariableValue(name, "system") != null;
+            bool inUser = engine.ReadValue(name, "user") != null;
+            bool inSystem = engine.ReadValue(name, "system") != null;
             if (inUser && inSystem)
                 return ArgError("Error: " + name + " exists in both user and system scope; specify --scope user|system");
             if (inUser) oldScope = "user";
@@ -58,40 +60,40 @@ partial class Program
         // Refuse to move a protected variable out of system scope, and refuse
         // to land into a protected slot. Same IsProtectedVariable checks used
         // by SetVariable/DeleteVariable for GUI/CLI state consistency.
-        if (IsProtectedVariable(name, oldScope))
+        if (isProtected(name, oldScope))
             return ArgError("Error: Cannot move protected variable " + name + " out of " + oldScope + " scope");
-        if (IsProtectedVariable(name, newScope))
+        if (isProtected(name, newScope))
             return ArgError("Error: Cannot place variable " + name + " into " + newScope + " scope (protected)");
 
-        string? oldValue = GetVariableValue(name, oldScope);
+        string? oldValue = engine.ReadValue(name, oldScope)?.Value;
         if (oldValue == null)
             return ArgError("Error: Variable " + name + " not found in " + oldScope + " scope");
 
         // Cross-scope collision refuses unless --overwrite matches rename contract
-        string? targetValue = GetVariableValue(name, newScope);
+        string? targetValue = engine.ReadValue(name, newScope)?.Value;
         if (targetValue != null && !args.Contains("--overwrite"))
             return ArgError("Error: " + name + " already exists in " + newScope + " scope; use --overwrite");
 
         // Write-then-verify-then-delete. Same safety contract as RunRename.
-        // SetVariableWithoutNotify batches changes, single broadcast at the end.
-        SetVariableWithoutNotify(name, oldValue, newScope);
-        if (GetVariableValue(name, newScope) != oldValue)
+        // The seam batches the batch steps without broadcasts; single broadcast at the end.
+        engine.WriteValuePreservingKind(name, oldValue, newScope);
+        if (engine.ReadValue(name, newScope)?.Value != oldValue)
             return ArgError("Error: Failed to verify variable in new scope; source preserved");
 
-        // Only delete source after target is confirmed in the registry.
-        DeleteVariableWithoutNotify(name, oldScope);
+        // Only delete source after target is confirmed in the store.
+        engine.DeleteValueWithoutNotify(name, oldScope);
 
         // Relocate any toggle backup so disabled state follows the variable.
         string toggleBackup = GetToggleBackupName(name);
-        string? backupVal = GetVariableValue(toggleBackup, oldScope);
+        string? backupVal = engine.ReadValue(toggleBackup, oldScope)?.Value;
         if (backupVal != null)
         {
-            SetVariableWithoutNotify(toggleBackup, backupVal, newScope);
-            if (GetVariableValue(toggleBackup, newScope) == backupVal)
-                DeleteVariableWithoutNotify(toggleBackup, oldScope);
+            engine.WriteValuePreservingKind(toggleBackup, backupVal, newScope);
+            if (engine.ReadValue(toggleBackup, newScope)?.Value == backupVal)
+                engine.DeleteValueWithoutNotify(toggleBackup, oldScope);
         }
 
-        BroadcastSettingChange();
+        engine.BroadcastSettingChange();
         Console.WriteLine("Changed scope of " + name + " from " + oldScope + " to " + newScope);
         return 0;
     }

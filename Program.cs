@@ -438,8 +438,10 @@ partial class Program
         return fullPath;
     }
 
-    static int RunSet(string[] args)
+    internal static int RunSet(string[] args, IEnvironmentScope? env = null, Func<string, string, bool>? isProtectedVariable = null)
     {
+        IEnvironmentScope engine = env ?? Engine;
+        Func<string, string, bool> isProtected = isProtectedVariable ?? IsProtectedVariable;
         string? scope = ParseScope(args, 3, "user");
         if (scope == null) return 1;
 
@@ -451,20 +453,22 @@ partial class Program
             Console.Error.WriteLine("Error: Internal disabled-variable backup names are not writable");
             return 1;
         }
-        if (IsProtectedVariable(args[1], scope))
+        if (isProtected(args[1], scope))
         {
             Console.Error.WriteLine($"Error: Cannot modify protected system variable '{args[1]}'");
             return 1;
         }
 
-        string? existing = GetVariableValue(args[1], scope);
+        string? existing = engine.ReadValue(args[1], scope)?.Value;
         if (existing != null && existing != args[2] && !args.Contains("--overwrite"))
             return ArgError("Error: Variable already exists with a different value; use --overwrite");
-        return SetVariable(args[1], args[2], scope) ? 0 : 1;
+        return WriteVariableCore(engine, isProtected, args[1], args[2], scope) ? 0 : 1;
     }
 
-    static int RunDelete(string[] args)
+    internal static int RunDelete(string[] args, IEnvironmentScope? env = null, Func<string, string, bool>? isProtectedVariable = null)
     {
+        IEnvironmentScope engine = env ?? Engine;
+        Func<string, string, bool> isProtected = isProtectedVariable ?? IsProtectedVariable;
         string? scope = ParseScope(args, 2, "user");
         if (scope == null) return 1;
 
@@ -476,12 +480,12 @@ partial class Program
             Console.Error.WriteLine("Error: Internal disabled-variable backup names are not deletable");
             return 1;
         }
-        if (IsProtectedVariable(args[1], scope))
+        if (isProtected(args[1], scope))
         {
             Console.Error.WriteLine($"Error: Cannot delete protected system variable '{args[1]}'");
             return 1;
         }
-        DeleteVariable(args[1], scope);
+        DeleteVariableCore(engine, isProtected, args[1], scope);
         return 0;
     }
     static int RunBackup(string[] args)
@@ -715,193 +719,6 @@ partial class Program
         return 1;
     }
 
-    static bool SetVariable(string name, string? value, string scope)
-    {
-        DebugLog("SetVariable scope=" + scope);
-        if (string.IsNullOrEmpty(name))
-        {
-            Console.Error.WriteLine("Error: Variable name cannot be empty");
-            return false;
-        }
-        if (IsInternalToggleBackupName(name))
-        {
-            Console.Error.WriteLine("Error: Internal disabled-variable backup names are not writable");
-            return false;
-        }
-
-        // PowerToys: user env var names limited to 255 chars in registry
-        int maxNameLength = scope == "user" ? 255 : MaxLength;
-        if (name.Length > maxNameLength)
-        {
-            Console.Error.WriteLine($"Error: Variable name exceeds {maxNameLength} characters");
-            return false;
-        }
-
-        // Reject names containing '=' (invalid in Windows environment)
-        if (name.Contains('='))
-        {
-            Console.Error.WriteLine("Error: Variable name cannot contain '='");
-            return false;
-        }
-
-        // Protect critical system variables from being overwritten
-        if (IsProtectedVariable(name, scope))
-        {
-            Console.Error.WriteLine($"Error: Cannot modify protected system variable '{name}'");
-            return false;
-        }
-
-        value ??= "";
-        if (value.Length > MaxLength)
-        {
-            Console.Error.WriteLine("Error: Value exceeds maximum length");
-            return false;
-        }
-
-        var (hive, path) = GetScopeTarget(scope);
-        using (var key = hive?.OpenSubKey(path, true))
-        {
-            if (key == null)
-            {
-                Console.Error.WriteLine($"Error: Cannot open registry key for scope '{scope}'");
-                return false;
-            }
-
-            bool existed = key.GetValueNames().Any(n => n.Equals(name, StringComparison.OrdinalIgnoreCase));
-            object? originalValue = existed
-                ? key.GetValue(name, null, RegistryValueOptions.DoNotExpandEnvironmentNames)
-                : null;
-            RegistryValueKind originalKind = RegistryValueKind.String;
-            if (existed)
-            {
-                try
-                {
-                    originalKind = key.GetValueKind(name);
-                }
-                catch (IOException)
-                {
-                    existed = false;
-                    originalValue = null;
-                }
-            }
-
-            RegistryValueKind writeKind = originalKind;
-            if (!existed || value.Contains('%'))
-            {
-                writeKind = value.Contains('%') ? RegistryValueKind.ExpandString : RegistryValueKind.String;
-            }
-
-            bool RestoreOriginal()
-            {
-                try
-                {
-                    if (existed)
-                    {
-                        key.SetValue(name, originalValue!, originalKind);
-                    }
-                    else
-                    {
-                        key.DeleteValue(name, false);
-                    }
-
-                    bool restoredExists = key.GetValueNames().Any(n => n.Equals(name, StringComparison.OrdinalIgnoreCase));
-                    if (restoredExists != existed) return false;
-                    if (!existed) return true;
-
-                    object? restoredValue = key.GetValue(name, null, RegistryValueOptions.DoNotExpandEnvironmentNames);
-                    return Equals(restoredValue, originalValue) && key.GetValueKind(name) == originalKind;
-                }
-                catch (Exception restoreError)
-                {
-                    DebugLog("SetVariable rollback failure=" + restoreError.GetType().Name);
-                    return false;
-                }
-            }
-
-            try
-            {
-                key.SetValue(name, value, writeKind);
-                object? persisted = key.GetValue(name, null, RegistryValueOptions.DoNotExpandEnvironmentNames);
-                bool verified = persisted is string persistedString &&
-                    string.Equals(persistedString, value, StringComparison.Ordinal) &&
-                    key.GetValueKind(name) == writeKind;
-                if (verified)
-                {
-                    BroadcastSettingChange();
-                    return true;
-                }
-            }
-            catch (Exception writeError)
-            {
-                DebugLog("SetVariable write failure=" + writeError.GetType().Name);
-            }
-
-            bool rolledBack = RestoreOriginal();
-            if (rolledBack)
-            {
-                BroadcastSettingChange();
-                Console.Error.WriteLine("Error: Variable write could not be verified; original value restored");
-            }
-            else
-            {
-                Console.Error.WriteLine("Error: Variable write could not be verified and automatic rollback failed; restore from a backup before retrying");
-            }
-            return false;
-        }
-    }
-
-    static void DeleteVariable(string name, string scope)
-    {
-        DebugLog("DeleteVariable scope=" + scope);
-        if (string.IsNullOrEmpty(name))
-        {
-            Console.Error.WriteLine("Error: Invalid variable name");
-            return;
-        }
-
-        // Protect critical system variables from being deleted
-        if (IsProtectedVariable(name, scope))
-        {
-            Console.Error.WriteLine($"Error: Cannot delete protected system variable '{name}'");
-            return;
-        }
-
-        var (hive, path) = GetScopeTarget(scope);
-        using (var key = hive?.OpenSubKey(path, true))
-        {
-            if (key == null)
-            {
-                Console.Error.WriteLine($"Error: Cannot open registry key for scope '{scope}'");
-                return;
-            }
-
-            key.DeleteValue(name, false);
-
-            // Also clean up toggle backup key if the variable was disabled.
-            // This prevents orphaned _EnvManager_disabled keys from accumulating.
-            string toggleBackupName = GetToggleBackupName(name);
-            if (key.GetValue(toggleBackupName) != null)
-            {
-                key.DeleteValue(toggleBackupName, false);
-            }
-
-            // Also clean up profile backup keys for this variable name.
-            // Profile backups use the format: <varName>_PowerToys_<profileName>
-            // We scan for _PowerToys_ backup keys that start with the variable name.
-            foreach (var valName in key.GetValueNames())
-            {
-                // Match: <varName>_PowerToys_<anything> (the applied profile backup)
-                // Also match: <varName>_EnvManager_disabled (the toggle backup)
-                if (valName.StartsWith(name + "_PowerToys_") && !valName.EndsWith("_EnvManager_disabled"))
-                {
-                    key.DeleteValue(valName, false);
-                }
-            }
-        }
-
-        BroadcastSettingChange();
-    }
-
     [System.Runtime.InteropServices.DllImport("user32.dll", SetLastError = true, CharSet = System.Runtime.InteropServices.CharSet.Auto)]
     static extern bool SendMessageTimeout(
         IntPtr hWnd, uint msg, IntPtr wParam, string lParam,
@@ -982,106 +799,12 @@ partial class Program
         return name.EndsWith("_EnvManager_disabled", StringComparison.OrdinalIgnoreCase);
     }
 
-    static int RunToggle(string[] args)
+    internal static int RunToggle(string[] args, IEnvironmentScope? env = null, Func<string, string, bool>? isProtectedVariable = null)
     {
         string name = args[1];
         string? scope = ParseScope(args, 2, "user");
         if (scope == null) return 1;
-        DebugLog($"Toggle scope={scope}");
-
-        if (string.IsNullOrEmpty(name))
-        {
-            Console.Error.WriteLine("Error: Variable name cannot be empty");
-            return 1;
-        }
-        if (IsInternalToggleBackupName(name))
-        {
-            Console.Error.WriteLine("Error: Cannot toggle a variable whose name ends with '_EnvManager_disabled'");
-            return 1;
-        }
-        if (IsProtectedVariable(name, scope))
-        {
-            Console.Error.WriteLine($"Error: Cannot toggle protected variable '{name}'");
-            return 1;
-        }
-
-        string backupName = GetToggleBackupName(name);
-        var (hive, registryPath) = GetScopeTarget(scope);
-        using var key = hive?.OpenSubKey(registryPath, true);
-        if (key == null)
-        {
-            Console.Error.WriteLine($"Error: Cannot open registry key for scope '{scope}'");
-            return 1;
-        }
-
-        bool originalExists = key.GetValueNames().Any(valueName => valueName.Equals(name, StringComparison.OrdinalIgnoreCase));
-        bool backupExists = key.GetValueNames().Any(valueName => valueName.Equals(backupName, StringComparison.OrdinalIgnoreCase));
-        if (originalExists && backupExists)
-        {
-            Console.Error.WriteLine($"Error: Toggle recovery conflict for '{name}'. Both the variable and its disabled backup exist; no values were changed.");
-            return 1;
-        }
-        if (!originalExists && !backupExists)
-        {
-            Console.Error.WriteLine($"Error: Variable '{name}' not found");
-            return 1;
-        }
-
-        try
-        {
-            if (backupExists)
-            {
-                object backupValue = key.GetValue(backupName, null, RegistryValueOptions.DoNotExpandEnvironmentNames)
-                    ?? throw new InvalidDataException("Disabled backup has no value");
-                RegistryValueKind backupKind = key.GetValueKind(backupName);
-                key.SetValue(name, backupValue, backupKind);
-                object? restoredValue = key.GetValue(name, null, RegistryValueOptions.DoNotExpandEnvironmentNames);
-                bool restored = Equals(restoredValue, backupValue) && key.GetValueKind(name) == backupKind;
-                if (!restored)
-                {
-                    key.DeleteValue(name, false);
-                    Console.Error.WriteLine($"Error: Failed to restore '{name}' exactly; disabled backup was preserved");
-                    return 1;
-                }
-                key.DeleteValue(backupName, false);
-                if (key.GetValueNames().Any(valueName => valueName.Equals(backupName, StringComparison.OrdinalIgnoreCase)))
-                {
-                    Console.Error.WriteLine($"Error: Restored '{name}', but could not remove its disabled backup");
-                    return 1;
-                }
-                BroadcastSettingChange();
-                Console.WriteLine(JsonSerializer.Serialize(new { name, scope, isDisabled = false }, JsonOpts));
-                return 0;
-            }
-
-            object originalValue = key.GetValue(name, null, RegistryValueOptions.DoNotExpandEnvironmentNames)
-                ?? throw new InvalidDataException("Variable has no value");
-            RegistryValueKind originalKind = key.GetValueKind(name);
-            key.SetValue(backupName, originalValue, originalKind);
-            object? persistedBackup = key.GetValue(backupName, null, RegistryValueOptions.DoNotExpandEnvironmentNames);
-            bool backupVerified = Equals(persistedBackup, originalValue) && key.GetValueKind(backupName) == originalKind;
-            if (!backupVerified)
-            {
-                key.DeleteValue(backupName, false);
-                Console.Error.WriteLine($"Error: Failed to preserve '{name}' exactly; variable was not disabled");
-                return 1;
-            }
-            key.DeleteValue(name, false);
-            if (key.GetValueNames().Any(valueName => valueName.Equals(name, StringComparison.OrdinalIgnoreCase)))
-            {
-                Console.Error.WriteLine($"Error: Failed to disable '{name}'; its backup was preserved for recovery");
-                return 1;
-            }
-            BroadcastSettingChange();
-            Console.WriteLine(JsonSerializer.Serialize(new { name, scope, isDisabled = true }, JsonOpts));
-            return 0;
-        }
-        catch (Exception error) when (error is UnauthorizedAccessException or IOException or InvalidDataException)
-        {
-            DebugLog("Toggle failure=" + error.GetType().Name);
-            Console.Error.WriteLine($"Error: Could not toggle '{name}'; no destructive recovery was attempted");
-            return 1;
-        }
+        return ToggleVariableCore(env ?? Engine, isProtectedVariable ?? IsProtectedVariable, name, scope);
     }
 
     static int ProfileEditVar(string profileName, string oldVarName, string newVarName, string newVarValue)
@@ -2289,26 +2012,7 @@ partial class Program
             return;
         }
 
-        var (hive, path) = GetScopeTarget(scope);
-        using (var key = hive?.OpenSubKey(path, true))
-        {
-            if (key == null) return;
-
-            RegistryValueKind kind = RegistryValueKind.String;
-            try
-            {
-                kind = key.GetValueKind(name);
-            }
-            catch (IOException) { }
-
-            // If value contains %, use ExpandString like Windows does
-            if (value.Contains('%'))
-            {
-                kind = RegistryValueKind.ExpandString;
-            }
-
-            key.SetValue(name, value, kind);
-        }
+        Engine.WriteValuePreservingKind(name, value, scope);
     }
 
     /// <summary>
@@ -2326,12 +2030,7 @@ partial class Program
             return;
         }
 
-        var (hive, path) = GetScopeTarget(scope);
-        using (var key = hive?.OpenSubKey(path, true))
-        {
-            if (key == null) return;
-            key.DeleteValue(name, false);
-        }
+        Engine.DeleteValueWithoutNotify(name, scope);
     }
 
     // Variables that should be edited as semicolon-separated lists.
@@ -2630,11 +2329,7 @@ partial class Program
     /// </summary>
     static List<string> GetPathEntries(string scope)
     {
-        string? pathValue = GetVariableValue("PATH", scope);
-        if (string.IsNullOrEmpty(pathValue))
-            return new List<string>();
-
-        return pathValue.Split(';', StringSplitOptions.RemoveEmptyEntries).ToList();
+        return GetPathEntriesCore(Engine, scope);
     }
 
     /// <summary>
@@ -2642,30 +2337,7 @@ partial class Program
     /// </summary>
     static bool SetPathEntries(List<string> entries, string scope)
     {
-        string joined = string.Join(";", entries);
-        if (joined.Length > MaxLength)
-        {
-            Console.Error.WriteLine($"Error: PATH value exceeds maximum length of {MaxLength} characters (current: {joined.Length})");
-            return false;
-        }
-
-        // Validate: don't allow removing protected PATH entries.
-        // Compare current entries vs new entries to find what's being removed.
-        var currentEntries = GetPathEntries(scope);
-        var removed = currentEntries.Where(e => !entries.Any(x => NormalizePathEntry(x).Equals(NormalizePathEntry(e), StringComparison.OrdinalIgnoreCase))).ToList();
-        foreach (var r in removed)
-        {
-            if (IsProtectedPathEntry(r))
-            {
-                Console.Error.WriteLine($"Error: Cannot remove protected PATH entry: {r}");
-                return false;
-            }
-        }
-
-        // PATH is intentionally editable. SetVariable verifies the exact raw
-        // registry value and restores the previous value if verification fails.
-        // PATH callers therefore never report success after an unverified write.
-        return SetVariable("PATH", joined, scope);
+        return SetPathEntriesCore(Engine, IsProtectedVariable, IsProtectedPathEntry, entries, scope);
     }
 
     /// <summary>
@@ -2915,7 +2587,7 @@ partial class Program
                     skipped++;
                     continue;
                 }
-                if (SetVariable(v.Name, v.Value, v.Scope))
+                if (WriteVariableCore(Engine, IsProtectedVariable, v.Name, v.Value, v.Scope))
                 {
                     restored++;
                 }
@@ -3221,27 +2893,22 @@ partial class Program
         if (args.Any(a => a == "--service-pipe"))
             pipeName = @"\\.\pipe\EnvManager.Service";
 
-        string requestJson = subcommand switch
+        ServiceIpcRequest request;
+        try
         {
-            "status" => $"{{\"method\":\"status\",\"request_id\":\"{EscapeJsonLocal(reqId)}\"}}",
-            "health" => $"{{\"method\":\"health\",\"request_id\":\"{EscapeJsonLocal(reqId)}\"}}",
-            "refresh" => args.Length < 3
-                ? $"{{\"error\":\"refresh requires mountId\"}}"
-                : $"{{\"method\":\"refresh\",\"mount_id\":\"{EscapeJsonLocal(args[2])}\",\"request_id\":\"{EscapeJsonLocal(reqId)}\"}}",
-            "rotate" => args.Length < 3
-                ? $"{{\"error\":\"rotate requires mountId\"}}"
-                : $"{{\"method\":\"rotate\",\"mount_id\":\"{EscapeJsonLocal(args[2])}\",\"request_id\":\"{EscapeJsonLocal(reqId)}\"}}",
-            "reload" => $"{{\"method\":\"reload\",\"request_id\":\"{EscapeJsonLocal(reqId)}\"}}",
-            "shutdown" => $"{{\"method\":\"shutdown\",\"request_id\":\"{EscapeJsonLocal(reqId)}\"}}",
-            "ping" => "{\"method\":\"ping\"}",
-            _ => $"{{\"error\":\"unknown subcommand: {EscapeJsonLocal(subcommand)}\"}}"
-        };
-
-        if (requestJson.Contains("\"error\""))
+            request = ServiceIpcRequest.FromSubcommand(subcommand, reqId, args.Length >= 3 ? args[2] : null);
+        }
+        catch (ArgumentException)
         {
-            Console.Error.WriteLine(requestJson);
+            Console.Error.WriteLine($"{{\"error\":\"unknown subcommand: {EscapeJsonLocal(subcommand)}\"}}");
             return 1;
         }
+        if ((subcommand == "refresh" || subcommand == "rotate") && args.Length < 3)
+        {
+            Console.Error.WriteLine($"{{\"error\":\"{subcommand} requires mountId\"}}");
+            return 1;
+        }
+        string requestJson = ServiceIpcRequest.Serialize(request);
 
         try
         {

@@ -2,8 +2,10 @@ namespace EnvManager;
 
 partial class Program
 {
-    static int RunRename(string[] args)
+    internal static int RunRename(string[] args, IEnvironmentScope? env = null, Func<string, string, bool>? isProtectedVariable = null)
     {
+        IEnvironmentScope engine = env ?? Engine;
+        Func<string, string, bool> isProtected = isProtectedVariable ?? IsProtectedVariable;
         string oldName = args[1];
         string newName = args[2];
         string? scope = ParseScope(args, 3, "user");
@@ -16,23 +18,26 @@ partial class Program
         // DeleteVariableWithoutNotify(oldName) is blocked by the internal
         // protected-variable guard, leaving the variable duplicated and the
         // registry in an inconsistent state.
-        if (IsProtectedVariable(oldName, scope))
+        if (isProtected(oldName, scope))
             return ArgError("Error: Cannot rename protected variable (source protected): " + oldName);
-        if (IsProtectedVariable(newName, scope))
+        if (isProtected(newName, scope))
             return ArgError("Error: Cannot rename into a protected slot: " + newName + " is a protected variable");
 
         ValidateVariableInput(newName, "", scope);
-        string? oldValue = GetVariableValue(oldName, scope);
+        string? oldValue = engine.ReadValue(oldName, scope)?.Value;
         if (oldValue == null) return ArgError("Error: Source variable not found");
-        string? targetValue = GetVariableValue(newName, scope);
+        string? targetValue = engine.ReadValue(newName, scope)?.Value;
         if (targetValue != null && !args.Contains("--overwrite"))
             return ArgError("Error: Target variable already exists; use --overwrite");
 
-        SetVariableWithoutNotify(newName, oldValue, scope);
-        if (GetVariableValue(newName, scope) != oldValue)
+        // Write-verify-delete contract (hard boundary): write the target through the seam,
+        // verify the exact raw value landed, and only then remove the source. Never
+        // delete-then-write. The single broadcast fires only after the source is gone.
+        engine.WriteValuePreservingKind(newName, oldValue, scope);
+        if (engine.ReadValue(newName, scope)?.Value != oldValue)
             return ArgError("Error: Failed to verify renamed variable; source preserved");
-        DeleteVariableWithoutNotify(oldName, scope);
-        BroadcastSettingChange();
+        engine.DeleteValueWithoutNotify(oldName, scope);
+        engine.BroadcastSettingChange();
         Console.WriteLine($"Renamed variable '{oldName}' to '{newName}'");
         return 0;
     }
