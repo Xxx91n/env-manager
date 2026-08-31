@@ -189,6 +189,8 @@ env-manager-cli.exe audit migrate-audit
 env-manager-cli.exe audit verify-ledger
 ```
 
+> 启动目标位于 Windows 系统目录（System32）内时会在 profile 保存/启动时被拒绝，以防止 system32 劫持。
+
 完整命令参考请见 [docs/cli-commands.md](../../docs/cli-commands.md)。
 
 ### GUI

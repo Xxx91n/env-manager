@@ -483,6 +483,12 @@ try {
     if ((Invoke-Cli @("delete", $toggleName, "--scope", "user")) -ne 0) { throw "toggle smoke cleanup failed" }
   }
 
+  # B1-FIX: create a System32-free launch target in %TEMP%. The ValidateLaunchTarget
+  # System32 guard is now enforced (T04-SYS32-FIX), so the old System32\cmd.exe target
+  # would be refused and this smoke would fail unconditionally.
+  $launchTarget = Join-Path $env:TEMP "em-twr-target-$Stamp.cmd"
+  if (-not (Test-Path $launchTarget)) { Set-Content -Path $launchTarget -Value "@echo ok" -Encoding Ascii }
+
   $profileName = "EM_TEST_PROFILE_$Stamp"
   $secretProfileName = "EM_TEST_SEC_$Stamp"
 
@@ -493,7 +499,7 @@ try {
   }
 
   Run-Test "secrets never in registry" {
-    if ((Invoke-Cli @("profile", "create", $secretProfileName, "--type", "launch", "--target", (Join-Path $env:SystemRoot "System32\cmd.exe"))) -ne 0) { throw "profile create failed" }
+    if ((Invoke-Cli @("profile", "create", $secretProfileName, "--type", "launch", "--target", $launchTarget)) -ne 0) { throw "profile create failed" }
     if ((Invoke-Cli @("profile", "add-secret", $secretProfileName, "S", "topsecret")) -ne 0) { throw "add-secret failed" }
     $applyExit = Invoke-CliExit @("profile", "apply", $secretProfileName)
     if ($applyExit -eq 0) { throw "secrets-bearing profile apply must be rejected" }

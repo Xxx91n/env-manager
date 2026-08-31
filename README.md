@@ -45,7 +45,7 @@ The demo shows read-only CLI commands in action: `agents --summary`, `path healt
 ## Features
 
 - **Agent-native CLI** — 18+ commands with a first-class machine contract: `env-manager-cli agents --json` exposes a structured command spec, and every capability is documented in an agent-facing manual ([AGENTS.cli.md](AGENTS.cli.md)) that ships with the binary.
-- **Profiles & config** — Global profiles apply to the registry; Launch profiles inject an isolated env block into a single process (never touch the registry, never broadcast `WM_SETTINGCHANGE`). Inheritance, conflict previews, and safe reverse-order rollback included.
+- **Profiles & config** — Global profiles apply to the registry; Launch profiles inject an isolated env block into a single process (never touch the registry, never broadcast `WM_SETTINGCHANGE`). Inheritance, conflict previews, and safe reverse-order rollback included. Launch targets inside the Windows system folder (`System32`) are refused at profile save/launch to prevent system32 hijacking.
 - **8 secret providers, zero plaintext** — DPAPI, Credential Manager, SecretStore, HashiCorp Vault, SOPS, Azure Key Vault, 1Password, AWS Secrets Manager. Plaintext never persists to disk or logs.
 - **Protected by default** — system variables and PATH entries cannot be deleted or renamed; every write is a three-layer serialized contract (mutex + write lock + verify-before-swap).
 - **PATH health** — detects duplicates and dead entries, with `--fix` / `--dry-run`.
