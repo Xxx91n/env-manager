@@ -129,6 +129,13 @@ Launch-profile injection and secret redaction are verified by a three-layer net 
 - `CanaryRedactionTests` (xUnit, `tests/EnvManager.Engine.Tests/`): pure-function canary regression over `ScrubExceptionMessage` — format-shaped canary values (password=/Bearer/VAULT_TOKEN=) never survive scrubbing, `<redacted>` placeholder appears, un-patterned values pass through unchanged (documented best-effort behavior, ADR 0005).
 - `scripts/run-ci-tests.ps1` orchestrates four integration suites: launch-env-injection, canary-redaction, inheritance-protection, test-with-restore. Run it after building the CLI: `pwsh -NoProfile -File scripts/run-ci-tests.ps1 -CliExe <path-to-env-manager-cli.exe>`.
 
+IPC schema contract tests (architecture-recovery issue 08) pin the three IPC clients to the single Rust-owned schema:
+
+- Authoritative schema: `IpcRequest`/`IpcResponse` in `service/src/ipc.rs`; golden files `docs/schemas/env-manager-service-ipc.schema.json` + `docs/schemas/ipc-samples.json` are exported from it (regenerate with `ENVMANAGER_REGENERATE_IPC_GOLDEN=1 cargo test -p env-manager-service ipc`).
+- C# gateway: `ServiceIpc.cs` typed request/response + `ServiceIpcContractTests` xUnit suite (wire names, null-skip semantics, schema property coverage).
+- TS GUI: `parseServiceResponse` (exported from `api.ts`) + `frontend/src/lib/ipc-schema-contract.test.ts` vitest suite over the golden samples.
+- Tauri shell: `ipc_contract_tests` in `frontend/src-tauri/src/main.rs` pin the watchdog ping / GUI-exit shutdown pipe payloads.
+- CI: `cargo test --locked` runs for `service` and `frontend/src-tauri` in the build.yml verify job. See docs/architecture.md "IPC Schema Contract (single source of truth)".
 ```bash
 Get-Process -Name 'env-manager*' -ErrorAction SilentlyContinue | Stop-Process - Force
 node scripts/build.mjs --arch x64
