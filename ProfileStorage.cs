@@ -7,7 +7,7 @@ partial class Program
 {
     static string ProfilesBackupPath => ProfilesFilePath + ".bak";
 
-    static List<ProfileData> LoadProfiles()
+    internal static List<ProfileData> LoadProfiles()
     {
         if (!File.Exists(ProfilesFilePath)) return new();
         try
@@ -39,7 +39,7 @@ partial class Program
         return profiles;
     }
 
-    static void SaveProfiles(List<ProfileData> profiles)
+    internal static void SaveProfiles(List<ProfileData> profiles)
     {
         ValidateProfiles(profiles);
         AtomicWriteProfiles(profiles, createBackup: true);

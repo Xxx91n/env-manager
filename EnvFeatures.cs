@@ -483,8 +483,12 @@ static void AtomicWriteJson<T>(string path, T value)
         if (ext is not (".exe" or ".bat" or ".cmd" or ".ps1"))
             throw new InvalidDataException($"Launch target must be an .exe/.bat/.cmd/.ps1 file (got: {ext})");
         if (!File.Exists(full)) throw new InvalidDataException($"Launch target does not exist: {full}");
-        string lower = full.ToLowerInvariant();
-        if (lower.StartsWith(@"c:\\windows\\system32\\"))
+        // T04-SYS32-FIX: the prior verbatim literal @"c:\\windows\\system32\\" carries doubled separators,
+        // so its compiled value never matches Path.GetFullPath output and the system32-hijacking
+        // guard was inert. Match the resolved system folder (and a separator-normalized path) instead.
+        string lower = full.ToLowerInvariant().Replace('/', '\\');
+        string system32Prefix = Environment.GetFolderPath(Environment.SpecialFolder.System).TrimEnd('\\').ToLowerInvariant() + '\\';
+        if (lower.StartsWith(system32Prefix) || lower.StartsWith(@"\\windows\\system32\\"))
             throw new InvalidDataException("Launch targets inside \\Windows\\System32 are rejected to prevent system32 hijacking");
     }
 
@@ -504,7 +508,9 @@ static void AtomicWriteJson<T>(string path, T value)
             var parent = FindProfile(profiles, parentName) ?? throw new InvalidDataException("Inherited profile not found: " + parentName);
             ResolveProfile(parent, profiles, stack, result);
         }
-        foreach (var variable in profile.Variables) result[variable.Name] = new ProfileVariable { Name = variable.Name, Value = variable.Value };
+        // T04-SCOPE-FIX: preserve Scope (default "user") so ApplyProfile routes system-scope
+        // variables to the system store; the old projection silently reset Scope to "user".
+        foreach (var variable in profile.Variables) result[variable.Name] = new ProfileVariable { Name = variable.Name, Value = variable.Value, Scope = variable.Scope };
         stack.Remove(profile.Name);
     }
 

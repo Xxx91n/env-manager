@@ -36,3 +36,14 @@ Keep the 37 existing Vitest unit tests (mockIPC official pattern). Add `@wdio/ta
 - CVE-2024-29188 (GHSA-jx4p-m4wm-vvjg) fixed in 3.14.1 — justifies frozen WiX v3 usage.
 - Tauri v2 officially stays on WiX v3 (tauri-apps/tauri #10348); no migration timeline.
 - Registry-write layer is the heart of env-manager: unit coverage 80%+ = minimum; e2e flow-count only (5-10% of pyramid); backup/restore via `scripts/test-with-restore.ps1` is the safety net, not a coverage metric.
+
+## Amendment (T04 amendment, architecture-recovery issue 04, 2026-09-01): pyramid extended to the C# engine
+
+Decision 6 originally scoped the test pyramid to the GUI. The architecture-recovery wave (spec: "ADR 0010 decision 6 is amended to extend the test pyramid from GUI-only to the C# engine") extends it as follows:
+
+- **Seam, not registry**: C# engine tests run against the `IEnvironmentScope` seam (issue 01). Production = `RegistryScope` (registry + WM_SETTINGCHANGE P/Invoke); tests = `InMemoryScope` (dictionary-backed double, counted broadcasts). The registry/P-Invoke layer itself stays a thin adapter covered by the top-of-pyramid `test-with-restore.ps1` smoke, not by unit coverage.
+- **Lane**: xUnit in `tests/EnvManager.Engine.Tests/`, wired into the `build.yml` `verify` job (issue 02), gating PRs. Same layering as the GUI Vitest lane: unit tests are the base, integration scripts are the apex.
+- **Layers after issues 03/04**: write-path command cores (set/delete/toggle/rename/change-scope/PATH, issue 03) and profile/secret flows (apply/unapply/pre-flight validation/inheritance-chain secret propagation, issue 04) are unit-tested against `InMemoryScope`. Hard boundaries (protected entries, rename write-verify-delete, v0.7.7 inherited-secret rejection) are executable tests, per the spec.
+- **Red-first falsification as acceptance evidence**: boundary tests must be demonstrably falsifiable - e.g. the launch-inherits-secret-launch poisoned-JSON variant fails when the inherited-secret union walk regresses to own-list-only (demonstrated live in ticket 04).
+- **Coverage numbers**: the 80%+ CLI gate from Decision 6 now reads as the engine coverage target, measured via the seam lanes; the registry adapter and P/Invoke surfaces remain excluded (they are the apex smoke's job).
+

@@ -50,9 +50,11 @@ function Invoke-Cli {
     return [pscustomobject]@{ ExitCode = $p.ExitCode; Stdout = $stdout; Stderr = $stderr }
 }
 
-$hadProfilesFile = Test-Path $profilesPath
-if ($hadProfilesFile) { Copy-Item $profilesPath $backupPath -Force }
 
+# Ticket 04: create a System32-free launch target so ValidateLaunchTarget passes without
+# accepting System32 binaries (hard boundary).
+$targetCmd = Join-Path $env:TEMP 'em-inherit-test-target.cmd'
+if (-not (Test-Path $targetCmd)) { Set-Content -Path $targetCmd -Value '@echo ok' -Encoding Ascii }
 $failures = @()
 try {
     foreach ($name in @('EM_INHERIT_TEST_global','EM_INHERIT_TEST_launch_secret','EM_INHERIT_TEST_launch_plain','EM_INHERIT_TEST_global_other')) {
@@ -60,12 +62,12 @@ try {
     }
 
     [void](Invoke-Cli -CliArgs @('create','EM_INHERIT_TEST_global','--type','global'))
-    [void](Invoke-Cli -CliArgs @('create','EM_INHERIT_TEST_launch_secret','--type','launch','--target','C:\Windows\System32\cmd.exe'))
+    [void](Invoke-Cli -CliArgs @('create','EM_INHERIT_TEST_launch_secret','--type','launch','--target', $targetCmd))
     $secretRes = Invoke-Cli -CliArgs @('add-secret','EM_INHERIT_TEST_launch_secret','EM_TEST_SECRET','dummy-value')
     if ($secretRes.ExitCode -ne 0 -and $secretRes.Stderr -notmatch 'already') {
         Write-Warning ("add-secret returned exit {0}: {1}" -f $secretRes.ExitCode, $secretRes.Stderr)
     }
-    [void](Invoke-Cli -CliArgs @('create','EM_INHERIT_TEST_launch_plain','--type','launch','--target','C:\Windows\System32\cmd.exe'))
+    [void](Invoke-Cli -CliArgs @('create','EM_INHERIT_TEST_launch_plain','--type','launch','--target', $targetCmd))
     [void](Invoke-Cli -CliArgs @('create','EM_INHERIT_TEST_global_other','--type','global'))
 
     # Case 1: global inherits launch -> MUST be rejected.

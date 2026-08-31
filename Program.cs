@@ -208,12 +208,30 @@ partial class Program
     {
         get
         {
+            if (_profilesFilePathOverride != null) return _profilesFilePathOverride; // Ticket 04 test redirect
             string dir = Path.Combine(
                 Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
                 "EnvManager");
             Directory.CreateDirectory(dir);
             return Path.Combine(dir, "profiles.json");
         }
+    }
+
+    // Ticket 04 test seam: when non-null, ProfilesFilePath returns this path so the
+    // xUnit lane can redirect profiles.json to a temp dir. Production never sets it.
+    static string? _profilesFilePathOverride;
+
+    internal static void SetProfilesFilePathForTests(string? path)
+    {
+        _profilesFilePathOverride = path;
+    }
+
+    // Ticket 04 test seam: persist profiles WITHOUT ValidateProfiles, simulating a
+    // hand-edited profiles.json so the ApplyProfile protection guard (defense in depth
+    // behind pre-flight) can be exercised against poisoned data.
+    internal static void SaveProfilesRawForTests(List<ProfileData> profiles)
+    {
+        AtomicWriteProfiles(profiles, createBackup: false);
     }
 
     static int Main(string[] args)
@@ -1407,6 +1425,20 @@ partial class Program
     /// - Secret names (in profile.SecretVariables) are read but their values are NOT echoed to stdout/stderr.
     /// - Logs only command names and arg counts (existing hard boundary: no env values in logs).
     /// </summary>
+    /// <summary>
+    /// Ticket 04 seam extraction: profile launch entry-point validation, returned as an
+    /// error string (null = valid) so xUnit tests cover it without the registry or any
+    /// process spawn. Message text reproduces the pre-seam stderr branches verbatim.
+    /// </summary>
+    internal static string? ValidateLaunchPreflight(ProfileData profile)
+    {
+        if (!profile.ProfileType.Equals("launch", StringComparison.OrdinalIgnoreCase))
+            return $"Profile '{profile.Name}' is a Global profile; only Launch profiles support `profile launch`";
+        if (string.IsNullOrWhiteSpace(profile.TargetExecutable))
+            return $"Profile '{profile.Name}' has no targetExecutable. Use 'profile set-launch {profile.Name} --target <exe>' first.";
+        return null;
+    }
+
     static int ProfileLaunch(string[] args)
     {
         string name = args[2];
@@ -1418,16 +1450,8 @@ partial class Program
         var profiles = LoadProfiles();
         var profile = FindProfile(profiles, name);
         if (profile == null) { Console.Error.WriteLine($"Error: Profile '{name}' not found"); return 1; }
-        if (!profile.ProfileType.Equals("launch", StringComparison.OrdinalIgnoreCase))
-        {
-            Console.Error.WriteLine($"Error: Profile '{name}' is a Global profile; only Launch profiles support `profile launch`");
-            return 1;
-        }
-        if (string.IsNullOrWhiteSpace(profile.TargetExecutable))
-        {
-            Console.Error.WriteLine($"Error: Profile '{name}' has no targetExecutable. Use 'profile set-launch {name} --target <exe>' first.");
-            return 1;
-        }
+        string? launchError = ValidateLaunchPreflight(profile);
+        if (launchError != null) { Console.Error.WriteLine("Error: " + launchError); return 1; }
 
        string exe = profile.TargetExecutable!;
        string cwd = profile.WorkingDirectory ?? Path.GetDirectoryName(exe)!;
@@ -1753,7 +1777,9 @@ partial class Program
             return 1;
         }
 
-        if (!IsProfileApplicable(profile))
+        // T04-PREFLIGHT: same v0.7.7 boundary set, now exercised through the seam core
+        // (RunProfilePreflight) so the inherited-secret rejection is unit-testable.
+        if (!RunProfilePreflight(profile))
         {
             Console.Error.WriteLine($"Error: Profile '{name}' contains invalid or protected variables and cannot be applied");
             return 1;

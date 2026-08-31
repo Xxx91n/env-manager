@@ -65,6 +65,8 @@ MSI string-gate tests, and ICE suppression list. Cherry-picked from f073733.
 **ADR-0011 Decision 2 follow-up ponytail debt (added 2026-08-23 maintenance pass):** the InstallDir-dialog desktop-shortcut **checkbox UI** is deliberately not implemented in the v0.9.29 MSI — only the `INSTALLDESKTOPSHORTCUT` public property + component Condition ship. Rationale: minimizing WixUI Extension surface (frozen WiX v3.14.1, EOL); a dialog fork is a high-risk change touching localized UI strings. If GUI surfacing becomes a requirement, implement it as a vendored `WixUI_InstallDir` fragment copy with renamed dialog IDs (e.g. `EnvMgrInstallDirDlg`) and a `<UI>` element in `frontend/scripts/`, never by mutating `WixUIExtension.dll` state.
 watchdog covers WixUI_InstallDir localization asset availability.
 
+[ADR 0010 amendment (issue 04)](docs/adr/0010-msi-hygiene-guid-pinning-eol-test-pyramid.md) extends Decision 6: the test pyramid now covers the C# engine via the IEnvironmentScope seam (xUnit lane against InMemoryScope; registry adapter stays apex-smoke-only).
+
 [ADR 0012](docs/adr/0012-msi-uninstall-shortcut-logs-localappdata.md) covers MSI lifecycle: in-INSTALLDIR uninstall shortcut, log directory externalization to LocalAppData, legacy INSTALLDIR logs backstop, and 14-day log retention sweep.
 
 [ADR 0013](docs/adr/0013-resvg-js-for-svg-rendering.md) covers README asset rendering: use @resvg/resvg-js as committed npm devDependency instead of native rsvg-convert (Windows stdout corruption, no winget package). resvg does not support animation; the hero-motion.json per-frame composition architecture handles this.

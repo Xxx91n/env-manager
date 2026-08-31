@@ -35,7 +35,6 @@ partial class Program
 
     static bool IsProfileCorrectlyApplied(ProfileData profile) => GetEffectiveProfileVariables(profile).All(variable =>
         GetVariableValue(variable.Name, "user") == variable.Value);
-
     static bool IsProfileApplicable(ProfileData profile)
     {
         try
@@ -77,50 +76,131 @@ partial class Program
         }
     }
 
-    static HashSet<string> CollectInheritedSecrets(ProfileData profile, HashSet<string> visited)
+    /// <summary>
+    /// Ticket 04 seam extraction: profile apply/launch pre-flight validation core.
+    /// Runs every entry-point invariant that gates ProfileApply and ProfileLaunch against
+    /// an explicitly supplied profile list (hermetic: no LoadProfiles side effects), so
+    /// xUnit tests drive it without the registry or the real profiles.json.
+    /// Order matters: the topology guard (Global inheriting Launch) fires first, then
+    /// the inherited-secret union, then per-variable name checks, then PATH fragments.
+    /// The v0.7.7 inherited-secret tests (ProfileSeamValidationTests) fail against any
+    /// implementation that only walks profile.SecretVariables - keep them green.
+    /// </summary>
+    internal static bool RunProfilePreflight(ProfileData profile, List<ProfileData> allProfiles)
+    {
+        try
+        {
+            if (profile.ProfileType.Equals("global", StringComparison.OrdinalIgnoreCase))
+            {
+                foreach (string parentName in profile.Inherits)
+                {
+                    var parent = FindProfile(allProfiles, parentName);
+                    if (parent != null && parent.ProfileType.Equals("launch", StringComparison.OrdinalIgnoreCase))
+                        return false;
+                }
+            }
+            var allSecretNames = CollectInheritedSecretsFrom(profile, allProfiles, new HashSet<string>(StringComparer.OrdinalIgnoreCase));
+            // T04: an inherited secret (present in the chain union but not declared on this
+            // profile itself) has no decrypt path here - reject, mirroring the v0.7.7
+            // ProfileSetInherits rejections that a hand-edited profiles.json can bypass.
+            var ownSecrets = new HashSet<string>(profile.SecretVariables, StringComparer.OrdinalIgnoreCase);
+            if (allSecretNames.Any(name => !ownSecrets.Contains(name))) return false;
+            foreach (var variable in ResolveProfileVariables(profile, allProfiles))
+            {
+                if (string.IsNullOrWhiteSpace(variable.Name) || variable.Name.Length >= 255 ||
+                    variable.Name.Contains('=') || ProtectedSystemVars.Contains(variable.Name)) return false;
+                if (allSecretNames.Contains(variable.Name)) return false;
+            }
+            foreach (string path in ResolveProfilePaths(profile, allProfiles)) ValidatePathFragment(path);
+            return true;
+        }
+        catch (InvalidDataException)
+        {
+            return false;
+        }
+    }
+
+    /// <summary>Production adapter: pre-flight against the live profiles.json store.</summary>
+    internal static bool RunProfilePreflight(ProfileData profile) => RunProfilePreflight(profile, LoadProfiles());
+
+    /// <summary>
+    /// Ticket 04 seam extraction: CollectInheritedSecrets over an explicit profile list.
+    /// Walks the ENTIRE inheritance chain (visited-set keyed by profile Name, so a
+    /// poisoned profiles.json with an undetected cycle cannot infinite-loop) and unions
+    /// every SecretVariables entry - the authoritative inherited-secret membership source
+    /// per the v0.7.7 hard boundary. Do not add ad-hoc walk functions.
+    /// </summary>
+    internal static HashSet<string> CollectInheritedSecretsFrom(ProfileData profile, List<ProfileData> allProfiles, HashSet<string> visited)
     {
         if (visited.Contains(profile.Name)) return new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         visited.Add(profile.Name);
         var result = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var sv in profile.SecretVariables)
             result.Add(sv);
-        var all = LoadProfiles();
         foreach (string parentName in profile.Inherits)
         {
-            var parent = FindProfile(all, parentName);
+            var parent = FindProfile(allProfiles, parentName);
             if (parent != null)
-                foreach (var name in CollectInheritedSecrets(parent, visited))
+                foreach (var name in CollectInheritedSecretsFrom(parent, allProfiles, visited))
                     result.Add(name);
         }
         return result;
     }
 
-    static void ApplyProfile(ProfileData profile)
+    static HashSet<string> CollectInheritedSecrets(ProfileData profile, HashSet<string> visited)
+        => CollectInheritedSecretsFrom(profile, LoadProfiles(), visited);
+
+    /// <summary>
+    /// Ticket 04 seam extraction: the apply write path. Every registry touch goes
+    /// through IEnvironmentScope: backup preservation via WriteValuePreservingKind,
+    /// the value write via WriteValuePreservingKind, teardown via DeleteValueWithoutNotify,
+    /// and exactly ONE BroadcastSettingChange per apply/unapply. The protection guard
+    /// (SetVariableWithoutNotify's IsProtectedVariable check) is preserved so a poisoned
+    /// profile can never write a protected entry even if it slips past pre-flight.
+    /// </summary>
+    internal static void ApplyProfile(ProfileData profile, IEnvironmentScope env)
     {
+        bool wrote = false;
         foreach (var variable in GetEffectiveProfileVariables(profile))
         {
             string backupName = GetBackupVariableName(variable.Name, profile.Name);
             string scope = variable.Scope ?? "user";
-            string? existingValue = GetVariableValue(variable.Name, scope);
-            if (existingValue != null && GetVariableValue(backupName, scope) == null)
-                SetVariableWithoutNotify(backupName, existingValue, scope);
-            SetVariableWithoutNotify(variable.Name, variable.Value, scope);
+            if (IsProtectedVariable(variable.Name, scope)) continue;
+            string? existingValue = env.ReadValue(variable.Name, scope)?.Value;
+            if (existingValue != null && env.ReadValue(backupName, scope) == null)
+                env.WriteValuePreservingKind(backupName, existingValue, scope);
+            env.WriteValuePreservingKind(variable.Name, variable.Value, scope);
+            wrote = true;
         }
-        BroadcastSettingChange();
+        // T04: broadcast only when the batch actually changed something (protected-only
+        // or empty profiles changed nothing, so WM_SETTINGCHANGE would be noise).
+        if (wrote) env.BroadcastSettingChange();
     }
 
-    static void UnapplyProfile(ProfileData profile)
+    /// <summary>Production adapter: apply against the real registry seam.</summary>
+    static void ApplyProfile(ProfileData profile) => ApplyProfile(profile, Engine);
+
+    /// <summary>
+    /// Ticket 04 seam extraction: the unapply write path. Deletes through the seam's
+    /// DeleteValueWithoutNotify (no per-delete broadcast), restores the backup value,
+    /// removes the backup, and broadcasts exactly once at the end.
+    /// </summary>
+    internal static void UnapplyProfile(ProfileData profile, IEnvironmentScope env)
     {
         foreach (var variable in GetEffectiveProfileVariables(profile))
         {
             string backupName = GetBackupVariableName(variable.Name, profile.Name);
             string scope = variable.Scope ?? "user";
-            DeleteVariableWithoutNotify(variable.Name, scope);
-            string? backupValue = GetVariableValue(backupName, scope);
+            if (IsProtectedVariable(variable.Name, scope)) continue;
+            env.DeleteValueWithoutNotify(variable.Name, scope);
+            string? backupValue = env.ReadValue(backupName, scope)?.Value;
             if (backupValue == null) continue;
-            SetVariableWithoutNotify(variable.Name, backupValue, scope);
-            DeleteVariableWithoutNotify(backupName, scope);
+            env.WriteValuePreservingKind(variable.Name, backupValue, scope);
+            env.DeleteValueWithoutNotify(backupName, scope);
         }
-        BroadcastSettingChange();
+        env.BroadcastSettingChange();
     }
+
+    /// <summary>Production adapter: unapply against the real registry seam.</summary>
+    static void UnapplyProfile(ProfileData profile) => UnapplyProfile(profile, Engine);
 }
