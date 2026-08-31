@@ -2,11 +2,12 @@
 # CI Tier 3 orchestrator: runs integration tests AFTER the vitest unit-test
 # step in build.yml's verify job.
 #
-# Three integration suites:
+# Four integration suites:
 #   1. tests/launch-env-injection.Tests.ps1   (Pester; self-contained fixture)
-#   2. scripts/test-inheritance-protection.ps1 (raw ps1; AGENTS.md hard boundary)
-#   3. scripts/test-with-restore.ps1             (raw ps1 with registry rollback)
-# Suites 2 and 3 are invoked as subprocesses to preserve their already-correct
+#   2. tests/canary-redaction.Tests.ps1       (Pester; ticket 07 canary zero-leak + mask assertions)
+#   3. scripts/test-inheritance-protection.ps1 (raw ps1; AGENTS.md hard boundary)
+#   4. scripts/test-with-restore.ps1             (raw ps1 with registry rollback)
+# Suites 3 and 4 are invoked as subprocesses to preserve their already-correct
 # setup/teardown semantics. Pester 6 ( Run.Script removed) means the new test
 # file auto-discovers its CLI path so no parameter passing is needed.
 
@@ -58,7 +59,26 @@ if (Test-Path $pesterPath) {
     Write-Warning "launch-env-injection.Tests.ps1 not found; skipping"
 }
 
-# --- Suite 2: InheritanceProtection (raw script; AGENTS.md hard boundary) ---
+# --- Suite 2: CanaryRedaction (Pester; ticket 07 zero-leak across sinks) ---
+$canaryPath = Join-Path $projectRoot 'tests\canary-redaction.Tests.ps1'
+if (Test-Path $canaryPath) {
+    $xml = Join-Path $projectRoot "$ResultsDir\canary-redaction.junit.xml"
+    $cfg = New-PesterConfiguration
+    $cfg.Run.Path = $canaryPath
+    $cfg.Run.Exit = $false
+    $cfg.Output.Verbosity = 'Normal'
+    $cfg.TestResult.Enabled = $true
+    $cfg.TestResult.OutputPath = $xml
+    $cfg.Filter.Tag = 'CI'
+    $r = Invoke-Pester -Configuration $cfg
+    if ($r.Result -ne 'Passed' -and $r.FailedCount -gt 0) {
+        $failures += "canary-redaction.Tests.ps1: $($r.FailedCount) test(s) failed"
+    }
+} else {
+    Write-Warning "canary-redaction.Tests.ps1 not found; skipping"
+}
+
+# --- Suite 3: InheritanceProtection (raw script; AGENTS.md hard boundary) ---
 $inhPath = Join-Path $projectRoot 'scripts\test-inheritance-protection.ps1'
 if (Test-Path $inhPath) {
     Write-Host "`n=== InheritanceProtection ===" -ForegroundColor Cyan
@@ -68,7 +88,7 @@ if (Test-Path $inhPath) {
     Write-Warning "test-inheritance-protection.ps1 not found; skipping"
 }
 
-# --- Suite 3: RegistryTxTests (raw script with rollback; AGENTS.md hard boundary) ---
+# --- Suite 4: RegistryTxTests (raw script with rollback; AGENTS.md hard boundary) ---
 $regPath = Join-Path $projectRoot 'scripts\test-with-restore.ps1'
 if (Test-Path $regPath) {
     Write-Host "`n=== RegistryTxTests ===" -ForegroundColor Cyan
