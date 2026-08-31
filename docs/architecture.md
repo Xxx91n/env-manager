@@ -15,6 +15,23 @@ The Rust layer (`main.rs`) exposes two Tauri commands:
 - `run_cli(command: String, args: Vec<String>) -> CliResponse` - Spawns the CLI subprocess, returns `{ success, data, error }`.
 - `cli_diagnostics() -> serde_json::Value` - Returns resolved CLI path, GUI exe directory, and CWD for debugging.
 
+## IPC Schema Contract (single source of truth)
+
+The env-manager-service named-pipe IPC protocol has ONE authoritative definition: the serde structs `IpcRequest` / `IpcResponse` in `service/src/ipc.rs` (ADR 0001 decision A7). Golden files are exported from those structs by the Rust golden test (`cargo test -p env-manager-service ipc::`) and committed for the other two clients to consume:
+
+- `docs/schemas/env-manager-service-ipc.schema.json` - JSON Schema (draft-07 wrapper, 2020-12 subschemas) for both messages.
+- `docs/schemas/ipc-samples.json` - fixed sample payloads covering every request method and response shape, including the CLI gateway degraded `not_running` / `unresponsive` envelope.
+
+Contract tests wire all three clients to that schema, so protocol drift fails CI instead of corrupting state:
+
+| Client | Test | What it pins |
+|---|---|---|
+| Rust service (authoritative) | `ipc::tests::export_contract_golden` + sample round-trips (`cargo test -p env-manager-service`) | Golden files match the structs; every sample deserializes into `IpcRequest`/`IpcResponse`. |
+| C# CLI gateway | `ServiceIpcContractTests` in `tests/EnvManager.Engine.Tests/` (`dotnet test`) | `ServiceIpc.cs` wire format (snake_case `mount_id`/`request_id`, null-skip matching serde), golden samples deserialize, C# property set covers the schema property set. |
+| TypeScript GUI | `frontend/src/lib/ipc-schema-contract.test.ts` (`npx vitest run`) | `parseServiceResponse` in `api.ts` parses every golden response sample; `ok`/`data`/`message` envelope and degraded `state` field preserved. |
+| Tauri shell (Rust) | `ipc_contract_tests` in `frontend/src-tauri/src/main.rs` (`cargo test`) | The watchdog `ping` and GUI-exit `shutdown` pipe payloads match the request contract and their methods exist in the golden samples. |
+
+Deliberate schema changes: rename the field in `service/src/ipc.rs`, regenerate with `ENVMANAGER_REGENERATE_IPC_GOLDEN=1 cargo test -p env-manager-service ipc`, commit the golden-file diff, and update the C#/TS mirrors in the same commit. Every consumer test goes red until the clients follow - that is the drift alarm working as designed. `cargo test --locked` runs for both Rust crates in the `build.yml` verify job.
 ## Cross-View Refresh
 
 The `refreshTrigger` store in `stores.ts` is a counter incremented when the header refresh button is clicked. Each page component (Variables, ProfilePage, PathEditor) subscribes to it via a reactive statement (`$: if ($refreshTrigger > 0) { refresh() }`) and re-fetches its data. This ensures the current view's data is refreshed regardless of which page is active.
