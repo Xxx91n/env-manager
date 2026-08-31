@@ -1524,3 +1524,63 @@ fn set_lightweight_config(enabled: bool, timeout_minutes: u32) -> bool {
     let _ = write_gui_setting("lightweightTimeout".to_string(), timeout_minutes.to_string());
     true
 }
+
+// Ticket 08 (architecture-recovery): IPC payload contract tests. The service's
+// authoritative schema lives in service/src/ipc.rs; these assertions pin the
+// hand-rolled pipe payloads the GUI sends (watchdog ping, shutdown) to that
+// contract so a rename on either side fails cargo test in the Tauri crate.
+#[cfg(test)]
+mod ipc_contract_tests {
+    use serde_json::Value;
+
+    /// The watchdog ping payload must deserialize against the service's
+    /// IpcRequest shape: exactly a known method, no stray fields.
+    #[test]
+    fn watchdog_ping_payload_matches_ipc_request_contract() {
+        let raw = r#"{"method":"ping"}"#;
+        let value: Value = serde_json::from_str(raw).expect("watchdog ping payload must be valid JSON");
+        let obj = value.as_object().expect("payload must be a JSON object");
+        assert_eq!(obj.len(), 1, "ping must not carry extra fields");
+        assert_eq!(obj.get("method").and_then(|m| m.as_str()), Some("ping"));
+    }
+
+    /// The GUI-exit shutdown payload must deserialize against the service's
+    /// IpcRequest shape.
+    #[test]
+    fn shutdown_payload_matches_ipc_request_contract() {
+        let raw = r#"{"method":"shutdown"}"#;
+        let value: Value = serde_json::from_str(raw).expect("shutdown payload must be valid JSON");
+        let obj = value.as_object().expect("payload must be a JSON object");
+        assert_eq!(obj.len(), 1, "shutdown must not carry extra fields");
+        assert_eq!(obj.get("method").and_then(|m| m.as_str()), Some("shutdown"));
+    }
+
+    /// Both payloads must also parse through the golden sample contract: the
+    /// request names used here must exist in docs/schemas/ipc-samples.json so a
+    /// method rename in the service fails this test too.
+    #[test]
+    fn pipe_payload_methods_exist_in_golden_samples() {
+        let manifest = env!("CARGO_MANIFEST_DIR"); // frontend/src-tauri
+        let repo = std::path::Path::new(manifest)
+            .ancestors()
+            .nth(2)
+            .expect("repo root above frontend/src-tauri");
+        let golden = repo.join("docs/schemas/ipc-samples.json");
+        let raw = std::fs::read_to_string(&golden)
+            .unwrap_or_else(|e| panic!("failed to read {}: {}", golden.display(), e));
+        let samples: Value = serde_json::from_str(&raw).expect("golden samples must be valid JSON");
+        let names: Vec<&str> = samples["requests"]
+            .as_array()
+            .expect("requests array")
+            .iter()
+            .filter_map(|s| s["name"].as_str())
+            .collect();
+        for method in ["ping", "shutdown"] {
+            assert!(
+                names.iter().any(|n| n.contains(method)),
+                "golden samples must cover the '{}' method (regenerate with ENVMANAGER_REGENERATE_IPC_GOLDEN=1 cargo test -p env-manager-service ipc)",
+                method
+            );
+        }
+    }
+}

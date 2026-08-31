@@ -221,6 +221,11 @@ partial class Program
         // v0.9.13 Phase 2D/4A: Disable WER crash dialogs + SEM_NOGPFAULTERRORBOX (best-effort)
         DisableCrashDialogs();
 
+        // Route seam debug output (RegistryScope write/toggle failure logs) into the CLI
+        // --debug channel; before the seam migration these lines were DebugLog calls inside
+        // SetVariable/Toggle. No output change without --debug.
+        RegistryScope.DebugSink = DebugLog;
+
         // v0.7.1 fix: recover from the classic Windows "trailing backslash + quote"
         // tokenizer hazard, where values like "C:\Program Files\PowerShell\7\"
         // merge with following --scope/--overwrite flags. Main(args) follows
@@ -2940,7 +2945,7 @@ partial class Program
                 bool pipeExists = System.IO.File.Exists($@"\\.\pipe\{pipePath}");
                 string state = isProbe && pipeExists ? "unresponsive" : "not_running";
                 // not_running is expected常态 = stdout JSON, stderr debug; unresponsive = stdout JSON, stderr warn.
-                Console.Out.WriteLine($"{{\"ok\":false,\"state\":\"{state}\",\"message\":\"service {state} at {pipeName}\"}}");
+                Console.Out.WriteLine(ServiceIpcResponse.SerializeDegraded(state, $"service {state} at {pipeName}"));
                 if (state == "unresponsive")
                     Console.Error.WriteLine($"Warning: service unresponsive at {pipeName} (pipe exists but IPC timeout). Process may be deadlocked.");
                 return 1;
@@ -2960,9 +2965,10 @@ partial class Program
             try { reader.Dispose(); } catch { }
             try { client.Dispose(); } catch { }
 
-            if (response.Contains("\"ok\":true") || response.Contains("\"ok\": true"))
-                return 0;
-            return 1;
+            // Parse through the typed contract instead of substring matching, so a
+            // schema change on either side surfaces here as a parse/field mismatch.
+            var parsed = ServiceIpcResponse.Deserialize(response);
+            return parsed is { Ok: true } ? 0 : 1;
         }
         catch (System.TimeoutException)
         {

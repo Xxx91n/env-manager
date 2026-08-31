@@ -1,0 +1,63 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "IpcRequest": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "description": "IPC request from CLI/GUI to the service.",
+    "properties": {
+      "id": {
+        "type": [
+          "string",
+          "null"
+        ]
+      },
+      "method": {
+        "type": "string"
+      },
+      "mount_id": {
+        "type": [
+          "string",
+          "null"
+        ]
+      },
+      "request_id": {
+        "type": [
+          "string",
+          "null"
+        ]
+      }
+    },
+    "required": [
+      "method"
+    ],
+    "title": "IpcRequest",
+    "type": "object"
+  },
+  "IpcResponse": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "description": "IPC response from the service to CLI/GUI.",
+    "properties": {
+      "data": true,
+      "id": {
+        "type": [
+          "string",
+          "null"
+        ]
+      },
+      "message": {
+        "type": [
+          "string",
+          "null"
+        ]
+      },
+      "ok": {
+        "type": "boolean"
+      }
+    },
+    "required": [
+      "ok"
+    ],
+    "title": "IpcResponse",
+    "type": "object"
+  },
+  "title": "env-manager-service IPC protocol v1"
+}

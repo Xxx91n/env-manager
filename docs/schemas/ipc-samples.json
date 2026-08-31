@@ -1,0 +1,158 @@
+{
+  "requests": [
+    {
+      "name": "ping_minimal",
+      "note": "Tauri watchdog + startup probe form",
+      "payload": {
+        "method": "ping"
+      }
+    },
+    {
+      "name": "status",
+      "note": "CLI gateway form with request_id",
+      "payload": {
+        "method": "status",
+        "request_id": "1425300042"
+      }
+    },
+    {
+      "name": "health",
+      "payload": {
+        "method": "health",
+        "request_id": "1425300042"
+      }
+    },
+    {
+      "name": "refresh",
+      "payload": {
+        "method": "refresh",
+        "mount_id": "vault-team",
+        "request_id": "1425300042"
+      }
+    },
+    {
+      "name": "rotate",
+      "payload": {
+        "method": "rotate",
+        "mount_id": "vault-team",
+        "request_id": "1425300042"
+      }
+    },
+    {
+      "name": "reload",
+      "payload": {
+        "method": "reload",
+        "request_id": "1425300042"
+      }
+    },
+    {
+      "name": "shutdown",
+      "payload": {
+        "method": "shutdown"
+      }
+    }
+  ],
+  "responses": [
+    {
+      "name": "ok_status",
+      "payload": {
+        "data": {
+          "mountFile": true,
+          "mountPath": "C:\\ProgramData\\EnvManager\\secretMount.json",
+          "running": true
+        },
+        "ok": true
+      }
+    },
+    {
+      "name": "ok_ping",
+      "payload": {
+        "data": {
+          "pong": true,
+          "uptime_seconds": 3600
+        },
+        "ok": true
+      }
+    },
+    {
+      "name": "ok_health",
+      "payload": {
+        "data": {
+          "mounts": [
+            {
+              "healthy": true,
+              "id": "vault-team",
+              "lastFetchedAt": "2026-08-31T10:00:00+00:00",
+              "lastRotatedAt": null,
+              "message": null,
+              "name": "TEAM_TOKEN",
+              "provider": "vault-kv2",
+              "refreshPolicy": "Renew"
+            },
+            {
+              "healthy": false,
+              "id": "cred-app",
+              "message": "expired",
+              "name": "APP_KEY",
+              "provider": "credential-manager",
+              "refreshPolicy": "CreatedOnce"
+            }
+          ]
+        },
+        "ok": true
+      }
+    },
+    {
+      "name": "ok_refresh",
+      "payload": {
+        "data": {
+          "lastFetchedAt": "2026-08-31T10:00:00+00:00",
+          "mountId": "vault-team",
+          "refreshed": true
+        },
+        "ok": true
+      }
+    },
+    {
+      "name": "ok_reload",
+      "payload": {
+        "data": {
+          "reloaded": true
+        },
+        "ok": true
+      }
+    },
+    {
+      "name": "ok_shutdown",
+      "payload": {
+        "data": {
+          "shuttingDown": true
+        },
+        "ok": true
+      }
+    },
+    {
+      "name": "err_unknown_method",
+      "payload": {
+        "message": "unknown method: frobnicate",
+        "ok": false
+      }
+    },
+    {
+      "name": "err_refresh_missing_mount",
+      "payload": {
+        "message": "refresh requires mountId",
+        "ok": false
+      }
+    },
+    {
+      "name": "cli_degraded_not_running",
+      "note": "C# gateway-side failure envelope; extra `state` field is tolerated by consumers",
+      "payload": {
+        "message": "service not_running at \\\\.\\pipe\\EnvManager.Background",
+        "ok": false,
+        "state": "not_running"
+      }
+    }
+  ]
+}

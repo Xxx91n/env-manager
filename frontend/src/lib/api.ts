@@ -1354,12 +1354,25 @@ export async function secretProviderRotate(): Promise<string> {
  * Get service status (running, mount file path, etc).
  * CLI: `service status` (read-only)
  */
+/**
+ * Typed contract of the env-manager-service IPC response envelope
+ * (mirrors Rust IpcResponse in service/src/ipc.rs — the authoritative schema;
+ * golden files in docs/schemas/ are exported from it, see docs/architecture.md
+ * "IPC Schema Contract"). Exported so the vitest contract tests can exercise
+ * the exact parser the GUI uses.
+ */
+export interface ServiceIpcResponse {
+  ok: boolean
+  data?: any
+  message?: string
+}
+
 // ---- v0.9.2 unified service response parser ----
 // CLI returns raw JSON on stdout: {"ok":true,"data":{...}} or {"ok":false,"message":"..."}
 // All service functions must go through this parser to avoid the string-vs-object
 // bug that caused the GUI to show "not running" even when the service was alive.
 // Returns { ok, data, message } or { ok:false, message:'parse error' } on failure.
-function parseServiceResponse(raw: string): { ok: boolean; data?: any; message?: string } {
+export function parseServiceResponse(raw: string): ServiceIpcResponse {
   try {
     const parsed = JSON.parse(raw)
     if (parsed && typeof parsed === 'object' && 'ok' in parsed) {
