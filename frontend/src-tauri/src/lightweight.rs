@@ -141,8 +141,19 @@ pub fn cancel_lightweight_timer() {
 mod tests {
     use super::*;
 
+    /// Every test here mutates the process-global LIGHTWEIGHT_STATE, and
+    /// cargo runs test threads in parallel — without this lock a sibling
+    /// test can flip the state mid-assertion (observed as a flaky panic in
+    /// test_lightweight_state_after_auto_timer_cancel). Lock the state for
+    /// the whole test body; the guard releases on panic so one failure
+    /// cannot poison the rest.
+    static STATE_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+    fn lock_state() -> std::sync::MutexGuard<'static, ()> {
+        STATE_LOCK.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
+    }
     #[test]
     fn test_state_machine_transitions() {
+        let _state = lock_state();
         LIGHTWEIGHT_STATE.store(STATE_NORMAL, Ordering::Release);
         assert!(try_transition(STATE_NORMAL, STATE_LIGHTWEIGHT));
         assert!(is_in_lightweight_mode());
@@ -153,6 +164,7 @@ mod tests {
 
     #[test]
     fn test_concurrent_cas_guards() {
+        let _state = lock_state();
         LIGHTWEIGHT_STATE.store(STATE_NORMAL, Ordering::Release);
         // First transition succeeds
         assert!(try_transition(STATE_NORMAL, STATE_LIGHTWEIGHT));
@@ -164,6 +176,7 @@ mod tests {
 
     #[test]
     fn test_tray_check_callback_invocation() {
+        let _state = lock_state();
         // Verify the callback hook pattern: register a callback,
         // then verify it would be called (we test the static registration
         // mechanism, not the actual Tauri AppHandle which requires a runtime).
@@ -185,6 +198,7 @@ mod tests {
 
     #[test]
     fn test_lightweight_state_idempotent_enter_exit() {
+        let _state = lock_state();
         // Reset to known state
         LIGHTWEIGHT_STATE.store(STATE_NORMAL, Ordering::Release);
 
@@ -201,6 +215,7 @@ mod tests {
 
     #[test]
     fn test_lightweight_state_after_auto_timer_cancel() {
+        let _state = lock_state();
         // Verify that cancel_lightweight_timer does not affect the lightweight state.
         LIGHTWEIGHT_STATE.store(STATE_LIGHTWEIGHT, Ordering::Release);
         cancel_lightweight_timer(); // should be a no-op if no timer is running
@@ -217,6 +232,7 @@ mod tests {
     /// set_checked AND set_enabled after a set_text call.
     #[test]
     fn test_tray_sync_state_after_transition() {
+        let _state = lock_state();
         LIGHTWEIGHT_STATE.store(STATE_NORMAL, Ordering::Release);
         assert!(!is_in_lightweight_mode());
         assert!(try_transition(STATE_NORMAL, STATE_LIGHTWEIGHT));
@@ -229,6 +245,7 @@ mod tests {
     /// for both checked=true and checked=false paths (enter and exit).
     #[test]
     fn test_tray_callback_registration_for_enabled_sync() {
+        let _state = lock_state();
         use std::sync::atomic::{AtomicU8, Ordering};
         static LAST_CHECKED_VALUE: AtomicU8 = AtomicU8::new(99);
         register_tray_check_callback(Box::new(|_app, checked| {
