@@ -173,4 +173,73 @@ partial class Program
         // PATH callers therefore never report success after an unverified write.
         return WriteVariableCore(env, isProtectedVariable, "PATH", joined, scope);
     }
+    internal static int RunSet(string[] args, IEnvironmentScope? env = null, Func<string, string, bool>? isProtectedVariable = null)
+    {
+        IEnvironmentScope engine = env ?? Engine;
+        Func<string, string, bool> isProtected = isProtectedVariable ?? IsProtectedVariable;
+        string? scope = ParseScope(args, 3, "user");
+        if (scope == null) return 1;
+
+        // SAFETY (hard boundary): reject protected-system-variable writes BEFORE
+        // any value comparison -- otherwise the "already exists" overwrite
+        // prompt can leak past the protection guard for non-interactive flows.
+        if (IsInternalToggleBackupName(args[1]))
+        {
+            Console.Error.WriteLine("Error: Internal disabled-variable backup names are not writable");
+            return 1;
+        }
+        if (isProtected(args[1], scope))
+        {
+            Console.Error.WriteLine($"Error: Cannot modify protected system variable '{args[1]}'");
+            return 1;
+        }
+
+        string? existing = engine.ReadValue(args[1], scope)?.Value;
+        if (existing != null && existing != args[2] && !args.Contains("--overwrite"))
+            return ArgError("Error: Variable already exists with a different value; use --overwrite");
+        return WriteVariableCore(engine, isProtected, args[1], args[2], scope) ? 0 : 1;
+    }
+
+    internal static int RunDelete(string[] args, IEnvironmentScope? env = null, Func<string, string, bool>? isProtectedVariable = null)
+    {
+        IEnvironmentScope engine = env ?? Engine;
+        Func<string, string, bool> isProtected = isProtectedVariable ?? IsProtectedVariable;
+        string? scope = ParseScope(args, 2, "user");
+        if (scope == null) return 1;
+
+        // SAFETY (hard boundary): reject protected-system-variable deletes BEFORE
+        // delegating to DeleteVariable, so non-interactive callers see a clear
+        // non-zero exit and a "protected" error message rather than silent success.
+        if (IsInternalToggleBackupName(args[1]))
+        {
+            Console.Error.WriteLine("Error: Internal disabled-variable backup names are not deletable");
+            return 1;
+        }
+        if (isProtected(args[1], scope))
+        {
+            Console.Error.WriteLine($"Error: Cannot delete protected system variable '{args[1]}'");
+            return 1;
+        }
+        DeleteVariableCore(engine, isProtected, args[1], scope);
+        return 0;
+    }
+
+    static string GetToggleBackupName(string varName)
+    {
+        return varName + "_EnvManager_disabled";
+    }
+
+    static bool IsInternalToggleBackupName(string name)
+    {
+        return name.EndsWith("_EnvManager_disabled", StringComparison.OrdinalIgnoreCase);
+    }
+
+    internal static int RunToggle(string[] args, IEnvironmentScope? env = null, Func<string, string, bool>? isProtectedVariable = null)
+    {
+        string name = args[1];
+        string? scope = ParseScope(args, 2, "user");
+        if (scope == null) return 1;
+        return ToggleVariableCore(env ?? Engine, isProtectedVariable ?? IsProtectedVariable, name, scope);
+    }
+
 }
