@@ -8,7 +8,7 @@ import * as path from 'path'
 describe('Phase 5: Secret provider timeout - comprehensive verification', () => {
   it('All subprocess providers: 30s timeout on WaitForExit', () => {
     const src = fs.readFileSync(
-      path.resolve(__dirname, '..', '..', 'SecretProvider.cs'),
+      path.resolve(__dirname, '..', '..', 'src', 'SecretProvider.cs'),
       'utf8'
     )
     const sopsSection = src.slice(src.indexOf('class SopsProvider'), src.indexOf('class AzureKeyVaultProvider'))
@@ -23,7 +23,7 @@ describe('Phase 5: Secret provider timeout - comprehensive verification', () => 
 
   it('All network providers: explicit HTTP timeout', () => {
     const src = fs.readFileSync(
-      path.resolve(__dirname, '..', '..', 'SecretProvider.cs'),
+      path.resolve(__dirname, '..', '..', 'src', 'SecretProvider.cs'),
       'utf8'
     )
     const vaultSection = src.slice(src.indexOf('class VaultKV2Provider'), src.indexOf('class SopsProvider'))
@@ -61,12 +61,12 @@ describe('Phase 5: Secret provider timeout - comprehensive verification', () => 
 describe('Phase 5: Long-session memory safety', () => {
   it('C# SecretProvider: decrypted material only lives in transient process memory', () => {
     const src = fs.readFileSync(
-      path.resolve(__dirname, '..', '..', 'SecretProvider.cs'),
+      path.resolve(__dirname, '..', '..', 'src', 'SecretProvider.cs'),
       'utf8'
     )
     expect(src).toContain('ciphertext')
     const programSrc = fs.readFileSync(
-      path.resolve(__dirname, '..', '..', 'Program.cs'),
+      path.resolve(__dirname, '..', '..', 'src', 'ProfileCommand.cs'),
       'utf8'
     )
     expect(programSrc).toContain('ProfileRevealSecret')
@@ -74,7 +74,7 @@ describe('Phase 5: Long-session memory safety', () => {
 
   it('C# Program.cs: secrets never written to profiles.json as plaintext', () => {
     const src = fs.readFileSync(
-      path.resolve(__dirname, '..', '..', 'Program.cs'),
+      path.resolve(__dirname, '..', '..', 'src', 'ProfileCommand.cs'),
       'utf8'
     )
     expect(src).toContain('<encrypted>')

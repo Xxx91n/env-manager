@@ -170,7 +170,7 @@ describe('CLI/GUI state synchronization', () => {
   })
 
   it('GUI/CLI alignment: every API function sends correct command name', async () => {
-    // Verify command names match what Program.cs expects
+    // Verify command names match what src/Program.cs expects
     // toggle returns JSON with isDisabled, so mock must return valid JSON
     mockInvoke.mockImplementation((_cmd: string, opts: { command: string }) => {
       if (opts.command === 'toggle') {
@@ -191,7 +191,7 @@ describe('CLI/GUI state synchronization', () => {
       (c: unknown[]) => (c[1] as { command: string }).command
     )
 
-    // These must match the ValidCommands set in Program.cs
+    // These must match the ValidCommands set in src/Program.cs
     expect(commands).toContain('set')
     expect(commands).toContain('delete')
     expect(commands).toContain('toggle')

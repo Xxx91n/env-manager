@@ -65,7 +65,7 @@ describe('v0.7 secrets design invariants', () => {
   })
 
   it('ProfileShow masks secret values by default (CLI contract)', () => {
-    const src = require('fs').readFileSync(resolve(__dirname, '..' , '..', '..', 'Program.cs'), 'utf8')
+    const src = require('fs').readFileSync(resolve(__dirname, '..' , '..', '..', 'src', 'ProfileCommand.cs'), 'utf8')
     // Contract check (loosened from a literal `v.Value` reference): the source
     // has evolved to look up via `profile.Variables.First(...)`. The invariant
     // that must NOT regress is "masked by default, unmasked only when
@@ -76,14 +76,14 @@ describe('v0.7 secrets design invariants', () => {
   })
 
   it('DpapiHelper uses P/Invoke crypt32 (no NuGet dependency)', () => {
-    const src = require('fs').readFileSync(resolve(__dirname, '..' , '..', '..', 'EnvFeatures.cs'), 'utf8')
+    const src = require('fs').readFileSync(resolve(__dirname, '..' , '..', '..', 'src', 'EnvFeatures.cs'), 'utf8')
     expect(src).toContain('crypt32.dll')
     expect(src).toContain('CryptProtectData')
     expect(src).toContain('CryptUnprotectData')
   })
 
   it('ProfileLaunch decrypts secrets in-process (never logs plaintext)', () => {
-    const src = require('fs').readFileSync(resolve(__dirname, '..' , '..', '..', 'Program.cs'), 'utf8')
+    const src = require('fs').readFileSync(resolve(__dirname, '..' , '..', '..', 'src', 'ProfileCommand.cs'), 'utf8')
     expect(src).toContain('profile.SecretVariables.Contains(v.Name, StringComparer.OrdinalIgnoreCase)')
     expect(src).toContain('SecretProviderManager.Decrypt(valueToInject, profile.Name')
   })

@@ -105,7 +105,7 @@ describe('review-finder regressions', () => {
     const fs = await import('node:fs')
     const path = await import('node:path/win32')
     const here = path.dirname(import.meta.url.replace('file:///', ''))
-    const src = fs.readFileSync(path.join(here, '..', '..', '..', 'Program.cs'), 'utf-8')
+    const src = fs.readFileSync(path.join(here, '..', '..', '..', 'src', 'PathCommand.cs'), 'utf-8')
     const match = src.match(/if \(!isProtected\) seen\.Add\(entry\)/)
     expect(match).toBeTruthy()
   })
@@ -118,29 +118,33 @@ describe('review-finder regressions', () => {
     const fs = await import('node:fs')
     const path = await import('node:path/win32')
     const here = path.dirname(import.meta.url.replace('file:///', ''))
-    const src = fs.readFileSync(path.join(here, '..', '..', '..', 'VariableChangeScope.cs'), 'utf-8')
+    const src = fs.readFileSync(path.join(here, '..', '..', '..', 'src', 'VariableChangeScope.cs'), 'utf-8')
     expect(src).toContain('exists in both user and system scope; specify --scope')
   })
 
-  it('PATH writes delegate to transactional SetVariable and do not claim success after an unverifiable registry write', async () => {
+  it('PATH writes delegate to the transactional write core and do not claim success after an unverifiable registry write', async () => {
     const fs = await import('node:fs')
     const path = await import('node:path/win32')
     const here = path.dirname(import.meta.url.replace('file:///', ''))
-    const src = fs.readFileSync(path.join(here, '..', '..', '..', 'Program.cs'), 'utf-8')
-    expect(src).toContain('static bool SetVariable')
+    // issue 03 seam migration: the transactional PATH write lives in SetPathEntriesCore,
+    // which delegates to WriteVariableCore (write-verify, rollback + restore-on-failure).
+    const src = fs.readFileSync(path.join(here, '..', '..', '..', 'src', 'VariableWrite.cs'), 'utf-8')
+    expect(src).toContain('static bool SetPathEntriesCore')
     expect(src).toContain('original value restored')
-    expect(src).toContain('return SetVariable("PATH", joined, scope);')
+    expect(src).toContain('return WriteVariableCore(env, isProtectedVariable, "PATH", joined, scope);')
   })
 
   it('trailing-backslash recovery preserves the launch-profile separator contract', async () => {
     const fs = await import('node:fs')
     const path = await import('node:path/win32')
     const here = path.dirname(import.meta.url.replace('file:///', ''))
-    const tokenizer = fs.readFileSync(path.join(here, '..', '..', '..', 'ArgTokenizer.cs'), 'utf-8')
-    const program = fs.readFileSync(path.join(here, '..', '..', '..', 'Program.cs'), 'utf-8')
+    const tokenizer = fs.readFileSync(path.join(here, '..', '..', '..', 'src', 'ArgTokenizer.cs'), 'utf-8')
+    const program = fs.readFileSync(path.join(here, '..', '..', '..', 'src', 'Program.cs'), 'utf-8')
+    const profileCommand = fs.readFileSync(path.join(here, '..', '..', '..', 'src', 'ProfileCommand.cs'), 'utf-8')
     expect(tokenizer).toContain('s.Contains(" --", StringComparison.Ordinal)')
     expect(program).toContain('args = recovered;')
-    expect(program).toContain('int dashIndex = Array.IndexOf(args, "--");')
+    // issue 05: launch separator handling moved to ProfileCommand.cs
+    expect(profileCommand).toContain('int dashIndex = Array.IndexOf(args, "--");')
   })
 
   it('live harness re-verifies internal configuration after a rollback attempt', async () => {
@@ -174,21 +178,21 @@ describe('review-finder regressions', () => {
   })
 
   it('preserves RegistryValueKind and verifies exact values during toggle recovery', () => {
-    const program = readFileSync(join(repoRoot, 'Program.cs'), 'utf8')
+    const program = readFileSync(join(repoRoot, 'src', 'RegistryScope.cs'), 'utf8')
     expect(program).toContain('RegistryValueKind backupKind = key.GetValueKind(backupName)')
     expect(program).toContain('Equals(restoredValue, backupValue) && key.GetValueKind(name) == backupKind')
     expect(program).toContain('Toggle recovery conflict')
   })
 
   it('does not expose internal toggle backup names through get', () => {
-    const program = readFileSync(join(repoRoot, 'Program.cs'), 'utf8')
+    const program = readFileSync(join(repoRoot, 'src', 'VariableQuery.cs'), 'utf8')
     expect(program).toContain('Internal disabled-variable backup names are not addressable')
     expect(program).toContain('IsInternalToggleBackupName')
     expect(program).toContain('backupVal != null && key.GetValue(name) == null')
   })
 
   it('projects disabled backup records from both registry scopes through one helper', () => {
-    const program = readFileSync(join(repoRoot, 'Program.cs'), 'utf8')
+    const program = readFileSync(join(repoRoot, 'src', 'VariableQuery.cs'), 'utf8')
     expect(program).toContain('AppendEnvironmentItems(userKey, "user", items)')
     expect(program).toContain('AppendEnvironmentItems(systemKey, "system", items)')
     expect(program).toContain('Scope = scope')
@@ -200,7 +204,7 @@ describe('review-finder regressions', () => {
   })
 
   it('creates launch profiles in one CLI transaction', () => {
-    const program = readFileSync(join(repoRoot, 'Program.cs'), 'utf8')
+    const program = readFileSync(join(repoRoot, 'src', 'ProfileCommand.cs'), 'utf8')
     const profilePage = readFileSync(join(repoRoot, 'frontend/src/lib/components/ProfilePage.svelte'), 'utf8')
     expect(program).toContain('static int ProfileCreate(string[] args)')
     expect(program).toContain('Launch profile requires --target <exe>')
