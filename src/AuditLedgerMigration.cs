@@ -354,4 +354,17 @@ partial class Program
 
         return 0;
     }
+
+    // --- SafeSlice (architecture-recovery issue 06, moved verbatim from EnvFeatures.cs) ---
+
+    /// <summary>
+    /// Safe string slice: returns substring up to maxLength, or full string if shorter.
+    /// Prevents ArgumentOutOfRangeException on hash-display substrings.
+    /// </summary>
+    static string SafeSlice(string s, int maxLength)
+    {
+        if (string.IsNullOrEmpty(s) || s.Length <= maxLength) return s ?? "";
+        return s[..maxLength];
+    }
+
 }

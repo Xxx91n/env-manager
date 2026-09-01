@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Serialization;
 namespace EnvManager;
 
 partial class Program
@@ -114,7 +115,7 @@ partial class Program
         return ArgError("Usage: env-manager protection list | add-path <dir> | remove-path <dir> | add-var <name> | remove-var <name>");
     }
     // Built-in protected system variables and PATH entries are loaded from external
-    // JSON config files in %LOCALAPPDATA%\EnvManager (see EnvFeatures.cs).
+    // JSON config files in %LOCALAPPDATA%\EnvManager (see ProtectionCommand.cs).
     // They are seeded from embedded protection.defaults.json on first run and can
     // be edited without recompiling. The HashSet wrapping is for O(1) case-insensitive lookups.
     static HashSet<string> ProtectedSystemVars => new(
@@ -178,4 +179,76 @@ partial class Program
         return ProtectedSystemVars.Contains(name);
     }
 
+
+    // --- protection defaults storage (architecture-recovery issue 06, moved verbatim from EnvFeatures.cs) ---
+
+    /// <summary>
+    /// Path to the externally-editable built-in protected variables list.
+    /// Created on first run from <c>protection.defaults.json</c> if missing.
+    /// Users / admins can edit this file to customize protection without recompiling.
+    /// </summary>
+    static string BuiltinProtectedVarsFile => Path.Combine(AppDataDirectory, "builtin-protected-vars.json");
+
+    /// <summary>
+    /// Path to the externally-editable built-in protected PATH entries list.
+    /// Created on first run from <c>protection.defaults.json</c> if missing.
+    /// </summary>
+    static string BuiltinProtectedPathsFile => Path.Combine(AppDataDirectory, "builtin-protected-paths.json");
+
+    static ProtectionDefaults LoadProtectionDefaults()
+    {
+        const string resourceName = "EnvManager.protection.defaults.json";
+        try
+        {
+            using var stream = typeof(Program).Assembly.GetManifestResourceStream(resourceName);
+            if (stream == null) throw new InvalidDataException("Embedded protection defaults are unavailable");
+            var defaults = JsonSerializer.Deserialize<ProtectionDefaults>(stream, JsonOpts);
+            if (defaults == null || defaults.Variables.Count == 0 || defaults.Paths.Count == 0)
+                throw new InvalidDataException("Embedded protection defaults are invalid");
+            return defaults;
+        }
+        catch (Exception error)
+        {
+            throw new InvalidOperationException("Cannot load embedded protection defaults", error);
+        }
+    }
+
+    static List<string> LoadBuiltinProtectedVars()
+    {
+        var defaults = LoadProtectionDefaults().Variables;
+        try
+        {
+            if (!File.Exists(BuiltinProtectedVarsFile))
+                AtomicWriteJson(BuiltinProtectedVarsFile, defaults);
+            return JsonSerializer.Deserialize<List<string>>(File.ReadAllText(BuiltinProtectedVarsFile), JsonOpts)
+                ?? defaults;
+        }
+        catch
+        {
+            return defaults;
+        }
+    }
+
+    static List<string> LoadBuiltinProtectedPaths()
+    {
+        var defaults = LoadProtectionDefaults().Paths;
+        try
+        {
+            if (!File.Exists(BuiltinProtectedPathsFile))
+                AtomicWriteJson(BuiltinProtectedPathsFile, defaults);
+            return JsonSerializer.Deserialize<List<string>>(File.ReadAllText(BuiltinProtectedPathsFile), JsonOpts)
+                ?? defaults;
+        }
+        catch
+        {
+            return defaults;
+        }
+    }
+
+}
+
+class ProtectionDefaults
+{
+    [JsonPropertyName("variables")] public List<string> Variables { get; set; } = new();
+    [JsonPropertyName("paths")] public List<string> Paths { get; set; } = new();
 }

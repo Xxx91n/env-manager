@@ -242,4 +242,14 @@ partial class Program
         return ToggleVariableCore(env ?? Engine, isProtectedVariable ?? IsProtectedVariable, name, scope);
     }
 
+
+    // --- VariableWrite members (architecture-recovery issue 06, moved verbatim from EnvFeatures.cs) ---
+
+    static void ValidateVariableInput(string name, string value, string scope)
+    {
+        if (string.IsNullOrWhiteSpace(name) || name.Length > 255 || name.Contains('=') || name.Any(char.IsControl)) throw new ArgumentException("Invalid variable name");
+        if (value.Length > MaxLength || value.Contains('\0')) throw new ArgumentException("Invalid variable value");
+        if (IsProtectedVariable(name, scope)) throw new UnauthorizedAccessException("Protected system variable");
+    }
+
 }

@@ -1,5 +1,6 @@
 using Microsoft.Win32;
 using System.Linq;
+using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
@@ -343,4 +344,97 @@ Commands:
         }
         catch (Exception ex) { DebugLog($"Provider hash recording failed: {ex.GetType().Name}"); }
     }
+
+    // --- shared runtime infrastructure (architecture-recovery issue 06, moved verbatim from EnvFeatures.cs) ---
+
+    static string AppDataDirectory
+    {
+        get
+        {
+            string path = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "EnvManager");
+            Directory.CreateDirectory(path);
+            return path;
+        }
+    }
+
+    static bool IsWriteInvocation(string[] args)
+    {
+        if (args.Length == 0) return false;
+        string command = args[0].ToLowerInvariant();
+        if (command is "list" or "get" or "backup" or "diff" or "validate" or "agents" or "help" or "expand") return false;
+        if (command == "history") return args.Length > 1 && args[1].Equals("undo", StringComparison.OrdinalIgnoreCase);
+        if (command == "bulk") return args.Length > 1 && args[1].Equals("import", StringComparison.OrdinalIgnoreCase) && !args.Contains("--dry-run");
+        if (command == "profile") return args.Length < 2 || !new[] { "list", "show", "status", "preview", "export", "help" }.Contains(args[1], StringComparer.OrdinalIgnoreCase);
+        if (command == "path") return args.Length < 2 || !new[] { "list", "help" }.Contains(args[1], StringComparer.OrdinalIgnoreCase);
+        return true;
+    }
+
+    static Mutex? AcquireMutationLock(string[] args)
+    {
+        if (!IsWriteInvocation(args)) return null;
+        var mutex = new Mutex(false, "Local\\EnvManager.RegistryMutation");
+        try
+        {
+            if (!mutex.WaitOne(TimeSpan.FromSeconds(30)))
+            {
+                mutex.Dispose();
+                throw new TimeoutException("Another Env Manager write operation is still running");
+            }
+        }
+        catch (AbandonedMutexException)
+        {
+            DebugLog("Recovered abandoned mutation lock");
+        }
+        return mutex;
+    }
+
+    static Dictionary<string, string?> CaptureEnvironmentSnapshot()
+    {
+        var snapshot = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
+        CaptureScope(Registry.CurrentUser, UserEnvPath, "user", snapshot);
+        CaptureScope(Registry.LocalMachine, SystemEnvPath, "system", snapshot);
+        return snapshot;
+    }
+
+    static void CaptureScope(RegistryKey hive, string path, string scope, Dictionary<string, string?> target)
+    {
+        using var key = hive?.OpenSubKey(path, false);
+        if (key == null) return;
+        foreach (string name in key.GetValueNames())
+        {
+            if (name.Contains("_PowerToys_", StringComparison.OrdinalIgnoreCase)) continue;
+            target[scope + "\0" + name] = key.GetValue(name, null, RegistryValueOptions.DoNotExpandEnvironmentNames)?.ToString();
+        }
+    }
+
+static void AtomicWriteJson<T>(string path, T value)
+{
+    string temp = path + ".tmp." + Environment.ProcessId;
+    // v0.8.0 A3: fsync before rename to match Rust write_atomic.
+    using (var fs = File.Create(temp))
+    {
+        byte[] bytes = JsonSerializer.SerializeToUtf8Bytes(value, JsonOptsIndented);
+        fs.Write(bytes, 0, bytes.Length);
+        fs.Flush(flushToDisk: true); // fsync
+    }
+    File.Move(temp, path, true);
+}
+
+    /// <summary>
+    /// Atomically write a UTF-8 string to a file: temp + fsync + rename.
+    /// Same pattern as AtomicWriteJson but accepts pre-serialized text.
+    /// </summary>
+    static void WriteAtomicUtf8(string path, string content)
+    {
+        string temp = path + ".tmp." + Environment.ProcessId;
+        using (var fs = File.Create(temp))
+        {
+            byte[] bytes = new UTF8Encoding(false).GetBytes(content);
+            fs.Write(bytes, 0, bytes.Length);
+            fs.Flush(flushToDisk: true); // fsync
+        }
+        File.Move(temp, path, true);
+    }
+
+
 }
