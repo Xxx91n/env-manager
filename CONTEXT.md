@@ -71,6 +71,8 @@ watchdog covers WixUI_InstallDir localization asset availability.
 
 [ADR 0013](docs/adr/0013-resvg-js-for-svg-rendering.md) covers README asset rendering: use @resvg/resvg-js as committed npm devDependency instead of native rsvg-convert (Windows stdout corruption, no winget package). resvg does not support animation; the hero-motion.json per-frame composition architecture handles this.
 
+**Architecture-recovery landing (2026-09-02, issues 01-06/07/08):** C# sources moved under src/ (issue 05) and Program.cs reduced to a thin Main dispatcher plus shared runtime infra (441 lines, one partial-class module per command domain); EnvFeatures.cs retired by domain split into AuditCommand/ExpandCommand/BulkCommand/DpapiHelper (issue 06); IPC schema contract is Rust-owned with golden files under docs/schemas/ consumed by C#/TS/Tauri contract tests (issue 08); launch injection and canary redaction verified by the three-layer test net (issue 07). Process record: docs/history/architecture-recovery-2026-09/.
+
 ## Language (continued)
 
 **Mount Refresh Policy**:
@@ -149,7 +151,7 @@ _Avoid_: winget manifest, package manager submission, Windows Package Manager
 _Avoid_: auto-update, update plugin, signed update
 
 **ScrubExceptionMessage**:
-The v0.9.12 C# helper that masks 22 secret-bearing patterns from exception messages before they reach stderr or logs. Applied at all 7 x.Message leak sites in Program.cs. Bounded to 512 chars, best-effort pattern matching. Mirrors scrub_stderr in Rust.
+The v0.9.12 C# helper that masks 22 secret-bearing patterns from exception messages before they reach stderr or logs. Defined in src/Program.cs; applied at all 7 x.Message leak sites spanning src/Program.cs / src/ProfileCommand.cs / src/ServiceCommand.cs / src/UpdateCommand.cs after the issue-05/06 module split. Bounded to 512 chars, best-effort pattern matching. Mirrors scrub_stderr in Rust.
 _Avoid_: error scrubber, message filter, log sanitizer
 
 **SecretString (C#)**:

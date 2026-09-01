@@ -1,0 +1,326 @@
+[
+  {
+    "index": 0,
+    "path": "D:\\DevTools\\ffmpeg",
+    "expandedPath": "D:\\DevTools\\ffmpeg",
+    "isDuplicate": false,
+    "exists": true,
+    "isProtected": false,
+    "isBuiltinProtected": false
+  },
+  {
+    "index": 1,
+    "path": "C:\\Users\\Administrator\\.local\\share\\jadx\\bin",
+    "expandedPath": "C:\\Users\\Administrator\\.local\\share\\jadx\\bin",
+    "isDuplicate": false,
+    "exists": true,
+    "isProtected": false,
+    "isBuiltinProtected": false
+  },
+  {
+    "index": 2,
+    "path": "C:\\Users\\Administrator\\.cargo\\bin",
+    "expandedPath": "C:\\Users\\Administrator\\.cargo\\bin",
+    "isDuplicate": false,
+    "exists": true,
+    "isProtected": false,
+    "isBuiltinProtected": false
+  },
+  {
+    "index": 3,
+    "path": "C:\\Users\\Administrator\\AppData\\Local\\pnpm\\bin",
+    "expandedPath": "C:\\Users\\Administrator\\AppData\\Local\\pnpm\\bin",
+    "isDuplicate": false,
+    "exists": true,
+    "isProtected": false,
+    "isBuiltinProtected": false
+  },
+  {
+    "index": 4,
+    "path": "C:\\Program Files\\Git\\cmd",
+    "expandedPath": "C:\\Program Files\\Git\\cmd",
+    "isDuplicate": false,
+    "exists": true,
+    "isProtected": false,
+    "isBuiltinProtected": false
+  },
+  {
+    "index": 5,
+    "path": "C:\\Program Files\\Git\\bin",
+    "expandedPath": "C:\\Program Files\\Git\\bin",
+    "isDuplicate": false,
+    "exists": true,
+    "isProtected": false,
+    "isBuiltinProtected": false
+  },
+  {
+    "index": 6,
+    "path": "D:\\jdk17\\bin",
+    "expandedPath": "D:\\jdk17\\bin",
+    "isDuplicate": false,
+    "exists": true,
+    "isProtected": false,
+    "isBuiltinProtected": false
+  },
+  {
+    "index": 7,
+    "path": "D:\\MinGW64\\bin",
+    "expandedPath": "D:\\MinGW64\\bin",
+    "isDuplicate": false,
+    "exists": true,
+    "isProtected": false,
+    "isBuiltinProtected": false
+  },
+  {
+    "index": 8,
+    "path": "D:\\vscode\\bin",
+    "expandedPath": "D:\\vscode\\bin",
+    "isDuplicate": false,
+    "exists": true,
+    "isProtected": false,
+    "isBuiltinProtected": false
+  },
+  {
+    "index": 9,
+    "path": "D:\\xnj\\bin\\",
+    "expandedPath": "D:\\xnj\\bin\\",
+    "isDuplicate": false,
+    "exists": true,
+    "isProtected": false,
+    "isBuiltinProtected": false
+  },
+  {
+    "index": 10,
+    "path": "C:\\Windows\\system32",
+    "expandedPath": "C:\\Windows\\system32",
+    "isDuplicate": false,
+    "exists": true,
+    "isProtected": true,
+    "isBuiltinProtected": true
+  },
+  {
+    "index": 11,
+    "path": "C:\\Windows",
+    "expandedPath": "C:\\Windows",
+    "isDuplicate": false,
+    "exists": true,
+    "isProtected": true,
+    "isBuiltinProtected": true
+  },
+  {
+    "index": 12,
+    "path": "C:\\Windows\\System32\\Wbem",
+    "expandedPath": "C:\\Windows\\System32\\Wbem",
+    "isDuplicate": false,
+    "exists": true,
+    "isProtected": true,
+    "isBuiltinProtected": true
+  },
+  {
+    "index": 13,
+    "path": "D:\\xshell\\",
+    "expandedPath": "D:\\xshell\\",
+    "isDuplicate": false,
+    "exists": true,
+    "isProtected": false,
+    "isBuiltinProtected": false
+  },
+  {
+    "index": 14,
+    "path": "D:\\nodejs\\",
+    "expandedPath": "D:\\nodejs\\",
+    "isDuplicate": false,
+    "exists": true,
+    "isProtected": false,
+    "isBuiltinProtected": false
+  },
+  {
+    "index": 15,
+    "path": "D:\\nodejs\\node_modules\\npm\\bin",
+    "expandedPath": "D:\\nodejs\\node_modules\\npm\\bin",
+    "isDuplicate": false,
+    "exists": true,
+    "isProtected": false,
+    "isBuiltinProtected": false
+  },
+  {
+    "index": 16,
+    "path": "C:\\Program Files\\dotnet\\",
+    "expandedPath": "C:\\Program Files\\dotnet\\",
+    "isDuplicate": false,
+    "exists": true,
+    "isProtected": false,
+    "isBuiltinProtected": false
+  },
+  {
+    "index": 17,
+    "path": "C:\\Program Files\\ExifTool",
+    "expandedPath": "C:\\Program Files\\ExifTool",
+    "isDuplicate": false,
+    "exists": true,
+    "isProtected": false,
+    "isBuiltinProtected": false
+  },
+  {
+    "index": 18,
+    "path": "C:\\Users\\Administrator\\AppData\\Local\\Microsoft\\WindowsApps",
+    "expandedPath": "C:\\Users\\Administrator\\AppData\\Local\\Microsoft\\WindowsApps",
+    "isDuplicate": false,
+    "exists": true,
+    "isProtected": false,
+    "isBuiltinProtected": false
+  },
+  {
+    "index": 19,
+    "path": "D:\\tools\\bandzip\\",
+    "expandedPath": "D:\\tools\\bandzip\\",
+    "isDuplicate": false,
+    "exists": true,
+    "isProtected": false,
+    "isBuiltinProtected": false
+  },
+  {
+    "index": 20,
+    "path": "C:\\Users\\Administrator\\.dotnet\\tools",
+    "expandedPath": "C:\\Users\\Administrator\\.dotnet\\tools",
+    "isDuplicate": false,
+    "exists": true,
+    "isProtected": false,
+    "isBuiltinProtected": false
+  },
+  {
+    "index": 21,
+    "path": "C:\\Users\\Administrator\\AppData\\Roaming\\npm",
+    "expandedPath": "C:\\Users\\Administrator\\AppData\\Roaming\\npm",
+    "isDuplicate": false,
+    "exists": true,
+    "isProtected": false,
+    "isBuiltinProtected": false
+  },
+  {
+    "index": 22,
+    "path": "C:\\Program Files\\PyManager\\",
+    "expandedPath": "C:\\Program Files\\PyManager\\",
+    "isDuplicate": false,
+    "exists": true,
+    "isProtected": false,
+    "isBuiltinProtected": false
+  },
+  {
+    "index": 23,
+    "path": "D:\\Github Cli",
+    "expandedPath": "D:\\Github Cli",
+    "isDuplicate": false,
+    "exists": true,
+    "isProtected": false,
+    "isBuiltinProtected": false
+  },
+  {
+    "index": 24,
+    "path": "C:\\Users\\Administrator\\go\\bin",
+    "expandedPath": "C:\\Users\\Administrator\\go\\bin",
+    "isDuplicate": false,
+    "exists": true,
+    "isProtected": false,
+    "isBuiltinProtected": false
+  },
+  {
+    "index": 25,
+    "path": "D:\\DevTools\\Python\\runtimes\\pythoncore-3.11-64\\Scripts",
+    "expandedPath": "D:\\DevTools\\Python\\runtimes\\pythoncore-3.11-64\\Scripts",
+    "isDuplicate": false,
+    "exists": true,
+    "isProtected": false,
+    "isBuiltinProtected": false
+  },
+  {
+    "index": 26,
+    "path": "C:\\Users\\Administrator\\AppData\\AndroidCLI",
+    "expandedPath": "C:\\Users\\Administrator\\AppData\\AndroidCLI",
+    "isDuplicate": false,
+    "exists": true,
+    "isProtected": false,
+    "isBuiltinProtected": false
+  },
+  {
+    "index": 27,
+    "path": "C:\\Users\\Administrator\\AppData\\Local\\Android\\Sdk\\platform-tools",
+    "expandedPath": "C:\\Users\\Administrator\\AppData\\Local\\Android\\Sdk\\platform-tools",
+    "isDuplicate": false,
+    "exists": true,
+    "isProtected": false,
+    "isBuiltinProtected": false
+  },
+  {
+    "index": 28,
+    "path": "D:\\Obsidian",
+    "expandedPath": "D:\\Obsidian",
+    "isDuplicate": false,
+    "exists": true,
+    "isProtected": false,
+    "isBuiltinProtected": false
+  },
+  {
+    "index": 29,
+    "path": "c:\\users\\administrator\\.local\\bin",
+    "expandedPath": "c:\\users\\administrator\\.local\\bin",
+    "isDuplicate": false,
+    "exists": true,
+    "isProtected": false,
+    "isBuiltinProtected": false
+  },
+  {
+    "index": 30,
+    "path": "C:\\Users\\Administrator\\AppData\\Local\\Programs\\odl",
+    "expandedPath": "C:\\Users\\Administrator\\AppData\\Local\\Programs\\odl",
+    "isDuplicate": false,
+    "exists": true,
+    "isProtected": false,
+    "isBuiltinProtected": false
+  },
+  {
+    "index": 31,
+    "path": "C:\\Users\\Administrator\\AppData\\Local\\winget-cli",
+    "expandedPath": "C:\\Users\\Administrator\\AppData\\Local\\winget-cli",
+    "isDuplicate": false,
+    "exists": true,
+    "isProtected": false,
+    "isBuiltinProtected": false
+  },
+  {
+    "index": 32,
+    "path": "C:\\Users\\Administrator\\AppData\\Local\\Microsoft\\WinGet\\Links",
+    "expandedPath": "C:\\Users\\Administrator\\AppData\\Local\\Microsoft\\WinGet\\Links",
+    "isDuplicate": false,
+    "exists": true,
+    "isProtected": false,
+    "isBuiltinProtected": false
+  },
+  {
+    "index": 33,
+    "path": "D:\\DevTools\\Go\\bin",
+    "expandedPath": "D:\\DevTools\\Go\\bin",
+    "isDuplicate": false,
+    "exists": true,
+    "isProtected": false,
+    "isBuiltinProtected": false
+  },
+  {
+    "index": 34,
+    "path": "D:\\DevTools\\Python\\bin",
+    "expandedPath": "D:\\DevTools\\Python\\bin",
+    "isDuplicate": false,
+    "exists": true,
+    "isProtected": false,
+    "isBuiltinProtected": false
+  },
+  {
+    "index": 35,
+    "path": "C:\\Users\\Administrator\\AppData\\Local\\Programs\\glab",
+    "expandedPath": "C:\\Users\\Administrator\\AppData\\Local\\Programs\\glab",
+    "isDuplicate": false,
+    "exists": true,
+    "isProtected": false,
+    "isBuiltinProtected": false
+  }
+]
