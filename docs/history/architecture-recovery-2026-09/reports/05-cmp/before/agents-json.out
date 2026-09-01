@@ -1,0 +1,172 @@
+{
+  "name": "env-manager-cli",
+  "version": "0.9.30",
+  "description": "Windows environment variable manager CLI",
+  "commands": [
+    {
+      "cmd": "list",
+      "desc": "List all variables (JSON)",
+      "args": "",
+      "scope": false,
+      "async": true
+    },
+    {
+      "cmd": "get",
+      "desc": "Get variable (JSON)",
+      "args": "\u003Cname\u003E",
+      "scope": false,
+      "async": true
+    },
+    {
+      "cmd": "set",
+      "desc": "Set variable",
+      "args": "\u003Cname\u003E \u003Cvalue\u003E",
+      "scope": true,
+      "async": false
+    },
+    {
+      "cmd": "delete",
+      "desc": "Delete variable",
+      "args": "\u003Cname\u003E",
+      "scope": true,
+      "async": false
+    },
+    {
+      "cmd": "toggle",
+      "desc": "Enable/disable variable (backs up value)",
+      "args": "\u003Cname\u003E",
+      "scope": true,
+      "async": false
+    },
+    {
+      "cmd": "backup",
+      "desc": "Backup to JSON",
+      "args": "[--output \u003Cfile\u003E]",
+      "scope": false,
+      "async": true
+    },
+    {
+      "cmd": "restore",
+      "desc": "Restore from JSON",
+      "args": "\u003Cfile\u003E [--scope]",
+      "scope": true,
+      "async": false
+    },
+    {
+      "cmd": "diff",
+      "desc": "Compare backups (JSON)",
+      "args": "\u003Cold\u003E \u003Cnew\u003E",
+      "scope": false,
+      "async": true
+    },
+    {
+      "cmd": "merge",
+      "desc": "Merge backups",
+      "args": "\u003Cold\u003E \u003Cnew\u003E --output \u003Cfile\u003E",
+      "scope": false,
+      "async": false
+    },
+    {
+      "cmd": "validate",
+      "desc": "Validate backup",
+      "args": "\u003Cfile\u003E",
+      "scope": false,
+      "async": true
+    },
+    {
+      "cmd": "profile",
+      "desc": "Manage profiles",
+      "args": "list|create|delete|apply|unapply|show|add-var|remove-var|edit-var|status",
+      "scope": true,
+      "async": false
+    },
+    {
+      "cmd": "path",
+      "desc": "Edit PATH as list",
+      "args": "list|add|remove|move-up|move-down|rename",
+      "scope": true,
+      "async": false
+    },
+    {
+      "cmd": "agents",
+      "desc": "Output AGENTS.md spec",
+      "args": "[--path|--json|--summary]",
+      "scope": false,
+      "async": true
+    },
+    {
+      "cmd": "help",
+      "desc": "Show help",
+      "args": "",
+      "scope": false,
+      "async": true
+    },
+    {
+      "cmd": "rename",
+      "desc": "Atomically rename variable (verify before delete)",
+      "args": "\u003Cold\u003E \u003Cnew\u003E",
+      "scope": true,
+      "async": false
+    },
+    {
+      "cmd": "change-scope",
+      "desc": "Move variable user\u003C-\u003Esystem atomically",
+      "args": "\u003Cname\u003E \u003Cnew-scope\u003E",
+      "scope": true,
+      "async": false
+    },
+    {
+      "cmd": "history",
+      "desc": "Audit log \u002B guarded undo",
+      "args": "list|undo|delete|clear",
+      "scope": false,
+      "async": true
+    },
+    {
+      "cmd": "bulk",
+      "desc": "Import/export JSON/.env/CSV with --dry-run",
+      "args": "import|export \u003Cfile\u003E",
+      "scope": true,
+      "async": false
+    },
+    {
+      "cmd": "expand",
+      "desc": "Resolve nested %VAR% references",
+      "args": "\u003Cvalue\u003E",
+      "scope": false,
+      "async": true
+    },
+    {
+      "cmd": "protection",
+      "desc": "List/add/remove protected vars and PATH entries",
+      "args": "list|add-var|remove-var|add-path|remove-path",
+      "scope": false,
+      "async": true
+    },
+    {
+      "cmd": "update",
+      "desc": "Check GitHub releases for newer version",
+      "args": "check",
+      "scope": false,
+      "async": true
+    }
+  ],
+  "scopes": [
+    "user",
+    "system"
+  ],
+  "output": "stdout: JSON or text, stderr: errors/debug, exit 0=success 1=failure",
+  "safety": {
+    "noCredentials": true,
+    "injectionProtected": true,
+    "writeSerialized": true,
+    "maxArgLen": 32767,
+    "maxArgs": 64,
+    "nullByteRejected": true,
+    "controlCharRejected": true
+  },
+  "integration": {
+    "pattern": "Call agents first to discover the contract, then use commands. Read operations are safe to batch. Write operations are serialized.",
+    "tip": "Use --debug for verbose stderr logging. Pin to --scope user for non-interactive agent workflows (no elevation needed)."
+  }
+}

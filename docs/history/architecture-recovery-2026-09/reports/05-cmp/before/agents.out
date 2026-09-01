@@ -1,0 +1,6 @@
+# Env Manager CLI
+
+Commands: list, get, set, delete, toggle, backup, restore, diff, merge, validate, profile, path, agents, help
+
+Use --debug for verbose logging. Use --scope user|system for scope control.
+Use agents --json for machine-readable spec.

@@ -1,0 +1,31 @@
+Profile commands:
+  profile list                        List all profiles (JSON)
+  profile create <name> [--type global|launch] [--target <exe>]
+                                                    Create a Global or Launch profile atomically
+  profile delete <name>               Delete a profile
+  profile show <name>                 Show profile details (JSON)
+  profile apply <name>                Apply a profile (backs up existing user vars)
+  profile unapply <name>              Unapply a profile (restores backed-up user vars)
+  profile add-var <profile> <name> <val> [--scope user|system]
+                                                     Add a variable to a profile (v0.7.1: --scope routes to user or system on apply)
+  profile add-path <profile> <dir> [--scope user|system]
+                                                     Add a PATH entry to a profile (v0.7.1: --scope stored per-entry)
+  profile remove-path <profile> <dir>               Remove a PATH entry from a profile
+  profile remove-var <profile> <name>                Remove a variable from a profile
+  profile edit-var <profile> <old> <new> <val>       Edit a variable in a profile
+  profile status <name>                         Check profile application status
+  profile export <name> --output <file>          Export profile to JSON file
+  profile import <file>                          Import profile from JSON file
+  profile rename <old> <new>                     Rename a profile
+  profile set-launch <name> --target <exe> [--args <args>] [--cwd <dir>] [--type global|launch]
+  profile launch <name> [-- <extra-args ...>]    Spawn target with isolated env from profile (no registry write)
+  profile add-secret <profile> <name> <val>     Encrypt a value with DPAPI-CurrentUser; stored as ciphertext in profile json
+  profile edit-secret <profile> <old> <new> <val>  Rename/re-encrypt a secret; plaintext lives only in memory
+  profile remove-secret <profile> <name>          Remove a secret variable from a profile
+  profile reveal-secret <profile> <name>          Print one secret's plaintext to stdout (DPAPI-bound to current user only)
+  profile show <name> [--reveal]                  Show profile details (secret values masked unless --reveal; --reveal still only outputs decrypted value for the current user)
+  profile export-secrets <profile> <file>          Export encrypted secrets from a profile to a file
+  profile import-secrets <profile> <file>          Import encrypted secrets from a file into a profile
+  profile secret-provider list                     List available secret providers and active selection
+  profile secret-provider set <name>               Set the active secret provider
+  profile secret-provider rotate                   Re-encrypt all secrets across all profiles with the active provider
