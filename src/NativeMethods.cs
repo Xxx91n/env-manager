@@ -85,3 +85,13 @@ partial class Program
         }
     }
 }
+
+/// <summary>
+/// LocalFree interop used by DpapiHelper buffer cleanup (architecture-recovery issue 06):
+/// moved verbatim from EnvFeatures.cs. Behavior unchanged.
+/// </summary>
+internal static partial class NativeMethods
+{
+    [System.Runtime.InteropServices.DllImport("kernel32.dll", SetLastError = true)]
+    internal static extern IntPtr LocalFree(IntPtr hMem);
+}

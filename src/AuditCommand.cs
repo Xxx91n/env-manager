@@ -1,6 +1,7 @@
 using Microsoft.Win32;
 using System.Linq;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace EnvManager;
 
@@ -115,4 +116,116 @@ partial class Program
                 return 1;
         }
     }
+
+    // --- audit/history storage + `history` command (architecture-recovery issue 06, moved verbatim from EnvFeatures.cs) ---
+
+    const int MaxAuditEntries = 2000;
+
+    static string AuditFilePath => Path.Combine(AppDataDirectory, "audit.json");
+
+    static List<AuditEntry> LoadAuditHistory()
+    {
+        if (!File.Exists(AuditFilePath)) return new();
+        var info = new FileInfo(AuditFilePath);
+        if (info.Length > MaxBackupFileSize) throw new InvalidDataException("Audit history exceeds the safety limit");
+        // v0.9.13 Phase 3B: decrypt AES-GCM encrypted audit content at rest
+        string rawContent = File.ReadAllText(AuditFilePath);
+        string plainJson = DecryptAuditContent(rawContent);
+        return JsonSerializer.Deserialize<List<AuditEntry>>(plainJson, JsonOpts) ?? new();
+    }
+
+    static int RunHistoryCommand(string[] args)
+   {
+       string sub = args.Length > 1 ? args[1].ToLowerInvariant() : "list";
+       if (sub == "list")
+       {
+           int limit = 200;
+           int flag = Array.IndexOf(args, "--limit");
+           if (flag >= 0 && flag + 1 < args.Length && int.TryParse(args[flag + 1], out int parsed)) limit = Math.Clamp(parsed, 1, 1000);
+           Console.WriteLine(JsonSerializer.Serialize(LoadAuditHistory().TakeLast(limit).Reverse(), JsonOptsIndented));
+           return 0;
+       }
+       if (sub == "undo" && args.Length > 2)
+       {
+           var entry = LoadAuditHistory().FirstOrDefault(e => e.Id.Equals(args[2], StringComparison.OrdinalIgnoreCase));
+           if (entry == null) return ArgError("Error: Audit entry not found");
+
+           // Profile-level audit entries use Scope="profile" and are reverted
+           // via TryUndoProfileAudit (restoring the profiles.json state). They
+           // do not touch the registry, so no stale-value check applies.
+           if (entry.Scope == "profile")
+           {
+               bool handled = TryUndoProfileAudit(entry);
+               if (!handled) return ArgError("Error: This profile change cannot be undone");
+               Console.WriteLine(JsonSerializer.Serialize(new { undone = entry.Id, entry.Name, entry.Scope }, JsonOpts));
+               return 0;
+           }
+
+           // Registry-level entries: only undo if the live value still matches
+           // the recorded newValue. Otherwise force the user to --force.
+           string? current = GetVariableValue(entry.Name, entry.Scope);
+           if (current != entry.NewValue && !args.Contains("--force"))
+               return ArgError("Error: Variable changed since this audit entry; use --force to override");
+           if (entry.OldValue == null) DeleteVariableWithoutNotify(entry.Name, entry.Scope);
+           else SetVariableWithoutNotify(entry.Name, entry.OldValue, entry.Scope);
+           BroadcastSettingChange();
+           Console.WriteLine(JsonSerializer.Serialize(new { undone = entry.Id, entry.Name, entry.Scope }, JsonOpts));
+           return 0;
+       }
+       if (sub == "delete")
+       {
+           if (args.Length < 3) return ArgError("Usage: env-manager history delete <id> | history delete --all [--scope user|system]");
+           var history = LoadAuditHistory();
+           if (args[2] == "--all")
+           {
+               string? scope = ParseScope(args, 3, "all");
+               if (scope == null) return 1;
+               if (scope == "all") history.Clear();
+               else history.RemoveAll(e => e.Scope == scope);
+               AtomicWriteJson(AuditFilePath, history);
+               Console.WriteLine(JsonSerializer.Serialize(new { deleted = "all", scope }, JsonOpts));
+               return 0;
+           }
+           var entry = history.FirstOrDefault(e => e.Id.Equals(args[2], StringComparison.OrdinalIgnoreCase));
+           if (entry == null) return ArgError("Error: Audit entry not found");
+           history.Remove(entry);
+           AtomicWriteJson(AuditFilePath, history);
+           Console.WriteLine(JsonSerializer.Serialize(new { deleted = entry.Id }, JsonOpts));
+           return 0;
+       }
+       return ArgError("Usage: env-manager history list [--limit N] | history undo <id> [--force]\nNote: profile-scoped audit entries are undone via profile-state revert; --force has no effect. | history delete <id> | history delete --all [--scope user|system]");
+    }
+
+
+    static void RecordSnapshotDiff(string command, Dictionary<string, string?> before, Dictionary<string, string?> after)
+    {
+        var keys = before.Keys.Concat(after.Keys).Distinct(StringComparer.OrdinalIgnoreCase);
+        var changes = new List<AuditEntry>();
+        foreach (string key in keys)
+        {
+            before.TryGetValue(key, out string? oldValue);
+            after.TryGetValue(key, out string? newValue);
+            if (oldValue == newValue) continue;
+            string[] parts = key.Split('\0', 2);
+            changes.Add(new AuditEntry { Command = command, Scope = parts[0], Name = parts[1], OldValue = oldValue, NewValue = newValue });
+        }
+        if (changes.Count == 0) return;
+        var history = LoadAuditHistory();
+        history.AddRange(changes);
+        if (history.Count > MaxAuditEntries) history = history[^MaxAuditEntries..];
+        AtomicWriteJson(AuditFilePath, history);
+    }
+
+}
+
+class AuditEntry
+{
+    [JsonPropertyName("id")] public string Id { get; set; } = Guid.NewGuid().ToString("N");
+    [JsonPropertyName("timestamp")] public string Timestamp { get; set; } = DateTimeOffset.UtcNow.ToString("O");
+    [JsonPropertyName("command")] public string Command { get; set; } = "";
+    [JsonPropertyName("name")] public string Name { get; set; } = "";
+    [JsonPropertyName("scope")] public string Scope { get; set; } = "user";
+    [JsonPropertyName("oldValue")] public string? OldValue { get; set; }
+    [JsonPropertyName("newValue")] public string? NewValue { get; set; }
+
 }

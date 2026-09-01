@@ -484,4 +484,23 @@ partial class Program
         Console.WriteLine($"Moved PATH entry at index {index} down");
         return 0;
     }
+
+    // --- PathCommand members (architecture-recovery issue 06, moved verbatim from EnvFeatures.cs) ---
+
+    internal static string NormalizePathEntry(string path) => Environment.ExpandEnvironmentVariables(path).Trim().TrimEnd('\\', '/');
+
+    /// <summary>
+    /// Removes the Windows \\?\ verbatim prefix that `Path.GetFullPath` can append.
+    /// We always expose normalized paths to the user, the registry, profiles, and PATH entries
+    /// to avoid leaking the prefix (regression: previously GUI "Add CLI to PATH" produced
+    /// \\?\D:\... in user PATH which broke child invocations).
+    /// </summary>
+    static string StripVerbatimPrefix(string? path)
+    {
+        if (string.IsNullOrEmpty(path)) return path ?? string.Empty;
+        if (path.StartsWith(@"\\?\UNC\", StringComparison.OrdinalIgnoreCase)) return @"\\" + path.Substring(8);
+        if (path.StartsWith(@"\\?\", StringComparison.OrdinalIgnoreCase)) return path.Substring(4);
+        return path;
+    }
+
 }

@@ -1256,4 +1256,296 @@ partial class Program
     }
 
     /// <summary>
+
+    // --- ProfileCommand members (architecture-recovery issue 06, moved verbatim from EnvFeatures.cs) ---
+
+    /// <summary>
+    /// Validates that a Launch profile target executable exists, has a known executable
+    /// extension, and is NOT inside \\Windows\\System32 (hard refusal: system32 hijacking).
+    /// </summary>
+    static void ValidateLaunchTarget(string target)
+    {
+        if (string.IsNullOrWhiteSpace(target)) throw new InvalidDataException("Launch target is empty");
+        string cwd = Environment.CurrentDirectory;
+        string full = Path.IsPathRooted(target) ? target : Path.GetFullPath(Path.Combine(cwd, target));
+        string ext = Path.GetExtension(full).ToLowerInvariant();
+        if (ext is not (".exe" or ".bat" or ".cmd" or ".ps1"))
+            throw new InvalidDataException($"Launch target must be an .exe/.bat/.cmd/.ps1 file (got: {ext})");
+        if (!File.Exists(full)) throw new InvalidDataException($"Launch target does not exist: {full}");
+        // T04-SYS32-FIX: the prior verbatim literal @"c:\\windows\\system32\\" carries doubled separators,
+        // so its compiled value never matches Path.GetFullPath output and the system32-hijacking
+        // guard was inert. Match the resolved system folder (and a separator-normalized path) instead.
+        string lower = full.ToLowerInvariant().Replace('/', '\\');
+        string system32Prefix = Environment.GetFolderPath(Environment.SpecialFolder.System).TrimEnd('\\').ToLowerInvariant() + '\\';
+        if (lower.StartsWith(system32Prefix) || lower.StartsWith(@"\\windows\\system32\\"))
+            throw new InvalidDataException("Launch targets inside \\Windows\\System32 are rejected to prevent system32 hijacking");
+    }
+
+    static List<ProfileVariable> ResolveProfileVariables(ProfileData profile, List<ProfileData>? profiles = null)
+    {
+        profiles ??= LoadProfiles();
+        var result = new Dictionary<string, ProfileVariable>(StringComparer.OrdinalIgnoreCase);
+        ResolveProfile(profile, profiles, new HashSet<string>(StringComparer.OrdinalIgnoreCase), result);
+        return result.Values.ToList();
+    }
+
+    static void ResolveProfile(ProfileData profile, List<ProfileData> profiles, HashSet<string> stack, Dictionary<string, ProfileVariable> result)
+    {
+        if (!stack.Add(profile.Name)) throw new InvalidDataException("Profile inheritance cycle detected at " + profile.Name);
+        foreach (string parentName in profile.Inherits)
+        {
+            var parent = FindProfile(profiles, parentName) ?? throw new InvalidDataException("Inherited profile not found: " + parentName);
+            ResolveProfile(parent, profiles, stack, result);
+        }
+        // T04-SCOPE-FIX: preserve Scope (default "user") so ApplyProfile routes system-scope
+        // variables to the system store; the old projection silently reset Scope to "user".
+        foreach (var variable in profile.Variables) result[variable.Name] = new ProfileVariable { Name = variable.Name, Value = variable.Value, Scope = variable.Scope };
+        stack.Remove(profile.Name);
+    }
+
+    static List<string> ResolveProfilePaths(ProfileData profile, List<ProfileData>? profiles = null)
+    {
+        profiles ??= LoadProfiles();
+        var result = new List<string>();
+        ResolvePaths(profile, profiles, new HashSet<string>(StringComparer.OrdinalIgnoreCase), result);
+        return result.DistinctBy(NormalizePathEntry, StringComparer.OrdinalIgnoreCase).ToList();
+    }
+
+    static void ResolvePaths(ProfileData profile, List<ProfileData> profiles, HashSet<string> stack, List<string> result)
+    {
+        if (!stack.Add(profile.Name)) throw new InvalidDataException("Profile inheritance cycle detected at " + profile.Name);
+        foreach (string parentName in profile.Inherits) ResolvePaths(FindProfile(profiles, parentName) ?? throw new InvalidDataException("Inherited profile not found: " + parentName), profiles, stack, result);
+        result.AddRange(profile.PathEntries);
+        stack.Remove(profile.Name);
+    }
+
+    // v0.9.15: Resolve PATH entries with per-entry scope preserved.
+    // Returns (path, scope) pairs index-aligned with PathEntries[i] / PathScopes[i].
+    // Missing PathScopes[i] defaults to "user" (backward compat with pre-v0.7.1 profiles).
+    static List<(string path, string scope)> ResolveProfilePathsWithScopes(ProfileData profile, List<ProfileData>? profiles = null)
+    {
+        profiles ??= LoadProfiles();
+        var result = new List<(string path, string scope)>();
+        ResolvePathsWithScopes(profile, profiles, new HashSet<string>(StringComparer.OrdinalIgnoreCase), result);
+        // Deduplicate by normalized path entry, keeping first occurrence (which carries the most specific scope).
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        return result.Where(p =>
+        {
+            string norm = NormalizePathEntry(p.path);
+            return seen.Add(norm);
+        }).ToList();
+    }
+
+    static void ResolvePathsWithScopes(ProfileData profile, List<ProfileData> profiles, HashSet<string> stack, List<(string path, string scope)> result)
+    {
+        if (!stack.Add(profile.Name)) throw new InvalidDataException("Profile inheritance cycle detected at " + profile.Name);
+        foreach (string parentName in profile.Inherits) ResolvePathsWithScopes(FindProfile(profiles, parentName) ?? throw new InvalidDataException("Inherited profile not found: " + parentName), profiles, stack, result);
+        for (int i = 0; i < profile.PathEntries.Count; i++)
+        {
+            string scope = i < profile.PathScopes.Count ? (profile.PathScopes[i] ?? "user") : "user";
+            result.Add((profile.PathEntries[i], scope));
+        }
+        stack.Remove(profile.Name);
+    }
+
+    // v0.9.16: Resolve PATH entries with per-entry scope AND source profile name preserved.
+    // Returns (path, scope, sourceProfile) tuples tracking which profile contributed each entry.
+    // Inherits chain walked depth-first; parent entries appear before child entries (same order as ResolveProfilePathsWithScopes).
+    static List<(string path, string scope, string sourceProfile)> ResolveProfilePathsWithSource(ProfileData profile, List<ProfileData>? profiles = null)
+    {
+        profiles ??= LoadProfiles();
+        var result = new List<(string path, string scope, string sourceProfile)>();
+        ResolvePathsWithSource(profile, profiles, new HashSet<string>(StringComparer.OrdinalIgnoreCase), result);
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        return result.Where(p =>
+        {
+            string norm = NormalizePathEntry(p.path);
+            return seen.Add(norm);
+        }).ToList();
+    }
+
+    static void ResolvePathsWithSource(ProfileData profile, List<ProfileData> profiles, HashSet<string> stack, List<(string path, string scope, string sourceProfile)> result)
+    {
+        if (!stack.Add(profile.Name)) throw new InvalidDataException("Profile inheritance cycle detected at " + profile.Name);
+        foreach (string parentName in profile.Inherits) ResolvePathsWithSource(FindProfile(profiles, parentName) ?? throw new InvalidDataException("Inherited profile not found: " + parentName), profiles, stack, result);
+        for (int i = 0; i < profile.PathEntries.Count; i++)
+        {
+            string scope = i < profile.PathScopes.Count ? (profile.PathScopes[i] ?? "user") : "user";
+            result.Add((profile.PathEntries[i], scope, profile.Name));
+        }
+        stack.Remove(profile.Name);
+    }
+
+    // v0.9.16: Resolve variables with source profile name preserved.
+    // Returns ProfileVariable list with Scope + SourceProfile fields populated.
+    // Child variables override parent variables by name (same semantics as ResolveProfileVariables).
+    static List<ProfileVariable> ResolveProfileVariablesWithSource(ProfileData profile, List<ProfileData>? profiles = null)
+    {
+        profiles ??= LoadProfiles();
+        var result = new Dictionary<string, ProfileVariable>(StringComparer.OrdinalIgnoreCase);
+        ResolveProfileWithSource(profile, profiles, new HashSet<string>(StringComparer.OrdinalIgnoreCase), result);
+        return result.Values.ToList();
+    }
+
+    static void ResolveProfileWithSource(ProfileData profile, List<ProfileData> profiles, HashSet<string> stack, Dictionary<string, ProfileVariable> result)
+    {
+        if (!stack.Add(profile.Name)) throw new InvalidDataException("Profile inheritance cycle detected at " + profile.Name);
+        foreach (string parentName in profile.Inherits)
+        {
+            var parent = FindProfile(profiles, parentName) ?? throw new InvalidDataException("Inherited profile not found: " + parentName);
+            ResolveProfileWithSource(parent, profiles, stack, result);
+        }
+        foreach (var variable in profile.Variables) result[variable.Name] = new ProfileVariable { Name = variable.Name, Value = variable.Value, Scope = variable.Scope, SourceProfile = profile.Name };
+        stack.Remove(profile.Name);
+    }
+
+    static int ProfilePreview(string name)
+    {
+        var profiles = LoadProfiles();
+        var profile = FindProfile(profiles, name);
+        if (profile == null) return ArgError("Error: Profile not found");
+        var variables = ResolveProfileVariables(profile, profiles).Select(v => new { v.Name, v.Value, currentValue = GetVariableValue(v.Name, "user"), conflict = GetVariableValue(v.Name, "user") != null }).ToList();
+        var paths = ResolveProfilePaths(profile, profiles).Select(path => new { path, expandedPath = Environment.ExpandEnvironmentVariables(path), exists = FastDirectoryExists(Environment.ExpandEnvironmentVariables(path)) }).ToList();
+        Console.WriteLine(JsonSerializer.Serialize(new { profile = name, profile.Inherits, variables, pathEntries = paths }, JsonOptsIndented));
+        return 0;
+    }
+
+    // v0.7.5: DFS to detect if adding parents would close a cycle. Walk
+// every requested parent's existing Inherits chain; if any chain leads back
+// to the target profile name there is a cycle.
+static bool HasInheritanceCycle(string targetName, List<string> requestedParents, List<ProfileData> allProfiles)
+{
+    var visited = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+    var stack = new Stack<string>(requestedParents);
+    while (stack.Count > 0)
+    {
+        var cur = stack.Pop();
+        if (cur.Equals(targetName, StringComparison.OrdinalIgnoreCase)) return true;
+        if (!visited.Add(cur)) continue;
+        var p = allProfiles.FirstOrDefault(x => x.Name.Equals(cur, StringComparison.OrdinalIgnoreCase));
+        if (p != null) foreach (var parent in p.Inherits) stack.Push(parent);
+    }
+    return false;
+}
+
+static int ProfileSetInherits(string[] args)
+    {
+        var profiles = LoadProfiles();
+        var profile = FindProfile(profiles, args[2]);
+        if (profile == null) return ArgError("Error: Profile not found");
+        // v0.7.5: reject self-inheritance and cycles. A cycle (A inherits B
+        // which inherits A) or a self-loop makes ResolveProfileVariables
+        // infinite-loop and the profile un-recoverable.
+        var requestedParents = args.Skip(3).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        if (requestedParents.Any(p => p.Equals(args[2], StringComparison.OrdinalIgnoreCase)))
+            return ArgError("Error: A profile cannot inherit itself");
+        if (HasInheritanceCycle(args[2], requestedParents, profiles))
+            return ArgError("Error: Inheritance cycle detected. One of the requested parents already inherits (transitively) from '" + args[2] + "'.");
+        // v0.7.7 hard boundary: a Global profile MUST NOT inherit from a Launch profile.
+        // The Launch profile type carries DPAPI secrets that cannot be put in the user
+        // registry as plaintext, and a Launch-targeted apply would never act on them
+        // in the right scope. This is the same guard as IsProfileApplicable, applied
+        // at set-inherits time so the user sees the rejection immediately instead of
+        // only at apply time. We also forbid a Launch profile from inheriting another
+        // Launch profile that carries secrets -- the inherited secret has no in-process
+        // decrypt path in this profile.
+        bool targetIsGlobal = profile.ProfileType.Equals("global", StringComparison.OrdinalIgnoreCase);
+        bool targetIsLaunch = profile.ProfileType.Equals("launch", StringComparison.OrdinalIgnoreCase);
+        if (targetIsGlobal)
+        {
+            foreach (string parentName in requestedParents)
+            {
+                var parent = FindProfile(profiles, parentName);
+                if (parent != null && parent.ProfileType.Equals("launch", StringComparison.OrdinalIgnoreCase))
+                    return ArgError("Error: A Global profile cannot inherit from a Launch profile. Launch profiles may carry DPAPI secrets that would leak ciphertext to the user registry if inherited.");
+            }
+        }
+        if (targetIsLaunch)
+        {
+            foreach (string parentName in requestedParents)
+            {
+                var parent = FindProfile(profiles, parentName);
+                if (parent != null && parent.ProfileType.Equals("launch", StringComparison.OrdinalIgnoreCase)
+                    && parent.SecretVariables.Count > 0)
+                    return ArgError("Error: A Launch profile cannot inherit from another Launch profile that already carries secrets. The inherited secret has no in-process decrypt path in this profile's launch target.");
+            }
+        }
+        bool wasEnabled = profile.IsEnabled;
+        if (wasEnabled) UnapplyProfile(profile);
+        profile.Inherits = args.Skip(3).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        // v0.7.7: if the inheritance chain is somehow already poisoned (e.g. a
+        // hand-edited profiles.json that bypassed CLI validation), ResolveProfile*
+        // throws InvalidDataException. Wrap so set-inherits itself does not brick.
+        try
+        {
+            ResolveProfileVariables(profile, profiles);
+            ResolveProfilePaths(profile, profiles);
+        }
+        catch (InvalidDataException ex)
+        {
+            Console.Error.WriteLine("Error: Resolving the new inheritance chain failed: " + ex.Message + " -- the profiles.json file may have a pre-existing inheritance cycle. Aborting set-inherits without persisting.");
+            return 1;
+        }
+        SaveProfiles(profiles);
+        if (wasEnabled)
+        {
+            if (IsProfileApplicable(profile)) { ApplyProfile(profile); profile.AppliedAt = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(); SaveProfiles(profiles); }
+            else
+            {
+                profile.IsEnabled = false;
+                SaveProfiles(profiles);
+                Console.Error.WriteLine("Warning: Profile '" + profile.Name + "' is no longer applicable after the inheritance change (e.g. it now pulls in a secret variable). It has been disabled; fix the inheritance chain before re-applying.");
+            }
+        }
+        Console.WriteLine(JsonSerializer.Serialize(new { profile = profile.Name, profile.Inherits }, JsonOpts));
+        return 0;
+    }
+
+    static int ProfileAddPath(string profileName, string path, string scope = "user")
+    {
+        if (scope != "user" && scope != "system")
+            return ArgError("Error: Invalid scope. Must be 'user' or 'system'");
+        var profiles = LoadProfiles();
+        var profile = FindProfile(profiles, profileName);
+        if (profile == null) return ArgError("Error: Profile not found");
+        if (profile.IsEnabled) return ArgError("Error: Unapply the profile before changing PATH entries");
+        ValidatePathFragment(path);
+        if (!profile.PathEntries.Any(p => NormalizePathEntry(p).Equals(NormalizePathEntry(path), StringComparison.OrdinalIgnoreCase)))
+        {
+            profile.PathEntries.Add(path);
+            // Track the scope the user chose for this entry. The list is parallel to
+            // PathEntries; older profiles.json files without PathScopes are treated
+            // as "user" by ProfileApply (index-based lookup with out-of-range guard).
+            while (profile.PathScopes.Count < profile.PathEntries.Count - 1) profile.PathScopes.Add("user");
+            profile.PathScopes.Add(scope);
+        }
+        SaveProfiles(profiles);
+        Console.WriteLine("Added PATH entry to profile: " + profileName);
+        return 0;
+    }
+
+    static int ProfileRemovePath(string profileName, string path)
+    {
+        var profiles = LoadProfiles();
+        var profile = FindProfile(profiles, profileName);
+        if (profile == null) return ArgError("Error: Profile not found");
+        if (profile.IsEnabled) return ArgError("Error: Unapply the profile before changing PATH entries");
+        int idx = profile.PathEntries.FindIndex(p => NormalizePathEntry(p).Equals(NormalizePathEntry(path), StringComparison.OrdinalIgnoreCase));
+        if (idx >= 0)
+        {
+            profile.PathEntries.RemoveAt(idx);
+            // Keep PathScopes in lockstep with PathEntries by index. If PathScopes
+            // was shorter (legacy profile), simply drop the matching tail entry.
+            if (idx < profile.PathScopes.Count) profile.PathScopes.RemoveAt(idx);
+        }
+        SaveProfiles(profiles);
+        Console.WriteLine("Removed PATH entry from profile: " + profileName);
+        return 0;
+    }
+
+    static void ValidatePathFragment(string path)
+    {
+        if (string.IsNullOrWhiteSpace(path) || path.Length > MaxLength || path.Contains(';') || path.Any(ch => ch == '\0' || (char.IsControl(ch) && ch != '\t'))) throw new ArgumentException("Invalid PATH entry");
+    }
+
 }
