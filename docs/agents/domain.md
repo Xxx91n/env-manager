@@ -20,7 +20,7 @@ This repo is **single-context**.
 |   +- 0003-version-single-source-changelog.md
 +- docs/agents/        <- this directory (agent-specific reference)
 +- docs/history/        <- process artifacts (audit logs, session records)
-+- Program.cs          <- C# CLI implementation
++- src/                <- C# CLI implementation (Program.cs thin dispatch + command-domain modules)
 +- service/            <- Rust service crate
 +- frontend/           <- Tauri GUI application
 ```

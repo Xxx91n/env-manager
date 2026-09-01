@@ -2,7 +2,7 @@
 
 ## Three Layers
 
-1. **CLI backend** (`Program.cs`) - C# .NET 10 console application that reads/writes the Windows Registry directly. Compiles to `env-manager-cli.exe`. Handles all variable CRUD, backup/restore, diff/merge operations.
+1. **CLI backend** (`src/`) - C# .NET 10 console application that reads/writes the Windows Registry directly. Compiles to `env-manager-cli.exe`. Handles all variable CRUD, backup/restore, diff/merge operations. `src/Program.cs` is a thin Main dispatcher (<400 lines); each command domain (profile, path, service, audit, agents, update, backup, protection, variable write/query) lives in its own `src/<Domain>Command.cs` module (issue 05).
 2. **Tauri shell** (`frontend/src-tauri/`) - Rust application that embeds the CLI as a bundled resource. Spawns CLI subprocesses for each operation and returns structured JSON responses to the frontend via Tauri IPC commands.
 3. **Svelte frontend** (`frontend/src/`) - TypeScript + Svelte 4 + TailwindCSS UI rendered in a WebView2 window. Communicates with the Rust layer exclusively through `invoke('run_cli', ...)`.
 
@@ -27,7 +27,7 @@ Contract tests wire all three clients to that schema, so protocol drift fails CI
 | Client | Test | What it pins |
 |---|---|---|
 | Rust service (authoritative) | `ipc::tests::export_contract_golden` + sample round-trips (`cargo test -p env-manager-service`) | Golden files match the structs; every sample deserializes into `IpcRequest`/`IpcResponse`. |
-| C# CLI gateway | `ServiceIpcContractTests` in `tests/EnvManager.Engine.Tests/` (`dotnet test`) | `ServiceIpc.cs` wire format (snake_case `mount_id`/`request_id`, null-skip matching serde), golden samples deserialize, C# property set covers the schema property set. |
+| C# CLI gateway | `ServiceIpcContractTests` in `tests/EnvManager.Engine.Tests/` (`dotnet test`) | `src/ServiceIpc.cs` wire format (snake_case `mount_id`/`request_id`, null-skip matching serde), golden samples deserialize, C# property set covers the schema property set. |
 | TypeScript GUI | `frontend/src/lib/ipc-schema-contract.test.ts` (`npx vitest run`) | `parseServiceResponse` in `api.ts` parses every golden response sample; `ok`/`data`/`message` envelope and degraded `state` field preserved. |
 | Tauri shell (Rust) | `ipc_contract_tests` in `frontend/src-tauri/src/main.rs` (`cargo test`) | The watchdog `ping` and GUI-exit `shutdown` pipe payloads match the request contract and their methods exist in the golden samples. |
 
@@ -118,11 +118,11 @@ The `--overwrite` flag is passed through only when the user explicitly confirmed
 
 ## Profile Audit History
 
-Profile-level mutations (`create`, `delete`, `rename`, `add-var`, `remove-var`, `edit-var`) modify `profiles.json` rather than the registry, so they bypass the standard snapshot diff the CLI writes for registry mutations in `Main()`. They are recorded explicitly via `RecordProfileAudit()` (see `ProfileAudit.cs`) so the user can see profile changes in `history list` and undo them via `history undo <id>`.
+Profile-level mutations (`create`, `delete`, `rename`, `add-var`, `remove-var`, `edit-var`) modify `profiles.json` rather than the registry, so they bypass the standard snapshot diff the CLI writes for registry mutations in `Main()`. They are recorded explicitly via `RecordProfileAudit()` (see `src/ProfileAudit.cs`) so the user can see profile changes in `history list` and undo them via `history undo <id>`.
 
 - Audit entries for profile mutations carry `Scope = "profile"` so the GUI and `history` command can distinguish them from registry-level entries.
 - `OldValue` / `NewValue` store a compact JSON summary of the affected profile (`id`, `name`, `isEnabled`, `inherits`, `pathEntries`, `variables`) so an undo restores that profile state without clobbering other profiles.
-- `TryUndoProfileAudit(entry)` in `ProfileAudit.cs` reverses create (delete), delete (re-create from `OldValue`), rename (restore old name), add-var (remove the added variable), remove-var (re-add the removed variable), and edit-var (restore the pre-edit variable). `apply`, `unapply`, `set-inherits`, `add-path`, and `remove-path` are non-undoable no-ops; unknown `profile <x>` subcommands emit an error and `return false` rather than silently reporting success.
+- `TryUndoProfileAudit(entry)` in `src/ProfileAudit.cs` reverses create (delete), delete (re-create from `OldValue`), rename (restore old name), add-var (remove the added variable), remove-var (re-add the removed variable), and edit-var (restore the pre-edit variable). `apply`, `unapply`, `set-inherits`, `add-path`, and `remove-path` are non-undoable no-ops; unknown `profile <x>` subcommands emit an error and `return false` rather than silently reporting success.
 - `RunHistoryCommand` dispatches profile entries to `TryUndoProfileAudit` and registry entries to the stale-value-verified undo path. The two paths never overlap.
 
 
@@ -193,7 +193,7 @@ Per-app launch profiles extend the profile system without modifying existing Glo
 ### Alignment Checklist
 
 When adding a new GUI feature:
-1. Add the CLI command in `Program.cs`
+1. Add the CLI command in the matching `src/<Domain>Command.cs` module (one module per command domain) and route it from the `Main()` switch in `src/Program.cs`
 2. Add the API function in `frontend/src/lib/api.ts`
 3. Add the command to `ALLOWED_COMMANDS` in `main.rs` (current: list, get, set, rename, change-scope, delete, toggle, backup, restore, diff, merge, validate, help, profile, path, agents, history, bulk, expand, protection, update - v0.6.0 subcommands profile set-launch/launch/health/secrets and path health are subcommand-routed through 'profile'/'path' top-level entries already in ALLOWED_COMMANDS). Also add write commands to `WRITE_COMMANDS` and read commands to `READ_COMMANDS` as appropriate. v0.7.0 secrets subcommands (add-secret/edit-secret/remove-secret/reveal-secret) are READ-or-WRITE classified by the CLI internal switch (add/edit/remove-secret = write, reveal-secret = read).
 4. Add UI in the appropriate `.svelte` component
@@ -222,7 +222,7 @@ The frontend exposes `getCliAgentsSpec()` and `getCliAgentsPath()` in `api.ts` f
 
 ## v0.7.0 DPAPI Secrets Runtime
 
-**Encryption**: `DpapiHelper.EncryptSecret/DecryptSecret` in `EnvFeatures.cs` uses `crypt32.dll` P/Invoke `CryptProtectData`/`CryptUnprotectData` with `CryptProtectUiForbidden=0x01` and no entropy, producing CurrentUser-scope ciphertext equivalent to `System.Security.Cryptography.ProtectedData.Protect(CurrentUser)`. No NuGet dependency; MSVC and MinGW toolchains compatible. Ciphertext stored as base64 in `profiles.json` `variables[].Value`; variable name also appears in the profile `secretVariables` array as a marker.
+**Encryption**: `DpapiHelper.EncryptSecret/DecryptSecret` in `src/EnvFeatures.cs` uses `crypt32.dll` P/Invoke `CryptProtectData`/`CryptUnprotectData` with `CryptProtectUiForbidden=0x01` and no entropy, producing CurrentUser-scope ciphertext equivalent to `System.Security.Cryptography.ProtectedData.Protect(CurrentUser)`. No NuGet dependency; MSVC and MinGW toolchains compatible. Ciphertext stored as base64 in `profiles.json` `variables[].Value`; variable name also appears in the profile `secretVariables` array as a marker.
 
 **Decryption paths**:
 1. `profile launch <name>` - decrypts in the launcher process memory before injecting into the child env block. If decryption fails the launch is refused (`return 1`) so ciphertext garbage is never silently injected.
@@ -301,7 +301,7 @@ The current DPAPI-CurrentUser implementation corresponds to Phase 0 below. Each 
 
 ## Phase 1-2 Implementation Status (v0.8)
 
-Phase 1 (Versioned Envelopes) and Phase 2 (Windows Credential Manager) are implemented in `SecretProvider.cs`:
+Phase 1 (Versioned Envelopes) and Phase 2 (Windows Credential Manager) are implemented in `src/SecretProvider.cs`:
 
 - **ISecretProvider interface**: `Encrypt`, `Decrypt`, `CanRotate`, `Rotate`, `Delete` methods.
 - **DpapiCurrentUserProvider**: wraps existing `DpapiHelper` in a JSON envelope `{ provider, version, createdAt, ciphertext }`.
@@ -315,7 +315,7 @@ Phase 1 (Versioned Envelopes) and Phase 2 (Windows Credential Manager) are imple
 
 ### Phase 4-5 Implementation Status (v0.9/v1.0)
 
-Phase 4 (PowerShell SecretManagement) and Phase 5 (HashiCorp Vault KV v2) are implemented in `SecretProvider.cs`:
+Phase 4 (PowerShell SecretManagement) and Phase 5 (HashiCorp Vault KV v2) are implemented in `src/SecretProvider.cs`:
 
 - **PowerShellSecretManagementProvider**: delegates to `Get-Secret`/`Set-Secret`/`Remove-Secret` via hosted `pwsh` process with `CREATE_NO_WINDOW` and 30s timeout. Profile stores only vault name + secret name. Requires PowerShell 7 + Microsoft.SecretManagement + Microsoft.SecretStore modules.
 - **VaultKV2Provider**: calls Vault HTTP API (`GET`/`POST /v1/secret/data/<path>`). Profile stores only mount path + secret path + key. Token from `VAULT_TOKEN` env var. TLS mandatory for non-localhost. 10s timeout. Fail-closed on network errors.
@@ -323,7 +323,7 @@ Phase 4 (PowerShell SecretManagement) and Phase 5 (HashiCorp Vault KV v2) are im
 - CLI: `profile secret-provider list` now shows all 4 providers; `profile secret-provider set <name>` supports all 4.
 ### Phase 3 Implementation Status (v0.8.1)
 
-Phase 3 (Key Rotation + Secret Export/Import) is also implemented in `SecretProvider.cs`:
+Phase 3 (Key Rotation + Secret Export/Import) is also implemented in `src/SecretProvider.cs`:
 
 - **Rotation**: `SecretProviderManager.RotateAll(profiles)` iterates all profiles and all secret variables, decrypts each with its original provider, re-encrypts with the active provider. Failed decryptions are counted and skipped (not deleted). CLI: `profile secret-provider rotate`.
 - **Export**: `SecretProviderManager.ExportSecrets(profile)` serializes all secrets from a profile to JSON, DPAPI-encrypts the entire blob, and writes to a file. The export is portable within the same user account regardless of the provider used. CLI: `profile export-secrets <profile> <file>`.
@@ -333,7 +333,7 @@ Phase 3 (Key Rotation + Secret Export/Import) is also implemented in `SecretProv
 
 ### Phase 3 Implementation Status (v0.8.1)
 
-Phase 3 (Key Rotation + Secret Export/Import) is also implemented in `SecretProvider.cs`:
+Phase 3 (Key Rotation + Secret Export/Import) is also implemented in `src/SecretProvider.cs`:
 
 - **Rotation**: `SecretProviderManager.RotateAll(profiles)` iterates all profiles and all secret variables, decrypts each with its original provider, re-encrypts with the active provider. Failed decryptions are counted and skipped (not deleted). CLI: `profile secret-provider rotate`.
 - **Export**: `SecretProviderManager.ExportSecrets(profile)` serializes all secrets from a profile to JSON, DPAPI-encrypts the entire blob, and writes to a file. The export is portable within the same user account regardless of the provider used. CLI: `profile export-secrets <profile> <file>`.
@@ -342,7 +342,7 @@ Phase 3 (Key Rotation + Secret Export/Import) is also implemented in `SecretProv
 
 ### Phase 6-7 Implementation Status (v0.7.2)
 
-Phase 6 (SOPS Encrypted Envelopes) and Phase 7 (Azure Key Vault) are implemented in `SecretProvider.cs`:
+Phase 6 (SOPS Encrypted Envelopes) and Phase 7 (Azure Key Vault) are implemented in `src/SecretProvider.cs`:
 
 - **SopsProvider**: shells out to a verified `sops` binary (`-e`/`-d`) under `CREATE_NO_WINDOW` with 30s timeout. The profile stores the full sops-encrypted JSON as the envelope `ciphertext` field. Supports Age, PGP, AWS KMS, Azure Key Vault, GCP KMS, and HashiCorp Vault decryptors via sops env vars (`SOPS_AGE_RECIPIENT`, `SOPS_AGE_KEY_FILE`, `SOPS_PGP_FP`, `SOPS_KMS_ARN`, etc.). Binary is discovered via `SOPS_PATH` env var, PATH search, or common install locations. Fail-closed if sops binary is missing or non-functional. Temp files are created in a per-operation isolated directory and securely cleaned up in a finally block.
 - **AzureKeyVaultProvider**: calls Azure Key Vault REST API (`PUT`/`GET /secrets/<name>?api-version=7.4`). Profile stores only vault URI + secret name as `TargetName` (format: `vaultUri|secretName`). TLS mandatory (HTTPS only). Token obtained via managed identity (IMDS `169.254.169.254`) or service principal (`AZURE_CLIENT_ID`/`AZURE_CLIENT_SECRET`/`AZURE_TENANT_ID`). Token cached in process memory only with 5-minute expiry buffer. 15s HTTP timeout. Fail-closed on 403/404. Supports rotation (decrypt + re-encrypt). Delete issues a soft-delete via DELETE API.

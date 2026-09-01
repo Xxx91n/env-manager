@@ -54,7 +54,7 @@ The GUI Profile page supports pointer-event-based drag-and-drop to reorder profi
 
 ### v0.7.0 Launch Profile + Secrets Schema
 
-Profile JSON gains these optional fields (see `ProfileData` in `Program.cs`):
+Profile JSON gains these optional fields (see `ProfileData` in `src/Models.cs`):
 
 - `profileType`: `"global"` (default, current apply-to-user-registry behavior) or `"launch"` (launcher template).
 - `targetExecutable` (launch only): absolute or relative path to an executable. `ValidateLaunchTarget` rejects non-existent, non-executable, or System32 paths.

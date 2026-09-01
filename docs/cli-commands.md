@@ -154,7 +154,7 @@ When invoking the CLI from a shell (cmd / PowerShell), a quoted value that ends 
 env-manager-cli path add "C:\Program Files\PowerShell\7\" --scope user
 ```
 
-The CLI now detects and recovers this case at startup via `LenientArgs.WasArgsCorruptedByTrailingBackslashQuote` + `LenientArgs.Tokenize` (see `ArgTokenizer.cs`). Detection is signature-based: re-tokenization only triggers when an arg element contains both a literal quote and an embedded long-option or separator marker such as ` --scope `, ` --overwrite`, ` --index `, or standalone ` -- `. Recovery replaces the known-corrupted argv even when the token count changes. Clean argv from any caller (including the Tauri/Rust `Command::arg()` path used by the GUI) is never mutated.
+The CLI now detects and recovers this case at startup via `LenientArgs.WasArgsCorruptedByTrailingBackslashQuote` + `LenientArgs.Tokenize` (see `src/ArgTokenizer.cs`). Detection is signature-based: re-tokenization only triggers when an arg element contains both a literal quote and an embedded long-option or separator marker such as ` --scope `, ` --overwrite`, ` --index `, or standalone ` -- `. Recovery replaces the known-corrupted argv even when the token count changes. Clean argv from any caller (including the Tauri/Rust `Command::arg()` path used by the GUI) is never mutated.
 
 Use the normal command form below. The standalone `--` separator remains reserved for `profile launch <name> -- <extra-args ...>` and is preserved by recovery.
 

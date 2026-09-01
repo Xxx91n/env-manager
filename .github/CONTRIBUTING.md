@@ -29,7 +29,7 @@ node scripts/build.mjs --arch x64
 
 ## Project Structure
 
-- `Program.cs` / `*.cs` -- C# .NET 10 CLI backend (env-manager-cli.exe)
+- `src/*.cs` -- C# .NET 10 CLI backend (env-manager-cli.exe); `src/Program.cs` is the thin Main dispatcher, one module file per command domain
 - `frontend/src/` -- Svelte 4 + TypeScript frontend (WebView2)
 - `frontend/src-tauri/src/` -- Rust Tauri shell (env-manager.exe)
 - `service/` -- Rust standalone service binary (env-manager-service.exe)

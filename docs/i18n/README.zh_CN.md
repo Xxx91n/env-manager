@@ -202,7 +202,7 @@ env-manager-cli.exe audit verify-ledger
 
 四层架构：
 
-1. **CLI 后端**（`Program.cs`）— C# .NET 10 控制台应用，直接读写 Windows 注册表，编译为 `env-manager-cli.exe`
+1. **CLI 后端**（`src/`）— C# .NET 10 控制台应用，直接读写 Windows 注册表，编译为 `env-manager-cli.exe`；`src/Program.cs` 为薄分发入口（<400 行），各命令域（profile/path/service/audit/agents/update 等）各自独立模块文件
 2. **Tauri 外壳**（`frontend/src-tauri/`）— Rust 应用，内嵌 CLI 为打包资源，生成 CLI 子进程，通过 Tauri IPC 返回 JSON
 3. **Svelte 前端**（`frontend/src/`）— TypeScript + Svelte 4 + TailwindCSS，运行于 WebView2，仅通过 `invoke('run_cli', ...)` 调用 Rust
 4. **服务 crate**（`service/`）— Rust 独立二进制（`env-manager-service.exe`），通过命名管道 IPC 管理机密挂载生命周期
