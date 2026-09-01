@@ -102,4 +102,38 @@ static void AtomicWriteProfiles(List<ProfileData> profiles, bool createBackup)
             ResolveProfilePaths(profile, profiles);
         }
     }
+    /// <summary>
+    /// Returns the path to the profiles JSON file in LocalAppData.
+    /// Mirrors PowerToys' approach of storing profiles in a per-user app data folder.
+    /// </summary>
+    static string ProfilesFilePath
+    {
+        get
+        {
+            if (_profilesFilePathOverride != null) return _profilesFilePathOverride; // Ticket 04 test redirect
+            string dir = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                "EnvManager");
+            Directory.CreateDirectory(dir);
+            return Path.Combine(dir, "profiles.json");
+        }
+    }
+
+    // Ticket 04 test seam: when non-null, ProfilesFilePath returns this path so the
+    // xUnit lane can redirect profiles.json to a temp dir. Production never sets it.
+    static string? _profilesFilePathOverride;
+
+    internal static void SetProfilesFilePathForTests(string? path)
+    {
+        _profilesFilePathOverride = path;
+    }
+
+    // Ticket 04 test seam: persist profiles WITHOUT ValidateProfiles, simulating a
+    // hand-edited profiles.json so the ApplyProfile protection guard (defense in depth
+    // behind pre-flight) can be exercised against poisoned data.
+    internal static void SaveProfilesRawForTests(List<ProfileData> profiles)
+    {
+        AtomicWriteProfiles(profiles, createBackup: false);
+    }
+
 }
