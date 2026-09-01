@@ -76,7 +76,7 @@ describe('v0.7 secrets design invariants', () => {
   })
 
   it('DpapiHelper uses P/Invoke crypt32 (no NuGet dependency)', () => {
-    const src = require('fs').readFileSync(resolve(__dirname, '..' , '..', '..', 'src', 'EnvFeatures.cs'), 'utf8')
+    const src = require('fs').readFileSync(resolve(__dirname, '..' , '..', '..', 'src', 'DpapiHelper.cs'), 'utf8')
     expect(src).toContain('crypt32.dll')
     expect(src).toContain('CryptProtectData')
     expect(src).toContain('CryptUnprotectData')

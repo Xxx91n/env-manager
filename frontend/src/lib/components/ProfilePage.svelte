@@ -196,7 +196,7 @@
     if (/already exists in PATH/i.test(errMsg)) {
       return $t('messages.pathDuplicate')
     }
-    // Launch target validation errors (EnvFeatures.ValidateLaunchTarget)
+    // Launch target validation errors (ProfileCommand.ValidateLaunchTarget)
     if (/Launch target is empty/i.test(errMsg)) return $t('errors.launchTargetEmpty')
     {
       const m = errMsg.match(/Launch target does not exist:\s*([^\n]+)/i)
