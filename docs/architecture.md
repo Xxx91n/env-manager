@@ -222,7 +222,7 @@ The frontend exposes `getCliAgentsSpec()` and `getCliAgentsPath()` in `api.ts` f
 
 ## v0.7.0 DPAPI Secrets Runtime
 
-**Encryption**: `DpapiHelper.EncryptSecret/DecryptSecret` in `src/EnvFeatures.cs` uses `crypt32.dll` P/Invoke `CryptProtectData`/`CryptUnprotectData` with `CryptProtectUiForbidden=0x01` and no entropy, producing CurrentUser-scope ciphertext equivalent to `System.Security.Cryptography.ProtectedData.Protect(CurrentUser)`. No NuGet dependency; MSVC and MinGW toolchains compatible. Ciphertext stored as base64 in `profiles.json` `variables[].Value`; variable name also appears in the profile `secretVariables` array as a marker.
+**Encryption**: `DpapiHelper.EncryptSecret/DecryptSecret` in `src/DpapiHelper.cs` uses `crypt32.dll` P/Invoke `CryptProtectData`/`CryptUnprotectData` with `CryptProtectUiForbidden=0x01` and no entropy, producing CurrentUser-scope ciphertext equivalent to `System.Security.Cryptography.ProtectedData.Protect(CurrentUser)`. No NuGet dependency; MSVC and MinGW toolchains compatible. Ciphertext stored as base64 in `profiles.json` `variables[].Value`; variable name also appears in the profile `secretVariables` array as a marker.
 
 **Decryption paths**:
 1. `profile launch <name>` - decrypts in the launcher process memory before injecting into the child env block. If decryption fails the launch is refused (`return 1`) so ciphertext garbage is never silently injected.
@@ -254,7 +254,7 @@ The current DPAPI-CurrentUser implementation corresponds to Phase 0 below. Each 
 
 - Wrap the existing base64 DPAPI blob in a JSON envelope { provider, version, createdAt, ciphertext } so future providers can coexist and the CLI can refuse unknown providers rather than guess.
 - Add profile secret-provider config file (%LOCALAPPDATA%\EnvManager\secret-providers.json) declaring the active provider and fallback policy. Default to "dpapi-current-user" with fail-closed behavior when the configured provider is missing or rejects the key.
-- Add a provider interface in EnvFeatures.cs (ISecretProvider: Encrypt/Decrypt/CanRotate/Rotate) so Phase 2+ providers plug in without touching the profile storage layer.
+- Add a provider interface in DpapiHelper.cs (ISecretProvider: Encrypt/Decrypt/CanRotate/Rotate) so Phase 2+ providers plug in without touching the profile storage layer.
 - Audit entries gain a "provider" field so dashboards and future rotation tooling know which envelope produced/decrypted each secret.
 
 **Phase 2 - Windows Credential Manager Reference Adapter (v0.8)**
