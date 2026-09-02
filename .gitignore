@@ -84,3 +84,4 @@ screenshot.png
 
 # CI test JUnit output (scripts/run-ci-tests.ps1 produces)
 test-results/
+.scratch/

@@ -49,7 +49,7 @@ CodeGraph is the project's indexed code intelligence layer. The index lives at `
 ## Architecture
 
 Four layers:
-1. **CLI backend** (`Program.cs`) - C# .NET 10 console app, reads/writes Windows Registry directly, compiles to `env-manager-cli.exe`.
+1. **CLI backend** (`src/`) - C# .NET 10 console app, reads/writes Windows Registry directly, compiles to `env-manager-cli.exe`. `src/Program.cs` is a thin Main dispatcher plus shared runtime infrastructure (mutex, snapshot, atomic writes); each command domain (profile, path, service, audit, agents, update, backup, protection, variable write/query, expand, bulk) lives in its own module file (issue 05, issue 06).
 2. **Tauri shell** (`frontend/src-tauri/`) - Rust app, embeds CLI as bundled resource, spawns CLI subprocesses, returns JSON via Tauri IPC.
 3. **Svelte frontend** (`frontend/src/`) - TypeScript + Svelte 4 + TailwindCSS in WebView2. Talks to Rust only via `invoke('run_cli', ...)`.
 4. **Service crate** (`service/`) - Rust standalone binary (`env-manager-service.exe`), manages secret mount lifecycle via named pipe IPC. Optional: runs as Windows service (`--mode=service`) or background process (`--mode=background`). The CLI `service` subcommand is a thin IPC gateway to this binary. See ADR 0001 and `docs/secret-architecture-blueprint.md` for the design review roadmap.
@@ -62,10 +62,28 @@ See [docs/architecture.md](docs/architecture.md) for IPC bridge, race condition 
 
 ```
 env-manager/
-+- Program.cs                  # C# CLI implementation
-+- EngineScope.cs              # IEnvironmentScope engine seam (architecture-recovery issue 01, expand phase)
-+- RegistryScope.cs            # Production IEnvironmentScope: registry + WM_SETTINGCHANGE P/Invoke (pure move)
-+- InMemoryScope.cs            # In-memory IEnvironmentScope test double (user/system isolated, broadcast counter)
++- src/                        # All C# sources (issue 05 moved them here; csproj default globbing compiles them)
+|   +- Program.cs             # Thin Main dispatch: command switch, help, ValidCommands, DebugLog, JsonOpts, shared runtime infra (issue 06)
+|   +- Models.cs              # Data contracts: EnvVariable, BackupData, ProfileVariable, ResolvedPathEntry, ProfileData
+|   +- EngineScope.cs         # IEnvironmentScope engine seam (architecture-recovery issue 01, expand phase)
+|   +- RegistryScope.cs       # Production IEnvironmentScope: registry + WM_SETTINGCHANGE P/Invoke (pure move)
+|   +- InMemoryScope.cs       # In-memory IEnvironmentScope test double (user/system isolated, broadcast counter)
+|   +- VariableWrite.cs       # Write-path command cores + set/delete/toggle wrappers (issue 03, issue 05)
+|   +- VariableQuery.cs       # Scope parsing, list/get projection, raw reads, WM_SETTINGCHANGE broadcast (issue 05)
+|   +- VariableRename.cs / VariableChangeScope.cs  # Rename / change-scope write-verify-delete contract
+|   +- ProfileCommand.cs      # Profile domain: list/show/create/delete/apply/unapply, launch + secrets, secret-provider CLI (issue 05)
+|   +- ProfileEffective.cs    # Profile apply/unapply write path + pre-flight validation, seam-parameterized (issue 04)
+|   +- ProfileStorage.cs      # profiles.json load/save + test redirect seams
+|   +- PathCommand.cs         # Path domain: list/add/remove/move/rename/dedupe/health + NormalizePathEntry/StripVerbatimPrefix (issue 05, issue 06)
+|   +- BackupCommand.cs       # Backup domain: backup/restore/diff/merge/validate + file path validator (issue 05)
+|   +- ProtectionCommand.cs   # Protection domain + protected collections (IsProtectedVariable/IsProtectedPathEntry) (issue 05)
+|   +- ServiceCommand.cs      # Service domain: IPC gateway to env-manager-service (issue 05)
+|   +- AuditCommand.cs        # Audit domain: audit list/encrypt-file/ledger routing + AuditEntry/LoadAuditHistory/RecordSnapshotDiff/history command (issue 05, issue 06)
+|   +- AgentsCommand.cs       # Agents domain: CLI spec emitter (issue 05)
+|   +- UpdateCommand.cs       # Update domain: update check + version compare (issue 05)
+|   +- ArgTokenizer.cs        # LenientArgs tokenizer (retained; System.CommandLine is a non-goal)
+|   +- AuditCrypto.cs / AuditLedgerMigration.cs / ProfileAudit.cs / SchemaMigration.cs / SecretMount.cs / SecretProvider.cs / ServiceIpc.cs / StateExportImport.cs / NativeMethods.cs
+|   +- ExpandCommand.cs / BulkCommand.cs / DpapiHelper.cs  # EnvFeatures.cs retired (issue 06 split)
 +- env-manager.csproj          # .NET 10 project (AssemblyName: env-manager-cli)
 +- AGENTS.md                   # This file (project-level operating instructions)
 +- AGENTS.cli.md               # CLI-level agent guide (distributed with CLI binary)
@@ -132,10 +150,16 @@ Launch-profile injection and secret redaction are verified by a three-layer net 
 - `CanaryRedactionTests` (xUnit, `tests/EnvManager.Engine.Tests/`): pure-function canary regression over `ScrubExceptionMessage` — format-shaped canary values (password=/Bearer/VAULT_TOKEN=) never survive scrubbing, `<redacted>` placeholder appears, un-patterned values pass through unchanged (documented best-effort behavior, ADR 0005).
 - `scripts/run-ci-tests.ps1` orchestrates four integration suites: launch-env-injection, canary-redaction, inheritance-protection, test-with-restore. Run it after building the CLI: `pwsh -NoProfile -File scripts/run-ci-tests.ps1 -CliExe <path-to-env-manager-cli.exe>`.
 
+Profile/secret seam migration is verified by `ProfileSeamValidationTests` (xUnit, `tests/EnvManager.Engine.Tests/`, architecture-recovery issue 04): the v0.7.7 inheritance-chain secret-propagation gate is exercised through the seam via `RunProfilePreflight` (explicit profile list, hermetic per-test profiles.json redirect via `SetProfilesFilePathForTests`), including a falsifiable launch-inherits-secret-launch poisoned-JSON variant that fails if the inherited-secret union walk regresses to own-list-only (red-first acceptance demonstrated live during ticket 04).
+
+Apply/unapply run against `InMemoryScope` with backup preservation, single-broadcast timing (apply broadcasts only when the batch wrote something), system-scope routing (requires `ResolveProfile` to carry `Scope` - a silent reset to "user" fails the test), and a poisoned-store protection guard (`SaveProfilesRawForTests` bypasses `ValidateProfiles` the way a hand-edited profiles.json would; `ApplyProfile` must skip protected entries and broadcast nothing). `ValidateLaunchPreflight` covers the launch entry-point rejections without spawning a process; `SecretProviderManager.Decrypt` fail-closed routing is pinned for unknown providers and non-envelope garbage.
+
+The `ValidateLaunchTarget` System32 guard compares against the resolved system folder - the prior doubled-separator verbatim literal never matched a real path (T04-SYS32-FIX), so the system32-hijacking refusal documented in hard-boundaries.md now actually fires.
+
 IPC schema contract tests (architecture-recovery issue 08) pin the three IPC clients to the single Rust-owned schema:
 
 - Authoritative schema: `IpcRequest`/`IpcResponse` in `service/src/ipc.rs`; golden files `docs/schemas/env-manager-service-ipc.schema.json` + `docs/schemas/ipc-samples.json` are exported from it (regenerate with `ENVMANAGER_REGENERATE_IPC_GOLDEN=1 cargo test -p env-manager-service ipc`).
-- C# gateway: `ServiceIpc.cs` typed request/response + `ServiceIpcContractTests` xUnit suite (wire names, null-skip semantics, schema property coverage).
+- C# gateway: `src/ServiceIpc.cs` typed request/response + `ServiceIpcContractTests` xUnit suite (wire names, null-skip semantics, schema property coverage).
 - TS GUI: `parseServiceResponse` (exported from `api.ts`) + `frontend/src/lib/ipc-schema-contract.test.ts` vitest suite over the golden samples.
 - Tauri shell: `ipc_contract_tests` in `frontend/src-tauri/src/main.rs` pin the watchdog ping / GUI-exit shutdown pipe payloads.
 - CI: `cargo test --locked` runs for `service` and `frontend/src-tauri` in the build.yml verify job. See docs/architecture.md "IPC Schema Contract (single source of truth)".
@@ -174,8 +198,8 @@ A commit that does not update AGENTS.md (and the relevant `docs/` file) when the
 
 ## How to Add a New CLI Command
 
-1. Add a `case` in `Program.cs` `Main()` switch statement.
-2. Implement the command method.
+1. Add a `case` in `src/Program.cs` `Main()` switch statement.
+2. Implement the command method in the matching command-domain module under `src/` (one module per domain; create a new `src/<Domain>Command.cs` partial-class file for a new domain).
 3. Update `ShowHelp()` with usage text.
 4. Add to the command table in [docs/cli-commands.md](docs/cli-commands.md) and the quick reference in AGENTS.md.
 5. If write command: add to `WRITE_COMMANDS` in `frontend/src-tauri/src/main.rs`. If read command: add to `READ_COMMANDS`.
