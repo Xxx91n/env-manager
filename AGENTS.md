@@ -159,6 +159,8 @@ Apply/unapply run against `InMemoryScope` with backup preservation, single-broad
 
 The `ValidateLaunchTarget` System32 guard compares against the resolved system folder - the prior doubled-separator verbatim literal never matched a real path (T04-SYS32-FIX), so the system32-hijacking refusal documented in hard-boundaries.md now actually fires.
 
+Secret provider contract tests (architecture-recovery issue 10) pin all eight `ISecretProvider` implementations to one shared behavior contract: an abstract `SecretProviderContractTests` base (fail-closed decryption, round-trip, stable malformed-format error, plaintext-never-in-the-envelope — each expressed only through the `ISecretProviderHarness` seam), one sealed mount per provider, and a `SecretProviderContractComplianceTests` reflection gate that fails the build when an implementation lacks a mount. `DpapiCurrentUserContractTests` runs its backend-dependent assertions on the real local DPAPI backend (L0); the other seven mounts run the backend-independent assertions (fail-closed, malformed-format) and `Skip` the backend-dependent round-trip/plaintext assertions with the layer reason (L1/L2, see docs/architecture.md "Secret Provider Contract Test Suite").
+
 IPC schema contract tests (architecture-recovery issue 08) pin the three IPC clients to the single Rust-owned schema:
 
 - Authoritative schema: `IpcRequest`/`IpcResponse` in `service/src/ipc.rs`; golden files `docs/schemas/env-manager-service-ipc.schema.json` + `docs/schemas/ipc-samples.json` are exported from it (regenerate with `ENVMANAGER_REGENERATE_IPC_GOLDEN=1 cargo test -p env-manager-service ipc`).

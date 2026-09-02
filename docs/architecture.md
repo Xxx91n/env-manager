@@ -363,6 +363,20 @@ Phase 6 (SOPS Encrypted Envelopes) and Phase 7 (Azure Key Vault) are implemented
 
 Each phase is opt-in via secret-providers.json; the default remains Phase 0 so existing installations upgrade without reconfiguration.
 
+## Secret Provider Contract Test Suite (L0/L1/L2 layering)
+
+The eight `ISecretProvider` implementations share one contract suite in `tests/EnvManager.Engine.Tests/` (architecture-recovery issue 10): an abstract `SecretProviderContractTests` base asserts four behaviors — fail-closed decryption, round-trip, stable malformed-format error, plaintext-never-in-the-envelope — each expressed only through the `ISecretProviderHarness` seam (`CreateProvider` / `SeedSecret` neutral-write / `ReadRawSecret` neutral-read, so a symmetric read/write bug cannot hide). Every provider mounts one sealed subclass; the `SecretProviderContractComplianceTests` reflection gate fails the build when an implementation lacks a mount.
+
+Test layering (per research/secret-provider-patterns.md):
+
+| Layer | Providers | Backend | CI |
+|-------|-----------|---------|----|
+| L0 | dpapi-current-user | real local DPAPI (crypt32 CurrentUser) | every PR |
+| L1 | credential-manager, powershell-secretmanagement, vault-kv2, sops | local CredMan / pwsh SecretStore / Vault dev server / sops binary | every PR, conditional |
+| L2 | azure-keyvault, 1password, aws-secretsmanager | real cloud services, credentials via env | scheduled / release pipeline |
+
+In this first round only DPAPI runs its backend-dependent assertions on a real backend; the other seven mounts run the backend-independent assertions (fail-closed, malformed-format) and `Skip` the backend-dependent ones with the layer reason.
+
 
 ## Profile Drag Reorder (Pointer Events)
 
