@@ -1,5 +1,5 @@
 // SecretEnvelope.cs - secret provider architecture (ticket 09, architecture-recovery)
-// Split from the retired single-file src/SecretProvider.cs; behavior unchanged.
+// One-symbol-per-file split of the retired single-file secret provider module (issue 09); behavior unchanged.
 // License: Apache-2.0
 
 using System;

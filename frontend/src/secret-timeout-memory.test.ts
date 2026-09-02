@@ -1,16 +1,14 @@
 import { describe, it, expect } from 'vitest'
 import * as fs from 'fs'
 import * as path from 'path'
+import { readSecretProviderSources } from './lib/secret-provider-source'
 
 /**
  * Phase 5: Secret provider timeout + long-session memory tests.
  */
 describe('Phase 5: Secret provider timeout - comprehensive verification', () => {
   it('All subprocess providers: 30s timeout on WaitForExit', () => {
-    const src = fs.readFileSync(
-      path.resolve(__dirname, '..', '..', 'src', 'SecretProvider.cs'),
-      'utf8'
-    )
+    const src = readSecretProviderSources()
     const sopsSection = src.slice(src.indexOf('class SopsProvider'), src.indexOf('class AzureKeyVaultProvider'))
     expect(sopsSection).toContain('WaitForExit(30000)')
     
@@ -22,10 +20,7 @@ describe('Phase 5: Secret provider timeout - comprehensive verification', () => 
   })
 
   it('All network providers: explicit HTTP timeout', () => {
-    const src = fs.readFileSync(
-      path.resolve(__dirname, '..', '..', 'src', 'SecretProvider.cs'),
-      'utf8'
-    )
+    const src = readSecretProviderSources()
     const vaultSection = src.slice(src.indexOf('class VaultKV2Provider'), src.indexOf('class SopsProvider'))
     expect(vaultSection).toContain('Timeout = TimeSpan.FromSeconds(10)')
     
@@ -60,10 +55,7 @@ describe('Phase 5: Secret provider timeout - comprehensive verification', () => 
 
 describe('Phase 5: Long-session memory safety', () => {
   it('C# SecretProvider: decrypted material only lives in transient process memory', () => {
-    const src = fs.readFileSync(
-      path.resolve(__dirname, '..', '..', 'src', 'SecretProvider.cs'),
-      'utf8'
-    )
+    const src = readSecretProviderSources()
     expect(src).toContain('ciphertext')
     const programSrc = fs.readFileSync(
       path.resolve(__dirname, '..', '..', 'src', 'ProfileCommand.cs'),

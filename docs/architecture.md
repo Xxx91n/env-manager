@@ -301,7 +301,7 @@ The current DPAPI-CurrentUser implementation corresponds to Phase 0 below. Each 
 
 ## Phase 1-2 Implementation Status (v0.8)
 
-Phase 1 (Versioned Envelopes) and Phase 2 (Windows Credential Manager) are implemented in `src/SecretProvider.cs`:
+Phase 1 (Versioned Envelopes) and Phase 2 (Windows Credential Manager) are implemented in `src/SecretEnvelope.cs`, `src/ISecretProvider.cs`, `src/DpapiCurrentUserProvider.cs`, and `src/CredentialManagerProvider.cs` (one symbol per file, issue 09 split):
 
 - **ISecretProvider interface**: `Encrypt`, `Decrypt`, `CanRotate`, `Rotate`, `Delete` methods.
 - **DpapiCurrentUserProvider**: wraps existing `DpapiHelper` in a JSON envelope `{ provider, version, createdAt, ciphertext }`.
@@ -315,7 +315,7 @@ Phase 1 (Versioned Envelopes) and Phase 2 (Windows Credential Manager) are imple
 
 ### Phase 4-5 Implementation Status (v0.9/v1.0)
 
-Phase 4 (PowerShell SecretManagement) and Phase 5 (HashiCorp Vault KV v2) are implemented in `src/SecretProvider.cs`:
+Phase 4 (PowerShell SecretManagement) and Phase 5 (HashiCorp Vault KV v2) are implemented in `src/PowerShellSecretManagementProvider.cs` and `src/VaultKV2Provider.cs`:
 
 - **PowerShellSecretManagementProvider**: delegates to `Get-Secret`/`Set-Secret`/`Remove-Secret` via hosted `pwsh` process with `CREATE_NO_WINDOW` and 30s timeout. Profile stores only vault name + secret name. Requires PowerShell 7 + Microsoft.SecretManagement + Microsoft.SecretStore modules.
 - **VaultKV2Provider**: calls Vault HTTP API (`GET`/`POST /v1/secret/data/<path>`). Profile stores only mount path + secret path + key. Token from `VAULT_TOKEN` env var. TLS mandatory for non-localhost. 10s timeout. Fail-closed on network errors.
@@ -323,7 +323,7 @@ Phase 4 (PowerShell SecretManagement) and Phase 5 (HashiCorp Vault KV v2) are im
 - CLI: `profile secret-provider list` now shows all 4 providers; `profile secret-provider set <name>` supports all 4.
 ### Phase 3 Implementation Status (v0.8.1)
 
-Phase 3 (Key Rotation + Secret Export/Import) is also implemented in `src/SecretProvider.cs`:
+Phase 3 (Key Rotation + Secret Export/Import) is implemented in `src/SecretProviderManager.cs`:
 
 - **Rotation**: `SecretProviderManager.RotateAll(profiles)` iterates all profiles and all secret variables, decrypts each with its original provider, re-encrypts with the active provider. Failed decryptions are counted and skipped (not deleted). CLI: `profile secret-provider rotate`.
 - **Export**: `SecretProviderManager.ExportSecrets(profile)` serializes all secrets from a profile to JSON, DPAPI-encrypts the entire blob, and writes to a file. The export is portable within the same user account regardless of the provider used. CLI: `profile export-secrets <profile> <file>`.
@@ -333,7 +333,7 @@ Phase 3 (Key Rotation + Secret Export/Import) is also implemented in `src/Secret
 
 ### Phase 3 Implementation Status (v0.8.1)
 
-Phase 3 (Key Rotation + Secret Export/Import) is also implemented in `src/SecretProvider.cs`:
+Phase 3 (Key Rotation + Secret Export/Import) is implemented in `src/SecretProviderManager.cs`:
 
 - **Rotation**: `SecretProviderManager.RotateAll(profiles)` iterates all profiles and all secret variables, decrypts each with its original provider, re-encrypts with the active provider. Failed decryptions are counted and skipped (not deleted). CLI: `profile secret-provider rotate`.
 - **Export**: `SecretProviderManager.ExportSecrets(profile)` serializes all secrets from a profile to JSON, DPAPI-encrypts the entire blob, and writes to a file. The export is portable within the same user account regardless of the provider used. CLI: `profile export-secrets <profile> <file>`.
@@ -342,7 +342,7 @@ Phase 3 (Key Rotation + Secret Export/Import) is also implemented in `src/Secret
 
 ### Phase 6-7 Implementation Status (v0.7.2)
 
-Phase 6 (SOPS Encrypted Envelopes) and Phase 7 (Azure Key Vault) are implemented in `src/SecretProvider.cs`:
+Phase 6 (SOPS Encrypted Envelopes) and Phase 7 (Azure Key Vault) are implemented in `src/SopsProvider.cs` and `src/AzureKeyVaultProvider.cs`:
 
 - **SopsProvider**: shells out to a verified `sops` binary (`-e`/`-d`) under `CREATE_NO_WINDOW` with 30s timeout. The profile stores the full sops-encrypted JSON as the envelope `ciphertext` field. Supports Age, PGP, AWS KMS, Azure Key Vault, GCP KMS, and HashiCorp Vault decryptors via sops env vars (`SOPS_AGE_RECIPIENT`, `SOPS_AGE_KEY_FILE`, `SOPS_PGP_FP`, `SOPS_KMS_ARN`, etc.). Binary is discovered via `SOPS_PATH` env var, PATH search, or common install locations. Fail-closed if sops binary is missing or non-functional. Temp files are created in a per-operation isolated directory and securely cleaned up in a finally block.
 - **AzureKeyVaultProvider**: calls Azure Key Vault REST API (`PUT`/`GET /secrets/<name>?api-version=7.4`). Profile stores only vault URI + secret name as `TargetName` (format: `vaultUri|secretName`). TLS mandatory (HTTPS only). Token obtained via managed identity (IMDS `169.254.169.254`) or service principal (`AZURE_CLIENT_ID`/`AZURE_CLIENT_SECRET`/`AZURE_TENANT_ID`). Token cached in process memory only with 5-minute expiry buffer. 15s HTTP timeout. Fail-closed on 403/404. Supports rotation (decrypt + re-encrypt). Delete issues a soft-delete via DELETE API.

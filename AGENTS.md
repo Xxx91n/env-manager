@@ -82,7 +82,10 @@ env-manager/
 |   +- AgentsCommand.cs       # Agents domain: CLI spec emitter (issue 05)
 |   +- UpdateCommand.cs       # Update domain: update check + version compare (issue 05)
 |   +- ArgTokenizer.cs        # LenientArgs tokenizer (retained; System.CommandLine is a non-goal)
-|   +- AuditCrypto.cs / AuditLedgerMigration.cs / ProfileAudit.cs / SchemaMigration.cs / SecretMount.cs / SecretProvider.cs / ServiceIpc.cs / StateExportImport.cs / NativeMethods.cs
+|   +- AuditCrypto.cs / AuditLedgerMigration.cs / ProfileAudit.cs / SchemaMigration.cs / SecretMount.cs / ServiceIpc.cs / StateExportImport.cs / NativeMethods.cs
+|   +- SecretEnvelope.cs / SecretEnvelopeJsonContext.cs / ProviderConfigJsonContext.cs / ISecretProvider.cs  # Secret provider core
+|   +- DpapiCurrentUserProvider.cs / CredentialManagerProvider.cs / PowerShellSecretManagementProvider.cs / VaultKV2Provider.cs / SopsProvider.cs / AzureKeyVaultProvider.cs / OnePasswordProvider.cs / AwsSecretsManagerProvider.cs  # One provider per file (issue 09 split)
+|   +- SecretProviderManager.cs  # Active-provider routing, rotation, export/import
 |   +- ExpandCommand.cs / BulkCommand.cs / DpapiHelper.cs  # EnvFeatures.cs retired (issue 06 split)
 +- env-manager.csproj          # .NET 10 project (AssemblyName: env-manager-cli)
 +- AGENTS.md                   # This file (project-level operating instructions)
