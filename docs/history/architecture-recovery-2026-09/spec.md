@@ -60,3 +60,53 @@ Env Manager 的 C# 引擎（改 PATH、管 secret、写注册表的核心）是�
 
 - Ticket breakdown, handoffs, launchers, and parallel waves live under `.scratch/architecture-recovery/` per WORKFLOW.md.
 - Industry evidence backing these choices was produced via two atomcode research runs (2026-08-31): .NET CLI 拆分与注册表测试模式、launch 注入验证与 redaction 测试模式。
+
+---
+
+## Phase 2 — SecretProvider 单文件拆分 + 契约测试套件（2026-09-02）
+
+> 由 atomcode 深度调研驱动（source: "atomcode"，五条独立证据线：gocloud.dev drivertest / Dapr components-contrib conformance / EF Core Specification Tests / WopiHost PR #411 / Arcus.Security）。摘要落盘 .scratch/architecture-recovery/research/secret-provider-patterns.md。
+
+### Problem Statement
+
+src/SecretProvider.cs 是约 1900 行单文件上帝对象，8 个 ISecretProvider 实现（DPAPI / Windows Credential Manager / PowerShell SecretManagement / HashiCorp Vault KV2 / sops / Azure Key Vault / 1Password / AWS Secrets Manager）与 SecretEnvelope、JSON 序列化上下文、SecretProviderManager 共处一文件。改一个 provider 需要跨过另外 7 个的实现；且除 fail-closed 解密路由外，没有"同一接口的所有实现共享同一套行为断言"的契约测试——新增 provider 或改其行为时没有自动回归网。
+
+### Solution
+
+把单文件按 provider 拆为独立模块（一 provider 一文件），接口/信封/管理器归位；再在 xUnit 工程落地共享契约测试套件：抽象契约基类 + harness 工厂缝，每 provider 一个挂载子类自动继承同一套行为断言，并以反射合规闸门保证"每个实现恰好挂一个契约子类"。对外行为零变化，不做 NuGet 分包（单 exe CLI）。
+
+### User Stories
+
+1. As an agent, I want each secret provider in its own file, so that changing one provider never requires scrolling past the other seven.
+2. As an agent, I want one shared contract-test suite over ISecretProvider, so that adding a ninth provider inherits the same behavior assertions by writing one subclass.
+3. As a maintainer, I want a compliance gate that fails the build when an ISecretProvider implementation lacks a contract-test subclass, so that coverage cannot silently rot.
+4. As a user, I want provider behavior (fail-closed decrypt, round-trip, stable typed errors) asserted uniformly, so that a regression in any provider is caught before merge.
+5. As a maintainer, I want the DPAPI provider covered on a real backend in CI, so that the local secret path is tested without cloud credentials.
+
+### Implementation Decisions
+
+- 拆分目标：一 provider 一文件；ISecretProvider + SecretEnvelope + JsonSerializerContext + SecretProviderManager 各自归位；"SecretProvider.cs" 单文件退役（类型名保留，退役的是单文件形态）。
+- 契约套件采用"抽象 xUnit 基类 + CreateHarness() 工厂缝"形态（WopiHost LockProviderConformanceTests 式）；每个 provider 写一个 sealed 子类 + 一个 harness 夹具。
+- 不用 [Theory]+[MemberData] 反射枚举所有实现跑一遍——各实现装配/清理逻辑不同、失败定位依赖参数名（社区已否定的做法）。
+- harness 是中立后端夹具：CreateProviderAsync / SeedSecretAsync（绕过 SUT 布数据）/ ReadRawSecretAsync（绕过 SUT 验落盘），防读写对称 bug 互相抵消。
+- 合规闸门：反射断言每个 ISecretProvider 实现恰好映射一个契约子类，新增未挂即红（EF ComplianceTest 式）。
+- 测试分层：L0 内存 fake / 真实本地后端（DPAPI）每 PR；L1 模拟器（Vault dev server / Azurite / Testcontainers）每 PR 有条件；L2 真实云服务定时/发布管道、凭据 env 注入。
+
+### Testing Decisions
+
+- 好测试只断言外部行为（fail-closed、往返、稳定错误码），不碰私有实现。
+- 契约断言只经 harness 的中立操作表达，与具体后端无关。
+- 现有 fail-closed 钉住测试（ProfileSeamValidationTests 的 Decrypt fail-closed 路由）评估迁入契约或保留原位，不重复。
+- 前端门禁测试若 readFileSync SecretProvider.cs 路径，随拆分同步重指向。
+
+### Out of Scope
+
+- 不做 NuGet 分包 / 契约套件对外分发（Arcus 式多项目形态）。
+- 不改任何 provider 的对外行为或支持矩阵；不新增 provider。
+- 不做 Pact 式 consumer-driven contract（服务间契约，与本场景无关）。
+- 不把 provider 特有行为（secret 版本/轮转 KV2 语义）纳入共享契约（首版只断言通用行为）。
+
+### Further Notes
+
+- 调研坦承无"8 provider + 契约套件"现成 .NET 成品，本方案是 Arcus（多 provider）+ WopiHost（契约套件）两先例的拼装，构件全部来自成熟先例。
+- 版本策略：契约套件与实现同 PR lockstep（不对外分发包，无 semver 问题）。
