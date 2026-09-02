@@ -1,22 +1,16 @@
-// SecretProvider.cs - Phase 1-2 Secret Provider Architecture
-// v0.8: ISecretProvider interface, versioned envelopes, Windows Credential Manager adapter
+// SecretProviderManager.cs - secret provider architecture (ticket 09, architecture-recovery)
+// Split from the retired single-file src/SecretProvider.cs; behavior unchanged.
 // License: Apache-2.0
 
 using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Runtime.InteropServices;
-using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
 namespace EnvManager;
 
 // --- Phase 1: SecretProviderManager (routes to active provider) ---
-
-
-
-
 
 internal static class SecretProviderManager
 {
