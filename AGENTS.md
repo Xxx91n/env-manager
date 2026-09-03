@@ -168,6 +168,8 @@ IPC schema contract tests (architecture-recovery issue 08) pin the three IPC cli
 - TS GUI: `parseServiceResponse` (exported from `api.ts`) + `frontend/src/lib/ipc-schema-contract.test.ts` vitest suite over the golden samples.
 - Tauri shell: `ipc_contract_tests` in `frontend/src-tauri/src/main.rs` pin the watchdog ping / GUI-exit shutdown pipe payloads.
 - CI: `cargo test --locked` runs for `service` and `frontend/src-tauri` in the build.yml verify job. See docs/architecture.md "IPC Schema Contract (single source of truth)".
+Mutation testing gate (architecture-recovery issue 13): dotnet-stryker 4.16.0 (local tool manifest `.config/dotnet-tools.json`, run `dotnet tool restore` then `dotnet stryker` from the repo root) mutates only the four red-line files (rename / change-scope / profile apply-unapply / protection) with string/logical mutants ignored and thresholds high 85 / low 70 / break 60. It is a local/PR-assist gate, deliberately NOT a CI hard gate (v5/dotnet10 pipeline friction; MS guidance against chasing 100% scores). Baseline: 76/94 killed (80.85% of tested mutants; raw Stryker score 37.07% counts NoCoverage as failures). Survivor classification and the red-line kill-rate mapping live in `.scratch/architecture-recovery/reports/13-mutation-testing-gate.md`.
+
 ```bash
 Get-Process -Name 'env-manager*' -ErrorAction SilentlyContinue | Stop-Process - Force
 node scripts/build.mjs --arch x64

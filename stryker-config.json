@@ -1,0 +1,27 @@
+{
+  "stryker-config": {
+    "project": "env-manager.csproj",
+    "test-projects": [
+      "tests/EnvManager.Engine.Tests/EnvManager.Engine.Tests.csproj"
+    ],
+    "mutate": [
+      "src/VariableRename.cs",
+      "src/VariableChangeScope.cs",
+      "src/ProfileEffective.cs",
+      "src/ProtectionCommand.cs"
+    ],
+    "thresholds": {
+      "high": 85,
+      "low": 70,
+      "break": 60
+    },
+    "reporters": [
+      "html",
+      "progress"
+    ],
+    "ignore-mutations": [
+      "string",
+      "logical"
+    ]
+  }
+}

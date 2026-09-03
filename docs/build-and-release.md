@@ -30,6 +30,22 @@ dotnet test tests/EnvManager.Engine.Tests/EnvManager.Engine.Tests.csproj
 - CI: the `build.yml` `verify` job runs this suite after `Build CLI` and gates pull requests.
 - Isolation: `env-manager.csproj` excludes `tests/**` from its compile glob (`Compile Remove`) and grants `InternalsVisibleTo` only to `EnvManager.Engine.Tests`; the release artifact list is unchanged.
 
+## Mutation testing (local gate, architecture-recovery issue 13)
+
+Stryker.NET runs a mutation-analysis gate over the four red-line files (rename / change-scope / profile apply-unapply / protection). It is a **local/PR-assist gate, not a CI hard gate**: the v5/dotnet10 CI pipeline friction is unresolved upstream, and the MS-official guidance is not to chase a 100% mutation score.
+
+```bash
+# One-time tool install (pinned by .config/dotnet-tools.json)
+dotnet tool restore
+
+# Run the gate from the repo root (config: stryker-config.json)
+dotnet stryker
+```
+
+Config contract (stryker-config.json): `mutate` is pinned to src/VariableRename.cs, src/VariableChangeScope.cs, src/ProfileEffective.cs, src/ProtectionCommand.cs; `ignore-mutations` excludes string/logical mutants; thresholds high 85 / low 70 / break 60 (exit code 2 below 60 is the gate firing); reporters html + progress (HTML report under StrykerOutput/, self-gitignored).
+
+Current baseline (2026-09-03): 94 mutants tested, 76 killed / 18 survived; raw Stryker score 37.07% (NoCoverage mutants count as failures) vs 80.85% over tested mutants only. The survived-mutant classification (2 equivalent, 16 missing-assertion) lives in .scratch/architecture-recovery/reports/13-mutation-testing-gate.md.
+
 ## Build GUI (development with hot reload)
 
 ```powershell
