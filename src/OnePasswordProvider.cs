@@ -104,6 +104,10 @@ internal sealed class OnePasswordProvider : ISecretProvider
             var v = Environment.GetEnvironmentVariable(envVar);
             if (v != null) psi.EnvironmentVariables[envVar] = v;
         }
+        // Connect targets are localhost servers behind corporate proxies in the
+        // wild; loopback must bypass any system proxy (op's Go HTTP stack honors one).
+        psi.EnvironmentVariables["NO_PROXY"] = "localhost,127.0.0.1,::1";
+        psi.EnvironmentVariables["no_proxy"] = "localhost,127.0.0.1,::1";
 
         using var proc = System.Diagnostics.Process.Start(psi);
         if (proc == null) throw new InvalidOperationException("Failed to start op process");
@@ -151,7 +155,13 @@ internal sealed class OnePasswordProvider : ISecretProvider
         var psi = new System.Diagnostics.ProcessStartInfo
         {
             FileName = OP_BINARY,
-            Arguments = "item get " + ShellQuote(itemId) + " --field " + ShellQuote(fieldName) + " --reveal",
+            // --format=json is MANDATORY in Connect mode (op errors out with plain
+            // output when OP_CONNECT_HOST is set); in account mode it just wraps the
+            // value as a JSON string, which the parse below unwraps either way.
+            // Connect mode has no default account vault: --vault is mandatory there
+            // (live-verified v2.39.0); in account mode it pins the same vault the
+            // envelope already names.
+            Arguments = "item get " + ShellQuote(itemId) + " --field " + ShellQuote(fieldName) + " --vault=" + ShellQuote(parts[0]) + " --format=json --reveal",
             UseShellExecute = false,
             RedirectStandardOutput = true,
             RedirectStandardError = true,
@@ -166,6 +176,10 @@ internal sealed class OnePasswordProvider : ISecretProvider
             var v = Environment.GetEnvironmentVariable(envVar);
             if (v != null) psi.EnvironmentVariables[envVar] = v;
         }
+        // Connect targets are localhost servers behind corporate proxies in the
+        // wild; loopback must bypass any system proxy (op's Go HTTP stack honors one).
+        psi.EnvironmentVariables["NO_PROXY"] = "localhost,127.0.0.1,::1";
+        psi.EnvironmentVariables["no_proxy"] = "localhost,127.0.0.1,::1";
 
         using var proc = System.Diagnostics.Process.Start(psi);
         if (proc == null) throw new InvalidOperationException("Failed to start op process");
@@ -176,7 +190,19 @@ internal sealed class OnePasswordProvider : ISecretProvider
             string stderr = proc.StandardError.ReadToEnd();
             throw new InvalidOperationException("1Password CLI get failed (exit " + proc.ExitCode + "): " + stderr);
         }
-        return proc.StandardOutput.ReadToEnd().TrimEnd();
+        string output = proc.StandardOutput.ReadToEnd().TrimEnd();
+        // --format=json returns the field value as a JSON string ("value"); plain
+        // output (older non-Connect flows) passes through unchanged.
+        try
+        {
+            using var doc = System.Text.Json.JsonDocument.Parse(output);
+            if (doc.RootElement.ValueKind == System.Text.Json.JsonValueKind.String)
+            {
+                return doc.RootElement.GetString() ?? output;
+            }
+        }
+        catch (System.Text.Json.JsonException) { }
+        return output;
     }
 
     public void Delete(string envelope, string? context = null)

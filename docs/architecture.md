@@ -380,6 +380,22 @@ In this first round only DPAPI runs its backend-dependent assertions on a real b
 
 ## Profile Drag Reorder (Pointer Events)
 
+Secret Provider L1 Emulator Matrix (issue 15)
+
+Issue 15 converts the 7 static Skips into affinity-gated real-backend tests. Skips become dynamic (xunit.skippablefact): the backend-independent assertions still always run, and the backend-dependent ones run whenever the host has the backend, skipping with the reason otherwise. All pins were verified live on 2026-09-03:
+
+| Provider | L1 backend | Seam / mechanism |
+|----------|-----------|------------------|
+| vault-kv2 | HashiCorp Vault dev server, hashicorp/vault:1.20.4 (generic container; no official .NET Testcontainers module exists) | VAULT_ADDR/VAULT_TOKEN env, localhost http allowed by the provider's TLS guard |
+| aws-secretsmanager | LocalStack localstack/localstack:4.4.0 (last token-free community image; the 2026-03 unified image requires an auth token) | new AWS_ENDPOINT_URL_SECRETS_MANAGER env seam in AwsSecretsManagerProvider (official AWS service-specific endpoint override convention; production never sets it) |
+| azure-keyvault | Lowkey Vault nagyesta/lowkey-vault:4.0.0-ubi9-minimal (official Testcontainers.LowkeyVault 4.14.0) | KV API on the container's https port (self-signed cert trusted in CurrentUser Root for the run), AAD token endpoint faked on its token port; provider driven via the new IDENTITY_ENDPOINT/IDENTITY_HEADER App-Service-convention seam in AzureKeyVaultProvider |
+| credential-manager | real Windows Credential Manager (advapi32 CredWrite/CredRead) | harness DPAPI-encrypts with DpapiHelper and writes the CRED blob directly; Windows-only |
+| powershell-secretmanagement | real pwsh SecretStore, official non-interactive automation mode (Set-SecretStoreConfiguration -Authentication None -Interaction None) | idempotent vault registration in the harness scope |
+| sops | real sops 3.13.3 + age 1.3.2 (pinned; downloaded to the OS temp session dir only when the host lacks them) | throwaway age keypair per session; SOPS_AGE_RECIPIENTS/SOPS_AGE_KEY_FILE |
+| 1password | real op CLI 2.39.0 (pinned) against the in-repo OpConnectMock Connect REST stub on localhost | OP_CONNECT_HOST/OP_CONNECT_TOKEN; provider gained production Connect fixes (--vault always passed, --format=json on item get, JSON-string unwrap, NO_PROXY loopback bypass). The Encrypt-side assertions stay Skip: op item create is refused over Connect by design (live-verified v2.39.0) and otherwise requires a cloud account - target L2 |
+
+Affinity gating (L1MatrixAffinity): container backends require Docker reachable AND EM_L1_MATRIX=1 (a plain dotnet test never pulls images or downloads binaries; EM_L1_STRICT=1 flips affinity misses to hard failures); tool backends run wherever the binaries are discoverable, and their pinned downloads are also gated behind the matrix opt-in. CI: the verify-l1 job (ubuntu-latest) runs --filter Category=L1 with EM_L1_MATRIX=1 - Docker is preinstalled on Linux runners, which resolves the checkpoint-A assumption this ticket was created to verify. Two production seams were added by this issue (AWS_ENDPOINT_URL_SECRETS_MANAGER, IDENTITY_ENDPOINT/IDENTITY_HEADER); both are no-op in production deployments that do not set the variables.
+
 The profile page supports drag-to-reorder using Pointer Events, NOT the HTML5 Drag and Drop API. Root cause: HTML5 DnD is intercepted at the OS level in WebView2, causing a persistent "forbidden" cursor and dropped events.
 
 Implementation:
