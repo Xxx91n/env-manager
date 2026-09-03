@@ -121,7 +121,11 @@ partial class Program
 
     const int MaxAuditEntries = 2000;
 
-    static string AuditFilePath => Path.Combine(AppDataDirectory, "audit.json");
+    static string? _auditFilePathForTests;
+
+    internal static void SetAuditFilePathForTests(string? path) => _auditFilePathForTests = path;
+
+    static string AuditFilePath => _auditFilePathForTests ?? Path.Combine(AppDataDirectory, "audit.json");
 
     static List<AuditEntry> LoadAuditHistory()
     {

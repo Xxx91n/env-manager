@@ -14,7 +14,11 @@ partial class Program
     private const int AuditTagSize = 16;
     private const int AuditKeySize = 32;
 
-    private static readonly string AuditKeyPath = Path.Combine(
+    private static string? _auditKeyPathForTests;
+
+    internal static void SetAuditKeyPathForTests(string? path) => _auditKeyPathForTests = path;
+
+    private static string AuditKeyPath => _auditKeyPathForTests ?? Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
         "EnvManager", "audit.key");
 

@@ -1,0 +1,1 @@
+﻿Renamed variable 'EM_SNAP_A' to 'EM_SNAP_B'

@@ -18,4 +18,8 @@
     <ProjectReference Include="..\..\env-manager.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- architecture-recovery issue 14: CLI output snapshot testing (help / stdout / error / canary) -->
+    <PackageReference Include="Verify.Xunit" Version="31.12.5" />
+  </ItemGroup>
 </Project>

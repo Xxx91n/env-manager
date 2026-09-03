@@ -17,7 +17,7 @@ partial class Program
     // original values are backed up as name_PowerToys_<profileName> before apply,
     // and restored on unapply. Profiles only affect user-scope variables.
 
-    static int RunProfileCommand(string[] args)
+    internal static int RunProfileCommand(string[] args)
     {
         if (args.Length < 2)
         {

@@ -1,0 +1,28 @@
+﻿Unknown command: definitely-not-a-command
+
+Env Manager v<version>
+
+Commands:
+  list                       List all variables (JSON)
+  get <name>                 Get variable (JSON)
+  set <name> <val> [--scope user|system] [--overwrite] Set variable
+  rename <old> <new> [--scope user|system] [--overwrite] Rename variable atomically
+  change-scope <name> <new-scope> [--scope user|system] [--overwrite] Move variable to another scope atomically
+  delete <name> [--scope user|system]    Delete variable
+  toggle <name> [--scope user|system]    Enable/disable a variable (backs up value)
+  backup [--output <file>]   Create backup
+  restore <file> [--scope user|system]   Restore backup
+  diff <old> <new>           Compare backups (JSON)
+  merge <old> <new> --output <file>      Merge backups
+  validate <file>            Validate backup
+  profile <subcommand>       Manage variable profiles (see: profile help)
+  path <subcommand>          Edit PATH variable as list (see: path help)
+  history list|undo           View or undo audited changes
+  bulk import|export          Import/export .json, .env, or .csv
+  expand <value>              Expand nested %VARIABLE% references
+  protection list|add-path|remove-path|add-var|remove-var  View or manage protected variables and PATH entries
+  agents [--path|--json|--summary] Output CLI spec. --path: file only. --json: machine-readable. --summary: brief
+  help                       Show help
+  update check                Check for latest version
+  service status|health|refresh <id>|rotate <id>  Interact with the secret lifecycle service
+  --debug                    Enable verbose stderr logging

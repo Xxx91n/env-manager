@@ -270,11 +270,11 @@ partial class Program
     /// (used by the service's export_survival_kit to create machine+user-bound archives).
     /// "audit list": lists audit ledger events (read-only).
     /// </summary>
-    static int ShowHelp()
+    internal static string BuildHelpText()
     {
         var asm = System.Reflection.Assembly.GetExecutingAssembly().GetName();
         var ver = asm.Version ?? new Version(0, 0, 0);
-        Console.WriteLine($@"Env Manager v{ver.Major}.{ver.Minor}.{ver.Build}
+        return $@"Env Manager v{ver.Major}.{ver.Minor}.{ver.Build}
 
 Commands:
   list                       List all variables (JSON)
@@ -299,8 +299,13 @@ Commands:
   help                       Show help
   update check                Check for latest version
   service status|health|refresh <id>|rotate <id>  Interact with the secret lifecycle service
-  --debug                    Enable verbose stderr logging");
-       return 0;
+  --debug                    Enable verbose stderr logging";
+    }
+
+    static int ShowHelp()
+    {
+        Console.WriteLine(BuildHelpText());
+        return 0;
     }
 
     // v0.9.13 Phase 4F: Provider binary hash verification (best-effort)
