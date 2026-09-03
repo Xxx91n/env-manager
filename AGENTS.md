@@ -119,7 +119,7 @@ All invariants that must never be violated are in [docs/agents/hard-boundaries.m
 **Top-level constraints (most critical):**
 - **Protected variables/PATH**: built-in protected entries cannot be set/deleted/toggled/renamed/scope-changed. See `IsProtectedVariable` / `IsProtectedPathEntry`.
 - **Cross-process mutex**: all writes acquire `Local\EnvManager.RegistryMutation` mutex + Rust `CLI_RWLOCK` write lock + frontend `writeChain` serialization. Three layers, never bypass.
-- **Rename/scope-change contract**: write+verify target before deleting source. Never delete-then-set.
+- **Rename/scope-change contract**: write+verify target before deleting source. Never delete-then-set. Registry mutations are compensatory-write only: TxR/TxF are non-goals (ADR 0014, docs/adr/0014-no-txr-txf-compensatory-writes.md).
 - **GUI 3-way save ordering**: `rename(old scope)` -> `changeScope(overwrite flag)` -> `setVariable(value, overwrite flag)`. `--overwrite` only from explicit user confirmation.
 - **Secrets never in registry**: DPAPI-encrypted on disk, plaintext only in transient launcher process memory. `profile launch` is the only apply path for Launch profiles.
 - **Live test harness**: any registry-mutating CLI smoke test MUST use `scripts/test-with-restore.ps1`. Never run raw registry-mutating commands.
