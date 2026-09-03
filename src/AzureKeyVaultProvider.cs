@@ -168,11 +168,29 @@ internal sealed class AzureKeyVaultProvider : ISecretProvider
     {
         try
         {
-            string imdsUrl = "http://169.254.169.254/metadata/identity/oauth2/token" +
-                "?api-version=2018-02-01&resource=https://vault.azure.net";
+            // App Service / emulator convention (issue 15): IDENTITY_ENDPOINT overrides
+            // the hardcoded IMDS URL, IDENTITY_HEADER names the auth header. Production
+            // never sets these; the L1 Lowkey Vault emulator does.
+            string? identityEndpoint = Environment.GetEnvironmentVariable("IDENTITY_ENDPOINT");
+            string imdsUrl;
+            if (!string.IsNullOrEmpty(identityEndpoint))
+            {
+                string joiner = identityEndpoint.Contains('?') ? "&" : "?";
+                imdsUrl = identityEndpoint + joiner + "api-version=2018-02-01&resource=https://vault.azure.net";
+            }
+            else
+            {
+                imdsUrl = "http://169.254.169.254/metadata/identity/oauth2/token" +
+                    "?api-version=2018-02-01&resource=https://vault.azure.net";
+            }
 
             using var client = new System.Net.Http.HttpClient();
             client.DefaultRequestHeaders.Add("Metadata", "true");
+            string? identityHeader = Environment.GetEnvironmentVariable("IDENTITY_HEADER");
+            if (!string.IsNullOrEmpty(identityEndpoint) && !string.IsNullOrEmpty(identityHeader))
+            {
+                client.DefaultRequestHeaders.Add("X-IDENT-HEADER", identityHeader);
+            }
             client.Timeout = TimeSpan.FromSeconds(10);
 
             var response = client.GetAsync(imdsUrl).GetAwaiter().GetResult();

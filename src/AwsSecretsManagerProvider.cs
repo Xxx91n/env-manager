@@ -92,7 +92,22 @@ internal sealed class AwsSecretsManagerProvider : ISecretProvider
 
     private static System.Net.Http.HttpResponseMessage CallAwsApi(string region, string target, string body)
     {
-        string host = "secretsmanager." + region + ".amazonaws.com";
+        // Official AWS service-specific endpoint override convention (issue 15):
+        // AWS_ENDPOINT_URL_SECRETS_MANAGER redirects all Secrets Manager calls -
+        // production deployments never set it; the L1 LocalStack emulator does.
+        // TLS stays mandatory for the default endpoint; an explicit override may
+        // use http:// (it is always an opt-in local/emulator endpoint by nature).
+        string? endpointOverride = Environment.GetEnvironmentVariable("AWS_ENDPOINT_URL_SECRETS_MANAGER");
+        string requestUrl;
+        if (!string.IsNullOrEmpty(endpointOverride))
+        {
+            requestUrl = endpointOverride.TrimEnd('/') + "/";
+        }
+        else
+        {
+            string host = "secretsmanager." + region + ".amazonaws.com";
+            requestUrl = "https://" + host + "/";
+        }
         string accessKey = Environment.GetEnvironmentVariable("AWS_ACCESS_KEY_ID") ?? "";
         string secretKey = Environment.GetEnvironmentVariable("AWS_SECRET_ACCESS_KEY") ?? "";
         string sessionToken = Environment.GetEnvironmentVariable("AWS_SESSION_TOKEN") ?? "";
@@ -103,7 +118,10 @@ internal sealed class AwsSecretsManagerProvider : ISecretProvider
         string dateStamp = DateTimeOffset.UtcNow.ToString("yyyyMMdd");
         string credentialScope = dateStamp + "/" + region + "/" + SERVICE + "/aws4_request";
 
-        string canonicalHeaders = "content-type:application/x-amz-json-1.1\nhost:" + host + "\nx-amz-date:" + amzDate + "\n" +
+        string signedHost = endpointOverride != null
+            ? new Uri(requestUrl).Host
+            : "secretsmanager." + region + ".amazonaws.com";
+        string canonicalHeaders = "content-type:application/x-amz-json-1.1\nhost:" + signedHost + "\nx-amz-date:" + amzDate + "\n" +
             (!string.IsNullOrEmpty(sessionToken) ? "x-amz-security-token:" + sessionToken + "\n" : "");
         string signedHeaders = "content-type;host;x-amz-date" + (!string.IsNullOrEmpty(sessionToken) ? ";x-amz-security-token" : "");
         string payloadHash = HexSHA256(body);
@@ -124,7 +142,7 @@ internal sealed class AwsSecretsManagerProvider : ISecretProvider
         // are REQUEST headers, not content headers. Adding "Authorization" to
         // HttpContent throws "Misused header name, 'Authorization'" because the
         // .NET dispatcher treats it as a content header.
-        var request = new System.Net.Http.HttpRequestMessage(System.Net.Http.HttpMethod.Post, "https://" + host + "/");
+        var request = new System.Net.Http.HttpRequestMessage(System.Net.Http.HttpMethod.Post, requestUrl);
         request.Content = content;
         request.Headers.Add("X-Amz-Target", target);
         request.Headers.Add("X-Amz-Date", amzDate);
