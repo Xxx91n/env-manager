@@ -513,6 +513,21 @@ try {
   }
 
   Run-Test "trailing-backslash + quote recovery" { Test-RawTrailingBackslashInvocation }
+
+  Run-Test "differential oracle parity (InMemoryScope vs RegistryScope)" {
+    # Ticket 11: the differential suite drives the real registry as the oracle, so it is
+    # gated behind EM_DIFFERENTIAL_ORACLE and must only ever run inside THIS fixture's
+    # snapshot/restore window (hard-boundary real-registry isolation red line).
+    $testProject = Join-Path $ProjectRoot "tests\EnvManager.Engine.Tests\EnvManager.Engine.Tests.csproj"
+    if (-not (Test-Path $testProject)) { throw "engine test project not found: $testProject" }
+    $env:EM_DIFFERENTIAL_ORACLE = "1"
+    try {
+      dotnet test $testProject -c Release --nologo --filter "FullyQualifiedName~DifferentialOracleTests"
+      if ($LASTEXITCODE -ne 0) { throw "differential oracle suite failed (dotnet test exit $LASTEXITCODE)" }
+    } finally {
+      Remove-Item Env:EM_DIFFERENTIAL_ORACLE -ErrorAction SilentlyContinue
+    }
+  }
 } catch {
   $failures += @{ Name = "harness"; Error = $_.Exception.Message }
 } finally {
