@@ -216,8 +216,9 @@ internal sealed class AzureKeyVaultProvider : ISecretProvider
             }
             return null;
         }
-        catch
+        catch (Exception ex)
         {
+            Console.Error.WriteLine("[azure-keyvault] identity token request threw: " + ex.GetType().Name + ": " + ex.Message);
             return null;
         }
     }
