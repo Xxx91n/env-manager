@@ -1,0 +1,14 @@
+<Project>
+
+  <!-- architecture-recovery issue 15: L1 matrix package pins, auto-imported by the test csproj.
+       Added as a new file (not a csproj hunk) so this branch is self-contained on CI checkouts
+       despite the cross-stack conflict on EnvManager.Engine.Tests.csproj; at fold time the brain
+       session keeps exactly one source of truth for these references. -->
+  <ItemGroup>
+    <PackageReference Include="Testcontainers" Version="4.14.0" />
+    <PackageReference Include="Testcontainers.LocalStack" Version="4.14.0" />
+    <PackageReference Include="Testcontainers.LowkeyVault" Version="4.14.0" />
+    <PackageReference Include="xunit.skippablefact" Version="1.5.85" />
+  </ItemGroup>
+
+</Project>
