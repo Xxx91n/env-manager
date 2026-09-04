@@ -14,6 +14,7 @@ namespace EnvManager.Engine.Tests;
 /// container; no official .NET module exists) and skip when no Docker runtime is
 /// reachable or EM_L1_MATRIX is not opted in.
 /// </summary>
+[Collection(L1ContainerCollection.Name)]
 public sealed class VaultKV2ContractTests : SecretProviderContractTests
 {
     public VaultKV2ContractTests()
