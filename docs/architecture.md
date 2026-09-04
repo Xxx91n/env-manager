@@ -378,6 +378,37 @@ Test layering (per research/secret-provider-patterns.md):
 In this first round only DPAPI runs its backend-dependent assertions on a real backend; the other seven mounts run the backend-independent assertions (fail-closed, malformed-format) and `Skip` the backend-dependent ones with the layer reason.
 
 
+## Canary Zero-Leak Assertion Net and Golden/Snapshot Layers
+
+Secret-leak defenses and output contracts are pinned by three complementary test layers (spec Phase 3/4, issues 07/08/14). They are deliberately non-overlapping: the IPC golden pins the wire schema, the CLI/i18n snapshots pin the human-readable output, and the canary net proves dynamically that secret plaintext never reaches a scanned sink.
+
+### Canary zero-leak assertion net (issue 07)
+
+`tests/launch-env-injection.Tests.ps1` (Pester, CI Tier 3) proves the injection channel works before the leak net means anything: golden env diff (the injected set must exactly match the profile's resolved variables, ignoring only the variables cmd.exe synthesizes in the child: COMSPEC/PATHEXT/PROMPT), probe-process echo (the launched child re-reads its injected values), and the Launch-never-writes-registry invariant (injected names absent from `HKCU\Environment` after launch).
+
+`tests/canary-redaction.Tests.ps1` (Pester, CI Tier 3) then injects a uniquely tagged, format-shaped fake secret (`password=canary-<id>` — shaped so a leaking sink also trips the CLI scrub patterns) into a throwaway launch profile and scans every output sink of the secret lifecycle for zero occurrence:
+
+| Sink | Surface |
+|---|---|
+| S1 | `profile show` (masked stdout) |
+| S2 | `profile preview` (resolved-variable view; stores ciphertext) |
+| S3 | `profile list` |
+| S4 | audit trail (`history list`; audit.json is AES-GCM encrypted at rest and records NAME + `<redacted>`/`<encrypted>` markers only) |
+| S5 | `profile launch` stdout |
+| S6 | launched-child env dump — the positive control: the canary MUST appear here (it is the documented injection channel), guarding the zero-leak assertions against a silent false-green if decryption broke |
+| S7 | forced-error stderr (scrubbed by `ScrubExceptionMessage`) |
+
+`profile reveal-secret` is the only designed plaintext-stdout path (hard boundary) and is deliberately not scanned as a sink. Masking placeholders are asserted positively: `<encrypted>` in show output (matched in its JSON-escaped `\u003Cencrypted\u003E` wire form) and `<revealed>` in the audit reveal entry. `CanaryRedactionTests` (xUnit) pins the pure-function core: format-shaped canaries (password=/Bearer/VAULT_TOKEN=) never survive `ScrubExceptionMessage`, `<redacted>` appears in their place, and un-patterned values pass through unchanged (documented best-effort behavior, ADR 0005).
+
+### Golden/snapshot layers (issues 08 + 14)
+
+Two golden layers lock output contracts; both files are source-controlled, so any drift is an explicit, reviewable diff rather than a silent change:
+
+- **Machine contract — IPC schema golden (issue 08)**: `docs/schemas/env-manager-service-ipc.schema.json` + `docs/schemas/ipc-samples.json` are exported from the Rust-owned `IpcRequest`/`IpcResponse` structs and pinned across all three clients (see "IPC Schema Contract (single source of truth)" above).
+- **Human contract — CLI output snapshots (issue 14)**: `CliOutputSnapshotTests` (Verify.Xunit 31.12.5) locks 17 source-controlled `.verified.txt` snapshots in `tests/EnvManager.Engine.Tests/` — help text (2: main help, unknown-command error prefix + help), write-path stdout (2: rename success, toggle disable/restore JSON projection), error copy (12: protected-variable rejections for set/rename/toggle/delete, rename source-missing/target-exists, `=`-in-name rejection, change-scope already-in-target warning, scrubbed generic-exception copy, UnauthorizedAccess fixed copy, profile show unknown profile, reveal-secret scrubbed decrypt failure), and the canary masking contract (1: `profile show` masks the secret value as `<encrypted>` with a ciphertext-never-reaches-stdout negative assertion). The `Scrub()` normalizer touches only the four volatile fields (version line, profile GUIDs, audit ids, RFC3339 timestamps) and restores JSON `\u003C/\u003E/\u0026` escapes so masking markers compare as literals; a scrubber self-check test pins that real user-facing copy is never swallowed. Console capture is serialized via a dedicated non-parallel collection so parallel tests cannot interleave. The `<revealed>` audit positive path is covered by the live canary Pester suite above, not by a snapshot.
+- **i18n rendered snapshots**: `frontend/src/lib/translations.test.ts` renders every key of all 10 locales through `intl-messageformat` (the svelte-i18n engine) with one Vitest snapshot per locale (`frontend/src/lib/__snapshots__/translations.test.ts.snap`); an ICU render failure (e.g. a `{placeholder}` wrapped in single quotes) turns red, and any wording drift appears in the snapshot diff.
+
+
 ## Profile Drag Reorder (Pointer Events)
 
 Secret Provider L1 Emulator Matrix (issue 15)
