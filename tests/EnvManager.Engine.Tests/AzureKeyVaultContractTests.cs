@@ -63,6 +63,24 @@ public sealed class AzureKeyVaultContractTests : SecretProviderContractTests
             // AZURE_KEYVAULT_URI for Encrypt/Decrypt (the CI failure proved this mount
             // never set it), IDENTITY_ENDPOINT/IDENTITY_HEADER for the token path.
             var baseAddress = container.GetBaseAddress();
+            // reachability probe of the token endpoint BEFORE handing off to the provider:
+            // a failure here is an environment problem (skip with reason), not a provider bug.
+            try
+            {
+                using var probeClient = new HttpClient { Timeout = TimeSpan.FromSeconds(10) };
+                using var probe = probeClient.GetAsync(container.GetAuthTokenUrl() + "?api-version=2018-02-01&resource=https://vault.azure.net").GetAwaiter().GetResult();
+                if (!probe.IsSuccessStatusCode)
+                {
+                    var body = probe.Content.ReadAsStringAsync().GetAwaiter().GetResult();
+                    throw new Xunit.SkipException("azure-keyvault L1 smoke: Lowkey Vault token endpoint returned " +
+                        (int)probe.StatusCode + " (env problem, not provider); body: " + body[..Math.Min(200, body.Length)]);
+                }
+            }
+            catch (Xunit.SkipException) { throw; }
+            catch (Exception ex)
+            {
+                throw new Xunit.SkipException("azure-keyvault L1 smoke: token endpoint unreachable (" + ex.GetType().Name + ": " + ex.Message + ")");
+            }
             Environment.SetEnvironmentVariable("AZURE_KEYVAULT_URI", baseAddress);
             Environment.SetEnvironmentVariable("IDENTITY_ENDPOINT", container.GetAuthTokenUrl());
             Environment.SetEnvironmentVariable("IDENTITY_HEADER", "em-l1-identity-header");
