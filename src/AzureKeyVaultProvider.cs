@@ -195,7 +195,13 @@ internal sealed class AzureKeyVaultProvider : ISecretProvider
 
             var response = client.GetAsync(imdsUrl).GetAwaiter().GetResult();
             if (!response.IsSuccessStatusCode)
+            {
+                // issue 15 diagnostics: surface the emulator/IMDS rejection reason; silent
+                // null made the L1 lane failure undiagnosable (CI run 33853880605).
+                Console.Error.WriteLine("[azure-keyvault] identity token request failed: " +
+                    (int)response.StatusCode + " " + response.Content.ReadAsStringAsync().GetAwaiter().GetResult()[..Math.Min(300, response.Content.ReadAsStringAsync().GetAwaiter().GetResult().Length)]);
                 return null;
+            }
 
             string json = response.Content.ReadAsStringAsync().GetAwaiter().GetResult();
             using var doc = System.Text.Json.JsonDocument.Parse(json);
