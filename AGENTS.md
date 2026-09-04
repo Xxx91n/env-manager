@@ -50,7 +50,7 @@ CodeGraph is the project's indexed code intelligence layer. The index lives at `
 
 Four layers:
 1. **CLI backend** (`src/`) - C# .NET 10 console app, reads/writes Windows Registry directly, compiles to `env-manager-cli.exe`. `src/Program.cs` is a thin Main dispatcher plus shared runtime infrastructure (mutex, snapshot, atomic writes); each command domain (profile, path, service, audit, agents, update, backup, protection, variable write/query, expand, bulk) lives in its own module file (issue 05, issue 06).
-2. **Tauri shell** (`frontend/src-tauri/`) - Rust app, embeds CLI as bundled resource, spawns CLI subprocesses, returns JSON via Tauri IPC.
+2. **Tauri shell** (`frontend/src-tauri/`) - Rust app, embeds CLI as bundled resource (the five `tauri.conf.json` bundle.resources are staged into `frontend/src-tauri/bin/` by `frontend/scripts/prebuild.mjs` during local builds and by a fail-closed staging step in the CI verify job before any cargo compile), spawns CLI subprocesses, returns JSON via Tauri IPC.
 3. **Svelte frontend** (`frontend/src/`) - TypeScript + Svelte 4 + TailwindCSS in WebView2. Talks to Rust only via `invoke('run_cli', ...)`.
 4. **Service crate** (`service/`) - Rust standalone binary (`env-manager-service.exe`), manages secret mount lifecycle via named pipe IPC. Optional: runs as Windows service (`--mode=service`) or background process (`--mode=background`). The CLI `service` subcommand is a thin IPC gateway to this binary. See ADR 0001 and `docs/secret-architecture-blueprint.md` for the design review roadmap.
 

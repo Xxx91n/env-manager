@@ -87,6 +87,41 @@ jobs:
       - name: Build CLI
         run: dotnet build -c Release
 
+      - name: Stage CLI artifacts into Tauri resource dir (issue 17)
+        shell: pwsh
+        run: |
+          # The Tauri crate's build script (tauri_build::build) validates the
+          # tauri.conf.json bundle.resources on every cargo compile of that
+          # crate. Locally frontend/scripts/prebuild.mjs stages these files
+          # during "npm run build"/"tauri build"; the verify job runs cargo
+          # directly, so stage the five declared resources here. Fail-closed:
+          # a missing source file fails the job.
+          $cliDir = 'bin/Release/net10.0-windows'
+          $dst = 'frontend/src-tauri/bin'
+          New-Item -ItemType Directory -Force -Path $dst | Out-Null
+          $missing = @()
+          foreach ($f in @('env-manager-cli.exe', 'env-manager-cli.dll', 'env-manager-cli.runtimeconfig.json', 'env-manager-cli.deps.json')) {
+            $src = Join-Path $cliDir $f
+            if (Test-Path $src) {
+              Copy-Item $src -Destination (Join-Path $dst $f) -Force
+              Write-Host "staged: $f"
+            } else {
+              $missing += $src
+            }
+          }
+          if (Test-Path 'AGENTS.cli.md') {
+            Copy-Item 'AGENTS.cli.md' -Destination (Join-Path $dst 'AGENTS.cli.md') -Force
+            Write-Host "staged: AGENTS.cli.md"
+          } else {
+            $missing += 'AGENTS.cli.md'
+          }
+          if ($missing.Count -gt 0) {
+            Write-Host "=== CLI resource staging FAILED: $($missing.Count) of 5 missing ==="
+            $missing | ForEach-Object { Write-Host "MISSING: $_" }
+            exit 1
+          }
+          Write-Host "=== CLI resource staging OK: 5/5 files present in $dst ==="
+
       - name: Run C# engine unit tests
         run: dotnet test tests/EnvManager.Engine.Tests/EnvManager.Engine.Tests.csproj -c Release --nologo
 

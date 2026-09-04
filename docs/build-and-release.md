@@ -264,6 +264,8 @@ The project uses [CodeGraph](https://github.com/nicholasgriffintn/codegraph) for
 ### build.yml (CI verification)
 Runs on push to main and pull requests. Verifies code quality (tests, lint, build) and builds x64 packages to verify the build pipeline.
 
+The verify job stages the five `tauri.conf.json` `bundle.resources` (`env-manager-cli.exe`/`.dll`/`.runtimeconfig.json`/`.deps.json` plus `AGENTS.cli.md`) from the CLI build output (`bin/Release/net10.0-windows/`) and the repo root into `frontend/src-tauri/bin/` immediately after the "Build CLI" step and before any cargo compile (service crate tests, Tauri crate tests, cargo check). The step is fail-closed: any of the five missing fails the job. This mirrors the local staging done by `frontend/scripts/prebuild.mjs` during `npm run build`/`tauri build`; `scripts/build.mjs` responsibilities are unchanged.
+
 ### release.yml (Manual release)
 Triggered manually via GitHub Actions `workflow_dispatch` with a version input. Builds x64, x86, and arm64 packages in parallel, then creates a GitHub Release with all artifacts:
 - Portable ZIPs (per arch)
