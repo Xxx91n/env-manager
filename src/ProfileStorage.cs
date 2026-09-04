@@ -112,7 +112,7 @@ static void AtomicWriteProfiles(List<ProfileData> profiles, bool createBackup)
         {
             if (_profilesFilePathOverride != null) return _profilesFilePathOverride; // Ticket 04 test redirect
             string dir = Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                LocalAppDataRoot,
                 "EnvManager");
             Directory.CreateDirectory(dir);
             return Path.Combine(dir, "profiles.json");

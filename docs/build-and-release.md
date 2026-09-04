@@ -276,6 +276,23 @@ Triggered manually via GitHub Actions `workflow_dispatch` with a version input. 
 
 The release workflow does NOT auto-trigger on tags or pushes - it must be manually dispatched.
 
+### CI user-state isolation and env-block snapshot semantics (architecture-recovery issue 24)
+
+Integration tests in CI run with an **isolated user-state root**: the `Run Pester integration tests` step in `build.yml` sets `ENVMANAGER_LOCALAPPDATA` to a job-private directory under `runner.temp`, and every CLI user-state file (profiles.json, audit.json/audit.key, secretMount.json, secret-providers.json, provider-hash.json, protection JSON stores) resolves through that root instead of the runner's real `%LOCALAPPDATA%`. A follow-up step, `Assert user-state isolation (issue 24)`, verifies after the run (even on failure, `if: always()`) that the real `%LOCALAPPDATA%\EnvManager` directory was not created by the job and prints the redirected directory contents as redirect proof.
+
+Why an explicit seam variable instead of setting `LOCALAPPDATA`: `Environment.GetFolderPath(SpecialFolder.LocalApplicationData)` does **not** honor a process-level `LOCALAPPDATA` override — the .NET shell-folder API expands the `Local AppData` value from the registry (`HKCU\...\Explorer\User Shell Folders`), not the process environment. `src/CliRuntime.cs` therefore exposes `LocalAppDataRoot`, which returns `ENVMANAGER_LOCALAPPDATA` when set to a non-empty value and falls back to `GetFolderPath` otherwise. The seam is cross-process (the Pester harness passes the variable to every CLI subprocess env block) and requires no in-process test redirect. When the variable is unset — every user and non-test CI path — behavior is byte-identical to the pre-issue-24 resolution. Unit-pinned by `LocalAppDataRedirectTests` (xUnit).
+
+**Two-level isolation discipline** (research/round4-closeout-patterns.md section A):
+
+1. **Machine-state writes** (registry `HKCU\Environment` / `HKLM\...\Session Manager\Environment`, `%ProgramData%`): tolerated on GitHub-hosted runners because every job starts on a fresh VM — machine state dies with the job. The registry side is additionally bounded by the `test-with-restore.ps1` snapshot/reconcile transaction and the issue-22 residue-zero assertion, so nothing survives the run anyway.
+2. **User-state writes** (`%LOCALAPPDATA%` tree): NOT tolerated inside a job, because a job's later steps share the same user profile — an unredirected integration run could read a stale profiles.json written by an earlier step or leak test profiles into packaging steps. The `ENVMANAGER_LOCALAPPDATA` redirect removes the shared surface entirely.
+
+**env-block snapshot semantics** (tests and CI steps MUST NOT assume cross-process real-time environment refresh): a Windows environment block is a snapshot copied at process creation; a child process inherits the env of its creator at spawn time, and a registry environment write plus `WM_SETTINGCHANGE` broadcast notifies only registered listeners (shell/Explorer), not arbitrary already-running processes. Consequences the test discipline encodes:
+
+- A CLI subprocess never sees environment changes made by the harness after the subprocess was spawned; set variables BEFORE spawning.
+- A process that itself writes the registry environment does not see its own write via its inherited env-block snapshot; refresh assertions must re-read the registry (the CLI does) or spawn a fresh child, never probe the writer's own env.
+- Windows-latest hosted runners are always elevated, so elevation-gated system-scope behavior cannot be differentially verified in CI; that path is pinned at the seam level in xUnit instead.
+
 ## Performance Targets
 
 | Metric | Target |

@@ -160,12 +160,50 @@ jobs:
 
       - name: Run Pester integration tests
         shell: pwsh
+        env:
+          # CI user-state isolation (issue 24): redirect every CLI user-state write
+          # (profiles.json, audit, secret mounts, provider config, protection stores)
+          # into this job-private directory. The runner's real user profile stays
+          # untouched, so integration runs can neither pollute nor be polluted by
+          # later steps. Requires the ENVMANAGER_LOCALAPPDATA seam in src/CliRuntime.cs
+          # (GetFolderPath does NOT honor a process-level LOCALAPPDATA override).
+          ENVMANAGER_LOCALAPPDATA: ${{ runner.temp }}\test-user-state
         run: |
           # Tier 3: integration tests that invoke env-manager-cli.exe
           # Build CLI step above has produced the binary;
           # the unit-test step has run vitest (mocked, no binary).
           # This step runs Pester 5 + the raw ps1 harnesses.
+          New-Item -ItemType Directory -Force -Path $env:ENVMANAGER_LOCALAPPDATA | Out-Null
+          Write-Host "=== issue 24 user-state isolation: ENVMANAGER_LOCALAPPDATA=$env:ENVMANAGER_LOCALAPPDATA ==="
+          # Record pre-run state of the real profile dir for the isolation assertion
+          # (the runner image may legitimately ship one; never delete anything there).
+          $real = Join-Path $env:LOCALAPPDATA 'EnvManager'
+          "ISSUE24_REAL_DIR_EXISTED=$(Test-Path $real)" | Add-Content $env:GITHUB_ENV
           ./scripts/run-ci-tests.ps1 -ResultsDir test-results -CliExe (Join-Path $PWD 'bin\Release\net10.0-windows\env-manager-cli.exe')
+
+      - name: Assert user-state isolation (issue 24)
+        if: always()
+        shell: pwsh
+        env:
+          ENVMANAGER_LOCALAPPDATA: ${{ runner.temp }}\test-user-state
+        run: |
+          # Two-level isolation discipline (issue 24): machine-state writes are
+          # harmless on a fresh VM; user-state writes must not leak into the real
+          # runner profile during the job.
+          $real = Join-Path $env:LOCALAPPDATA 'EnvManager'
+          if ($env:ISSUE24_REAL_DIR_EXISTED -eq 'False') {
+            if (Test-Path $real) { throw "user-state pollution: $real was created by this run (redirect did not hold)" }
+            Write-Host "user-state isolation OK: real EnvManager dir not created by this run"
+          } else {
+            Write-Host "real EnvManager dir pre-existed (image state); run-owned state redirected - see Pester step log"
+          }
+          $redirected = Join-Path $env:ENVMANAGER_LOCALAPPDATA 'EnvManager'
+          if (Test-Path (Join-Path $redirected 'profiles.json')) {
+            $files = Get-ChildItem $redirected -File | Select-Object -ExpandProperty Name
+            Write-Host "redirect proof: job-private dir holds $($files.Count) state file(s): $($files -join ', ')"
+          } else {
+            Write-Warning "redirected EnvManager dir has no profiles.json at $redirected (suites may use per-suite fixtures)"
+          }
 
       - name: Upload Pester JUnit results
         if: always()

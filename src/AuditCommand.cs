@@ -81,7 +81,7 @@ partial class Program
                     // The ledger migration from audit.json to audit-ledger.jsonl
                     // happens in v1.0.0; for now, list the existing audit entries.
                     string auditPath = Path.Combine(
-                        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                        LocalAppDataRoot,
                         "EnvManager", "audit.json");
                     if (!File.Exists(auditPath))
                     {

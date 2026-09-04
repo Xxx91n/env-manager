@@ -19,7 +19,7 @@ partial class Program
     internal static void SetAuditKeyPathForTests(string? path) => _auditKeyPathForTests = path;
 
     private static string AuditKeyPath => _auditKeyPathForTests ?? Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+        LocalAppDataRoot,
         "EnvManager", "audit.key");
 
     /// <summary>

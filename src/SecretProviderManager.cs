@@ -44,7 +44,7 @@ internal static class SecretProviderManager
     private static string GetConfigPath()
     {
         string dir = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            Program.LocalAppDataRoot,
             "EnvManager");
         return Path.Combine(dir, PROVIDER_CONFIG_FILE);
     }
@@ -173,7 +173,7 @@ internal static class SecretProviderManager
         }
 
         string dir = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            Program.LocalAppDataRoot,
             "EnvManager");
         Directory.CreateDirectory(dir);
 

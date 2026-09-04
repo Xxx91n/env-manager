@@ -39,7 +39,7 @@ partial class Program
         get
         {
             string dir = Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                LocalAppDataRoot,
                 "EnvManager");
             Directory.CreateDirectory(dir);
             return Path.Combine(dir, "secretMount.json");
