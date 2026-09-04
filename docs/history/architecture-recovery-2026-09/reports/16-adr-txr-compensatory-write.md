@@ -75,4 +75,4 @@ $ git diff --stat
 ## 备注
 
 - 弃用依据两页 MS Learn 原文已核验入会话知识库（source: ms-learn-txf-portal / ms-learn-txf-deprecation）。
-- 版本控制按 WORKFLOW §4.2：GitButler 分支 arch/16-adr-txr-txf-ban，conventional commit（docs(adr): ...），不 push、不建 PR。
+- 版本控制按 WORKFLOW §4.2：GitButler 分支 arch/16-adr-txr-txf-ban，conventional commit（docs(adr): ...）；已推 origin，用户授权，2026-09-04 收口修正。

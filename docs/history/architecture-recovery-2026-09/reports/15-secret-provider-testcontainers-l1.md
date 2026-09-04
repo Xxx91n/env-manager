@@ -1,6 +1,6 @@
 # 报告 15 — Testcontainers L1 矩阵：7 个 Skip 挂载转真实后端
 
-**分支**: arch/15-testcontainers-l1（GitButler，主提交 vwz / 00d2233，未 push）
+**分支**: arch/15-testcontainers-l1（GitButler，主提交 vwz / 00d2233；应用户指示已推 origin，PR #39 随收口关闭）
 **日期**: 2026-09-03 → 2026-09-04
 **状态**: 实现完成，dotnet test 全绿（Debug 与 Release 双模式）；两项验收项按 AGENTS.md 规则完成文档落盘但受跨栈冲突驻留未提交（见 §6）。
 

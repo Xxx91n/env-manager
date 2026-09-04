@@ -1,7 +1,7 @@
 # 票 13 交付报告 — 变异测试闸门（Stryker.NET，本地/PR 辅助）
 
 > 日期: 2026-09-03 · 执行窗口: 票13 子窗口 · 工具: dotnet-stryker 4.16.0 · dotnet SDK 10.0.201 / runtime 10.0.5
-> 版本控制: 遵循 WORKFLOW §4.2（GitButler 分支 arch/13-mutation-gate，不 push）
+> 版本控制: 遵循 WORKFLOW §4.2（GitButler 分支 arch/13-mutation-gate；已推 origin，用户授权，2026-09-04 收口修正）
 > 核心立场（spec Phase 3 / research A3）: 追 100% 变异分是被否定的反模式；存活变异的人工审查分类是本票核心交付，非跑分。
 
 ---

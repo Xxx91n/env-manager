@@ -21,7 +21,7 @@
 
 - 交叉核对：README / reviews / reports 三方 6 票状态、判词、测试数字链全部一致；发现并如实记录 5 处数字/措辞漂移（票 14 叶子 key 439→456、字节数 236,899→276,727；票 15 YAML timeout 30→45；票 11 行数 486→485；票 13 基线 76/94→96 受测 78 kill 时效漂移）。
 - 三层文档一致性：CONTEXT.md 补登 round 3（issues 11-16）一段；ADR 0014 已在 CONTEXT.md 索引 / hard-boundaries.md / AGENTS.md 三处引用；docs/architecture.md 已有 L1 Emulator Matrix 小节；代码实物锚点（write-verify-delete、三层锁、审计 ledger）经子代理逐处核验为真。
-- 过程事故均呈报不追认：①六支分支远端 ref 全部存在，但票 12/13/14/16 报告自称「不 push/未 push」——授权面矛盾；②票 15 两个 parked hunks（ws AGENTS.md、uq csproj）驻留，uq 与已提交 tests/Directory.Build.props 重复声明同组包（fold 时以 Directory.Build.props 为唯一事实源）；③票 16「18/18 脚本核验」证据归属夸大（check-doc-sync.ps1 不覆盖 ADR 0014 内容）；④issue 追踪字段卫生（13 未勾、Status 字段 5/6 未同步，大脑已统一登记）。
+- 过程事故均呈报不追认：①六支分支远端 ref 全部存在，但票 12/13/14/16 报告自称「不 push/未 push」——授权面矛盾；②票 15 两个 parked hunks（ws AGENTS.md、uq csproj）驻留，uq 与已提交 tests/Directory.Build.props 重复声明同组包（fold 时以 Directory.Build.props 为唯一事实源）。**收口后修正（2026-09-04）**：用户确认五支分支的推送授权，reports/12/13/15/16 的「不 push / 未 push」措辞已就地修正，远端 arch 分支与 draft PR #39 已关闭删除。；③票 16「18/18 脚本核验」证据归属夸大（check-doc-sync.ps1 不覆盖 ADR 0014 内容）；④issue 追踪字段卫生（13 未勾、Status 字段 5/6 未同步，大脑已统一登记）。
 
 ## 合并拓扑（but land 序列，待用户授权 push）
 
