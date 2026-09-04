@@ -208,14 +208,14 @@ function Compare-RegistrySnapshot([Microsoft.Win32.RegistryHive]$Hive, [string]$
   }
 
   if ($added.Count -eq 0 -and $removed.Count -eq 0 -and $changed.Count -eq 0) {
-    return @{ Match = $true; Diff = "" }
+    return @{ Match = $true; Diff = ""; Added = @(); Removed = @(); Changed = @() }
   }
 
   $parts = @()
   if ($added.Count -gt 0) { $parts += "added=$($added -join ',')" }
   if ($removed.Count -gt 0) { $parts += "removed=$($removed -join ',')" }
   if ($changed.Count -gt 0) { $parts += "changed=$($changed -join ',')" }
-  return @{ Match = $false; Diff = ($parts -join '; ') }
+  return @{ Match = $false; Diff = ($parts -join '; '); Added = $added; Removed = $removed; Changed = $changed }
 }
 
 function Convert-RegistryKind([string]$Kind) {
@@ -283,7 +283,14 @@ function Invoke-CliExit([string[]]$CliArgs) {
 
 function Backup-Registry {
   Write-Host "[test-with-restore] Capturing exact HKCU\Environment snapshot ..." -ForegroundColor Cyan
-  Save-Snapshot (Get-RegistrySnapshot ([Microsoft.Win32.RegistryHive]::CurrentUser) $UserEnvSubKey) $UserJsonBackup
+  $hkcuSnapshot = Get-RegistrySnapshot ([Microsoft.Win32.RegistryHive]::CurrentUser) $UserEnvSubKey
+  Save-Snapshot $hkcuSnapshot $UserJsonBackup
+  # Ticket 22: informational only - pre-existing values under the harness prefix are
+  # noted, never touched (they predate this run; see scripts/check-test-residue.ps1).
+  $preExisting = @($hkcuSnapshot.Values.Keys | Where-Object { $_ -like "$TestPrefix*" } | Sort-Object)
+  if ($preExisting.Count -gt 0) {
+    Write-Host "[test-with-restore] Note: $($preExisting.Count) pre-existing $TestPrefix* value(s) in HKCU predate this run (left untouched): $($preExisting -join ", ")" -ForegroundColor Yellow
+  }
   $userExport = reg export "HKCU\Environment" $UserRegBackup /y 2>&1
   if ($LASTEXITCODE -ne 0) {
     Write-Warning "HKCU .reg export failed; the exact JSON snapshot remains the rollback source."
@@ -547,6 +554,26 @@ try {
   $systemVerify = if ($SystemSnapshotAvailable) { Compare-RegistrySnapshot ([Microsoft.Win32.RegistryHive]::LocalMachine) $SystemEnvSubKey $SystemJsonBackup } else { @{ Match = $true; Diff = "not tested (no accessible snapshot)" } }
   $allPass = ($failures.Count -eq 0) -and $internalVerify.Match -and $userVerify.Match -and $systemVerify.Match
 
+  # Ticket 22 (residue-zero, pre-restore classification): the pre/post snapshot diff
+  # may only reference harness-registered value names (the $TestPrefix* set this harness
+  # itself writes). Names outside the registered set are foreign drift, reported
+  # separately and failed even when the test bodies themselves passed.
+  $foreignDrift = @()
+  foreach ($hiveCheck in @(@{ Hive = 'HKCU'; Verify = $userVerify }, @{ Hive = 'HKLM'; Verify = $systemVerify })) {
+    $verifyResult = $hiveCheck.Verify
+    $diffNames = @()
+    if ($verifyResult.ContainsKey('Added')) { $diffNames += @($verifyResult.Added) }
+    if ($verifyResult.ContainsKey('Removed')) { $diffNames += @($verifyResult.Removed) }
+    if ($verifyResult.ContainsKey('Changed')) { $diffNames += @($verifyResult.Changed) }
+    foreach ($name in $diffNames) {
+      if ($name -notlike "$TestPrefix*") { $foreignDrift += "$($hiveCheck.Hive)\$name" }
+    }
+  }
+  if ($foreignDrift.Count -gt 0) {
+    $failures += @{ Name = "registry-foreign-drift"; Error = "snapshot diff contains names outside the registered $TestPrefix* set: $($foreignDrift -join ", ")" }
+    $allPass = $false
+  }
+
   if (-not $allPass) {
     Write-Warning "[test-with-restore] Failure or drift detected; restoring snapshots."
     if (-not $internalVerify.Match) { Write-Warning "[test-with-restore] Internal configuration drift: $($internalVerify.Diff)" }
@@ -556,6 +583,23 @@ try {
     $internalRestored = Compare-InternalConfigSnapshot
     $userRestored = Compare-RegistrySnapshot ([Microsoft.Win32.RegistryHive]::CurrentUser) $UserEnvSubKey $UserJsonBackup
     $systemRestored = if ($SystemSnapshotAvailable) { Compare-RegistrySnapshot ([Microsoft.Win32.RegistryHive]::LocalMachine) $SystemEnvSubKey $SystemJsonBackup } else { @{ Match = $true; Diff = "not tested (no accessible snapshot)" } }
+    # Ticket 22 (residue-zero, post-restore assertion): after compensatory
+    # reconciliation the diff against the pre-test snapshot must be empty; any
+    # surviving name is residue that failed to roll back and is listed by name.
+    $residueLeft = @()
+    foreach ($hiveCheck in @(@{ Hive = 'HKCU'; Verify = $userRestored }, @{ Hive = 'HKLM'; Verify = $systemRestored })) {
+      $verifyResult = $hiveCheck.Verify
+      $diffNames = @()
+      if ($verifyResult.ContainsKey('Added')) { $diffNames += @($verifyResult.Added) }
+      if ($verifyResult.ContainsKey('Removed')) { $diffNames += @($verifyResult.Removed) }
+      if ($verifyResult.ContainsKey('Changed')) { $diffNames += @($verifyResult.Changed) }
+      foreach ($name in $diffNames) { $residueLeft += "$($hiveCheck.Hive)\$name" }
+    }
+    if ($residueLeft.Count -gt 0) {
+      Write-Warning "[test-with-restore] RESIDUE-ZERO assertion failed: $($residueLeft.Count) value(s) still differ from the pre-test snapshot after reconciliation: $($residueLeft -join ", ")"
+    } else {
+      Write-Host "[test-with-restore] Residue-zero assertion passed: post-reconciliation snapshots match exactly." -ForegroundColor Green
+    }
     if ($restoreErrors.Count -gt 0 -or -not $internalRestored.Match -or -not $userRestored.Match -or -not $systemRestored.Match) {
       foreach ($restoreError in $restoreErrors) { Write-Warning "[test-with-restore] $restoreError" }
       if (-not $internalRestored.Match) { Write-Warning "[test-with-restore] Internal config rollback verification failed: $($internalRestored.Diff)" }

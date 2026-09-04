@@ -172,6 +172,36 @@ The harness uses an exact transaction: it snapshots all HKCU values plus accessi
 
 `.test-backups/` is gitignored.
 
+### Test residue hygiene (self-check and user self-clean)
+
+The harness registers every registry value it writes under the `EM_TEST_` prefix and enforces a **residue-zero assertion** in its reconciliation block (architecture-recovery issue 22):
+
+- The pre/post snapshot diff of a run may reference only harness-registered `EM_TEST_*` value names. Any name outside the registered set is foreign drift: it is reported separately as `registry-foreign-drift`, reconciled, and fails the run.
+- After compensatory reconciliation the diff must be empty; surviving names are listed in a `RESIDUE-ZERO assertion failed` warning and the run exits non-zero.
+- Pre-existing `EM_TEST_*` values (written before the run, present in both snapshots) are only logged as an informational note at snapshot time; the harness never deletes values it did not write.
+
+To audit a machine for residue at any time, run the read-only self-check (exit 0 = no residue, exit 1 = residue found):
+
+```powershell
+pwsh -NoProfile -File scripts/check-test-residue.ps1
+```
+
+It lists harness-prefix registry values under `HKCU\Environment` and the HKLM system environment key, plus `EM_TEST_*` profiles in `%LOCALAPPDATA%\EnvManager\profiles.json`. It never mutates anything.
+
+**User self-clean.** Removing residue (for example the legacy `EM_TEST_DST=v1` value) is a deliberate user-side operation the harness never performs on values it did not write. Preferred path, because the CLI broadcasts `WM_SETTINGCHANGE` so running processes pick up the change:
+
+```powershell
+env-manager-cli delete EM_TEST_DST --scope user
+env-manager-cli profile delete EM_TEST_PROFILE_20260101-000000   # for residue profiles
+```
+
+Native registry alternatives (target `HKEY_CURRENT_USER\Environment`; raw edits do not broadcast the change, so sign out/in or restart Explorer afterwards):
+
+```powershell
+Remove-ItemProperty -Path 'HKCU:\Environment' -Name 'EM_TEST_DST'
+# or: reg delete "HKCU\Environment" /v EM_TEST_DST /f
+```
+
 ## MSI Silent-Install Validation Runbook (v0.9.27+, ADR-0009)
 
 Any change to `frontend/scripts/installer.wxs` MUST pass this local 4-step silent msiexec proof before commit. Runs on the build machine; takes under 2 minutes total when green.
