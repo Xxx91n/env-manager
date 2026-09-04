@@ -33,16 +33,33 @@ internal static class L1ContainerFixtures
             .WithEnvironment("VAULT_DEV_LISTEN_ADDRESS", "0.0.0.0:8200")
             // the image's default entrypoint is "docker-entrypoint.sh server"; dev mode
             // additionally needs the -dev flag or vault waits on a config file forever
-            // (CI run 33845154578: the fixture hung 44m on the wait strategy)
             .WithCommand("server", "-dev")
             .WithPortBinding(8200, true)
-            .WithWaitStrategy(Wait.ForUnixContainer()
-                .UntilHttpRequestIsSucceeded(r => r
-                    .ForPort(8200)
-                    .ForPath("/v1/sys/health?standbyok=true&sealedcode=200&uninitcode=200")))
+            // CI run 33845154578 (44m hang) pinned the failure on the HTTP wait strategy
+            // with a query-string health path; no custom strategy = Testcontainers' default
+            // wait (container running), then the bounded manual health poll below decides
+            // readiness so a flaky endpoint can never wedge the job.
             .Build();
         container.StartAsync().GetAwaiter().GetResult();
-        return new VaultDevContainer(container, token);
+        // bounded manual health poll (dev server is typically healthy in <5s)
+        using var client = new HttpClient { Timeout = TimeSpan.FromSeconds(5) };
+        var deadline = DateTime.UtcNow.AddMinutes(3);
+        while (DateTime.UtcNow < deadline)
+        {
+            try
+            {
+                var port = container.GetMappedPublicPort(8200);
+                using var resp = client.GetAsync($"http://{container.Hostname}:{port}/v1/sys/health?standbyok=true&sealedcode=200&uninitcode=200").GetAwaiter().GetResult();
+                // 200 (active) or 429/472/473 (standby/uninit variants) all mean the server is up
+                if ((int)resp.StatusCode is 200 or 429 or 472 or 473)
+                {
+                    return new VaultDevContainer(container, token);
+                }
+            }
+            catch (Exception) { }
+            System.Threading.Thread.Sleep(1000);
+        }
+        throw new InvalidOperationException("vault dev server did not become healthy within 3 minutes");
     });
 
     internal sealed record VaultDevContainer(IContainer Container, string RootToken)

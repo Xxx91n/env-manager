@@ -97,7 +97,7 @@ internal sealed class AwsSecretsManagerL1Harness(LocalStackContainer container) 
         {
             // provider.Encrypt already created this secret id -> update instead (still a
             // neutral backend write; the provider never issues PutSecretValue on Encrypt)
-            var put = "{\"SecretId\":\"" + VaultKv2L1Harness.JsonEscape(secretId) + "\",\"SecretString\":\"" + VaultKv2L1Harness.JsonEscape(plaintext) + "\"}";
+            var put = "{\"SecretId\":\"" + VaultKv2L1Harness.JsonEscape(secretId) + "\",\"SecretString\":\"" + VaultKv2L1Harness.JsonEscape(plaintext) + "\",\"ClientRequestToken\":\"" + Guid.NewGuid().ToString("N") + "\"}";
             res = Aws("secretsmanager.PutSecretValue", put);
             if (!res.Success)
             {
