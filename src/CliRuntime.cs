@@ -191,8 +191,7 @@ Commands:
     // v0.9.13 Phase 4F: Provider binary hash verification (best-effort)
     // Computes SHA256 of sops/op binary on first use, warns on subsequent mismatch.
     private static readonly string ProviderHashPath = Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-        "EnvManager", "provider-hash.json");
+        LocalAppDataRoot, "EnvManager", "provider-hash.json");
 
     internal static void RecordProviderHash(string binaryName, string binaryPath)
     {
@@ -232,12 +231,30 @@ Commands:
 
     // --- shared runtime infrastructure (architecture-recovery issue 06, moved verbatim from EnvFeatures.cs) ---
 
+    // CI user-state isolation (architecture-recovery issue 24): when
+    // ENVMANAGER_LOCALAPPDATA is set, it replaces the per-user LocalApplicationData
+    // root for ALL user-state file resolution (profiles.json, audit, secret mounts,
+    // provider config/hash, protection stores). GetFolderPath does not honor a
+    // process-level LOCALAPPDATA override (shell folders expand from the registry),
+    // so CI integration tests redirect user-state writes through this variable
+    // instead. Unset in production: GetFolderPath applies unchanged.
+    internal static string LocalAppDataRoot
+    {
+        get
+        {
+            string? redirect = Environment.GetEnvironmentVariable("ENVMANAGER_LOCALAPPDATA");
+            return string.IsNullOrEmpty(redirect)
+                ? Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData)
+                : redirect;
+        }
+    }
+
     static string AppDataDirectory
     {
         get
         {
             if (_appDataDirectoryForTests != null) return _appDataDirectoryForTests;
-            string path = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "EnvManager");
+            string path = Path.Combine(LocalAppDataRoot, "EnvManager");
             Directory.CreateDirectory(path);
             return path;
         }
@@ -263,6 +280,14 @@ Commands:
         if (command == "profile") return args.Length < 2 || !new[] { "list", "show", "status", "preview", "export", "help" }.Contains(args[1], StringComparer.OrdinalIgnoreCase);
         if (command == "path") return args.Length < 2 || !new[] { "list", "help" }.Contains(args[1], StringComparer.OrdinalIgnoreCase);
         return true;
+    }
+
+    // Issue 25 fuzz seam: argv arrays arriving from the fuzzer are attacker-shaped;
+    // null elements must be treated as malformed input (return false), not a crash.
+    internal static bool IsWriteInvocationForFuzz(params string?[]? args)
+    {
+        if (args == null || args.Any(a => a == null)) return false;
+        return IsWriteInvocation(args!);
     }
 
     static Mutex? AcquireMutationLock(string[] args)
