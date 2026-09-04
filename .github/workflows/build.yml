@@ -6,6 +6,7 @@ on:
     tags: ['v*']
   pull_request:
     branches: [main]
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -390,3 +391,47 @@ jobs:
           draft: true
           generate_release_notes: true
 
+
+  # Ticket 18 (architecture-recovery): on-demand Stryker mutation short run.
+  # Config gate stays in stryker-config.json (mutate four red-line files, thresholds 85/70/60,
+  # ignore string/logical - locked, do not tune). This job is a workflow_dispatch convenience:
+  # the brain session triggers it to produce the rerun evidence + per-module scores
+  # (scripts/stryker-module-scores.mjs) and uploads the full HTML report as an artifact.
+  stryker:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Restore local tools (dotnet-stryker 4.16.0)
+        run: dotnet tool restore
+
+      - name: Run Stryker mutation analysis
+        run: dotnet stryker
+        env:
+          EM_DIFFERENTIAL_ORACLE: ""
+          EM_L1_MATRIX: ""
+
+      - name: Per-module mutation scores
+        run: |
+          report="$(find StrykerOutput -type f -name mutation-report.html | sort | tail -1)"
+          echo "report: $report"
+          test -n "$report"
+          node scripts/stryker-module-scores.mjs "$report" | tee stryker-module-scores.txt
+          cp "$report" mutation-report.html
+
+      - name: Upload mutation report
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: stryker-mutation-report
+          path: |
+            mutation-report.html
+            stryker-module-scores.txt
+          if-no-files-found: error

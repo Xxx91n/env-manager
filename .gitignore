@@ -55,6 +55,9 @@ omx_wiki/
 # not machine-specific. It guarantees all developers build Tauri with MSVC.
 # See: https://doc.rust-lang.org/cargo/reference/config.html#hierarchical-structure
 
+# === Mutation testing output (Stryker, ticket 13/18: machine-local reports) ===
+StrykerOutput/
+
 # === Temporary / cache ===
 .codex-tmp/
 .test-backups/

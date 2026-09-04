@@ -236,10 +236,21 @@ Commands:
     {
         get
         {
+            if (_appDataDirectoryForTests != null) return _appDataDirectoryForTests;
             string path = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "EnvManager");
             Directory.CreateDirectory(path);
             return path;
         }
+    }
+
+    // Ticket 18 test seam: when non-null, AppDataDirectory returns this path so the
+    // xUnit lane can redirect the protection JSON stores (protected-vars.json,
+    // builtin-protected-vars.json) to a temp dir. Production never sets it.
+    static string? _appDataDirectoryForTests;
+
+    internal static void SetAppDataDirectoryForTests(string? path)
+    {
+        _appDataDirectoryForTests = path;
     }
 
     static bool IsWriteInvocation(string[] args)

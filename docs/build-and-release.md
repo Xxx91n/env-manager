@@ -46,6 +46,8 @@ Config contract (stryker-config.json): `mutate` is pinned to src/VariableRename.
 
 Current baseline (2026-09-03): 94 mutants tested, 76 killed / 18 survived; raw Stryker score 37.07% (NoCoverage mutants count as failures) vs 80.85% over tested mutants only. The survived-mutant classification (2 equivalent, 16 missing-assertion) lives in .scratch/architecture-recovery/reports/13-mutation-testing-gate.md.
 
+CI short run (issue 18): the build.yml `stryker` job runs on `workflow_dispatch` and publishes the HTML report plus per-module scores from `scripts/stryker-module-scores.mjs` (accepts the HTML report or a raw mutation-report.json). Current triage baseline (2026-09-05, issue 18): 96 tested, 14 survivors - 13 weak-assertion (kill tests in MutationSurvivorTriageTests/MutationSurvivorTriageStdoutTests) + 1 registered equivalent; registry at .scratch/architecture-recovery/reports/18-survivor-registry.json.
+
 ## Build GUI (development with hot reload)
 
 ```powershell
