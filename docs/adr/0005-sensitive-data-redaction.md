@@ -15,7 +15,7 @@ C# had no scrubbing at all — `ex.Message` was written verbatim to stderr at 7 
 
 Implement a unified redaction layer across all three tiers:
 
-1. **C# `ScrubExceptionMessage`** (src/Program.cs): Scrubs 22 secret-bearing patterns from exception
+1. **C# `ScrubExceptionMessage`** (src/CliRuntime.cs): Scrubs 22 secret-bearing patterns from exception
    messages before writing to stderr or logs. Applied at all 7 `ex.Message` leak sites.
 
 2. **Rust `scrub_stderr` expansion** (main.rs): Expanded from 10 to 22 patterns, matching the C#
@@ -23,7 +23,7 @@ Implement a unified redaction layer across all three tiers:
    AWS credentials, client_secret, connection_string, subscription_key, api_key, apikey,
    client_id, tenant_id, access_token, refresh_token, Authorization, X-Vault-Token, x-api-key.
 
-3. **C# `SecretString` ref struct** (src/Program.cs): Wraps decrypted secret values in a zeroing
+3. **C# `SecretString` ref struct** (src/CliRuntime.cs): Wraps decrypted secret values in a zeroing
    container. `Dispose()` clears the underlying char[] so plaintext does not linger in heap
    memory longer than necessary. Used at `ProfileRevealSecret` and `ProfileLaunch` decrypt sites.
 

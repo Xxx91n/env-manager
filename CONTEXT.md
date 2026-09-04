@@ -155,7 +155,7 @@ _Avoid_: winget manifest, package manager submission, Windows Package Manager
 _Avoid_: auto-update, update plugin, signed update
 
 **ScrubExceptionMessage**:
-The v0.9.12 C# helper that masks 22 secret-bearing patterns from exception messages before they reach stderr or logs. Defined in src/Program.cs; applied at all 7 x.Message leak sites spanning src/Program.cs / src/ProfileCommand.cs / src/ServiceCommand.cs / src/UpdateCommand.cs after the issue-05/06 module split. Bounded to 512 chars, best-effort pattern matching. Mirrors scrub_stderr in Rust.
+The v0.9.12 C# helper that masks 22 secret-bearing patterns from exception messages before they reach stderr or logs. Defined in src/CliRuntime.cs (moved from src/Program.cs by architecture-recovery issue 21); applied at all 7 x.Message leak sites spanning src/Program.cs / src/ProfileCommand.cs / src/ServiceCommand.cs / src/UpdateCommand.cs after the issue-05/06 module split. Bounded to 512 chars, best-effort pattern matching. Mirrors scrub_stderr in Rust.
 _Avoid_: error scrubber, message filter, log sanitizer
 
 **SecretString (C#)**:
