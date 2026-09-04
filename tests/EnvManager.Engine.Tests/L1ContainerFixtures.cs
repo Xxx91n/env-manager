@@ -31,6 +31,10 @@ internal static class L1ContainerFixtures
         var container = new ContainerBuilder(VaultImage)
             .WithEnvironment("VAULT_DEV_ROOT_TOKEN_ID", token)
             .WithEnvironment("VAULT_DEV_LISTEN_ADDRESS", "0.0.0.0:8200")
+            // the image's default entrypoint is "docker-entrypoint.sh server"; dev mode
+            // additionally needs the -dev flag or vault waits on a config file forever
+            // (CI run 33845154578: the fixture hung 44m on the wait strategy)
+            .WithCommand("server", "-dev")
             .WithPortBinding(8200, true)
             .WithWaitStrategy(Wait.ForUnixContainer()
                 .UntilHttpRequestIsSucceeded(r => r
