@@ -121,6 +121,13 @@ jobs:
             exit 1
           }
           Write-Host "=== CLI resource staging OK: 5/5 files present in $dst ==="
+          # tauri::generate_context! (main.rs) also validates the frontendDist
+          # path ("../../dist" = repo-root dist/) at compile time; the real
+          # dist/ is produced by the "Build frontend" step later in the job,
+          # so seed a placeholder (vite build overwrites index.html).
+          New-Item -ItemType Directory -Force -Path 'dist' | Out-Null
+          Set-Content -Path 'dist/index.html' -Value '<!doctype html><title>CI placeholder</title>'
+          Write-Host 'seeded: dist/index.html placeholder for frontendDist'
 
       - name: Run C# engine unit tests
         run: dotnet test tests/EnvManager.Engine.Tests/EnvManager.Engine.Tests.csproj -c Release --nologo
