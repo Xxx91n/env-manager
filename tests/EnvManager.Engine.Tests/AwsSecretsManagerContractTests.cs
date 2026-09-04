@@ -16,6 +16,7 @@ namespace EnvManager.Engine.Tests;
 /// (AWS_ENDPOINT_URL_SECRETS_MANAGER, wired into the provider as a production seam;
 /// real AWS deployments never set it, so behavior is unchanged).
 /// </summary>
+[Collection(L1ContainerCollection.Name)]
 public sealed class AwsSecretsManagerContractTests : SecretProviderContractTests
 {
     public AwsSecretsManagerContractTests()
