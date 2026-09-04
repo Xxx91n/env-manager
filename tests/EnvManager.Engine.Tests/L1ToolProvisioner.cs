@@ -169,15 +169,25 @@ internal static class L1ToolProvisioner
     internal static bool TryRegisterSecretStoreVault()
     {
         if (!IsSecretStoreAvailable()) return false;
-        // Set-SecretStoreConfiguration mutates per-user store config; -Confirm:$false
-        // suppresses the interactive confirmation. If the vault is already registered
-        // and configured, the probe short-circuits.
-        var probe = Run("pwsh", "-NoProfile -NonInteractive -Command \"try { $v = Get-SecretVault -Name EnvManager -ErrorAction Stop; if ($null -ne $v) { 'REGISTERED' } } catch { 'ABSENT' }\"");
-        if (probe.Contains("REGISTERED")) return true;
-        Run("pwsh", "-NoProfile -NonInteractive -Command \"Register-SecretVault -Name EnvManager -ModuleName Microsoft.PowerShell.SecretStore -AllowClobber; Set-SecretStoreConfiguration -Authentication None -Interaction None -PasswordTimeout 86400 -Confirm:$false; 'CONFIGURED'\"");
-        // verify the store unlocks without interaction
-        var verify = Run("pwsh", "-NoProfile -NonInteractive -Command \"try { Unlock-SecretStore; 'UNLOCKED' } catch { 'LOCKED' }\"");
-        return verify.Contains("UNLOCKED") || Run("pwsh", "-NoProfile -NonInteractive -Command \"try { Set-Secret -Name em-l1-probe -Secret (ConvertTo-SecureString 'probe' -AsPlainText -Force) -Vault EnvManager; 'SETOK' } catch { 'SETFAIL' }\"").Contains("SETOK");
+        // One-session setup: register the vault if absent, force the official
+        // non-interactive store config (Authentication=None), then verify with a REAL
+        // Set/Get round-trip. The CI Linux lane proved the old probe could short-circuit
+        // on "vault registered" while the store itself still demanded a password, so the
+        // round-trip is now the only success signal; on failure the pwsh transcript is
+        // embedded in the returned reason for the skip message.
+        var script =
+            "$ErrorActionPreference='Stop'; " +
+            "try { $null = Get-SecretVault -Name EnvManager -ErrorAction Stop } " +
+            "catch { Register-SecretVault -Name EnvManager -ModuleName Microsoft.PowerShell.SecretStore -AllowClobber | Out-Null } " +
+            "Set-SecretStoreConfiguration -Authentication None -Interaction None -PasswordTimeout 86400 -Confirm:$false; " +
+            "Set-Secret -Name em-l1-probe -Secret (ConvertTo-SecureString 'probe' -AsPlainText -Force) -Vault EnvManager; " +
+            "$g = Get-Secret -Name em-l1-probe -Vault EnvManager -AsPlainText; " +
+            "Remove-Secret -Name em-l1-probe -Vault EnvManager; " +
+            "if ($g -eq 'probe') { 'L1STORE-OK' } else { throw \"roundtrip mismatch: $g\" }";
+        var result = Run("pwsh", "-NoProfile -NonInteractive -Command \"" + script.Replace("\"", "'") + "\"");
+        if (result.Contains("L1STORE-OK")) return true;
+        Console.Error.WriteLine("[L1] SecretStore setup transcript: " + result);
+        return false;
     }
 
     // ---------------- helpers ----------------

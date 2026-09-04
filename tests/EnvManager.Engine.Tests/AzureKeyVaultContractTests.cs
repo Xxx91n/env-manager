@@ -17,6 +17,7 @@ namespace EnvManager.Engine.Tests;
 /// (App Service convention; the env var is only set inside the L1 test scope).
 /// The container's self-signed default certificate is trusted for the test run.
 /// </summary>
+[Collection(L1ContainerCollection.Name)]
 public sealed class AzureKeyVaultContractTests : SecretProviderContractTests
 {
     public AzureKeyVaultContractTests()
@@ -58,7 +59,22 @@ public sealed class AzureKeyVaultContractTests : SecretProviderContractTests
         {
             var scope = new LowkeyVaultScope(container);
             scope.InstallCertificate();
+            // The provider reads the vault URI + managed-identity endpoint from env:
+            // AZURE_KEYVAULT_URI for Encrypt/Decrypt (the CI failure proved this mount
+            // never set it), IDENTITY_ENDPOINT/IDENTITY_HEADER for the token path.
+            var baseAddress = container.GetBaseAddress();
+            Environment.SetEnvironmentVariable("AZURE_KEYVAULT_URI", baseAddress);
+            Environment.SetEnvironmentVariable("IDENTITY_ENDPOINT", container.GetAuthTokenUrl());
+            Environment.SetEnvironmentVariable("IDENTITY_HEADER", "em-l1-identity-header");
             return scope;
+        }
+
+        public void Dispose()
+        {
+            Environment.SetEnvironmentVariable("AZURE_KEYVAULT_URI", null);
+            Environment.SetEnvironmentVariable("IDENTITY_ENDPOINT", null);
+            Environment.SetEnvironmentVariable("IDENTITY_HEADER", null);
+            UninstallCertificate();
         }
 
         private void InstallCertificate()
@@ -86,7 +102,7 @@ public sealed class AzureKeyVaultContractTests : SecretProviderContractTests
             }
         }
 
-        public void Dispose()
+        private void UninstallCertificate()
         {
             if (_installed is null) return;
             try

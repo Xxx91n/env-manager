@@ -146,8 +146,11 @@ internal sealed class AwsSecretsManagerProvider : ISecretProvider
         request.Content = content;
         request.Headers.Add("X-Amz-Target", target);
         request.Headers.Add("X-Amz-Date", amzDate);
-        request.Headers.Add("Authorization", auth);
-        if (!string.IsNullOrEmpty(sessionToken)) request.Headers.Add("X-Amz-Security-Token", sessionToken);
+        // TryAddWithoutValidation: the SigV4 value's base64-ish segments can trip the
+        // strict Authorization header parser on some .NET platforms (CI Linux lane,
+        // live-verified); the SigV4 string is well-formed by construction.
+        request.Headers.TryAddWithoutValidation("Authorization", auth);
+        if (!string.IsNullOrEmpty(sessionToken)) request.Headers.TryAddWithoutValidation("X-Amz-Security-Token", sessionToken);
         return client.SendAsync(request).GetAwaiter().GetResult();
     }
 
