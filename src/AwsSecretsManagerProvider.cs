@@ -33,7 +33,10 @@ internal sealed class AwsSecretsManagerProvider : ISecretProvider
             ?? throw new InvalidOperationException("AWS_REGION or AWS_DEFAULT_REGION not set");
         string secretId = context != null ? SanitizeSecretId(context) : "env-manager-" + Guid.NewGuid().ToString("N").Substring(0, 12);
 
-        string body = "{\"Name\":\"" + JsonEscape(secretId) + "\",\"SecretString\":\"" + JsonEscape(plaintext) + "\"}";
+        // ClientRequestToken: AWS-recommended idempotency token; LocalStack (issue 15 L1
+        // lane) rejects CreateSecret without it. A per-call UUID is the documented pattern
+        // and is safe in production (retries dedupe).
+        string body = "{\"Name\":\"" + JsonEscape(secretId) + "\",\"SecretString\":\"" + JsonEscape(plaintext) + "\",\"ClientRequestToken\":\"" + Guid.NewGuid().ToString("N") + "\"}";
         var response = CallAwsApi(region, "secretsmanager.CreateSecret", body);
         if (!response.IsSuccessStatusCode) throw new InvalidOperationException($"AWS create failed ({response.StatusCode}): {response.Content.ReadAsStringAsync().GetAwaiter().GetResult()}");
 
