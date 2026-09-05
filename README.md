@@ -209,6 +209,10 @@ See [docs/secret-providers-guide.md](docs/secret-providers-guide.md) for per-pro
 
 [@Xxx91n](https://github.com/Xxx91n)
 
+## Releasing
+
+Releases run on the release-please single track: land conventional commits on main, review & merge the automated `chore(main): release X.Y.Z` PR, and the `vX.Y.Z` tag triggers the full artifact pipeline (portable / CLI-only / MSI, x64/x86/arm64, with build provenance attestations). The manual release workflow is emergency-only. See [docs/build-and-release.md](docs/build-and-release.md) "How to Release".
+
 ## Contributing
 
 Issues and PRs welcome. Read [AGENTS.md](AGENTS.md) first for architecture boundaries and the test policy.
