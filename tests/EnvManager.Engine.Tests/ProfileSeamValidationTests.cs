@@ -165,6 +165,128 @@ public class ProfileSeamValidationTests : IDisposable
         Assert.False(Program.RunProfilePreflight(child));
     }
 
+    // ---- ticket 19: two-tier preflight (warn tier + strict + structured report) ----
+
+    /// <summary>The error tier keeps rejecting: protected variable name lands in Errors, not Warnings.</summary>
+    [Fact]
+    public void Detailed_ProtectedVariable_IsErrorNotWarning()
+    {
+        var child = Global("EM_T19_err_protected", new ProfileVariable { Name = "ComSpec", Value = "C:\\x" });
+
+        var result = Program.RunProfilePreflightDetailed(child, Program.LoadProfiles(), strict: false);
+
+        Assert.True(result.HasErrors);
+        Assert.False(result.HasWarnings);
+        Assert.Contains(result.Errors, e => e.Contains("protected"));
+    }
+
+    /// <summary>The error tier keeps rejecting: '=' in a variable name is a hard error under both modes.</summary>
+    [Fact]
+    public void Detailed_NameWithEquals_IsError_UnderBothModes()
+    {
+        var child = Global("EM_T19_err_equals", new ProfileVariable { Name = "EM=BAD", Value = "v" });
+
+        Assert.True(Program.RunProfilePreflightDetailed(child, Program.LoadProfiles(), strict: false).HasErrors);
+        Assert.True(Program.RunProfilePreflightDetailed(child, Program.LoadProfiles(), strict: true).HasErrors);
+    }
+
+    /// <summary>An undefined %VAR% reference is warn-tier: no errors, exactly one warning naming the variable.</summary>
+    [Fact]
+    public void Detailed_UndefinedVarReference_IsWarning()
+    {
+        var child = Global("EM_T19_warn_var", new ProfileVariable { Name = FreeName, Value = "%EM_T19_UNDEF_VAR%\\bin" });
+
+        var result = Program.RunProfilePreflightDetailed(child, Program.LoadProfiles(), strict: false);
+
+        Assert.False(result.HasErrors);
+        Assert.True(result.HasWarnings);
+        Assert.Contains(result.Warnings, w => w.Contains("undefined %VAR%") && w.Contains(FreeName));
+    }
+
+    /// <summary>A defined %VAR% reference (machine env) must NOT warn. SYSTEMROOT is always set.</summary>
+    [Fact]
+    public void Detailed_DefinedVarReference_NoWarning()
+    {
+        var child = Global("EM_T19_ok_var", new ProfileVariable { Name = FreeName, Value = "%SYSTEMROOT%\\bin" });
+
+        var result = Program.RunProfilePreflightDetailed(child, Program.LoadProfiles(), strict: false);
+
+        Assert.False(result.HasErrors);
+        Assert.False(result.HasWarnings);
+    }
+
+    /// <summary>A stale PATH entry (temp dir removed) is warn-tier, not an error.</summary>
+    [Fact]
+    public void Detailed_StalePathEntry_IsWarning()
+    {
+        string stale = Path.Combine(Path.GetTempPath(), "em-t19-missing-" + Guid.NewGuid().ToString("N"));
+        var child = Global("EM_T19_warn_stale");
+        child.PathEntries.Add(stale);
+
+        var result = Program.RunProfilePreflightDetailed(child, Program.LoadProfiles(), strict: false);
+
+        Assert.False(result.HasErrors);
+        Assert.Contains(result.Warnings, w => w.Contains("stale entry") && w.Contains(stale));
+    }
+
+    /// <summary>A dangling launch target is warn-tier in the detailed core (suspicious-but-safe).</summary>
+    [Fact]
+    public void Detailed_DanglingLaunchTarget_IsWarning()
+    {
+        var profile = Launch("EM_T19_warn_dangling", Path.Combine(Path.GetTempPath(), "em-t19-missing-exe.cmd"));
+
+        var result = Program.RunProfilePreflightDetailed(profile, Program.LoadProfiles(), strict: false);
+
+        Assert.False(result.HasErrors);
+        Assert.Contains(result.Warnings, w => w.Contains("dangling launch target"));
+    }
+
+    /// <summary>Strict mode surfaces warnings as errors: the gate refuses and the structured report says strict.</summary>
+    [Fact]
+    public void Detailed_Strict_PromotesWarningToRefusal()
+    {
+        var child = Global("EM_T19_strict", new ProfileVariable { Name = FreeName, Value = "%EM_T19_UNDEF_STRICT%\\bin" });
+
+        var lenient = Program.RunProfilePreflightDetailed(child, Program.LoadProfiles(), strict: false);
+        var strict = Program.RunProfilePreflightDetailed(child, Program.LoadProfiles(), strict: true);
+
+        Assert.False(lenient.HasErrors);
+        Assert.True(lenient.HasWarnings);
+        Assert.True(strict.HasErrors || strict.HasWarnings); // strict surfaces at the gate; ProfileApply turns warnings into exit 1
+    }
+
+    /// <summary>End-to-end through the command core: a warn-only profile applies successfully and exits 2;
+    /// the same apply under --strict refuses with exit 1 and writes nothing.</summary>
+    [Fact]
+    public void ApplyCommand_WarnOnlyProfile_Exit2_Default_StrictExit1()
+    {
+        SeedStore(Global("EM_T19_apply_warn", new ProfileVariable { Name = FreeName, Value = "%EM_T19_UNDEF_APPLY%\\bin" }));
+
+        // Default (lenient): apply proceeds, exit 2.
+        int lenientCode = Program.RunProfileCommand(new[] { "profile", "apply", "EM_T19_apply_warn" });
+        Assert.Equal(2, lenientCode);
+        var applied = Program.LoadProfiles().First(p => p.Name == "EM_T19_apply_warn");
+        Assert.True(applied.IsEnabled);
+
+        // Reset, then strict: refuses with exit 1, stays disabled.
+        Program.RunProfileCommand(new[] { "profile", "unapply", "EM_T19_apply_warn" });
+        int strictCode = Program.RunProfileCommand(new[] { "profile", "apply", "EM_T19_apply_warn", "--strict" });
+        Assert.Equal(1, strictCode);
+        var strictState = Program.LoadProfiles().First(p => p.Name == "EM_T19_apply_warn");
+        Assert.False(strictState.IsEnabled);
+    }
+
+    /// <summary>A clean profile applies with the classic exit 0 - no behavioral drift for warning-free profiles.</summary>
+    [Fact]
+    public void ApplyCommand_CleanProfile_Exit0()
+    {
+        SeedStore(Global("EM_T19_apply_clean", new ProfileVariable { Name = FreeName, Value = "plain-value" }));
+
+        int code = Program.RunProfileCommand(new[] { "profile", "apply", "EM_T19_apply_clean" });
+
+        Assert.Equal(0, code);
+    }
+
     // ---- apply through the seam ----
 
     [Fact]

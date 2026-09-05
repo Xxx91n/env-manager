@@ -121,6 +121,136 @@ partial class Program
     }
 
     /// <summary>Production adapter: pre-flight against the live profiles.json store.</summary>
+
+    /// <summary>
+    /// Ticket 19: two-tier pre-flight validation result. Errors = data-destroying/
+    /// half-write conditions (keep hard-blocking); warnings = suspicious-but-safe
+    /// conditions (downgraded per spec Phase 4 / MongoDB validationAction pattern).
+    /// The structured warning list is the telemetry basis for future tightening:
+    /// once warnings prove rare in practice, promote one to the error tier with a
+    /// --strict escape hatch retained.
+    /// </summary>
+    internal sealed class PreflightResult
+    {
+        internal List<string> Errors = new();
+        internal List<string> Warnings = new();
+        internal bool HasErrors => Errors.Count > 0;
+        internal bool HasWarnings => Warnings.Count > 0;
+    }
+
+    /// <summary>
+    /// Ticket 19: warn-tier checks. Suspicious but safe to execute:
+    /// (1) variable values containing undefined %VAR% references (registry EXPAND
+    /// semantics simply leave them literal at read time - no data loss),
+    /// (2) PATH entries whose expanded target does not exist today (stale entry),
+    /// (3) launch profiles whose targetExecutable file is missing (dangling target).
+    /// Each check is self-contained so the error tier stays the sole gate of the
+    /// data-destroying conditions pinned by the v0.7.7 / T04 hard boundaries.
+    /// </summary>
+    internal static void CollectPreflightWarnings(ProfileData profile, List<ProfileData> allProfiles, PreflightResult result)
+    {
+        foreach (var variable in ResolveProfileVariables(profile, allProfiles))
+        {
+            if (string.IsNullOrEmpty(variable.Value)) continue;
+            foreach (System.Text.RegularExpressions.Match m in System.Text.RegularExpressions.Regex.Matches(variable.Value, "%([^%]+)%"))
+            {
+                string refName = m.Groups[1].Value;
+                if (refName.Length == 0) continue;
+                bool defined = GetVariableValue(refName, "user") != null || GetVariableValue(refName, "system") != null
+                    || ResolveProfileVariables(profile, allProfiles).Any(v => v.Name.Equals(refName, StringComparison.OrdinalIgnoreCase));
+                if (!defined)
+                    result.Warnings.Add($"Variable '{variable.Name}' references undefined %VAR%: %{refName}% (expands literally)");
+            }
+        }
+        foreach (string path in ResolveProfilePaths(profile, allProfiles))
+        {
+            string expanded = Environment.ExpandEnvironmentVariables(path);
+            if (!FastDirectoryExists(expanded))
+                result.Warnings.Add($"PATH entry does not exist: {path} (stale entry)");
+        }
+        if (profile.ProfileType.Equals("launch", StringComparison.OrdinalIgnoreCase) &&
+            !string.IsNullOrWhiteSpace(profile.TargetExecutable))
+        {
+            string full = Path.IsPathRooted(profile.TargetExecutable)
+                ? profile.TargetExecutable
+                : Path.GetFullPath(Path.Combine(Environment.CurrentDirectory, profile.TargetExecutable));
+            if (!File.Exists(full))
+                result.Warnings.Add($"Launch target does not exist: {profile.TargetExecutable} (dangling launch target)");
+        }
+    }
+
+    /// <summary>
+    /// Ticket 19: the full two-tier pre-flight core. Runs the same error-tier invariants
+    /// as <see cref="RunProfilePreflight"/> (identical order, identical messages) and then
+    /// the warn tier. Never throws for warn-tier findings; InvalidDataException from the
+    /// resolution walk still lands in Errors (cycle / missing parent = data-integrity).
+    /// </summary>
+    internal static PreflightResult RunProfilePreflightDetailed(ProfileData profile, List<ProfileData> allProfiles, bool strict)
+    {
+        var result = new PreflightResult();
+        // Error tier: verbatim port of the RunProfilePreflight body, message-shaped.
+        try
+        {
+            if (profile.ProfileType.Equals("global", StringComparison.OrdinalIgnoreCase))
+            {
+                foreach (string parentName in profile.Inherits)
+                {
+                    var parent = FindProfile(allProfiles, parentName);
+                    if (parent != null && parent.ProfileType.Equals("launch", StringComparison.OrdinalIgnoreCase))
+                        result.Errors.Add($"Global profile '{profile.Name}' cannot inherit from a Launch profile (secret ciphertext leak)");
+                }
+            }
+            var allSecretNames = CollectInheritedSecretsFrom(profile, allProfiles, new HashSet<string>(StringComparer.OrdinalIgnoreCase));
+            var ownSecrets = new HashSet<string>(profile.SecretVariables, StringComparer.OrdinalIgnoreCase);
+            if (allSecretNames.Any(name => !ownSecrets.Contains(name)))
+                result.Errors.Add($"Profile '{profile.Name}' resolves inherited secret variables that it does not declare (no decrypt path)");
+            foreach (var variable in ResolveProfileVariables(profile, allProfiles))
+            {
+                if (string.IsNullOrWhiteSpace(variable.Name) || variable.Name.Length >= 255)
+                    result.Errors.Add($"Variable name is empty or exceeds 255 characters: '{variable.Name}'");
+                if (variable.Name.Contains('='))
+                    result.Errors.Add($"Variable name contains '=': '{variable.Name}'");
+                if (ProtectedSystemVars.Contains(variable.Name))
+                    result.Errors.Add($"Variable '{variable.Name}' is protected and cannot be stored in profiles");
+                if (allSecretNames.Contains(variable.Name))
+                    result.Errors.Add($"Variable '{variable.Name}' collides with an inherited secret name");
+            }
+            foreach (string path in ResolveProfilePaths(profile, allProfiles))
+            {
+                try { ValidatePathFragment(path); }
+                catch (ArgumentException) { result.Errors.Add($"Invalid PATH entry: '{path}'"); }
+            }
+        }
+        catch (InvalidDataException ex)
+        {
+            result.Errors.Add(ex.Message);
+        }
+        if (result.HasErrors) return result;
+        // Warn tier only runs when the profile is otherwise applicable - a rejected
+        // profile must not bury its hard rejection under advisory noise.
+        CollectPreflightWarnings(profile, allProfiles, result);
+        return result;
+    }
+
+    /// <summary>
+    /// Ticket 19: emit the machine-parseable warn report. One JSON object on stdout
+    /// (parseable), the human line on stderr. Kept shape-stable: consumers key on
+    /// "preflight" / "warnings" / "strict" field names, not on prose.
+    /// </summary>
+    internal static void EmitPreflightWarnReport(string command, string profileName, PreflightResult result, bool strict)
+    {
+        var report = new
+        {
+            preflight = "warn",
+            command,
+            profile = profileName,
+            strict,
+            warnings = result.Warnings
+        };
+        Console.Error.WriteLine("Warning: Profile pre-flight warnings (" + (strict ? "strict mode: refusing" : "continuing") + "):");
+        Console.WriteLine(System.Text.Json.JsonSerializer.Serialize(report, JsonOptsIndented));
+    }
+
     internal static bool RunProfilePreflight(ProfileData profile) => RunProfilePreflight(profile, LoadProfiles());
 
     /// <summary>

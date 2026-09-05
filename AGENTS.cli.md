@@ -23,7 +23,7 @@ safeguards.
 - **Runtime**: .NET 10
 - **Scopes**: user (`HKEY_CURRENT_USER\Environment`, no elevation) and system (`HKEY_LOCAL_MACHINE\...\Environment`, requires administrator)
 - **Output**: stdout = JSON on success, stderr = error text on failure
-- **Exit codes**: 0 = success, 1 = failure
+- **Exit codes**: 0 = success, 1 = failure, 2 = success with preflight warnings (profile apply/launch; see below)
 
 ## CLI Commands
 
@@ -59,7 +59,7 @@ All commands: `env-manager-cli <command> [args] [--scope user|system] [--debug]`
 
 ### Profile Subcommands
 
-`profile list | create <name> [--type global|launch] [--target <exe>] [--args <args>] [--cwd <dir>] | delete <name> | show <name> [--reveal] | apply <name> | unapply <name> | rename <old> <new> | add-var <name> <var> <val> [--scope user|system] | remove-var <name> <var> | edit-var <name> <old> <new> <val> | add-path <name> <dir> [--scope user|system] | remove-path <name> <dir> | set-launch <name> --target <exe> [--args <args>] [--cwd <dir>] | launch <name> [-- <extra-args>] | status <name> | inherits <name> --parents <p1> [<p2>...] | add-secret <name> <var> <value> | edit-secret <name> <old> <new> <value> | remove-secret <name> <var> | reveal-secret <name> <var> | secret-provider list | secret-provider set <name> | secret-provider rotate | export-secrets <name> <file> | import-secrets <name> <file>`
+`profile list | create <name> [--type global|launch] [--target <exe>] [--args <args>] [--cwd <dir>] | delete <name> | show <name> [--reveal] | apply <name> [--strict] | unapply <name> | rename <old> <new> | add-var <name> <var> <val> [--scope user|system] | remove-var <name> <var> | edit-var <name> <old> <new> <val> | add-path <name> <dir> [--scope user|system] | remove-path <name> <dir> | set-launch <name> --target <exe> [--args <args>] [--cwd <dir>] | launch <name> [-- <extra-args>] | status <name> | inherits <name> --parents <p1> [<p2>...] | add-secret <name> <var> <value> | edit-secret <name> <old> <new> <value> | remove-secret <name> <var> | reveal-secret <name> <var> | secret-provider list | secret-provider set <name> | secret-provider rotate | export-secrets <name> <file> | import-secrets <name> <file>`
 
 Key profile concepts:
 
@@ -98,6 +98,7 @@ Custom protected variables (in `%LOCALAPPDATA%\EnvManager\protected-vars.json`) 
 ### set / delete / toggle / rename / change-scope
 - Success: JSON or text message on stdout
 - Failure: error message on stderr, exit code 1
+- Preflight warnings: profile apply/launch print a JSON warn report (field "preflight":"warn") and exit 2 after a successful write; --strict refuses instead (exit 1)
 
 ### toggle
 ```json
@@ -151,7 +152,7 @@ Pass `--debug` or `-d` to enable verbose stderr logging with timestamps. Logs re
 
 - stderr: error messages (human-readable)
 - stdout: success data (JSON)
-- Exit code: 0 success, 1 failure
+- Exit code: 0 success, 1 failure, 2 success-with-warnings (profile preflight)
 - `UnauthorizedAccessException`: handled for system scope without elevation (error to stderr, exit 1)
 
 ## Security Boundaries

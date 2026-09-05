@@ -31,7 +31,7 @@ partial class Program
             "list" => ProfileList(),
             "create" => ProfileCreate(args),
             "delete" => args.Length < 3 ? ArgError("Usage: env-manager profile delete <name>") : ProfileDelete(args[2]),
-            "apply" => args.Length < 3 ? ArgError("Usage: env-manager profile apply <name>") : ProfileApply(args[2]),
+            "apply" => args.Length < 3 ? ArgError("Usage: env-manager profile apply <name> [--strict]") : ProfileApply(args, args.Skip(2).FirstOrDefault(n => !n.StartsWith("--"))),
             "unapply" => args.Length < 3 ? ArgError("Usage: env-manager profile unapply <name>") : ProfileUnapply(args[2]),
             "show" => args.Length < 3 ? ArgError("Usage: env-manager profile show <name> [--reveal]") : ProfileShow(args[2], args.Any(a => a.Equals("--reveal", StringComparison.OrdinalIgnoreCase))),
             "preview" => args.Length < 3 ? ArgError("Usage: env-manager profile preview <name>") : ProfilePreview(args[2]),
@@ -686,11 +686,28 @@ partial class Program
         int dashIndex = Array.IndexOf(args, "--");
         if (dashIndex >= 0) extraArgs = args.Skip(dashIndex + 1).ToList();
 
+        // Ticket 19: --strict promotes pre-flight warnings to hard failures (exit 1).
+        bool strict = args.Any(a => a.Equals("--strict", StringComparison.OrdinalIgnoreCase));
         var profiles = LoadProfiles();
         var profile = FindProfile(profiles, name);
         if (profile == null) { Console.Error.WriteLine($"Error: Profile '{name}' not found"); return 1; }
         string? launchError = ValidateLaunchPreflight(profile);
         if (launchError != null) { Console.Error.WriteLine("Error: " + launchError); return 1; }
+        // Ticket 19 warn tier: a dangling launch target is suspicious-but-safe locally
+        // (the spawn itself fails loudly with exit 1); --strict refuses it up front.
+        if (strict && !string.IsNullOrWhiteSpace(profile.TargetExecutable))
+        {
+            string full = Path.IsPathRooted(profile.TargetExecutable)
+                ? profile.TargetExecutable
+                : Path.GetFullPath(Path.Combine(Environment.CurrentDirectory, profile.TargetExecutable));
+            if (!File.Exists(full))
+            {
+                var strictResult = new PreflightResult();
+                strictResult.Warnings.Add($"Launch target does not exist: {profile.TargetExecutable} (dangling launch target)");
+                EmitPreflightWarnReport("profile launch", name, strictResult, strict: true);
+                return 1;
+            }
+        }
 
        string exe = profile.TargetExecutable!;
        string cwd = profile.WorkingDirectory ?? Path.GetDirectoryName(exe)!;
@@ -782,7 +799,10 @@ partial class Program
                                                     Create a Global or Launch profile atomically
   profile delete <name>               Delete a profile
   profile show <name>                 Show profile details (JSON)
-  profile apply <name>                Apply a profile (backs up existing user vars)
+  profile apply <name> [--strict]     Apply a profile (backs up existing user vars).
+                                                      Preflight warnings (undefined %VAR%, stale PATH
+                                                      entry, dangling launch target) are advisory: exit 2 on
+                                                      success. --strict treats warnings as errors (exit 1).
   profile unapply <name>              Unapply a profile (restores backed-up user vars)
   profile add-var <profile> <name> <val> [--scope user|system]
                                                      Add a variable to a profile (v0.7.1: --scope routes to user or system on apply)
@@ -796,7 +816,7 @@ partial class Program
   profile import <file>                          Import profile from JSON file
   profile rename <old> <new>                     Rename a profile
   profile set-launch <name> --target <exe> [--args <args>] [--cwd <dir>] [--type global|launch]
-  profile launch <name> [-- <extra-args ...>]    Spawn target with isolated env from profile (no registry write)
+  profile launch <name> [--strict] [-- <extra-args ...>]    Spawn target with isolated env (no registry write); --strict refuses a dangling launch target up front
   profile add-secret <profile> <name> <val>     Encrypt a value with DPAPI-CurrentUser; stored as ciphertext in profile json
   profile edit-secret <profile> <old> <new> <val>  Rename/re-encrypt a secret; plaintext lives only in memory
   profile remove-secret <profile> <name>          Remove a secret variable from a profile
@@ -993,10 +1013,13 @@ partial class Program
        catch { return "<decryption-failed>"; }
    }
 
-    static int ProfileApply(string name)
+    static int ProfileApply(string[] args, string? name)
     {
+        // Ticket 19: --strict promotes pre-flight warnings to hard failures (exit 1).
+        bool strict = args.Skip(2).Any(a => a.Equals("--strict", StringComparison.OrdinalIgnoreCase));
         var profiles = LoadProfiles();
-        var profile = FindProfile(profiles, name);
+        bool applyWarned = false;
+        var profile = FindProfile(profiles, name ?? "");
         if (profile == null)
         {
             Console.Error.WriteLine($"Error: Profile '{name}' not found");
@@ -1018,10 +1041,21 @@ partial class Program
 
         // T04-PREFLIGHT: same v0.7.7 boundary set, now exercised through the seam core
         // (RunProfilePreflight) so the inherited-secret rejection is unit-testable.
-        if (!RunProfilePreflight(profile))
+        // Ticket 19: two-tier validation - the error tier keeps the exact rejection copy;
+        // the warn tier (undefined %VAR%, stale PATH entry, dangling launch target) is
+        // advisory by default (exit 2 after a successful apply) and hard-fails under --strict.
+        var preflight = RunProfilePreflightDetailed(profile, profiles, strict);
+        if (preflight.HasErrors)
         {
             Console.Error.WriteLine($"Error: Profile '{name}' contains invalid or protected variables and cannot be applied");
+            foreach (string err in preflight.Errors) Console.Error.WriteLine("  - " + err);
             return 1;
+        }
+        if (preflight.HasWarnings)
+        {
+            EmitPreflightWarnReport("profile apply", name, preflight, strict);
+            if (strict) return 1;
+            applyWarned = true;
         }
 
         // Single active profile policy: unapply any currently-active profile before applying the new one.
@@ -1054,7 +1088,9 @@ partial class Program
             throw;
         }
         Console.WriteLine($"Applied profile: {name} ({profile.Variables.Count} variables)");
-        return 0;
+        // Ticket 19: warn-tier findings are advisory - the write went through, but the
+        // process exit code records that the pre-flight had something to say (2 = warn).
+        return applyWarned ? 2 : 0;
     }
 
     static int ProfileUnapply(string name)

@@ -158,7 +158,7 @@ Per-app launch profiles extend the profile system without modifying existing Glo
 | Profile list | `profile list` | `listProfiles()` | Yes |
 | Profile create | `profile create` | `createProfile()` | Yes |
 | Profile delete | `profile delete` | `deleteProfile()` | Yes |
-| Profile apply | `profile apply` | `applyProfile()` | Yes |
+| Profile apply | `profile apply` (two-tier preflight: warn report + exit 2; `--strict` escalates; Rust shell maps exit 2 to GUI success) | `applyProfile()` | Yes |
 | Profile unapply | `profile unapply` | `unapplyProfile()` | Yes |
 | Profile show | `profile show` | `showProfile()` | Yes |
 | Profile add-var | `profile add-var` | `addProfileVar()` | Yes |

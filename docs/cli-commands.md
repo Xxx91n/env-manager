@@ -24,7 +24,7 @@ All commands follow: `env-manager-cli <command> [arguments] [--flags]`
 | `profile create` | `profile create <name> [--type global|launch] [--target <exe>] [--args <args>] [--cwd <dir>]` | Atomically create a Global or isolated Launch profile |
 | `profile delete` | `profile delete <name>` | Delete a profile |
 | `profile show` | `profile show <name>` | Show profile details (JSON) |
-| `profile apply` | `profile apply <name>` | Apply a profile (backs up existing user vars) |
+| `profile apply` | `profile apply <name> [--strict]` | Apply a profile (backs up existing user vars). Preflight warnings (undefined %VAR%, stale PATH entry, dangling launch target) are advisory: the apply proceeds and the exit code is 2; --strict refuses with exit 1 |
 | `profile unapply` | `profile unapply <name>` | Unapply a profile (restores backed-up user vars) |
 | `profile add-var` | `profile add-var <profile> <name> <val> [--scope user|system]` | Add a variable to a profile (v0.7.1: optional scope routes the variable to user or system on apply; default user) |
 | `profile add-path` | `profile add-path <profile> <dir> [--scope user|system]` | Add a PATH entry to a profile (v0.7.1: optional scope stored per-entry; default user) |
@@ -44,7 +44,7 @@ All commands follow: `env-manager-cli <command> [arguments] [--flags]`
 | `path dedupe` | `path dedupe [--scope] [--dry-run]` | Remove duplicate PATH entries (case-insensitive, preserves first, never removes protected entries; --dry-run reports without mutating) |
 | `path health` | `path health [--scope] [--fix] [--dry-run]` | v0.7.0. Detect duplicates and dead (non-existent) PATH entries; --fix removes non-protected duplicates+dead (always preserves protected entries) |
 | `profile set-launch` | `profile set-launch <name> --target <exe> [--args <args>] [--cwd <dir>] [--type global\|launch]` | v0.7.0. Configure a Launch profile's target executable / args / cwd, or convert a profile between Global and Launch types. Never writes the registry. |
-| `profile launch` | `profile launch <name> [-- <extra-args ...>]` | v0.7.0. Spawn the Launch profile's targetExecutable with an isolated env block (env_clear + inject). Never writes the registry or broadcasts WM_SETTINGCHANGE. |
+| `profile launch` | `profile launch <name> [--strict] [-- <extra-args ...>]` | v0.7.0. Spawn the Launch profile's targetExecutable with an isolated env block (env_clear + inject). Never writes the registry or broadcasts WM_SETTINGCHANGE. |
 | `profile add-secret` | `profile add-secret <name> <var> <value>` | v0.7.0. Encrypt `value` with DPAPI CurrentUser and store ciphertext in the profile. Requires the profile to be unapplied. Audit records NAME only. |
 | `profile edit-secret` | `profile edit-secret <name> <oldvar> <newvar> <value>` | v0.7.0. Rename and re-encrypt a secret. Audit records old/new NAME only. |
 | `profile remove-secret` | `profile remove-secret <name> <var>` | v0.7.0. Remove a secret variable from the profile (also dropped from `secretVariables`). |
@@ -107,8 +107,10 @@ Profiles are sets of preconfigured variables applied/unapplied as a group. When 
 - Profile storage: `%LOCALAPPDATA%\EnvManager\profiles.json`
 - Profile variables override user variables when applied
 - **v0.6.0 Profile types**: `profileType: "global" | "launch"`. Global profiles apply to the user registry (current behavior). Launch profiles are launcher templates that are NEVER written to the registry: `profile launch <name>` spawns `targetExecutable` with an isolated environment block (`env_clear` + inject profile vars + PATH entries), and never broadcasts `WM_SETTINGCHANGE`. Profile names are globally unique across Global and Launch types because every CLI profile command is name-addressed. `ValidateLaunchTarget` rejects targets inside `\\Windows\\System32` and non-executable extensions.
+- **v0.9.31 Two-tier preflight validation (ticket 19)**: `profile apply` validates in two tiers. The error tier (data-destroying: 32767 truncation, variable names containing `=`, protected variables, missing elevation, Global-inherits-Launch topology, undeclared inherited secrets) rejects with the pre-existing error copy and exit 1. The warn tier (undefined %VAR% references in values, stale PATH entries, dangling launch targets) is advisory: the apply proceeds, a JSON warn report (`"preflight":"warn"`, parseable, listing every downgraded finding) is printed, and the exit code is 2. `--strict` promotes warn-tier findings to hard failures (exit 1, no write). Warn output is the telemetry basis for future tightening (MongoDB validationAction pattern).
 - v0.6.0/v0.7.0 new profile subcommands: `profile set-launch <name> --target <exe> [--args <args>] [--cwd <dir>] [--type global|launch]` and `profile launch <name> [-- <extra-args ...>]`
 - v0.6.0/v0.7.0 schema fields: `profileType`, `targetExecutable`, `launchArguments`, `workingDirectory`, `secretVariables` (DPAPI encryption is fully implemented in v0.7.0; `profile launch` and `profile reveal-secret` decrypt at runtime)
+- `profile create --help` (also `-h`, `-?`, `/?` in the name position) prints the create usage and exits 0 without creating a profile or writing profiles.json. The bare word `help` remains a legal profile name; `profile help` shows the full profile subcommand list.
 - `profile status` checks `IsCorrectlyApplied()` (mirrors PowerToys)
 - `IsProfileApplicable()` rejects invalid variable names (>255 chars, contains `=`) and profiles containing protected system variables
 - `ApplyProfile()` skips any protected system variables in the profile variable list

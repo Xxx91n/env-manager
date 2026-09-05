@@ -104,6 +104,7 @@ Profile JSON gains these optional fields (see `ProfileData` in `src/Models.cs`):
 - **Toggle backup name collision prevention**: variables whose name ends with `_EnvManager_disabled` cannot be toggled, preventing backup key confusion
 - **Profile name validation**: rejects empty/whitespace names, names >255 chars, names with null/newline/carriage-return chars
 - **Profile variable name validation**: rejects empty names, names >255 chars, names containing `=`
+- **Two-tier profile preflight validation (ticket 19)**: `profile apply` hard-rejects data-destroying findings (32767 truncation, `=` in names, protected variables, undeclared inherited secrets, Global-inherits-Launch) with exit 1; suspicious-but-safe findings (undefined %VAR% references, stale PATH entries, dangling launch targets) are advisory - the apply proceeds, a JSON warn report (`"preflight":"warn"`) is printed, and the exit code is 2. `--strict` refuses warn-tier findings instead (exit 1)
 - **PathAdd directory validation**: rejects empty paths, null bytes, paths exceeding max length (for direct CLI usage)
 - **PathRename injection prevention**: validates new directory for empty values, null bytes, duplicates, max length
 - **Path total length validation**: SetPathEntries rejects PATH values exceeding 32767 chars before writing

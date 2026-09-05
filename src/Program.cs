@@ -101,7 +101,9 @@ partial class Program
                 _ => 1
             };
 
-            if (exitCode == 0 && beforeSnapshot != null)
+            // Ticket 19: exit 2 = success with preflight warnings; the write DID happen,
+            // so the environment audit snapshot must still be recorded (audit continuity).
+            if (exitCode is 0 or 2 && beforeSnapshot != null)
             {
                 try
                 {
