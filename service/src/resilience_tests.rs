@@ -61,9 +61,7 @@ async fn pipe_half_open_then_reconnect() {
     // Half-open: connect, write a request line, drop without reading the response.
     // The wire protocol is newline-delimited (ipc.rs reads until b'\n' or EOF),
     // so every request must end in '\n'.
-    let mut client = tokio::net::windows::named_pipe::ClientOptions::new()
-        .open(HALF_OPEN_PIPE)
-        .expect("connect to test pipe");
+    let mut client = open_with_retry(HALF_OPEN_PIPE).await;
     client
         .write_all(b"{\"method\":\"ping\"}\n")
         .await
@@ -74,9 +72,7 @@ async fn pipe_half_open_then_reconnect() {
     // Give the server a moment to reap the broken connection, then verify it
     // still accepts connections (watchdog reconnect semantics).
     tokio::time::sleep(Duration::from_millis(200)).await;
-    let mut reconnect = tokio::net::windows::named_pipe::ClientOptions::new()
-        .open(HALF_OPEN_PIPE)
-        .expect("reconnect after half-open drop");
+    let mut reconnect = open_with_retry(HALF_OPEN_PIPE).await;
     reconnect
         .write_all(b"{\"method\":\"ping\"}\n")
         .await
@@ -137,15 +133,24 @@ async fn ipc_read_timeout_fires_on_hung_server() {
                 _ = srv.connect() => {
                     // Read the request line, then go silent (never respond).
                     let mut byte = [0u8; 1];
+                    let mut got_byte = false;
                     while let Ok(n) = srv.read(&mut byte).await {
-                        if n == 0 || byte[0] == b'\n' {
+                        if n == 0 {
+                            break;
+                        }
+                        got_byte = true;
+                        if byte[0] == b'\n' {
                             break;
                         }
                     }
-                    // Hold the connection silently for a bounded lifetime.
-                    tokio::select! {
-                        _ = tokio::time::sleep(Duration::from_secs(10)) => {}
-                        _ = server_token.cancelled() => {}
+                    // The wait_for_pipe probe connects and immediately closes
+                    // without writing: release the instance instead of holding
+                    // the server's only slot for the silent lifetime.
+                    if got_byte {
+                        tokio::select! {
+                            _ = tokio::time::sleep(Duration::from_secs(10)) => {}
+                            _ = server_token.cancelled() => {}
+                        }
                     }
                 }
                 _ = server_token.cancelled() => return,
