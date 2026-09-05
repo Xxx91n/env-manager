@@ -160,9 +160,7 @@ async fn ipc_read_timeout_fires_on_hung_server() {
 
     wait_for_pipe(TIMEOUT_PIPE).await;
 
-    let mut client = tokio::net::windows::named_pipe::ClientOptions::new()
-        .open(TIMEOUT_PIPE)
-        .expect("connect to mock pipe");
+    let mut client = open_with_retry(TIMEOUT_PIPE).await;
     client
         .write_all(b"{\"method\":\"ping\"}\n")
         .await
