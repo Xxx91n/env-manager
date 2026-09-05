@@ -111,7 +111,7 @@ Read-only (concurrent-safe, read-locked): `list`, `get`, `backup`, `diff`, `vali
 
 Write (serialized, write-locked): `set`, `rename`, `change-scope`, `delete`, `toggle`, `restore`, `merge`, `profile create/delete/apply/unapply/add-var/remove-var/edit-var/rename, set-launch, add-secret/edit-secret/remove-secret, secret-provider set/rotate, import-secrets`, `path add/remove/move-up/move-down/rename/dedupe, path health --fix`, `history undo/delete`, `bulk import`, `audit encrypt-file`, `protection add-path/remove-path/add-var/remove-var`, `service refresh/rotate/reload/shutdown`. `import-state`, `audit migrate-audit/recover-from-ledger`.
 
-All commands: `env-manager-cli <command> [arguments] [--flags]`. `--debug`/`-d` anywhere enables verbose stderr. `--scope user|system` (default user). Exit 0/1; `profile apply`/`profile launch` also use 2 = success with preflight warnings (--strict treats warnings as errors, ticket 19).
+All commands: `env-manager-cli <command> [arguments] [--flags]`. `--debug`/`-d` anywhere enables verbose stderr. `--scope user|system` (default user). Exit 0/1; `profile apply` also uses 2 = success with preflight warnings (--strict treats warnings as errors, ticket 19).
 
 ## Hard Boundaries (Red Lines)
 

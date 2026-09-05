@@ -495,7 +495,13 @@ fn scrub_stderr(s: &str) -> String {
                 warn!("[run_cli] non-zero exit stderr_hint: {}", scrub_stderr(&stderr));
             }
 
-            if output.status.success() {
+            // Ticket 19: exit code 2 = success with preflight warnings (profile apply only; launch never emits 2).
+            // The write DID happen, so the GUI must not surface it as a failure; the JSON
+            // warn report on stdout rides in the data field, and the stderr warning stays in the log.
+            if output.status.success() || output.status.code() == Some(2) {
+                if output.status.code() == Some(2) {
+                    warn!("[run_cli] preflight warnings (exit 2): {}", scrub_stderr(&stderr));
+                }
                 CliResponse {
                     success: true,
                     data: Some(std::mem::take(&mut *stdout)),

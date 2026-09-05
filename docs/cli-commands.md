@@ -92,7 +92,7 @@ Key instrumented methods: `Main()` (all args), `ListEnvironment`, `GetVariable`,
 ## Error handling
 
 - Errors go to stderr, success output to stdout
-- Exit code: 0 = success, 1 = failure
+- Exit code: 0 = success, 1 = failure, 2 = success with preflight warnings (ticket 19, `profile apply` only)
 - The GUI catches CLI errors and displays them as transient toasts (auto-dismiss after 3s), not as persistent banners. This prevents duplicate error display when both the CLI stderr and the GUI error store would show the same message.
 
 ## Profiles (detailed)
