@@ -36,9 +36,16 @@ architecture-recovery Round 4 九票（17–25）全部 ✅ done：PR #45（head
 
 ## Backlog（收口后遗留，待用户决定是否立票）
 
-1. stryker workflow_dispatch 重跑数字回填（须合入 main 后，dispatch 触发需存在于默认分支）。
+1. 变异幸存者二次分诊：stryker CI 已在 main 跑通（run 33966698434，131 受测/118 kill/13 survived/TimeOut 0/Errors 0，score 46.83%，break 60 阈值红属票 13 设计）。kill 78→118 上升；survived 14→13，但新种群（票 19 增码后 mutate 文件变异增长至 131）仍有 13 条未分诊——需第二轮分诊+登记；score 46.83% 低于 break 60，红线四文件补杀仍有空间。
 2. git 暂存区旧化内容刷新/丢弃（3 文档文件修复前文本 + fuzz 文件 D+?? 双态；来源待认定）。
 3. 证据 PR 清理：#42/#43/#44 被 #45 取代，收口时关闭；远端 arch 分支 land 后删除。
 4. runner 镜像谱系残留调查（EM_TEST_FOO 预存来源未实锤，联合返修报告已标注未证）。
 5. 调研推迟项（spec Phase 3/4 Further Notes）：Coyote 并发 spike、GUI E2E 升级、fnox 式 profile export、flake 隔离仓注册表、变异等价 LLM 自动检测。
 6. 用户侧操作：HKCU Environment 残留 EM_TEST_DST=v1 自清（命令在 docs/build-and-release.md Test residue hygiene 节）。
+
+
+## 收口后回填（2026-09-05）
+
+- 合并期完成：11 支按序 land + 收口分支 land，origin/main 最终 tip = 856fa2e；远端 arch 分支清零；PR #40–#45 关闭（剩余 OPEN 仅为 dependabot + release-please）。
+- stryker CI 首跑（run 33966698434）：verify/verify-l1/package/verify-arch×2 全绿；stryker 131 受测/118 kill/13 survived/46.83%，break 阈值红属设计。
+- 违规第 7 条 git 暂存区旧化已清除（索引重置后工作区仅剩客户端 .zcode/ 未跟踪文件）。

@@ -29,7 +29,7 @@
 | Wave 8 | **15** Testcontainers L1 矩阵（7 个 Skip 转真） | ✅ done（reviews/15：verify-l1 CI PASS 经 gh 闭环；合入期 fold 2 hunks，uq 与 Directory.Build.props 去重） |
 | Wave 8 | **16** ADR 禁止 TxR/TxF，制度化补偿式写入 | ✅ done（reviews/16：ADR 0014 引语与 MS Learn 现文逐字核对；18/18 证据归属修正） |
 | Wave 9 | **17** CI verify 内嵌 CLI 资源 staging（main 推送每次变绿） | ✅ done（reviews/17；PR #45 全栈绿 run 33963823146：verify/verify-l1/verify-arch×2/package 全 success） |
-| Wave 9 | **18** 变异测试幸存者分诊 + 登记 + 模块化报告（CI 可跑） | ✅ done（reviews/18 两次返修复核；PR #45 全绿；stryker 重跑数字留合入 main 后 workflow_dispatch 回填） |
+| Wave 9 | **18** 变异测试幸存者分诊 + 登记 + 模块化报告（CI 可跑） | ✅ done（reviews/18 两次返修复核；PR #45 全绿；stryker CI 回填 run 33966698434：131 受测/118 kill/13 survived/46.83%——break 阈值红属设计；新种群 13 survivors 二次分诊列 backlog①） |
 | Wave 9 | **19** 预检验证两级降级（error/warn + --strict + 退出码 2） | ✅ done（reviews/19 二次返修复核；PR #45 全绿） |
 | Wave 9 | **20** profile create --help 解析修复（help 不当 profile 名落库） | ✅ done（reviews/20 返修复核；PR #45 全绿） |
 | Wave 9 | **21** CliRuntime 441 行拆出（纯搬迁，行为零变化） | ✅ done（reviews/21；PR #45 全绿） |

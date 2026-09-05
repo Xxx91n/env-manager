@@ -106,3 +106,12 @@ TOTAL                         96    81    14    109    1   85.42%
 ## 收口修正（2026-09-05 大脑）
 
 - 本文档写作时含「待 CI」表述；PR #45（head=完整 11 提交栈）已全绿（run 33963823146：verify/verify-l1/verify-arch×2/package 全 success + Fuzz/Workflow Lint/Dependency Review/Lint PR Title 全绿），本票终态 = ✅ done（README 已登记）。
+
+---
+
+## CI 重跑回填（2026-09-05 大脑，run 33966698434，main 首次 workflow_dispatch）
+
+- 数字（CI 当场输出）：Tested 131 / **Killed 118 / Survived 13 / Timeout 0 / Errors 0**；final score **46.83%**；低于 break 60 阈值 → exit 2（票 13 设计的阈值崩溃，属预期行为）。
+- 对比基线（96 受测 / 78 kill / 14 survived / 4 timeout / 40.00%）：受测 96→131（mutate 四文件中 ProfileEffective 等因票 19 增码，变异种群增长）；kill 78→118 上升；survived 14→13。
+- 诚实边界：survived 13 > 登记等价数 1——新增代码（票 19 两级预检实现）产生的变异未参与原分诊，需第二轮分诊（已列 backlog ①）。
+- 同 run 其余 job 全绿：verify / verify-l1 / package / verify-arch×2 success（main 全栈绿旁证）。
