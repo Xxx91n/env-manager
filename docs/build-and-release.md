@@ -234,18 +234,29 @@ Failure triage: hang at `InstallFinalize` -> `StartServices` with lowest `Action
 
 ## How to Release
 
-1. Update version in `env-manager.csproj`, `frontend/package.json`, `frontend/src-tauri/tauri.conf.json`, `frontend/src-tauri/Cargo.toml`
-2. Update `README.md` and `docs/i18n/README.zh_CN.md` if features changed (README_CN.md was superseded by `docs/i18n/`)
-3. Update `AGENTS.md` if structure or commands changed
-4. Run `node scripts/build.mjs --arch x64` (or per-arch: `--arch x86`, `--arch arm64`)
-   - Brand assets (logo, variants, favicons, social preview) live in `docs/assets/`; the brand guide is `docs/assets/brand/index.md`.
-   - **Brand Iconset** (CONTEXT.md Brand & Asset Terms): every file in `docs/assets/brand/` is the canonical source. README hero is `hero.svg` (mini hero, obsidian + Environment Color Token gradient). Do not change cosmetic colors ad hoc — palette decisions go through ADR.
-   - **Install Icon** (CONTEXT.md Brand & Asset Terms): the Windows-side icon family (desktop shortcut + exe resource + MSI installer + system tray) is driven by a **single source file** `frontend/src-tauri/icons/icon.ico` (multi-resolution 16/32/48/256). The `.png` siblings (`icon.png`, `128x128.png`, `128x128@2x.png`, `32x32.png`) are Tauri-derivation utilities — keep them in sync with the ICO. Install Icon is always the emerald logo; environment-specific icons are **not** bound to Dev/Staging/Prod (the Environment Color Token belongs only to the Brand Iconset layer).
-5. Verify `release/portable/env-manager.exe` launches and shows variables
-6. Verify MSI installs and the app works
-7. Commit: `chore: release vX.Y.Z`
-8. Tag: `git tag vX.Y.Z`
-9. Push: `git push origin main --tags`
+### Normal path — release-please single track (ticket 30, supersedes the manual flow)
+
+1. Land conventional commits on main (`feat:`, `fix:`, `perf:`, ...). Nothing else to do by hand — versions are decided by release-please only.
+2. release-please opens the Release PR (`chore(main): release X.Y.Z`). The PR bumps, in one commit:
+   - `CHANGELOG.md` (auto-generated section)
+   - `env-manager.csproj` `<Version>` (ADR 0003 single version source; annotated `<!-- x-release-please-version -->`, byte-identical update)
+   - `frontend/src-tauri/tauri.conf.json` + `frontend/package.json` (extra-files jsonpath `$.version`)
+   - `.release-please-manifest.json` (version ledger)
+   - `frontend/src-tauri/Cargo.toml` and `frontend/package-lock.json` root version are NOT bumped by the PR (spike A6/A7, see `.scratch/architecture-recovery/reports/30-release-please-single-track.md`): Cargo.lock is committed and CI runs `cargo --locked`, and npm does not validate the lockfile root version at install time.
+3. Review the PR (human-in-the-loop gate, ADR 0003) and merge.
+4. The merge triggers release-please again, which creates tag `vX.Y.Z` and the GitHub Release with the CHANGELOG notes (via the `RELEASE_PLEASE_TOKEN` PAT — a `GITHUB_TOKEN`-created tag would never trigger build.yml, GitHub recursive protection).
+5. The `vX.Y.Z` tag triggers build.yml (`tags: ['v*']`): the release job verifies tag == csproj == tauri.conf == package.json (version-consistency gate), builds x64/x86/arm64 artifacts, generates build provenance attestations, and uploads them to the release.
+6. Evidence: the release-please run, the Release PR, the tag, and the build.yml tag run URLs are the release record.
+
+PAT maintenance: `RELEASE_PLEASE_TOKEN` is a fine-grained PAT scoped to this repo with Contents: RW + Pull requests: RW (see the report for the full permission table). It expires — when release-please starts failing with 401/403, rotate the secret (GitHub → Settings → Secrets and variables → Actions) before the next release. The emergency path below is the fallback while the PAT is broken.
+
+### Emergency path — manual release.yml (EMERGENCY ONLY)
+
+`.github/workflows/release.yml` is degraded to an emergency-only track (ticket 30 checkpoint E). Use it only when the automated track is unavailable (expired/revoked PAT, release-please-action outage) or for a rebuild/re-publish of an already-decided version.
+
+- It keeps the `workflow_dispatch` form (version input + create_release toggle).
+- A fail-closed guard aborts the run if the target tag already exists, so it can never overtake a release-please tag.
+- Manual version editing remains the operator's responsibility; run the version-consistency expectations of step 5 above by hand before dispatching.
 
 ## Dependencies
 
@@ -298,13 +309,16 @@ Runs on push to main and pull requests. Verifies code quality (tests, lint, buil
 
 The verify job stages the five `tauri.conf.json` `bundle.resources` (`env-manager-cli.exe`/`.dll`/`.runtimeconfig.json`/`.deps.json` plus `AGENTS.cli.md`) from the CLI build output (`bin/Release/net10.0-windows/`) and the repo root into `frontend/src-tauri/bin/` immediately after the "Build CLI" step and before any cargo compile (service crate tests, Tauri crate tests, cargo check). The step is fail-closed: any of the five missing fails the job. This mirrors the local staging done by `frontend/scripts/prebuild.mjs` during `npm run build`/`tauri build`; `scripts/build.mjs` responsibilities are unchanged.
 
-### release.yml (Manual release)
-Triggered manually via GitHub Actions `workflow_dispatch` with a version input. Builds x64, x86, and arm64 packages in parallel, then creates a GitHub Release with all artifacts:
+### release-please.yml (single release track)
+Runs on every push to main via googleapis/release-please-action (pinned SHA) using the repository manifest config (`release-please-config.json` + `.release-please-manifest.json`). Maintains the Release PR that bumps CHANGELOG.md, `env-manager.csproj`, `tauri.conf.json`, and `package.json`; on merge of that PR it creates the `vX.Y.Z` tag + GitHub Release, which triggers build.yml's tag-driven release job. Authenticates with the `RELEASE_PLEASE_TOKEN` secret (fine-grained PAT) because GITHUB_TOKEN events never trigger other workflows.
+
+### release.yml (Emergency manual release)
+EMERGENCY ONLY since ticket 30. Triggered manually via GitHub Actions `workflow_dispatch` with a version input. Builds x64, x86, and arm64 packages in parallel, then creates a GitHub Release with all artifacts:
 - Portable ZIPs (per arch)
 - CLI-only ZIPs (per arch)
 - MSI installers (per arch, Windows only)
 
-The release workflow does NOT auto-trigger on tags or pushes - it must be manually dispatched.
+The release workflow does NOT auto-trigger on tags or pushes - it must be manually dispatched. A tag-exists precheck fails the run closed if the tag already exists, preventing it from overtaking the release-please track.
 
 ### CI user-state isolation and env-block snapshot semantics (architecture-recovery issue 24)
 

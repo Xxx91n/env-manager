@@ -92,6 +92,10 @@ env-manager-service.exe は、名前付きパイプ IPC 経由でシークレッ
 - ウォッチドッグ: 2 層のリカバリー — SCM 自動再起動 (Service モード) + GUI の 30 秒ピングウォッチドッグ (Background モード)
 ## Documentation
 ## Maintainers
+## リリース
+
+リリースは release-please 単一トラックで行います:main に conventional commits をプッシュし、自動生成された `chore(main): release X.Y.Z` PR をレビューしてマージすると、`vX.Y.Z` タグが完全な成果物パイプライン(portable / CLI のみ / MSI、x64/x86/arm64、ビルドプロビデンス証明付き)を起動します。手動のリリースワークフローは緊急時専用です。詳細は [docs/build-and-release.md](docs/build-and-release.md) の "How to Release" を参照。
+
 ## Contributing
 Issue と PR を歓迎します。アーキテクチャの境界とテスト方針については、まず AGENTS.md をお読みください。
 ## License

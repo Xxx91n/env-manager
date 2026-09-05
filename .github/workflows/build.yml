@@ -423,11 +423,12 @@ jobs:
         with:
           subject-path: artifacts/*
 
+      # ticket 30: release-please already created the published Release (with
+      # CHANGELOG notes) for this tag; upload artifacts onto that existing
+      # release. Never flip it back to draft / regenerate its notes here.
       - uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65
         with:
           files: artifacts/*
-          draft: true
-          generate_release_notes: true
 
 
   # Ticket 18 (architecture-recovery): on-demand Stryker mutation short run.
