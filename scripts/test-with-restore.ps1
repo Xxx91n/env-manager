@@ -264,10 +264,29 @@ namespace EnvManagerTest {
 }
 
 function Invoke-Cli([string[]]$CliArgs) {
-  # Discard CLI text so callers receive exactly one value: the native exit code.
-  # This avoids PowerShell treating normal success output as a failed comparison.
-  & $CliPath @CliArgs 2>$null | Out-Null
-  return [int]$LASTEXITCODE
+  # Callers receive exactly one value: the native exit code; stdout is discarded
+  # so normal success output never breaks a failed comparison. stderr is captured
+  # and re-emitted on failure (joint rework 22+24): the previous 2>$null left
+  # every red CLI step with zero diagnostics.
+  $stderrFile = [IO.Path]::GetTempFileName()
+  try {
+    & $CliPath @CliArgs 2>$stderrFile | Out-Null
+    $exitCode = [int]$LASTEXITCODE
+    if ($exitCode -ne 0) {
+      $stderrText = (Get-Content $stderrFile -Raw)
+      if ($stderrText) {
+        $stderrText = $stderrText.TrimEnd()
+        Write-Host "[test-with-restore] CLI failed (exit $exitCode). args: $($CliArgs -join ' ')" -ForegroundColor Red
+        Write-Host "[test-with-restore] CLI stderr:" -ForegroundColor Red
+        Write-Host $stderrText -ForegroundColor Red
+      } else {
+        Write-Host "[test-with-restore] CLI failed (exit $exitCode) with empty stderr. args: $($CliArgs -join ' ')" -ForegroundColor Red
+      }
+    }
+    return $exitCode
+  } finally {
+    Remove-Item -LiteralPath $stderrFile -Force -ErrorAction SilentlyContinue
+  }
 }
 
 function Invoke-CliExit([string[]]$CliArgs) {
@@ -442,10 +461,17 @@ try {
   $backupCompleted = $true
 
   Run-Test "set+get+delete round-trip" {
-    if ((Invoke-Cli @("set", "EM_TEST_FOO", "bar123", "--scope", "user")) -ne 0) { throw "set failed" }
-    $getOut = & $CliPath get EM_TEST_FOO 2>&1 | Out-String
+    # Stamped name, same pattern as the rename contract below: a fixed name
+    # collides with any pre-existing EM_TEST_FOO holding a value other than
+    # "bar123", and plain `set` then refuses with exit 1 ("already exists ...
+    # use --overwrite", src/VariableWrite.cs RunSet) - the CI first-run red.
+    # The residue-zero assertion is unchanged: this name is created and deleted
+    # inside this test, so the pre/post snapshot diff stays empty.
+    $roundTripName = "EM_TEST_RT_$Stamp"
+    if ((Invoke-Cli @("set", $roundTripName, "bar123", "--scope", "user")) -ne 0) { throw "set failed" }
+    $getOut = & $CliPath get $roundTripName 2>&1 | Out-String
     if ($LASTEXITCODE -ne 0 -or $getOut -notmatch "bar123") { throw "get mismatch" }
-    if ((Invoke-Cli @("delete", "EM_TEST_FOO", "--scope", "user")) -ne 0) { throw "delete failed" }
+    if ((Invoke-Cli @("delete", $roundTripName, "--scope", "user")) -ne 0) { throw "delete failed" }
   }
 
   Run-Test "rename contract" {
@@ -476,7 +502,9 @@ try {
       $backupValue = $key.GetValue($backupName, $null, [Microsoft.Win32.RegistryValueOptions]::DoNotExpandEnvironmentNames)
       if ([string]$backupValue -cne $expectedValue -or $key.GetValueKind($backupName) -ne [Microsoft.Win32.RegistryValueKind]::ExpandString) { throw "disabled backup lost the raw value or registry value kind" }
 
-      $items = (& $CliPath list 2>$null | Out-String | ConvertFrom-Json)
+      $listRaw = & $CliPath list 2>&1 | Out-String
+      if ($LASTEXITCODE -ne 0) { throw "list failed during toggle test: $($listRaw.Trim())" }
+      $items = $listRaw | ConvertFrom-Json
       $disabledItem = @($items | Where-Object { $_.name -ceq $toggleName -and $_.scope -ceq "user" })
       if ($disabledItem.Count -ne 1 -or -not $disabledItem[0].isDisabled) { throw "list did not project the disabled variable exactly once" }
 
