@@ -167,8 +167,13 @@ partial class Program
         return PathDedupeCore(Engine, IsProtectedVariable, IsProtectedPathEntry, scope, args.Contains("--dry-run"));
     }
 
-    // Seam-parameterized dedupe core (architecture-recovery issue 34): the historical inline
-    // body verbatim, runnable against InMemoryScope for the metamorphic test pilot.
+    // Seam-parameterized dedupe core (architecture-recovery issue 34). Duplicate detection
+    // normalizes BOTH sides with NormalizePathEntry (expand %VAR%, trim, strip trailing
+    // separators) so dedupe agrees with `path list` / `path health` and the documented
+    // case-insensitive matching contract (docs/cli-commands.md); the set stays
+    // OrdinalIgnoreCase so case-only variants keep folding. Outputs still carry the
+    // original entry strings. (DEF-1, found by the ticket-34 metamorphic pilot: the raw-
+    // string seen-set kept separator variants of the same directory.)
     internal static int PathDedupeCore(IEnvironmentScope env, Func<string, string, bool> isProtectedVariable, Func<string, bool> isProtectedPathEntry, string scope, bool dryRun)
     {
         var entries = GetPathEntriesCore(env, scope);
