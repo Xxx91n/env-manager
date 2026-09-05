@@ -156,7 +156,13 @@ partial class Program
             {
                 string refName = m.Groups[1].Value;
                 if (refName.Length == 0) continue;
-                bool defined = GetVariableValue(refName, "user") != null || GetVariableValue(refName, "system") != null
+                // Ticket 19 fix2: the expansion-resolvability surface includes the CLI
+                // process environment (it merges system+user at spawn time), not just the
+                // two registry hives - %SystemRoot% is kernel-provided and absent from both
+                // hives, so the registry-only check misreported defined vars as undefined
+                // (CI run 33953937157 red). Semantics: resolvable expansion => no warning.
+                bool defined = Environment.GetEnvironmentVariable(refName) != null
+                    || GetVariableValue(refName, "user") != null || GetVariableValue(refName, "system") != null
                     || ResolveProfileVariables(profile, allProfiles).Any(v => v.Name.Equals(refName, StringComparison.OrdinalIgnoreCase));
                 if (!defined)
                     result.Warnings.Add($"Variable '{variable.Name}' references undefined %VAR%: %{refName}% (expands literally)");

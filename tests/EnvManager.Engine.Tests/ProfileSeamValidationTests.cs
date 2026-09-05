@@ -194,6 +194,9 @@ public class ProfileSeamValidationTests : IDisposable
     [Fact]
     public void Detailed_UndefinedVarReference_IsWarning()
     {
+        // fix2: the defined-check surface now includes the process environment, so the
+        // undefined state pins its absence explicitly (set/clear discipline).
+        Environment.SetEnvironmentVariable("EM_T19_UNDEF_VAR", null, EnvironmentVariableTarget.Process);
         var child = Global("EM_T19_warn_var", new ProfileVariable { Name = FreeName, Value = "%EM_T19_UNDEF_VAR%\\bin" });
 
         var result = Program.RunProfilePreflightDetailed(child, Program.LoadProfiles(), strict: false);
@@ -203,16 +206,25 @@ public class ProfileSeamValidationTests : IDisposable
         Assert.Contains(result.Warnings, w => w.Contains("undefined %VAR%") && w.Contains(FreeName));
     }
 
-    /// <summary>A defined %VAR% reference (machine env) must NOT warn. SYSTEMROOT is always set.</summary>
+    /// <summary>A defined %VAR% reference must NOT warn. The reference is defined via a
+    /// Process-scoped variable set and cleared in-test (test discipline: no machine-state
+    /// dependence). The pre-fix version relied on %SYSTEMROOT% - kernel-provided, absent
+    /// from both registry env hives - and went red on CI run 33953937157.</summary>
     [Fact]
     public void Detailed_DefinedVarReference_NoWarning()
     {
-        var child = Global("EM_T19_ok_var", new ProfileVariable { Name = FreeName, Value = "%SYSTEMROOT%\\bin" });
+        const string known = "EM_T19_DEFINED_REF";
+        Environment.SetEnvironmentVariable(known, "C:\\tools", EnvironmentVariableTarget.Process);
+        try
+        {
+            var child = Global("EM_T19_ok_var", new ProfileVariable { Name = FreeName, Value = "%" + known + "%\\bin" });
 
-        var result = Program.RunProfilePreflightDetailed(child, Program.LoadProfiles(), strict: false);
+            var result = Program.RunProfilePreflightDetailed(child, Program.LoadProfiles(), strict: false);
 
-        Assert.False(result.HasErrors);
-        Assert.False(result.HasWarnings);
+            Assert.False(result.HasErrors);
+            Assert.False(result.HasWarnings);
+        }
+        finally { Environment.SetEnvironmentVariable(known, null, EnvironmentVariableTarget.Process); }
     }
 
     /// <summary>A stale PATH entry (temp dir removed) is warn-tier, not an error.</summary>
