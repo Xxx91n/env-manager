@@ -13,6 +13,13 @@ partial class Program
         if (IsInternalToggleBackupName(oldName) || IsInternalToggleBackupName(newName))
             return ArgError("Error: Internal disabled-variable backup names cannot be renamed");
 
+        // DEF-2 (found by the ticket-34 metamorphic pilot): a case-only rename with
+        // --overwrite writes the new slot and then deletes the source - both fold to the
+        // same registry value name, so the value would vanish entirely. Windows env-var
+        // names are case-insensitive, so refuse it exactly like a self-rename.
+        if (string.Equals(oldName, newName, StringComparison.OrdinalIgnoreCase))
+            return ArgError("Error: Rename target differs only by letter case; Windows variable names are case-insensitive");
+
         // Refuse to rename a protected variable. Without this entry guard,
         // SetVariableWithoutNotify(newName) could succeed while
         // DeleteVariableWithoutNotify(oldName) is blocked by the internal
