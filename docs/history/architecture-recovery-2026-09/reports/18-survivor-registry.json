@@ -1,0 +1,364 @@
+{
+  "ticket": "18",
+  "generatedAt": "2026-09-05",
+  "baseline": {
+    "date": "2026-09-04",
+    "source": "StrykerOutput/2026-09-04.19-08-22/reports/mutation-report.html (parsed mutation-report-data JSON)",
+    "brainRerunCounts": {
+      "tested": 96,
+      "killed": 78,
+      "survived": 14,
+      "timeout": 4,
+      "score": "40.00%"
+    },
+    "localHtmlParseCounts": {
+      "killed": 81,
+      "timeout": 1,
+      "survived": 14,
+      "noCoverage": 109,
+      "score": "40.00%",
+      "note": "killed/timeout split differs between runs (timeout flakiness); score identical"
+    },
+    "config": {
+      "mutate": [
+        "src/VariableRename.cs",
+        "src/VariableChangeScope.cs",
+        "src/ProfileEffective.cs",
+        "src/ProtectionCommand.cs"
+      ],
+      "thresholds": "high 85 / low 70 / break 60",
+      "ignoreMutations": [
+        "string",
+        "logical"
+      ]
+    }
+  },
+  "triageSummary": {
+    "total": 14,
+    "noCoverage": 0,
+    "weakAssertion": 13,
+    "equivalent": 1,
+    "note": "all 14 survivors had non-empty coveredBy in the baseline report -> zero no-coverage survivors"
+  },
+  "runs": [
+    {
+      "label": "baseline",
+      "date": "2026-09-04",
+      "source": "StrykerOutput/2026-09-04.19-08-22 (brain rerun; html parsed)",
+      "tested": 96,
+      "killed": 78,
+      "survived": 14,
+      "timeout": 4,
+      "score": "40.00%",
+      "perModule": [
+        {
+          "module": "ProfileEffective.cs",
+          "tested": 38,
+          "killed": 32,
+          "survived": 5,
+          "noCoverage": 34,
+          "timeout": 1,
+          "score": "86.84%"
+        },
+        {
+          "module": "ProtectionCommand.cs",
+          "tested": 13,
+          "killed": 8,
+          "survived": 5,
+          "noCoverage": 67,
+          "timeout": 0,
+          "score": "61.54%"
+        },
+        {
+          "module": "VariableChangeScope.cs",
+          "tested": 29,
+          "killed": 26,
+          "survived": 3,
+          "noCoverage": 8,
+          "timeout": 0,
+          "score": "89.66%"
+        },
+        {
+          "module": "VariableRename.cs",
+          "tested": 16,
+          "killed": 15,
+          "survived": 1,
+          "noCoverage": 0,
+          "timeout": 0,
+          "score": "93.75%"
+        }
+      ],
+      "totalTestedLocal": 96,
+      "totalKilledLocal": 81,
+      "totalScoreLocal": "85.42%"
+    }
+  ],
+  "survivors": [
+    {
+      "id": "4337",
+      "file": "src/ProfileEffective.cs",
+      "line": 93,
+      "column": 17,
+      "mutator": "Negate expression",
+      "original": "profile.ProfileType.Equals(\"global\", OrdinalIgnoreCase)",
+      "replacement": "!(...)",
+      "category": "weak-assertion",
+      "verdict": "killed-by-added-test",
+      "killedByTest": "MutationSurvivorTriageTests.Preflight_GlobalInheritsSecretlessLaunch_Rejected",
+      "rationale": "Topology guard (Global inheriting Launch) only observable when the launch parent carries NO secrets; every existing test used secret-bearing launch parents where the union walk rejects anyway. Secretless-launch test: original returns false (topology), mutant skips guard and returns true.",
+      "llmDetection": {
+        "candidate": false,
+        "notes": "",
+        "tool": null,
+        "date": null
+      }
+    },
+    {
+      "id": "4343",
+      "file": "src/ProfileEffective.cs",
+      "line": 98,
+      "column": 25,
+      "mutator": "Equality mutation",
+      "original": "parent != null",
+      "replacement": "parent == null",
+      "category": "weak-assertion",
+      "verdict": "killed-by-added-test",
+      "killedByTest": "MutationSurvivorTriageTests.Preflight_GlobalInheritsSecretlessLaunch_Rejected",
+      "rationale": "With a real (non-null) launch parent the mutant skips the topology guard; the secretless-launch parent case then falls through to acceptance (true) while the original rejects (false). The missing-parent direction is equivalent (ResolveProfileVariables throws InvalidDataException -> caught -> false in both).",
+      "llmDetection": {
+        "candidate": false,
+        "notes": "",
+        "tool": null,
+        "date": null
+      }
+    },
+    {
+      "id": "4369",
+      "file": "src/ProfileEffective.cs",
+      "line": 136,
+      "column": 9,
+      "mutator": "Statement mutation",
+      "original": "visited.Add(profile.Name);",
+      "replacement": ";",
+      "category": "equivalent",
+      "verdict": "accepted-equivalent",
+      "killedByTest": null,
+      "rationale": "In-process untestable. Non-cyclic chains: diamond inheritance re-visits return an empty set and the HashSet union is unchanged, so removing visited.Add changes nothing. Cyclic (poisoned) chains: the only observable difference is unbounded recursion -> StackOverflowException, which is a process-killing fault that no in-process xUnit assertion can intercept (uncatchable in .NET). The graceful InvalidDataException cycle guard lives in ResolveProfile/ResolvePaths (ProfileCommand.cs), which run AFTER this walk and never get reached on cycle input.",
+      "llmDetection": {
+        "candidate": true,
+        "notes": "crash-based differential harness (separate process) could in principle distinguish; out of scope, reserved for future LLM-assisted detection",
+        "tool": null,
+        "date": null
+      }
+    },
+    {
+      "id": "4392",
+      "file": "src/ProfileEffective.cs",
+      "line": 193,
+      "column": 28,
+      "mutator": "Null coalescing mutation (remove left)",
+      "original": "variable.Scope ?? \"user\"",
+      "replacement": "\"user\"",
+      "category": "weak-assertion",
+      "verdict": "killed-by-added-test",
+      "killedByTest": "MutationSurvivorTriageTests.Unapply_RemovesAppliedSystemVariableWithoutBackup",
+      "rationale": "Existing unapply test only covered user-scope variables where the fallback is a no-op. A system-scope profile variable must be deleted from the system store; the mutant deletes from (absent) user store instead, leaving the applied value in the system store.",
+      "llmDetection": {
+        "candidate": false,
+        "notes": "",
+        "tool": null,
+        "date": null
+      }
+    },
+    {
+      "id": "4396",
+      "file": "src/ProfileEffective.cs",
+      "line": 195,
+      "column": 13,
+      "mutator": "Statement mutation",
+      "original": "env.DeleteValueWithoutNotify(variable.Name, scope);",
+      "replacement": ";",
+      "category": "weak-assertion",
+      "verdict": "killed-by-added-test",
+      "killedByTest": "MutationSurvivorTriageTests.Unapply_RemovesAppliedSystemVariableWithoutBackup",
+      "rationale": "The existing unapply test has a pre-existing value (backup), and the restore write overwrites the applied value, masking the missing delete. A variable applied with NO prior value (no backup) makes the delete observable: mutant leaves the applied value in the store.",
+      "llmDetection": {
+        "candidate": false,
+        "notes": "",
+        "tool": null,
+        "date": null
+      }
+    },
+    {
+      "id": "5011",
+      "file": "src/ProtectionCommand.cs",
+      "line": 139,
+      "column": 21,
+      "mutator": "LogicalNotExpression to un-LogicalNotExpression",
+      "original": "if (!File.Exists(file)) return new();",
+      "replacement": "if (File.Exists(file)) return new();",
+      "category": "weak-assertion",
+      "verdict": "killed-by-added-test",
+      "killedByTest": "MutationSurvivorTriageTests.Set_CustomLockedVariable_Rejected",
+      "rationale": "No existing test seeds protected-vars.json, so CustomProtectedVars was only ever exercised on the file-absent path where both variants yield an empty list. With the file present and containing a locked variable, the mutant returns an empty list and the variable becomes writable.",
+      "llmDetection": {
+        "candidate": false,
+        "notes": "",
+        "tool": null,
+        "date": null
+      }
+    },
+    {
+      "id": "5012",
+      "file": "src/ProtectionCommand.cs",
+      "line": 140,
+      "column": 24,
+      "mutator": "Null coalescing mutation (remove left)",
+      "original": "Deserialize(...) ?? new()",
+      "replacement": "new()",
+      "category": "weak-assertion",
+      "verdict": "killed-by-added-test",
+      "killedByTest": "MutationSurvivorTriageTests.Set_CustomLockedVariable_Rejected",
+      "rationale": "Mutant always returns an empty custom list, ignoring the file content entirely. Killable only with a seeded protected-vars.json; no test did.",
+      "llmDetection": {
+        "candidate": false,
+        "notes": "",
+        "tool": null,
+        "date": null
+      }
+    },
+    {
+      "id": "5020",
+      "file": "src/ProtectionCommand.cs",
+      "line": 154,
+      "column": 16,
+      "mutator": "Linq method mutation (Any() to All())",
+      "original": "CustomProtectedVars.Any(v => v.Equals(name, ...))",
+      "replacement": "CustomProtectedVars.All(...)",
+      "category": "weak-assertion",
+      "verdict": "killed-by-added-test",
+      "killedByTest": "MutationSurvivorTriageTests.Set_CustomLockedVariable_Rejected",
+      "rationale": "With a single-entry custom list Any and All agree on every query, so the historic single-variable usage could never distinguish. A two-entry list where the queried name matches exactly one entry kills the mutant.",
+      "llmDetection": {
+        "candidate": false,
+        "notes": "",
+        "tool": null,
+        "date": null
+      }
+    },
+    {
+      "id": "5053",
+      "file": "src/ProtectionCommand.cs",
+      "line": 221,
+      "column": 17,
+      "mutator": "LogicalNotExpression to un-LogicalNotExpression",
+      "original": "if (!File.Exists(BuiltinProtectedVarsFile))",
+      "replacement": "if (File.Exists(BuiltinProtectedVarsFile))",
+      "category": "weak-assertion",
+      "verdict": "killed-by-added-test",
+      "killedByTest": "MutationSurvivorTriageTests.Set_BuiltinProtectedVarsFileExternalEditHonored",
+      "rationale": "File-absent path is equivalent (mutant falls into catch -> defaults, same as seed-then-read). The externally-editable builtin list is a documented feature that no test exercised: with file content that is a strict subset of defaults, the mutant returns defaults and re-protects variables the user deliberately unlocked.",
+      "llmDetection": {
+        "candidate": false,
+        "notes": "",
+        "tool": null,
+        "date": null
+      }
+    },
+    {
+      "id": "5055",
+      "file": "src/ProtectionCommand.cs",
+      "line": 223,
+      "column": 20,
+      "mutator": "Null coalescing mutation (remove left)",
+      "original": "Deserialize(...) ?? defaults",
+      "replacement": "defaults",
+      "category": "weak-assertion",
+      "verdict": "killed-by-added-test",
+      "killedByTest": "MutationSurvivorTriageTests.Set_BuiltinProtectedVarsFileDeserializedContentHonored",
+      "rationale": "Mutant always returns embedded defaults, ignoring the external file. Killable only by seeding the builtin file with non-default content; no test did.",
+      "llmDetection": {
+        "candidate": false,
+        "notes": "",
+        "tool": null,
+        "date": null
+      }
+    },
+    {
+      "id": "6111",
+      "file": "src/VariableChangeScope.cs",
+      "line": 18,
+      "column": 13,
+      "mutator": "Equality mutation",
+      "original": "args.Length < 3",
+      "replacement": "args.Length <= 3",
+      "category": "weak-assertion",
+      "verdict": "killed-by-added-test",
+      "killedByTest": "MutationSurvivorTriageStdoutTests.ChangeScope_AutoDetectedScope_MovesAndPrintsConfirmation",
+      "rationale": "Every existing change-scope test passed an explicit --scope flag (5 args). The minimal 3-arg form (name + new-scope, auto-detect) is the boundary the mutant breaks into a usage error.",
+      "llmDetection": {
+        "candidate": false,
+        "notes": "",
+        "tool": null,
+        "date": null
+      }
+    },
+    {
+      "id": "6126",
+      "file": "src/VariableChangeScope.cs",
+      "line": 30,
+      "column": 13,
+      "mutator": "Equality mutation",
+      "original": "oldScope != null && oldScope != \"user\" && oldScope != \"system\"",
+      "replacement": "oldScope == null",
+      "category": "weak-assertion",
+      "verdict": "killed-by-added-test",
+      "killedByTest": "MutationSurvivorTriageStdoutTests.ChangeScope_AutoDetectedScope_MovesAndPrintsConfirmation",
+      "rationale": "ParseScope already rejects invalid --scope values, so the guard is defense-in-depth whose mutant only diverges on the auto-detect path (oldScope == null): the mutant turns a legal 3-arg invocation into a scope error. All existing tests passed --scope explicitly.",
+      "llmDetection": {
+        "candidate": false,
+        "notes": "",
+        "tool": null,
+        "date": null
+      }
+    },
+    {
+      "id": "6191",
+      "file": "src/VariableChangeScope.cs",
+      "line": 97,
+      "column": 9,
+      "mutator": "Statement mutation",
+      "original": "Console.WriteLine(\"Changed scope of \" + ...)",
+      "replacement": ";",
+      "category": "weak-assertion",
+      "verdict": "killed-by-added-test",
+      "killedByTest": "MutationSurvivorTriageStdoutTests.ChangeScope_AutoDetectedScope_MovesAndPrintsConfirmation",
+      "rationale": "The success stdout of change-scope had no assertion (the issue-14 snapshot suite covered rename but not change-scope success). Stdout-capture assert kills the removal.",
+      "llmDetection": {
+        "candidate": false,
+        "notes": "",
+        "tool": null,
+        "date": null
+      }
+    },
+    {
+      "id": "6376",
+      "file": "src/VariableRename.cs",
+      "line": 26,
+      "column": 9,
+      "mutator": "Statement mutation",
+      "original": "ValidateVariableInput(newName, \"\", scope);",
+      "replacement": ";",
+      "category": "weak-assertion",
+      "verdict": "killed-by-added-test",
+      "killedByTest": "MutationSurvivorTriageTests.Rename_InvalidNewName_ThrowsAndPreservesSource",
+      "rationale": "The rename entry point re-validates newName (defense-in-depth behind the command-level guard). No existing rename test used an invalid new name (= in name), so the guard's removal was unobserved.",
+      "llmDetection": {
+        "candidate": false,
+        "notes": "",
+        "tool": null,
+        "date": null
+      }
+    }
+  ]
+}

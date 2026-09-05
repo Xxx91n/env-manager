@@ -290,3 +290,6 @@ rsvg-convert dependency formalization + i18n native-quality translation).
   is the correct static-renderer path.
   _Avoid_: animated SVG with SMIL/CSS (GitHub camo proxy breaks it);
   hardcoding version strings in hero.svg (use shields.io dynamic badge).
+
+
+**Architecture-recovery round 4 (2026-09-05, issues 17-25)**: CI 每次 main push 变绿的根因修复（票 17：verify job 在 cargo 前 staging CLI 五件套）、变异幸存者分诊三件套（票 18：登记 14 条 + 补杀测试 + CI 可跑 stryker job + 模块分算）、预检验证两级降级（票 19：error/warn 两档 + --strict + 退出码 2 仅 profile apply）、profile create --help 修复（票 20）、CliRuntime 拆出（票 21）、测试残留卫生（票 22：残留归零断言 + 自检命令）、architecture.md canary/golden 段（票 23）、CI 用户态隔离（票 24：ENVMANAGER_LOCALAPPDATA seam + 断言步骤）、SharpFuzz 夜间模糊（票 25：harness + 27 种子 + cron workflow）。三轮返修（19-fix2 去机器依赖、22+24 联合 harness 带戳名+stderr 捕获、14+18+19 静态 seam 串行化）与 PR #45 全栈绿（run 33963823146）为终验。九票全部合入待用户 land 授权。
