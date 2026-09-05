@@ -131,6 +131,10 @@ env-manager-service.exe — автономный бинарник на Rust, у�
 
 ## Поддержка
 
+## Выпуски
+
+Выпуски идут по единой колее release-please: отправьте conventional commits в main, проверьте и слейте автоматический PR `chore(main): release X.Y.Z` — тег `vX.Y.Z` запустит полный конвейер артефактов (portable / только CLI / MSI для x64/x86/arm64, с аттестатами происхождения сборки). Ручной workflow оставлен только для аварийных случаев. Подробности в [docs/build-and-release.md](docs/build-and-release.md), раздел "How to Release".
+
 ## Вклад в проект
 
 Приветствуются issues и PR. Сначала прочтите AGENTS.md: там описаны границы архитектуры и политика тестирования.
