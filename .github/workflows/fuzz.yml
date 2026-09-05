@@ -40,6 +40,8 @@ concurrency:
 env:
   SHARPFUZZ_VERSION: '2.3.0'
   DRIVER_URL: 'https://github.com/Metalnem/libfuzzer-dotnet/releases/download/v2025.05.02.0904/libfuzzer-dotnet-windows.exe'
+  # SHA256 recorded from the first CI run (2026-09-05, run 33943975560).
+  DRIVER_SHA256: '17AF5B3F6FF4D2C57B44B9A35C13051B570EB66F0557D00015DF3832709050BF'
 
 jobs:
   fuzz:
@@ -94,6 +96,7 @@ jobs:
           Invoke-WebRequest -Uri $env:DRIVER_URL -OutFile fuzz/out/libfuzzer-dotnet.exe
           $hash = (Get-FileHash 'fuzz/out/libfuzzer-dotnet.exe' -Algorithm SHA256).Hash
           Write-Host "driver sha256: $hash"
+          if ($hash -ne $env:DRIVER_SHA256) { throw "driver sha256 mismatch: got $hash, expected $env:DRIVER_SHA256" }
           Add-Content $env:GITHUB_STEP_SUMMARY "libfuzzer-dotnet driver SHA256: ``$hash``"
 
       - name: Smoke-run harness on seed corpus (standalone mode)
