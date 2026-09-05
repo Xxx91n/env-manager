@@ -389,3 +389,19 @@ The live CLI smoke test harness `scripts/test-with-restore.ps1` snapshots every 
 5. release-please (`release-please.yml`) drives CHANGELOG / version PRs after the public flip; this repository does not yet contain git tags, so release-please is configured in advance but the first release remains gated behind the "开始发布" user confirmation.
 6. Provenance attestation (`actions/attest-build-provenance`) is pre-wired in `build.yml` release job so future tagged releases carry SLSA L2 provenance automatically.
 7. Tauri updater: `tauri signer generate` executed once; public key committed in `frontend/src-tauri/tauri.conf.json` under `plugins.updater.pubkey`; private key kept only in GitHub Secrets (`TAURI_SIGNING_PRIVATE_KEY`, `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`). Reference: ADR 0008.
+
+## Structural Fitness: Cognitive Complexity Guard (ticket 29)
+
+`scripts/cognitive-complexity.mjs` (zero-dependency Node ESM) computes Sonar-style method-level cognitive complexity (SonarSource 2021 spec, C# subset) over `src/*.cs`. Threshold: 15 (SonarWay S3776 default).
+
+Modes:
+
+| Command | Behavior |
+|---|---|
+| `node scripts/cognitive-complexity.mjs` | Report: violation list to stdout, always exit 0 |
+| `node scripts/cognitive-complexity.mjs --gate` | Blocks only NEW violations (absent from baseline or regressed above it); grandfathered entries print but pass |
+| `node scripts/cognitive-complexity.mjs --update-baseline` | Rewrites `scripts/cognitive-complexity-baseline.json` |
+| `node scripts/cognitive-complexity.mjs --selftest` | 21 golden snippets; run after any rule change |
+| `node scripts/cognitive-complexity.mjs --demo-gate` | Gate semantics demonstration (red -> grandfathered-green -> regression-red) |
+
+CI (build.yml verify job): report step (non-blocking) -> `cognitive-complexity-report` artifact -> hard-gate step. The baseline JSON pins all `src/*.cs` methods; 32 legacy over-threshold methods are tiered T1/T2/T3 with a remediation schedule in `.scratch/architecture-recovery/reports/29-cognitive-complexity-guard.md`. Renaming an over-threshold method reads as a NEW violation until `--update-baseline` runs in the same PR with reviewer-approved rationale.

@@ -158,6 +158,27 @@ jobs:
       - name: Audit NuGet dependencies
         run: dotnet list package --vulnerable --include-transitive
 
+      # Ticket 29 (architecture-recovery): method-level cognitive complexity guard.
+      # Report mode never blocks the PR; the violation list is the standing baseline
+      # report (grandfathered entries are scheduled in
+      # .scratch/architecture-recovery/reports/29-cognitive-complexity-guard.md).
+      - name: Cognitive complexity report (ticket 29)
+        run: node scripts/cognitive-complexity.mjs
+
+      - name: Upload cognitive complexity report (ticket 29)
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: cognitive-complexity-report
+          path: scripts/cognitive-complexity-baseline.json
+          if-no-files-found: error
+
+      # Hard gate (checkpoint C): blocks only NEW violations - methods over threshold
+      # that are absent from the committed baseline, or baseline-clean methods that
+      # regressed above it. Existing violations stay grandfathered (ticket 18
+      # tiering principle: no 100% chase).
+      - name: Cognitive complexity hard gate (ticket 29)
+        run: node scripts/cognitive-complexity.mjs --gate
+
       - name: Run Pester integration tests
         shell: pwsh
         env:
