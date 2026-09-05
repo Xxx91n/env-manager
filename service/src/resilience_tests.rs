@@ -42,11 +42,13 @@ async fn pipe_half_open_then_reconnect() {
     wait_for_pipe(HALF_OPEN_PIPE).await;
 
     // Half-open: connect, write a request line, drop without reading the response.
+    // The wire protocol is newline-delimited (ipc.rs reads until b'\n' or EOF),
+    // so every request must end in '\n'.
     let mut client = tokio::net::windows::named_pipe::ClientOptions::new()
         .open(HALF_OPEN_PIPE)
         .expect("connect to test pipe");
     client
-        .write_all(br#"{"method":"ping"}"#)
+        .write_all(b"{\"method\":\"ping\"}\n")
         .await
         .expect("write request");
     client.flush().await.expect("flush request");
@@ -59,21 +61,29 @@ async fn pipe_half_open_then_reconnect() {
         .open(HALF_OPEN_PIPE)
         .expect("reconnect after half-open drop");
     reconnect
-        .write_all(br#"{"method":"ping"}"#)
+        .write_all(b"{\"method\":\"ping\"}\n")
         .await
         .expect("write ping after reconnect");
 
-    let mut resp = Vec::new();
-    let mut byte = [0u8; 1];
-    loop {
-        let n = reconnect.read(&mut byte).await.expect("read response");
-        assert!(n > 0, "server closed connection before sending a response");
-        if byte[0] == b'\n' {
-            break;
+    // Bounded read: a protocol regression must fail the test, not hang CI for
+    // the 30-minute job timeout (first run deadlocked here without '\n').
+    let read_resp = tokio::time::timeout(Duration::from_secs(5), async {
+        let mut resp = Vec::new();
+        let mut byte = [0u8; 1];
+        loop {
+            let n = reconnect.read(&mut byte).await.expect("read response");
+            assert!(n > 0, "server closed connection before sending a response");
+            if byte[0] == b'\n' {
+                break;
+            }
+            resp.push(byte[0]);
         }
-        resp.push(byte[0]);
-    }
-    let resp: serde_json::Value = serde_json::from_slice(&resp).expect("valid JSON response");
+        resp
+    })
+    .await
+    .expect("reconnect ping response within 5s");
+    let resp: serde_json::Value =
+        serde_json::from_slice(&read_resp).expect("valid JSON response");
     assert_eq!(resp["ok"], true, "ping after half-open drop must succeed");
     assert_eq!(resp["data"]["pong"], true);
 
@@ -125,7 +135,7 @@ async fn ipc_read_timeout_fires_on_hung_server() {
         .open(TIMEOUT_PIPE)
         .expect("connect to mock pipe");
     client
-        .write_all(br#"{"method":"ping"}"#)
+        .write_all(b"{\"method\":\"ping\"}\n")
         .await
         .expect("write request");
 
