@@ -99,12 +99,15 @@ async fn ipc_read_timeout_fires_on_hung_server() {
     let shutdown = Arc::new(CancellationToken::new());
     let server_token = shutdown.clone();
     let server = tokio::spawn(async move {
-        // Mock server: accept connections, read the request line, never respond.
+        // Mock server: serve one client at a time, mirroring the real server's
+        // loop shape (await connect inside the loop). A create/spawn tight loop
+        // with no await would spawn pipe instances unboundedly and wedge the
+        // runner until the job timeout.
         loop {
             if server_token.is_cancelled() {
                 return;
             }
-            let srv = match tokio::net::windows::named_pipe::ServerOptions::new()
+            let mut srv = match tokio::net::windows::named_pipe::ServerOptions::new()
                 .create(TIMEOUT_PIPE)
             {
                 Ok(s) => s,
@@ -113,19 +116,23 @@ async fn ipc_read_timeout_fires_on_hung_server() {
                     continue;
                 }
             };
-            let token = server_token.clone();
-            tokio::spawn(async move {
-                let mut srv = srv;
-                let _ = srv.connect().await;
-                let mut byte = [0u8; 1];
-                while let Ok(n) = srv.read(&mut byte).await {
-                    if n == 0 || byte[0] == b'\n' {
-                        break;
+            tokio::select! {
+                _ = srv.connect() => {
+                    // Read the request line, then go silent (never respond).
+                    let mut byte = [0u8; 1];
+                    while let Ok(n) = srv.read(&mut byte).await {
+                        if n == 0 || byte[0] == b'\n' {
+                            break;
+                        }
+                    }
+                    // Hold the connection silently for a bounded lifetime.
+                    tokio::select! {
+                        _ = tokio::time::sleep(Duration::from_secs(10)) => {}
+                        _ = server_token.cancelled() => {}
                     }
                 }
-                // Handler hangs: no response for the lifetime of the connection.
-                tokio::time::sleep(Duration::from_secs(60)).await;
-            });
+                _ = server_token.cancelled() => return,
+            }
         }
     });
 
