@@ -178,8 +178,7 @@ partial class Program
         foreach (var entry in entries)
         {
             bool isProtected = isProtectedPathEntry(entry);
-            string normalized = NormalizePathEntry(entry);
-            if (!isProtected && seen.Contains(entry))
+            if (!isProtected && seen.Contains(NormalizePathEntry(entry)))
             {
                 removed.Add(entry);
                 continue;
@@ -191,7 +190,7 @@ partial class Program
             // without re-checking isProtected. Defense-in-depth: SetPathEntries
             // also independently rejects removing protected entries, so even
             // drift on this side is caught downstream. (code-reviewer MEDIUM)
-            if (!isProtected) seen.Add(entry);
+            if (!isProtected) seen.Add(NormalizePathEntry(entry));
             kept.Add(entry);
         }
 
@@ -409,8 +408,10 @@ partial class Program
 
         var entries = GetPathEntriesCore(env, scope);
 
-        // Don't add duplicates
-        if (entries.Any(e => e.Equals(dir, StringComparison.OrdinalIgnoreCase)))
+        // Don't add duplicates. The guard normalizes both sides (DEF-3, found by the
+        // ticket-34 metamorphic pilot: the raw-compare guard let trailing-separator
+        // variants of an existing entry through) so `path add` agrees with list/health/dedupe.
+        if (entries.Any(e => NormalizePathEntry(e).Equals(NormalizePathEntry(dir), StringComparison.OrdinalIgnoreCase)))
         {
             Console.Error.WriteLine($"Warning: '{dir}' already exists in PATH ({scope})");
             return 0;
