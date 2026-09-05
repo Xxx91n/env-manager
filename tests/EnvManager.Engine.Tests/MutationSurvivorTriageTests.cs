@@ -15,6 +15,7 @@ namespace EnvManager.Engine.Tests;
 /// Survivor #4369 (CollectInheritedSecretsFrom visited.Add) is registered as equivalent
 /// and intentionally has no kill test.
 /// </summary>
+[Collection("CliSnapshotSerial")]
 public class MutationSurvivorTriageTests : IDisposable
 {
     const string FreeName = "EM_TEST_FOO";

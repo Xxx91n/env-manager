@@ -16,6 +16,7 @@ namespace EnvManager.Engine.Tests;
 /// Profiles.json is redirected to a per-test temp directory (RedirectProfilesToTemp)
 /// so LoadProfiles/SaveProfiles never touch the real %LOCALAPPDATA% config.
 /// </summary>
+[Collection("CliSnapshotSerial")]
 public class ProfileSeamValidationTests : IDisposable
 {
     const string FreeName = "EM_TEST_FOO";

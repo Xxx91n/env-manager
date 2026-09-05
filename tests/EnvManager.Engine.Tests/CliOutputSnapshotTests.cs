@@ -422,7 +422,11 @@ public class CliOutputSnapshotTests : VerifyBase
     }
 }
 
-/// <summary>Serializes Console redirection across the snapshot suite.</summary>
+/// <summary>Serializes every test class that flips process-global static state:
+/// Console redirection (snapshot/stdout/help suites) and the Program static seams
+/// (SetProfilesFilePathForTests / SetAppDataDirectoryForTests / SetAudit*PathForTests).
+/// xUnit v2 runs DisableParallelization collections strictly one at a time, never
+/// concurrently with any other collection (issue 14+18+19).</summary>
 [CollectionDefinition("CliSnapshotSerial", DisableParallelization = true)]
 public sealed class CliSnapshotSerialCollection;
 
