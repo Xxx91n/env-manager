@@ -108,7 +108,7 @@ async fn ipc_read_timeout_fires_on_hung_server() {
                 let mut srv = srv;
                 let _ = srv.connect().await;
                 let mut byte = [0u8; 1];
-                while let Ok(Ok(n)) = srv.read(&mut byte).await {
+                while let Ok(n) = srv.read(&mut byte).await {
                     if n == 0 || byte[0] == b'\n' {
                         break;
                     }
