@@ -846,10 +846,28 @@ partial class Program
         return 0;
     }
 
+    // Ticket 20: `profile create --help` (and the -h/-?/? variants) is a help request,
+    // not a profile name. Before this check the parser took args[2] verbatim as the
+    // name and persisted a profile literally named "--help" into profiles.json. The
+    // bare word "help" stays a legal profile name: only flag forms are intercepted.
+    const string ProfileCreateUsage = "Usage: env-manager profile create <name> [--type global|launch] [--target <exe>] [--args <args>] [--cwd <dir>]";
+
+    static bool IsProfileCreateHelp(string arg) =>
+        arg.Equals("--help", StringComparison.OrdinalIgnoreCase)
+        || arg.Equals("-h", StringComparison.OrdinalIgnoreCase)
+        || arg.Equals("-?", StringComparison.Ordinal)
+        || arg.Equals("/?", StringComparison.Ordinal);
+
     static int ProfileCreate(string[] args)
     {
         if (args.Length < 3)
-            return ArgError("Usage: env-manager profile create <name> [--type global|launch] [--target <exe>] [--args <args>] [--cwd <dir>]");
+            return ArgError(ProfileCreateUsage);
+
+        if (IsProfileCreateHelp(args[2]))
+        {
+            Console.WriteLine(ProfileCreateUsage);
+            return 0;
+        }
 
         string name = args[2];
         string profileType = "global";
