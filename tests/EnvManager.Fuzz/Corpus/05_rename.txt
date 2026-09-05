@@ -1,0 +1,1 @@
+rename EM_FUZZ_SEED EM_FUZZ_SEED2 --scope user

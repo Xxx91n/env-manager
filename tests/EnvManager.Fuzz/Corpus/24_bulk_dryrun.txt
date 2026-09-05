@@ -1,0 +1,1 @@
+bulk import file.env --dry-run

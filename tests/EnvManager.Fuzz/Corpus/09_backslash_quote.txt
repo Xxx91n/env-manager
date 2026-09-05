@@ -1,0 +1,1 @@
+profile create "C:\Program Files\PowerShell\7\" --scope user

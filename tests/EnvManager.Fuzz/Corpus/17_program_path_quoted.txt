@@ -1,0 +1,1 @@
+"C:\Program Files\env-manager-cli.exe" list

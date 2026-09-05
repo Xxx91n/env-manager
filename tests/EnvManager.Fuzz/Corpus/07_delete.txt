@@ -1,0 +1,1 @@
+delete EM_FUZZ_SEED --scope user
