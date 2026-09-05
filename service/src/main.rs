@@ -14,6 +14,8 @@ mod audit_ledger;
 mod redaction;
 mod pipe_dacl;
 mod process_guard;
+#[cfg(test)]
+mod resilience_tests;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RuntimeMode {
