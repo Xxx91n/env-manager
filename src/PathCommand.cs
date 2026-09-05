@@ -164,15 +164,21 @@ partial class Program
     {
         string? scope = ParseScope(args, 2, "user");
         if (scope == null) return 1;
-        bool dryRun = args.Contains("--dry-run");
+        return PathDedupeCore(Engine, IsProtectedVariable, IsProtectedPathEntry, scope, args.Contains("--dry-run"));
+    }
 
-        var entries = GetPathEntries(scope);
+    // Seam-parameterized dedupe core (architecture-recovery issue 34): the historical inline
+    // body verbatim, runnable against InMemoryScope for the metamorphic test pilot.
+    internal static int PathDedupeCore(IEnvironmentScope env, Func<string, string, bool> isProtectedVariable, Func<string, bool> isProtectedPathEntry, string scope, bool dryRun)
+    {
+        var entries = GetPathEntriesCore(env, scope);
         var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var removed = new List<string>();
         var kept = new List<string>();
         foreach (var entry in entries)
         {
-            bool isProtected = IsProtectedPathEntry(entry);
+            bool isProtected = isProtectedPathEntry(entry);
+            string normalized = NormalizePathEntry(entry);
             if (!isProtected && seen.Contains(entry))
             {
                 removed.Add(entry);
@@ -216,7 +222,7 @@ partial class Program
             return 0;
         }
 
-        if (!SetPathEntries(kept, scope)) return 1;
+        if (!SetPathEntriesCore(env, isProtectedVariable, isProtectedPathEntry, kept, scope)) return 1;
         Console.WriteLine(JsonSerializer.Serialize(new
         {
             scope,
@@ -227,8 +233,6 @@ partial class Program
         }, JsonOpts));
         return 0;
     }
-
-
 
     /// <summary>
     /// Renames a PATH entry: replaces the old directory string with a new one
@@ -368,6 +372,24 @@ partial class Program
         string? scope = ParseScope(args, 3, "user");
         if (scope == null) return 1;
 
+        // Parse optional --index
+        int? insertIndex = null;
+        for (int i = 3; i < args.Length - 1; i++)
+        {
+            if (args[i] == "--index" && int.TryParse(args[i + 1], out int idx))
+            {
+                insertIndex = idx;
+                break;
+            }
+        }
+
+        return PathAddCore(Engine, IsProtectedVariable, IsProtectedPathEntry, dir, scope, insertIndex);
+    }
+
+    // Seam-parameterized add core (architecture-recovery issue 34): the historical inline
+    // body verbatim, runnable against InMemoryScope for the metamorphic test pilot.
+    internal static int PathAddCore(IEnvironmentScope env, Func<string, string, bool> isProtectedVariable, Func<string, bool> isProtectedPathEntry, string dir, string scope, int? insertIndex)
+    {
         // Validate directory path (injection prevention for direct CLI usage)
         if (string.IsNullOrWhiteSpace(dir))
         {
@@ -385,18 +407,7 @@ partial class Program
             return 1;
         }
 
-        // Parse optional --index
-        int? insertIndex = null;
-        for (int i = 3; i < args.Length - 1; i++)
-        {
-            if (args[i] == "--index" && int.TryParse(args[i + 1], out int idx))
-            {
-                insertIndex = idx;
-                break;
-            }
-        }
-
-        var entries = GetPathEntries(scope);
+        var entries = GetPathEntriesCore(env, scope);
 
         // Don't add duplicates
         if (entries.Any(e => e.Equals(dir, StringComparison.OrdinalIgnoreCase)))
@@ -414,18 +425,23 @@ partial class Program
             entries.Add(dir);
         }
 
-        if (!SetPathEntries(entries, scope)) return 1;
+        if (!SetPathEntriesCore(env, isProtectedVariable, isProtectedPathEntry, entries, scope)) return 1;
         Console.WriteLine($"Added '{dir}' to PATH ({scope}) at index {insertIndex ?? entries.Count - 1}");
         return 0;
     }
-
     static int PathRemove(string[] args)
     {
         string dir = args[2];
         string? scope = ParseScope(args, 3, "user");
         if (scope == null) return 1;
+        return PathRemoveCore(Engine, IsProtectedVariable, IsProtectedPathEntry, dir, scope);
+    }
 
-        var entries = GetPathEntries(scope);
+    // Seam-parameterized remove core (architecture-recovery issue 34): the historical inline
+    // body verbatim, runnable against InMemoryScope for the metamorphic test pilot.
+    internal static int PathRemoveCore(IEnvironmentScope env, Func<string, string, bool> isProtectedVariable, Func<string, bool> isProtectedPathEntry, string dir, string scope)
+    {
+        var entries = GetPathEntriesCore(env, scope);
         int removed = entries.RemoveAll(e => e.Equals(dir, StringComparison.OrdinalIgnoreCase));
 
         if (removed == 0)
@@ -434,7 +450,7 @@ partial class Program
             return 0;
         }
 
-        if (!SetPathEntries(entries, scope)) return 1;
+        if (!SetPathEntriesCore(env, isProtectedVariable, isProtectedPathEntry, entries, scope)) return 1;
         Console.WriteLine($"Removed '{dir}' from PATH ({scope})");
         return 0;
     }
