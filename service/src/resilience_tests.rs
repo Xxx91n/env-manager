@@ -27,6 +27,23 @@ async fn wait_for_pipe(pipe: &str) {
     panic!("pipe {pipe} did not become connectable within 5s");
 }
 
+/// Open with ERROR_PIPE_BUSY (231) retry. A successful open (including this
+/// suite's own wait_for_pipe probe) consumes the server's pending instance;
+/// the next instance exists only after the server loop returns to create().
+/// Retry instead of racing it (documented Windows named-pipe client pattern).
+async fn open_with_retry(pipe: &str) -> tokio::net::windows::named_pipe::NamedPipeClient {
+    for _ in 0..100 {
+        match tokio::net::windows::named_pipe::ClientOptions::new().open(pipe) {
+            Ok(c) => return c,
+            Err(e) if matches!(e.raw_os_error(), Some(231) | Some(2)) => {
+                tokio::time::sleep(Duration::from_millis(50)).await;
+            }
+            Err(e) => panic!("connect to {pipe} failed: {e}"),
+        }
+    }
+    panic!("connect to {pipe}: busy or no instance after 100 retries");
+}
+
 /// Scenario: pipe half-open — a client connects, sends a request, then drops the
 /// connection without reading the response. The server must absorb the broken
 /// pipe (log + close, per handle_connection) and keep accepting new clients; the
