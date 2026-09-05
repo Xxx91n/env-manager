@@ -106,7 +106,10 @@ describe('review-finder regressions', () => {
     const path = await import('node:path/win32')
     const here = path.dirname(import.meta.url.replace('file:///', ''))
     const src = fs.readFileSync(path.join(here, '..', '..', '..', 'src', 'PathCommand.cs'), 'utf-8')
-    const match = src.match(/if \(!isProtected\) seen\.Add\(entry\)/)
+    // ticket 34 DEF-1: the seen-set now stores NormalizePathEntry(entry) so dedupe
+    // agrees with list/health; the isolation contract (protected entries never enter
+    // the bag) is unchanged - pin the normalized form.
+    const match = src.match(/if \(!isProtected\) seen\.Add\(NormalizePathEntry\(entry\)\)/)
     expect(match).toBeTruthy()
   })
 
