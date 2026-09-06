@@ -1,0 +1,1 @@
+﻿{"profile":"em32_si_child","Inherits":["em32_si_parent"]}

@@ -1,0 +1,11 @@
+﻿Warning: Profile pre-flight warnings (strict mode: refusing):
+
+{
+  "preflight": "warn",
+  "command": "profile launch",
+  "profile": "em32_dangling",
+  "strict": true,
+  "warnings": [
+    "Launch target does not exist: em32-no-such-target-32.exe (dangling launch target)"
+  ]
+}

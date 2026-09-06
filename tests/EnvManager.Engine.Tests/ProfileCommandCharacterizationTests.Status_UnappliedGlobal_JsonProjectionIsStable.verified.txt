@@ -1,0 +1,7 @@
+﻿{
+  "name": "em32_status",
+  "isEnabled": false,
+  "isCorrectlyApplied": false,
+  "isApplicable": true,
+  "variableCount": 2
+}

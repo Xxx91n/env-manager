@@ -1,0 +1,1 @@
+﻿Added PATH entry to profile: em32_p

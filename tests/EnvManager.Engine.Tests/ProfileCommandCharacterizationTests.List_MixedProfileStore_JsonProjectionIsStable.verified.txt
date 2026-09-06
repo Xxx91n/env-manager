@@ -1,0 +1,54 @@
+﻿[
+  {
+    "id": "<guid>",
+    "name": "em32_list_global",
+    "isEnabled": false,
+    "appliedAt": null,
+    "inherits": [],
+    "pathEntries": [],
+    "pathScopes": [],
+    "variables": [
+      {
+        "name": "EM32_LIST_A",
+        "value": "a",
+        "scope": "user",
+        "sourceProfile": null
+      }
+    ],
+    "profileType": "global",
+    "targetExecutable": null,
+    "launchArguments": null,
+    "workingDirectory": null,
+    "secretVariables": [],
+    "resolvedPaths": null,
+    "schemaVersion": 0
+  },
+  {
+    "id": "<guid>",
+    "name": "em32_list_launch",
+    "isEnabled": true,
+    "appliedAt": null,
+    "inherits": [],
+    "pathEntries": [
+      "%EM32_LIST_P%"
+    ],
+    "pathScopes": [],
+    "variables": [
+      {
+        "name": "EM32_LIST_B",
+        "value": "b",
+        "scope": "system",
+        "sourceProfile": null
+      }
+    ],
+    "profileType": "launch",
+    "targetExecutable": "em32-target.exe",
+    "launchArguments": null,
+    "workingDirectory": null,
+    "secretVariables": [
+      "EM32_LIST_S"
+    ],
+    "resolvedPaths": null,
+    "schemaVersion": 0
+  }
+]

@@ -1,0 +1,44 @@
+﻿{
+  "profile": "em32_child",
+  "Inherits": [
+    "em32_parent"
+  ],
+  "variables": [
+    {
+      "Name": "EM32_INJ_A",
+      "Value": "child-override",
+      "currentValue": null,
+      "conflict": false
+    },
+    {
+      "Name": "EM32_INJ_PARENT_ONLY",
+      "Value": "p-only",
+      "currentValue": null,
+      "conflict": false
+    },
+    {
+      "Name": "EM32_INJ_SYSTEM_VAR",
+      "Value": "s-value",
+      "currentValue": null,
+      "conflict": false
+    },
+    {
+      "Name": "EM32_INJ_SECRET",
+      "Value": "em32-fake-envelope-ciphertext",
+      "currentValue": null,
+      "conflict": false
+    }
+  ],
+  "pathEntries": [
+    {
+      "path": "%EM32_INJ_P1%",
+      "expandedPath": "%EM32_INJ_P1%",
+      "exists": false
+    },
+    {
+      "path": "em32-inj-relative-dir",
+      "expandedPath": "em32-inj-relative-dir",
+      "exists": false
+    }
+  ]
+}
