@@ -3,6 +3,9 @@ name: release-please
 on:
   push:
     branches: [main]
+  # manual re-run hook (ticket 30 drill: a bad run can otherwise only be retried
+  # by pushing a commit, since tag/release events belong to the next cycle)
+  workflow_dispatch:
 
 permissions:
   contents: write
