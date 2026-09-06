@@ -5,6 +5,14 @@ All notable changes to Env Manager will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.10.1](https://github.com/Xxx91n/env-manager/compare/v0.10.0...v0.10.1) (2026-09-06)
+
+
+### Bug Fixes
+
+* **ci:** repin attest-build-provenance to v4.2.2 (ticket 30 drill finding) ([#49](https://github.com/Xxx91n/env-manager/issues/49)) ([a8f2dd2](https://github.com/Xxx91n/env-manager/commit/a8f2dd2a4c0dfab43ff40baf92a545f6610aede3))
+* **release:** add workflow_dispatch trigger to release-please for manual re-runs (ticket 30 drill finding) ([#51](https://github.com/Xxx91n/env-manager/issues/51)) ([92764cb](https://github.com/Xxx91n/env-manager/commit/92764cb14e7178cb2fa39232208c9fd86a899705))
+
 ## [0.10.0](https://github.com/Xxx91n/env-manager/compare/v0.9.30...v0.10.0) (2026-09-05)
 
 
