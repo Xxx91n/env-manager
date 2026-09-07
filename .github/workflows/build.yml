@@ -234,6 +234,35 @@ jobs:
           path: test-results/*.junit.xml
           if-no-files-found: ignore
 
+      # Ticket 43 (architecture-recovery): audit-ledger hash-chain verification in CI.
+      # Builds a synthetic ledger line (migrate-audit writer contract, hash precomputed
+      # over the canonical event json), proves the strict verdict: tampered chain must
+      # exit 1, clean chain must exit 0. Report mode (no --strict) always exits 0 -
+      # the exit code carries the strict gate. Runs under the issue-24 user-state redirect.
+      - name: Audit ledger verify --strict gate (ticket 43)
+        shell: pwsh
+        env:
+          ENVMANAGER_LOCALAPPDATA: ${{ runner.temp }}\audit-verify-user-state
+        run: |
+          $cli = Join-Path $PWD "bin\Release\net10.0-windows\env-manager-cli.exe"
+          if (-not (Test-Path $cli)) { throw "CLI binary missing: $cli" }
+          New-Item -ItemType Directory -Force -Path $env:ENVMANAGER_LOCALAPPDATA | Out-Null
+          # --- clean chain: audit verify --strict exits 0 ---
+          $ledger = Join-Path $env:ENVMANAGER_LOCALAPPDATA "clean-ledger.jsonl"
+          $line = '{"id":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","timestamp":"2026-09-07T00.00.00.0000000Z","actor":"CLI","action":"migrate","command":"set","name":"EM_CI_A","scope":"user","prevHash":"0000000000000000000000000000000000000000000000000000000000000000","hash":"82a90f68c7b9d3efd73ee2f5f24c49d7ab2f5f1a6d08e7eadde167ce9e90ffb3","ledgerSchemaVersion":1}'
+          Set-Content -Path $ledger -Value $line -Encoding utf8NoBOM
+          & $cli audit verify --ledger $ledger --strict
+          if ($LASTEXITCODE -ne 0) { throw "audit verify --strict failed on a clean chain (exit $LASTEXITCODE)" }
+          # --- tampered chain: audit verify --strict exits 1 ---
+          $tampered = Join-Path $env:ENVMANAGER_LOCALAPPDATA "tampered-ledger.jsonl"
+          (Get-Content $ledger -Raw).Replace("EM_CI_A", "EM_CI_EVIL") | Set-Content -Path $tampered -Encoding utf8NoBOM
+          & $cli audit verify --ledger $tampered --strict
+          if ($LASTEXITCODE -eq 0) { throw "audit verify --strict returned 0 on a tampered chain" }
+          if ($LASTEXITCODE -ne 1) { throw "audit verify --strict returned unexpected exit $LASTEXITCODE on tampered chain" }
+          Write-Host "=== audit verify --strict gate OK (clean=0, tampered=1) ==="
+          # GH Actions pwsh wrapper exits with the last $LASTEXITCODE; the tampered-chain
+          # assertion intentionally leaves it at 1, so reset to green after the checks.
+          exit 0
       - name: Documentation sync check
         shell: pwsh
         run: |
