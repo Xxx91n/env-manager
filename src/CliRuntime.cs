@@ -4,6 +4,8 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
+using EnvManager.Secrets.Manager;
+
 namespace EnvManager;
 
 /// <summary>
