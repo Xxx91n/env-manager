@@ -1104,6 +1104,14 @@ fn restore_window(app: &tauri::AppHandle) {
 }
 
 
+/// Returns the running GUI version. Sources the Cargo package version,
+/// which release tooling keeps in sync with the csproj <Version> single
+/// source of truth (ADR 0003). SettingsDialog consumes this instead of a
+/// hardcoded literal so update verdicts compare against the real version.
+#[tauri::command]
+fn app_version() -> String {
+    env!("CARGO_PKG_VERSION").to_string()
+}
 /// Checks for available updates by querying the GitHub Releases API.
 /// Returns the latest release tag name, release URL, and whether an update is available.
 #[tauri::command]

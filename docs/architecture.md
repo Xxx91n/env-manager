@@ -91,7 +91,7 @@ The GUI implements a multi-layer caching strategy for production-scale environme
 
 The application checks for updates via the GitHub Releases API.
 
-**GUI**: The Settings dialog has a "Check for Updates" button. Clicking it invokes `check_for_updates` Tauri command in `main.rs`, which uses PowerShell `Invoke-RestMethod` to query `https://api.github.com/repos/Xxx91n/env-manager/releases/latest`. The response is parsed in Rust, compared against the current version, and returned to the frontend. If a newer version exists, a download link to the release page is shown. The check is triggered manually by the user - no background polling.
+**GUI**: The Settings dialog has a "Check for Updates" button. Clicking it first invokes the `app_version` Tauri command (returns the Cargo package version, which release tooling keeps in sync with the csproj `<Version>` single source, ADR 0003), then invokes `check_for_updates` with that runtime version - the GUI never hardcodes a version literal (pinned by `review-regressions.test.ts`). `check_for_updates` in `main.rs` uses PowerShell `Invoke-RestMethod` to query `https://api.github.com/repos/Xxx91n/env-manager/releases/latest`. The response is parsed in Rust, compared against the runtime version, and returned to the frontend. If a newer version exists, a download link to the release page is shown. The check is triggered manually by the user - no background polling. (Ticket 37 will rewire this flow onto tauri-plugin-updater.)
 
 **CLI**: The `update check` command uses `System.Net.Http.HttpClient` to query the same GitHub Releases API. Output is JSON with `currentVersion`, `latestVersion`, `isUpdateAvailable`, and `releaseUrl`. This command is read-only and safe for concurrent execution.
 
