@@ -94,7 +94,7 @@ internal static class AgentsCommand
                     tip = "Use --debug for verbose stderr logging. Pin to --scope user for non-interactive agent workflows (no elevation needed)."
                 }
             };
-            Console.WriteLine(JsonSerializer.Serialize(spec, JsonOptsIndented));
+            Console.WriteLine(JsonSerializer.Serialize(spec, Program.JsonOptsIndented));
             return 0;
         }
 

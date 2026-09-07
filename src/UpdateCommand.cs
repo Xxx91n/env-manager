@@ -5,7 +5,7 @@ using System.Text.Json;
 namespace EnvManager;
 
 /// <summary>
-/// Update command domain (architecture-recovery issue 05 + ticket 27): `update check` and version comparison, extracted from partial class Program to its own internal class so Program stops growing. VersionIsNewer stays nested in this class (no other domain reads it) - the closure of the helper on Run is the boundary the compiler enforces. JsonOpts / ArgError / ScrubExceptionMessage still live on partial Program via CliRuntime; this class reaches them via the existing Program.JsonOpts call shape.
+/// Update command domain (architecture-recovery issue 05 + ticket 27): `update check` and version comparison, extracted from partial class Program to its own internal class so Program stops growing. VersionIsNewer stays nested in this class (no other domain reads it) - the closure of the helper on Run is the boundary the compiler enforces. Program.JsonOpts / Program.ArgError / Program.ScrubExceptionMessage still live on partial Program via CliRuntime; this class reaches them via the existing Program.JsonOpts call shape.
 /// </summary>
 internal static class UpdateCommand
 {
@@ -39,17 +39,17 @@ internal static class UpdateCommand
                     isUpdateAvailable = isNewer,
                     releaseUrl = htmlUrl,
                 };
-                Console.WriteLine(System.Text.Json.JsonSerializer.Serialize(result, JsonOpts));
+                Console.WriteLine(System.Text.Json.JsonSerializer.Serialize(result, Program.JsonOpts));
                 return 0;
             }
             catch (Exception ex)
             {
-                Console.Error.WriteLine("Error checking for updates: " + ScrubExceptionMessage(ex.Message));
+                Console.Error.WriteLine("Error checking for updates: " + Program.ScrubExceptionMessage(ex.Message));
                 return 1;
             }
         }
 
-        return ArgError("Usage: env-manager update check");
+        return Program.ArgError("Usage: env-manager update check");
     }
 
     internal static bool VersionIsNewer(string remote, string local)

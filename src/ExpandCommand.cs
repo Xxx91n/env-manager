@@ -19,13 +19,13 @@ internal static class ExpandCommand
             string next = ExpandPattern.Replace(expanded, match =>
             {
                 string name = match.Groups[1].Value;
-                return GetVariableValue(name, "user") ?? GetVariableValue(name, "system") ??
+                return Program.GetVariableValue(name, "user") ?? Program.GetVariableValue(name, "system") ??
                     Environment.GetEnvironmentVariable(name) ?? match.Value;
             });
             if (next == expanded) break;
             expanded = next;
         }
-        Console.WriteLine(JsonSerializer.Serialize(new { value, expanded }, JsonOpts));
+        Console.WriteLine(JsonSerializer.Serialize(new { value, expanded }, Program.JsonOpts));
         return 0;
     }
 }
