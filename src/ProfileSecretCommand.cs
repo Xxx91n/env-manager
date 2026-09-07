@@ -6,7 +6,7 @@ namespace EnvManager;
 /// Profile secret sub-domain (architecture-recovery issue 26, ticket 26 split).
 /// Extracted from ProfileCommand.cs: ProfileAddSecret / ProfileEditSecret / ProfileRemoveSecret /
 /// ProfileRevealSecret / RunSecretProviderCommand / ProfileExportSecrets / ProfileImportSecrets
-/// plus TryDecryptSafe. Behaviour is verbatim from the original 1605-line monolith; the
+/// (TryDecryptSafe itself moved to CliRuntime.cs - shared reveal-path infrastructure). Behaviour is verbatim from the original 1605-line monolith; the
 /// splitting rationale is per Q5 ticket 26 ("launch/secret-provider first, then CRUD") and
 /// Q2 ticket 26 ("type-level split is ticket 27, file-level split here").
 ///
@@ -304,14 +304,5 @@ partial class Program
         RecordProfileAudit("profile import-secrets", profileName,
             JsonSerializer.Serialize(new { file = inputFile, imported = succeeded, failed = failedImp }), null);
         return 0;
-    }
-
-    // Best-effort decrypt for the show-with-reveal path. Returns "<decryption-failed>"
-    // on any exception (fail-closed UI signal: never echo ciphertext back to stdout).
-    // v0.8.0: also resolves the v0.8 secret-mount envelope ("mount:" prefixed ID).
-    static string TryDecryptSafe(string ciphertext)
-    {
-        try { return SecretProviderManager.Decrypt(ResolveSecretMount(ciphertext) ?? ciphertext); }
-        catch { return "<decryption-failed>"; }
     }
 }

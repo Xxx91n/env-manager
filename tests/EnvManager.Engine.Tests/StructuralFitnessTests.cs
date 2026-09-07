@@ -120,8 +120,14 @@ public class StructuralFitnessTests
     {
         // Sanity that ticket 27 ramp-1 didn't accidentally remove Main or
         // duplicate it across partials. NetArchTest / reflection confirms
-        // exactly one static Main(string[]) on Program after the ramp.
-        var mains = typeof(Program).GetMethods()
+        // exactly one static Main(string[]) on Program after the ramp. Main is
+        // declared without an access modifier (private) - the flags must include
+        // NonPublic or the scan silently returns an empty collection.
+        var mains = typeof(Program).GetMethods(System.Reflection.BindingFlags.Public
+                                | System.Reflection.BindingFlags.NonPublic
+                                | System.Reflection.BindingFlags.Static
+                                | System.Reflection.BindingFlags.Instance
+                                | System.Reflection.BindingFlags.DeclaredOnly)
             .Where(m => m.Name == "Main")
             .Where(m => m.ReturnType == typeof(int))
             .Where(m => m.IsStatic)
