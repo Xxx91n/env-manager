@@ -1,0 +1,1 @@
+﻿Error: Profile 'em32_launch' is a Launch (local) profile and cannot be applied to the registry. Use 'env-manager-cli profile launch <name>' to spawn its target with isolated variables.

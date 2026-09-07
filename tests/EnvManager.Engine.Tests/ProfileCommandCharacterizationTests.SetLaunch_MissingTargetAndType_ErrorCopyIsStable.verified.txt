@@ -1,0 +1,1 @@
+﻿Error: at least --target or --type must be specified

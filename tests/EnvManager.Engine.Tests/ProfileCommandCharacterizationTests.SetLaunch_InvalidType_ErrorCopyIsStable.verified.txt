@@ -1,0 +1,1 @@
+﻿Error: --type must be 'global' or 'launch'

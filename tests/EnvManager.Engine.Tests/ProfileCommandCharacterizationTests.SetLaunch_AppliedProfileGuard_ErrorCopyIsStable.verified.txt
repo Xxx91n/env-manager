@@ -1,0 +1,1 @@
+﻿Error: Cannot modify a launch configuration while profile 'em32_applied' is applied. Unapply it first.
