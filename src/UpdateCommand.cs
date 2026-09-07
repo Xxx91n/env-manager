@@ -5,11 +5,11 @@ using System.Text.Json;
 namespace EnvManager;
 
 /// <summary>
-/// Update command domain (architecture-recovery issue 05): `update check` and version comparison, moved verbatim from Program.cs. Behavior unchanged.
+/// Update command domain (architecture-recovery issue 05 + ticket 27): `update check` and version comparison, extracted from partial class Program to its own internal class so Program stops growing. VersionIsNewer stays nested in this class (no other domain reads it) - the closure of the helper on Run is the boundary the compiler enforces. JsonOpts / ArgError / ScrubExceptionMessage still live on partial Program via CliRuntime; this class reaches them via the existing Program.JsonOpts call shape.
 /// </summary>
-partial class Program
+internal static class UpdateCommand
 {
-    static int RunUpdate(string[] args)
+    internal static int Run(string[] args)
     {
         string sub = args.Length > 1 ? args[1].ToLowerInvariant() : "check";
 
@@ -52,7 +52,7 @@ partial class Program
         return ArgError("Usage: env-manager update check");
     }
 
-    static bool VersionIsNewer(string remote, string local)
+    internal static bool VersionIsNewer(string remote, string local)
     {
         var parse = (string s) => s.Split('.')
             .Select(p => int.TryParse(p.Trim(), out int n) ? n : 0)

@@ -5,11 +5,11 @@ using System.Text.Json;
 namespace EnvManager;
 
 /// <summary>
-/// Agents command domain (architecture-recovery issue 05): the `agents` CLI spec emitter, moved verbatim from Program.cs. Behavior unchanged.
+/// Agents command domain (architecture-recovery issue 05 + ticket 27): the `agents` CLI spec emitter, extracted from partial class Program to its own internal class so that the Program type stops accumulating domain methods. Behaviour is verbatim - no source-level change to the body. The internal accessibility keeps cross-domain helpers invisible to other assemblies while leaving Program itself a thin Main dispatcher that calls <see cref="Run"/>.
 /// </summary>
-partial class Program
+internal static class AgentsCommand
 {
-    static int RunAgents(string[] args)
+    internal static int Run(string[] args)
     {
         bool pathOnly = args.Length > 1 && args[1] == "--path";
         bool jsonOutput = args.Length > 1 && args[1] == "--json";
