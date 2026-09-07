@@ -129,14 +129,30 @@ describe('Secret provider regression safety', () => {
   })
 
   it('Logs never record secret values - audit records only names and markers', () => {
-    const programSrc = readFileSync(resolve(__dirname, '..' , '..', '..', 'src', 'ProfileCommand.cs'), 'utf8')
+    // Ticket 26 split ProfileCommand into three files; read all of them so the
+    // source-gate assertions look at the post-split code surface. <redacted> now
+    // lives in ProfileSecretCommand.cs (ProfileRevealSecret + add/edit-secret).
+    const programSrc = [
+      readFileSync(resolve(__dirname, '..' , '..', '..', 'src', 'ProfileCommand.cs'), 'utf8'),
+      readFileSync(resolve(__dirname, '..' , '..', '..', 'src', 'ProfileLaunchCommand.cs'), 'utf8'),
+      readFileSync(resolve(__dirname, '..' , '..', '..', 'src', 'ProfileSecretCommand.cs'), 'utf8'),
+    ].join('\n')
     // Audit records for secret operations should use <redacted> or <encrypted>
     expect(programSrc).toContain('<redacted>')
     expect(programSrc).toContain('<encrypted>')
   })
 
   it('Profile launch decrypts secrets in-process and never logs plaintext', () => {
-    const programSrc = readFileSync(resolve(__dirname, '..' , '..', '..', 'src', 'ProfileCommand.cs'), 'utf8')
+    // Ticket 26 split ProfileCommand into three files; read all of them so the
+    // source-gate assertions look at the post-split code surface.
+    // SecretProviderManager.Decrypt + SecretVariables.Contains now live in
+    // ProfileLaunchCommand.cs (env injection in ProfileLaunch) and
+    // ProfileSecretCommand.cs (reveal + add/edit secret JSON).
+    const programSrc = [
+      readFileSync(resolve(__dirname, '..' , '..', '..', 'src', 'ProfileCommand.cs'), 'utf8'),
+      readFileSync(resolve(__dirname, '..' , '..', '..', 'src', 'ProfileLaunchCommand.cs'), 'utf8'),
+      readFileSync(resolve(__dirname, '..' , '..', '..', 'src', 'ProfileSecretCommand.cs'), 'utf8'),
+    ].join('\n')
     expect(programSrc).toContain('SecretProviderManager.Decrypt')
     expect(programSrc).toContain('SecretVariables.Contains(v.Name, StringComparer.OrdinalIgnoreCase)')
   })
