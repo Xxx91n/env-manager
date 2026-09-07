@@ -3,7 +3,7 @@
   import { createEventDispatcher, onMount } from 'svelte'
   import { t, locale } from 'svelte-i18n'
   import { locales, defaultLanguage } from '../i18n'
-  import { isCliInPath, addCliToPath, removeCliFromPath, listPathEntries, checkForUpdates, bulkImport, bulkExport, pickOpenFile, pickSaveFile, serviceStatus, serviceHealth, servicePing, serviceRefreshMount, serviceRotateMount, serviceShutdown, serviceReload, serviceStart, serviceStop, exportState, importState } from '../api'
+  import { isCliInPath, addCliToPath, removeCliFromPath, listPathEntries, appVersion, checkForUpdates, bulkImport, bulkExport, pickOpenFile, pickSaveFile, serviceStatus, serviceHealth, servicePing, serviceRefreshMount, serviceRotateMount, serviceShutdown, serviceReload, serviceStart, serviceStop, exportState, importState } from '../api'
   import { get } from 'svelte/store'
   import { setSetting, frontendLog, getLightweightConfig as getLwConfig, setLightweightConfig as setLwConfig } from '../settingsStore'
   import { showToast } from '../stores'
@@ -278,7 +278,7 @@
     updateChecking = true
     updateAvailable = null
     try {
-      const version = '0.5.0'
+      const version = await appVersion()
       const info = await checkForUpdates(version)
       latestVersion = info.latestVersion
       releaseUrl = info.releaseUrl

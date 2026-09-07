@@ -185,6 +185,24 @@ describe('review-finder regressions', () => {
     expect(updateBlock![0]).toContain('command.creation_flags(CREATE_NO_WINDOW)')
   })
 
+  it('ticket 36: SettingsDialog reads the runtime version via app_version and never hardcodes a version literal', async () => {
+    const fs = await import('node:fs')
+    const path = await import('node:path/win32')
+    const here = path.dirname(import.meta.url.replace('file:///', ''))
+    const dialog = fs.readFileSync(path.join(here, 'components', 'SettingsDialog.svelte'), 'utf-8')
+    const api = fs.readFileSync(path.join(here, 'api.ts'), 'utf-8')
+    const mainRs = fs.readFileSync(path.join(here, '..', '..', 'src-tauri', 'src', 'main.rs'), 'utf-8')
+    // ADR 0003: csproj <Version> is the single version source. The update
+    // verdict must compare against the runtime-reported version, never a
+    // hardcoded literal assignment like `const version = '0.5.0'`.
+    expect(dialog).not.toMatch(/const version = ['"]\d+\.\d+\.\d+['"]/)
+    expect(dialog).toContain('await appVersion()')
+    expect(api).toContain("invoke<string>('app_version')")
+    expect(mainRs).toContain('fn app_version()')
+    // the command is registered on the invoke_handler surface
+    expect(mainRs).toMatch(/generate_handler!\[[\s\S]*app_version,/)
+  })
+
   it('preserves RegistryValueKind and verifies exact values during toggle recovery', () => {
     const program = readFileSync(join(repoRoot, 'src', 'RegistryScope.cs'), 'utf8')
     expect(program).toContain('RegistryValueKind backupKind = key.GetValueKind(backupName)')

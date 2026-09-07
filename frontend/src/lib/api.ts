@@ -187,6 +187,17 @@ export interface UpdateInfo {
 }
 
 /**
+ * Returns the running GUI version from the Tauri backend
+ * (Cargo package version, kept in sync with the csproj <Version> single source, ADR 0003).
+ */
+export async function appVersion(): Promise<string> {
+  try {
+    return await invoke<string>('app_version')
+  } catch {
+    return ''
+  }
+}
+/**
  * Checks for available updates by querying the GitHub Releases API via the Rust backend.
  * Returns the latest version, release URL, and whether an update is available.
  */
