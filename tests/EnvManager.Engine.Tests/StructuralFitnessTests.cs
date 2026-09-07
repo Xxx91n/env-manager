@@ -188,8 +188,8 @@ public class StructuralFitnessTests
             // file's only mention is a comment (// or /* ... */). A real
             // helper call would be `name(` not `name ` or `name<`.
             var matches = Regex.Matches(srcB, Regex.Escape(name) + @"\s*\(");
-            Assert.Empty(
-                matches,
+            Assert.True(
+                matches.Count == 0,
                 $"{pathA} helper `{name}` is referenced as a call site in {pathB} - subdomain cycle or leak. "
                 + "Either move the caller into the same file as the helper, or extract the helper to CliRuntime.cs.");
         }
@@ -197,8 +197,8 @@ public class StructuralFitnessTests
         foreach (var name in crudNamesB)
         {
             var matches = Regex.Matches(srcA, Regex.Escape(name) + @"\s*\(");
-            Assert.Empty(
-                matches,
+            Assert.True(
+                matches.Count == 0,
                 $"{pathB} helper `{name}` is referenced as a call site in {pathA} - subdomain cycle or leak.");
         }
     }
