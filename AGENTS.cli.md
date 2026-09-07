@@ -51,7 +51,7 @@ All commands: `env-manager-cli <command> [args] [--scope user|system] [--debug]`
 | `protection` | `protection <subcommand>` | List and manage protected vars + PATH entries |
 | `update` | `update check` | Check GitHub releases for newer version (network) |
 | `service` | `service status\|ping\|health\|refresh\|rotate\|reload\|shutdown` | IPC gateway to env-manager-service (secret mount lifecycle) |
-| `audit` | `audit list\|encrypt-file\|migrate-audit\|verify-ledger\|export-survival-kit\|recover-from-ledger` | Audit ledger management (hash-chained tamper-evident) |
+| `audit` | `audit list\|verify\|encrypt-file\|migrate-audit\|verify-ledger\|export-survival-kit\|recover-from-ledger` | Audit ledger management (hash-chained tamper-evident) |
 | `export-state` | `export-state --output <file>` | Export all internal config files as DPAPI-CurrentUser-encrypted archive |
 | `import-state` | `import-state --input <file> [--dry-run]` | Import DPAPI-encrypted state archive (atomically writes all config files) |
 | `agents` | `agents [--path\|--json\|--summary]` | Output this guide / machine-readable spec |

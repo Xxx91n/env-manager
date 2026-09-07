@@ -46,7 +46,10 @@ public class ProgramMethodBudgetTests
     // and wait for ramp-2+. The real post-ramp-1 baseline is therefore 200 human-authored
     // methods, not the 6 that an over-eager first draft assumed. The budget shrinks as
     // ramp-2+ migrates more domains.
-    private const int MethodsAfterRamp1 = 200;
+    // Ticket 43 (spec Phase 6) adds ResolveAuditLedgerPathForCommand to Program (the audit
+    // ledger-path seam used by the new AuditVerify.Run default routing): 200 -> 201. The
+    // budget shrinks again when a ramp-2+ ramp migrates the audit domain off Program.
+    private const int MethodsAfterRamp1 = 201;
 
     [Fact]
     public void Program_MethodCount_IsAtOrBelowRamp1Budget()

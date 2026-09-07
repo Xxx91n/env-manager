@@ -36,6 +36,10 @@ _Avoid_: backend, vault (ambiguous with HashiCorp Vault), store
 The Phase C v0.9.0 optional `secrets-agent.exe` background process that refreshes `Periodic` mounts on interval. Default off. Only `CanRotate=true` providers get a lease concept.
 _Avoid_: refresh daemon, sync loop, agent process
 
+**Audit Ledger**:
+The append-only, hash-chained **tamper-evident ledger** at `%ProgramData%\EnvManager\audit-ledger.jsonl` (AGT ADR-0017 / Sigstore Rekor isomorphic; schema v1: `hash = SHA256(prevHash || canonical_json(event minus hash/ledgerSchemaVersion))`, genesis prevHash = 64 zeros). `audit verify --strict` is the chain-verification step (CI gate, ticket 43). It is the authoritative audit trail; `audit.json` stays for backward-compatible undo. Not an event store - never replayed as one (Fowler warning; spec.md 6.0 naming correction).
+_Avoid_: event store, event log, audit log (ambiguous with audit.json), blockchain
+
 **Capability-Scoped Agentic Surface**:
 The Phase B v0.8.5 `agentCapabilities` whitelist on `secret-providers.json`. Default empty = all-allowed (today's behaviour). Opt-in deployments can reject parallel set/delete calls from LLM agents.
 _Avoid_: agent gate, capability filter, agent whitelist

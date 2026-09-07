@@ -137,7 +137,7 @@ env-manager-cli.exe restore backup.json
 
 # Disaster recovery + tamper-evident audit
 env-manager-cli.exe export-state --output state.dpapi
-env-manager-cli.exe audit verify-ledger
+env-manager-cli.exe audit verify --strict
 
 # Service control
 env-manager-cli.exe service status

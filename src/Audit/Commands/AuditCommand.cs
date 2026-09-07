@@ -3,10 +3,12 @@ using System.Linq;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
+using EnvManager.Secrets.Manager;
+
 namespace EnvManager;
 
 /// <summary>
-/// Audit command domain (architecture-recovery issue 05): the `audit` subcommand (list, encrypt-file, ledger operation routing), moved verbatim from Program.cs. Behavior unchanged.
+/// Audit command domain (architecture-recovery issue 05): the `audit` subcommand (list, encrypt-file, ledger operation routing), moved verbatim from Program.cs; ticket 43 adds the `verify` hash-chain subcommand routed to AuditVerify.Run. Everything else unchanged.
 /// </summary>
 partial class Program
 {
@@ -20,6 +22,7 @@ partial class Program
             Console.Error.WriteLine("  list [--mount <id>]                        List audit ledger events");
             Console.Error.WriteLine("  migrate-audit [--dry-run]                 Migrate audit.json to hash-chained ledger");
             Console.Error.WriteLine("  verify-ledger                              Verify audit ledger hash chain");
+            Console.Error.WriteLine("  verify [--ledger <file>] [--strict]        Verify hash-chain integrity (ticket 43)");
             Console.Error.WriteLine("  export-survival-kit [--mount <id>] [--output <file>]  Export DPAPI-encrypted survival kit");
             Console.Error.WriteLine("  recover-from-ledger                        Recover mounts from ledger replay");
             return 1;
@@ -107,6 +110,8 @@ partial class Program
                 return RunAuditMigrate(args);
             case "verify-ledger":
                 return RunAuditVerifyLedger();
+            case "verify":
+                return AuditVerify.Run(args);
             case "export-survival-kit":
                 return RunAuditExportSurvivalKit(args);
             case "recover-from-ledger":
@@ -115,6 +120,19 @@ partial class Program
                 Console.Error.WriteLine("Unknown audit subcommand: " + sub);
                 return 1;
         }
+    }
+
+    /// <summary>
+    /// Default ledger path for audit verify: the same %ProgramData% audit-ledger.jsonl
+    /// that verify-ledger reads (ticket 43). Overridable in tests via the --ledger flag.
+    /// </summary>
+    internal static string ResolveAuditLedgerPathForCommand(string[] args)
+    {
+        for (int i = 1; i < args.Length - 1; i++)
+        {
+            if (args[i] == "--ledger" && i + 1 < args.Length) return args[i + 1];
+        }
+        return AuditLedgerPath;
     }
 
     // --- audit/history storage + `history` command (architecture-recovery issue 06, moved verbatim from EnvFeatures.cs) ---

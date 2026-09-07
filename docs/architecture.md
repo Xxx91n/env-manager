@@ -135,7 +135,7 @@ Profile-level mutations (`create`, `delete`, `rename`, `add-var`, `remove-var`, 
 
 - Audit entries for profile mutations carry `Scope = "profile"` so the GUI and `history` command can distinguish them from registry-level entries.
 - `OldValue` / `NewValue` store a compact JSON summary of the affected profile (`id`, `name`, `isEnabled`, `inherits`, `pathEntries`, `variables`) so an undo restores that profile state without clobbering other profiles.
-- `TryUndoProfileAudit(entry)` in `src/ProfileAudit.cs` reverses create (delete), delete (re-create from `OldValue`), rename (restore old name), add-var (remove the added variable), remove-var (re-add the removed variable), and edit-var (restore the pre-edit variable). `apply`, `unapply`, `set-inherits`, `add-path`, and `remove-path` are non-undoable no-ops; unknown `profile <x>` subcommands emit an error and `return false` rather than silently reporting success.
+- `TryUndoProfileAudit(entry)` in `src/Audit/Recording/ProfileAudit.cs` (Audit bounded context, ticket 43) reverses create (delete), delete (re-create from `OldValue`), rename (restore old name), add-var (remove the added variable), remove-var (re-add the removed variable), and edit-var (restore the pre-edit variable). `apply`, `unapply`, `set-inherits`, `add-path`, and `remove-path` are non-undoable no-ops; unknown `profile <x>` subcommands emit an error and `return false` rather than silently reporting success.
 - `RunHistoryCommand` dispatches profile entries to `TryUndoProfileAudit` and registry entries to the stale-value-verified undo path. The two paths never overlap.
 
 

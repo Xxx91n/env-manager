@@ -52,7 +52,7 @@
 - **备份/恢复**：JSON 备份、diff、合并、验证、审计历史和受保护的撤销
 - **批量导入/导出**：`.env`、CSV、JSON，支持 dry-run 冲突预览
 - **状态导出/导入**：`export-state`/`import-state` — DPAPI 加密的全状态归档，用于容灾恢复
-- **审计账本**：`audit migrate-audit` / `verify-ledger` / `export-survival-kit` / `recover-from-ledger`
+- **审计账本**：`audit migrate-audit` / `verify --strict` / `verify-ledger` / `export-survival-kit` / `recover-from-ledger`（`verify` 为 CI 链校验门：正常链退出 0，任一断裂退出 1）
 - **服务控制**：`service status` / `ping` / `refresh` / `rotate` / `reload` / `shutdown`
 - 用户和系统范围支持，用户范围无需管理员权限
 
@@ -186,7 +186,7 @@ env-manager-cli.exe import-state --input state.dpapi
 
 # 审计账本
 env-manager-cli.exe audit migrate-audit
-env-manager-cli.exe audit verify-ledger
+env-manager-cli.exe audit verify --strict
 ```
 
 > 启动目标位于 Windows 系统目录（System32）内时会在 profile 保存/启动时被拒绝，以防止 system32 劫持。

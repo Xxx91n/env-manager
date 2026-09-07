@@ -69,6 +69,7 @@ All commands follow: `env-manager-cli <command> [arguments] [--flags]`
 | `service reload` | `service reload` | Tell env-manager-service to reload secretMount.json (write) |
 | `service shutdown` | `service shutdown` | Tell env-manager-service to stop its IPC server and reconcile loop (write) |
 | `audit list` | `audit list [--json]` | List audit ledger events (read-only). With `--json`, output raw JSON |
+| `audit verify` | `audit verify [--ledger <file>] [--strict]` | Verify hash-chained ledger integrity: prev_hash linkage + entry_hash recomputation. Report mode (default) prints the JSON verdict and always exits 0; `--strict` exits 0 only when every line verified, 1 on any breakage (CI gate). Missing/empty ledger = trivially OK |
 | `audit encrypt-file` | `audit encrypt-file --input <file> --output <file>` | DPAPI-encrypt a file (write). Used by service export_survival_kit. 50MB cap, system dirs blocked |
 
 ## Scope
