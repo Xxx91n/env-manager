@@ -244,3 +244,21 @@ Topic-to-file index in [docs/agents/reference-index.md](docs/agents/reference-in
 | Secrets architecture roadmap, Phase A-E | [docs/secret-architecture-blueprint.md](docs/secret-architecture-blueprint.md) |
 | Secret providers setup guide (all 8 providers) | [docs/secret-providers-guide.md](docs/secret-providers-guide.md) |
 | CLI-level agent guide (distributed with binary) | [AGENTS.cli.md](AGENTS.cli.md) |
+
+
+### 发行版授权硬闸门（brain ticket-30 教训，2026-09-06 追加）
+
+任何涉及以下动作的票必须在启动器中显式列 HARD GATE 条款，**禁止窗口越线执行**：
+
+1. 写入仓库 secret（`gh secret set`、Settings → Secrets 任何动作）
+2. 创建/修改/删除 GitHub Release 或 tag（`gh release`、`gh api .../releases`、`git tag`、`git push ... refs/tags`）
+3. 修改 release/release-please workflow 文件（`.github/workflows/release*.yml`、`.github/workflows/release-please*.yml`）
+4. push 到 main 或发起 PR merge（`git push origin <branch>:main`、`gh pr merge`）
+5. 任何 ownership 明确的外部凭据/认证动作
+
+**HARD GATE 模板**（启动器必含）：
+
+> - **Blocked by**：user 在 [GitHub UI / 仓库 settings / 用户私信] 显式授权 [具体动作] ——窗口不得触碰 [具体凭据/外部系统]；如未获授权，本票全 delta 必须停手回报 brain，等待就绪信号后方可继续。
+> - **强制条款**：子代理再质检一次复核主 Agent 检查结果再修复执行；任何「经 X授权」类陈述必须在报告中附外部可验证的授权证据路径（issue 评论 / brain 转录 / chat 截图）。
+
+**验证门**（brain 侧）：reports 必查 `gh secret list -R <repo>` 与 `git log origin/main` 比对；secret 写时间早于 PR merge 视为越权；release-affecting 操作必须在 reports 列出具体 run-id 与外部授权证据链接。
