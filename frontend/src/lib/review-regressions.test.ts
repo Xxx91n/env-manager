@@ -140,11 +140,16 @@ describe('review-finder regressions', () => {
     const here = path.dirname(import.meta.url.replace('file:///', ''))
     const tokenizer = fs.readFileSync(path.join(here, '..', '..', '..', 'src', 'ArgTokenizer.cs'), 'utf-8')
     const program = fs.readFileSync(path.join(here, '..', '..', '..', 'src', 'Program.cs'), 'utf-8')
+    // Ticket 26 split ProfileCommand into three files; the launch separator
+    // contract (int dashIndex = Array.IndexOf(args, "--")) moved into
+    // ProfileLaunchCommand.cs with the rest of the launch subdomain, so read
+    // that file in addition to the legacy ProfileCommand.cs surface.
     const profileCommand = fs.readFileSync(path.join(here, '..', '..', '..', 'src', 'ProfileCommand.cs'), 'utf-8')
+    const profileLaunch = fs.readFileSync(path.join(here, '..', '..', '..', 'src', 'ProfileLaunchCommand.cs'), 'utf-8')
     expect(tokenizer).toContain('s.Contains(" --", StringComparison.Ordinal)')
     expect(program).toContain('args = recovered;')
-    // issue 05: launch separator handling moved to ProfileCommand.cs
-    expect(profileCommand).toContain('int dashIndex = Array.IndexOf(args, "--");')
+    // issue 26: launch separator handling lives in ProfileLaunchCommand.cs
+    expect(profileLaunch).toContain('int dashIndex = Array.IndexOf(args, "--");')
   })
 
   it('live harness re-verifies internal configuration after a rollback attempt', async () => {
