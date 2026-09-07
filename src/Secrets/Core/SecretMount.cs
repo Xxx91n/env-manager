@@ -1,7 +1,12 @@
+// NOTE (ticket 38): this file lives inside the src/Secrets/ bounded context and the
+// SecretMount data class is EnvManager.Secrets.Core. The trailing partial class Program
+// members stay in namespace EnvManager because a partial class cannot span namespaces.
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using EnvManager.Secrets.Core;
 
-namespace EnvManager;
+namespace EnvManager.Secrets.Core
+{
 
 // v0.8.0 Phase A: SecretMount schema v2.
 // A SecretMount decouples the secret envelope (provider + ciphertext/targetName)
@@ -31,7 +36,10 @@ class SecretMount
     // The profile name that owns this mount. Used for migration and cleanup.
     [JsonPropertyName("profileName")] public string? ProfileName { get; set; }
 }
+}
 
+namespace EnvManager
+{
 partial class Program
 {
     static string SecretMountFilePath
@@ -136,4 +144,5 @@ partial class Program
         var mount = mounts.FirstOrDefault(m => m.Id.Equals(mountId, StringComparison.OrdinalIgnoreCase));
         return mount?.Envelope;
     }
+}
 }

@@ -14,6 +14,7 @@
 using System.Net;
 using System.Text;
 using System.Text.Json;
+using EnvManager.Secrets.Providers;
 
 namespace EnvManager.Engine.Tests;
 

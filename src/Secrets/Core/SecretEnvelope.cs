@@ -6,7 +6,7 @@ using System;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
-namespace EnvManager;
+namespace EnvManager.Secrets.Core;
 
 internal sealed class SecretEnvelope
 {

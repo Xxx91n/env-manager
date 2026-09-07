@@ -40,6 +40,10 @@ _Avoid_: refresh daemon, sync loop, agent process
 The Phase B v0.8.5 `agentCapabilities` whitelist on `secret-providers.json`. Default empty = all-allowed (today's behaviour). Opt-in deployments can reject parallel set/delete calls from LLM agents.
 _Avoid_: agent gate, capability filter, agent whitelist
 
+**Secrets Namespace**:
+The ticket 38 bounded-context layout under `src/Secrets/`: `EnvManager.Secrets.Core` (envelope, mounts, provider contract, JSON contexts), `EnvManager.Secrets.Providers` (the 8 `ISecretProvider` adapter implementations), `EnvManager.Secrets.Manager` (`SecretProviderManager` routing/rotation). Outside the Secrets context only Core and Manager may be consumed; Providers types never leak past the adapter boundary (StructuralFitnessTests Rule 4).
+_Avoid_: secrets folder (ambiguous with the on-disk secret stores), secrets module, secrets layer
+
 ## Decisions
 
 > **Process record — decisions are sedimented into ADRs.**

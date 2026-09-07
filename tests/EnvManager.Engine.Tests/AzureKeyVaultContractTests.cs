@@ -5,6 +5,7 @@ using EnvManager;
 
 using Testcontainers.LowkeyVault;
 using Xunit;
+using EnvManager.Secrets.Providers;
 
 namespace EnvManager.Engine.Tests;
 

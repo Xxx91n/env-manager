@@ -5,7 +5,7 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
-namespace EnvManager;
+namespace EnvManager.Secrets.Core;
 
 [JsonSerializable(typeof(SecretEnvelope))]
 [JsonSourceGenerationOptions(PropertyNameCaseInsensitive = true, WriteIndented = false)]

@@ -1,6 +1,8 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
+using EnvManager.Secrets.Core;
+
 namespace EnvManager;
 
 // v0.9.9: Versioned schema migration framework.

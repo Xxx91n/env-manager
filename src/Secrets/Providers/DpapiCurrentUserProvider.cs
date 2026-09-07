@@ -1,3 +1,4 @@
+using EnvManager.Secrets.Core;
 // DpapiCurrentUserProvider.cs - secret provider architecture (ticket 09, architecture-recovery)
 // One-symbol-per-file split of the retired single-file secret provider module (issue 09); behavior unchanged.
 // License: Apache-2.0
@@ -5,7 +6,7 @@
 using System;
 using System.Runtime.InteropServices;
 
-namespace EnvManager;
+namespace EnvManager.Secrets.Providers;
 
 // --- Phase 1: DpapiCurrentUserProvider (wraps existing DpapiHelper) ---
 

@@ -18,6 +18,7 @@
 // without any cloud credential.
 
 using Xunit;
+using EnvManager.Secrets.Core;
 
 namespace EnvManager.Engine.Tests;
 

@@ -1,6 +1,8 @@
 using System.Diagnostics;
 using System.Text;
 
+using EnvManager.Secrets.Manager;
+
 namespace EnvManager;
 
 /// <summary>

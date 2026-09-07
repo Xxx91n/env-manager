@@ -6,6 +6,8 @@ using System.Runtime.InteropServices;
 using EnvManager;
 
 using Xunit;
+using EnvManager.Secrets.Core;
+using EnvManager.Secrets.Providers;
 
 namespace EnvManager.Engine.Tests;
 

@@ -12,6 +12,7 @@ using DotNet.Testcontainers.Builders;
 using DotNet.Testcontainers.Containers;
 using Testcontainers.LocalStack;
 using Testcontainers.LowkeyVault;
+using EnvManager.Secrets.Providers;
 
 namespace EnvManager.Engine.Tests;
 

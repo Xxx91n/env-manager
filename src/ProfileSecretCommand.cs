@@ -1,5 +1,7 @@
 using System.Text.Json;
 
+using EnvManager.Secrets.Manager;
+
 namespace EnvManager;
 
 /// <summary>

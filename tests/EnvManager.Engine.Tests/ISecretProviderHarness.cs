@@ -2,6 +2,7 @@
 // License: Apache-2.0
 
 using EnvManager;
+using EnvManager.Secrets.Core;
 
 namespace EnvManager.Engine.Tests;
 

@@ -5,19 +5,19 @@ import { readFileSync } from 'fs'
 import { resolve } from 'path'
 
 const SECRET_PROVIDER_MODULES = [
-  'SecretEnvelope.cs',
-  'SecretEnvelopeJsonContext.cs',
-  'ProviderConfigJsonContext.cs',
-  'ISecretProvider.cs',
-  'DpapiCurrentUserProvider.cs',
-  'CredentialManagerProvider.cs',
-  'PowerShellSecretManagementProvider.cs',
-  'VaultKV2Provider.cs',
-  'SopsProvider.cs',
-  'AzureKeyVaultProvider.cs',
-  'OnePasswordProvider.cs',
-  'AwsSecretsManagerProvider.cs',
-  'SecretProviderManager.cs',
+  'Secrets/Core/SecretEnvelope.cs',
+  'Secrets/Core/SecretEnvelopeJsonContext.cs',
+  'Secrets/Core/ProviderConfigJsonContext.cs',
+  'Secrets/Core/ISecretProvider.cs',
+  'Secrets/Providers/DpapiCurrentUserProvider.cs',
+  'Secrets/Providers/CredentialManagerProvider.cs',
+  'Secrets/Providers/PowerShellSecretManagementProvider.cs',
+  'Secrets/Providers/VaultKV2Provider.cs',
+  'Secrets/Providers/SopsProvider.cs',
+  'Secrets/Providers/AzureKeyVaultProvider.cs',
+  'Secrets/Providers/OnePasswordProvider.cs',
+  'Secrets/Providers/AwsSecretsManagerProvider.cs',
+  'Secrets/Manager/SecretProviderManager.cs',
 ] as const
 
 export function readSecretProviderSources(): string {

@@ -1,6 +1,8 @@
 using EnvManager;
 
 using Xunit;
+using EnvManager.Secrets.Core;
+using EnvManager.Secrets.Manager;
 
 namespace EnvManager.Engine.Tests;
 

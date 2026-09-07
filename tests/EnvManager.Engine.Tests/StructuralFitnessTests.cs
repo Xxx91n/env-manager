@@ -16,6 +16,10 @@ namespace EnvManager.Engine.Tests;
 ///   - DependencyDirectionAcyclic: no two of ProfileCommand /
 ///     ProfileLaunchCommand / ProfileSecretCommand mutually reference one
 ///     another's helper methods.
+///   - SecretsIsolation (ticket 38): outside the src/Secrets/ bounded
+///     context, only EnvManager.Secrets.Core and EnvManager.Secrets.Manager
+///     may be consumed - EnvManager.Secrets.Providers implementation types
+///     never leak past the adapter boundary.
 ///
 /// All three run in milliseconds (file-scan + reflection) and are wired into
 /// the verify job's `dotnet test` step. Red-first discipline: each guard was
@@ -99,6 +103,74 @@ public class StructuralFitnessTests
             "ProfileSecretCommand",
             src,
             StringComparison.Ordinal);
+    }
+
+    // -- Rule 4: Secrets bounded-context isolation (ticket 38) -----------------
+
+    /// <summary>
+    /// Ticket 38 extraction: the 14 secret files moved under src/Secrets/
+    /// carry namespaces EnvManager.Secrets.{Core,Providers,Manager}. Outside
+    /// the Secrets context (src/Secrets/), callers may consume only Core and
+    /// Manager - the Providers layer is an internal adapter detail, and a
+    /// provider type referenced from the wider engine is a bounded-context
+    /// leak. Files inside src/Secrets/ are exempt from this rule.
+    /// </summary>
+    public static void AssertNoSecretsProvidersReferenceOutsideSecretsContext()
+    {
+        var secretsDir = Path.Combine(RepoRoot(), "src", "Secrets");
+        var offenders = new List<string>();
+
+        void Scan(string dir)
+        {
+            foreach (var file in Directory.GetFiles(dir, "*.cs"))
+            {
+                var src = File.ReadAllText(file);
+                if (Regex.IsMatch(src, @"\bEnvManager\.Secrets\.Providers\b"))
+                {
+                    offenders.Add(Path.GetFullPath(file).Replace(RepoRoot() + Path.DirectorySeparatorChar, ""));
+                }
+            }
+            foreach (var sub in Directory.GetDirectories(dir))
+            {
+                Scan(sub);
+            }
+        }
+
+        Scan(Path.Combine(RepoRoot(), "src"));
+        offenders.RemoveAll(p => p.StartsWith("src" + Path.DirectorySeparatorChar + "Secrets" + Path.DirectorySeparatorChar, StringComparison.Ordinal));
+
+        Assert.True(
+            offenders.Count == 0,
+            "EnvManager.Secrets.Providers types leaked outside src/Secrets/: " + string.Join(", ", offenders)
+            + ". Non-Secrets code may only consume EnvManager.Secrets.Core and EnvManager.Secrets.Manager.");
+    }
+
+    [Fact]
+    public void Secrets_Providers_Types_AreNotReferenced_OutsideSecretsContext()
+    {
+        AssertNoSecretsProvidersReferenceOutsideSecretsContext();
+    }
+
+    [Fact]
+    public void Secrets_Context_Files_UseTheSecretsNamespace()
+    {
+        // Every file under src/Secrets/ must live in (or import) one of the
+        // three bounded-context namespaces - catches a future file dropped
+        // into the tree that silently keeps the old flat EnvManager namespace.
+        var allowed = new[]
+        {
+            "namespace EnvManager.Secrets.Core",
+            "namespace EnvManager.Secrets.Providers",
+            "namespace EnvManager.Secrets.Manager",
+            "namespace EnvManager\n", // partial Program members inside Secrets tree (SecretMount.cs)
+        };
+        foreach (var file in Directory.GetFiles(Path.Combine(RepoRoot(), "src", "Secrets"), "*.cs", SearchOption.AllDirectories))
+        {
+            var src = File.ReadAllText(file);
+            Assert.True(
+                allowed.Any(a => src.Contains(a)),
+                Path.GetFileName(file) + " under src/Secrets/ declares none of the EnvManager.Secrets namespaces (ticket 38 bounded-context invariant).");
+        }
     }
 
     // -- Rule 2: dispatch surface contract ------------------------------------
