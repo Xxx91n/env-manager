@@ -66,13 +66,13 @@ partial class Program
         "validate", "help", "profile", "path", "agents", "history", "bulk", "expand", "protection", "update", "service", "audit", "export-state", "import-state"
     };
 
-    internal static readonly JsonSerializerOptions JsonOpts = new()
+    public static readonly JsonSerializerOptions JsonOpts = new()
     {
         PropertyNameCaseInsensitive = true,
         WriteIndented = false
     };
 
-    internal static readonly JsonSerializerOptions JsonOptsIndented = new()
+    public static readonly JsonSerializerOptions JsonOptsIndented = new()
     {
         PropertyNameCaseInsensitive = true,
         WriteIndented = true
@@ -83,7 +83,7 @@ partial class Program
     /// writing to stderr or logs. Masks common secret-bearing patterns so provider
     /// error messages are traceable without leaking credentials. Bounded + best-effort.
     /// </summary>
-    internal static string ScrubExceptionMessage(string msg)
+    public static string ScrubExceptionMessage(string msg)
     {
         if (string.IsNullOrEmpty(msg)) return msg;
         var result = msg.Length > 512 ? msg[..512] : msg;
@@ -135,7 +135,7 @@ partial class Program
         public void Dispose() { if (!_disposed && _buffer != null) Array.Clear(_buffer); _disposed = true; }
     }
 
-    internal static int ArgError(string msg)
+    public static int ArgError(string msg)
     {
         Console.Error.WriteLine(msg);
         return 1;
