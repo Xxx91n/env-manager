@@ -92,10 +92,6 @@ env-manager-service.exe는 명명된 파이프 IPC를 통해 시크릿 마운트
 - 워치독: 2계층 복구 — SCM 자동 재시작(Service 모드) + GUI 30초 핑 워치독(Background 모드)
 ## Documentation
 ## Maintainers
-## 릴리스
-
-릴리스는 release-please 단일 트랙으로 진행됩니다: main에 conventional commits를 푸시하고 자동 생성된 `chore(main): release X.Y.Z` PR를 검토 후 병합하면 `vX.Y.Z` 태그가 전체 아티팩트 파이프라인(portable / CLI 전용 / MSI, x64/x86/arm64, 빌드 출처 증명 포함)을 트리거합니다. 수동 릴리스 워크플로는 비상 시에만 사용합니다. 자세한 내용은 [docs/build-and-release.md](docs/build-and-release.md)의 "How to Release"를 참고하세요.
-
 ## Contributing
 이슈와 PR을 환영합니다. 아키텍처 경계와 테스트 정책을 위해 먼저 AGENTS.md를 읽어주세요.
 ## License

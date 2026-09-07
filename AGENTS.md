@@ -58,8 +58,6 @@ The GUI has NO local web server. Dev: Vite at `localhost:5173`. Production: Taur
 
 See [docs/architecture.md](docs/architecture.md) for IPC bridge, race condition prevention, system tray, toast, caching, auto-update, security hardening, modal dialog system, rename/change-scope contracts, profile audit history, and the GUI/CLI alignment table. See [docs/secret-architecture-decision-summary.md](docs/secret-architecture-decision-summary.md) for the Phase A-E secret architecture roadmap and ADR 0001.
 
-Releases run on the release-please single track (ticket 30): conventional commits on main -> release-please Release PR (bumps CHANGELOG.md, env-manager.csproj <Version> [ADR 0003 single version source], tauri.conf.json, package.json) -> human merge -> v tag -> build.yml tag job publishes artifacts. The manual release.yml is EMERGENCY ONLY (tag-exists fail-closed guard). The release-please action authenticates with the RELEASE_PLEASE_TOKEN secret (fine-grained PAT; GITHUB_TOKEN-created tags never trigger other workflows). See docs/build-and-release.md "How to Release".
-
 ## Project Structure
 
 ```

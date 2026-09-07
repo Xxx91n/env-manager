@@ -1,6 +1,6 @@
 {
   "name": "env-manager",
-  "version": "0.10.1",
+  "version": "0.9.30",
   "type": "module",
   "scripts": {
     "dev": "vite",

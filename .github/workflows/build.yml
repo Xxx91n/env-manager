@@ -419,16 +419,15 @@ jobs:
           path: artifacts
 
       - name: Generate build provenance attestation
-        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8  # v4.2.2
+        uses: actions/attest-build-provenance@97770d5af28a79af47c3b561a13184a059de48b6  # v4.1.0
         with:
           subject-path: artifacts/*
 
-      # ticket 30: release-please already created the published Release (with
-      # CHANGELOG notes) for this tag; upload artifacts onto that existing
-      # release. Never flip it back to draft / regenerate its notes here.
       - uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65
         with:
           files: artifacts/*
+          draft: true
+          generate_release_notes: true
 
 
   # Ticket 18 (architecture-recovery): on-demand Stryker mutation short run.

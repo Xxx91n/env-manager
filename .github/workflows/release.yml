@@ -1,8 +1,3 @@
-# EMERGENCY ONLY (ticket 30): the normal release path is release-please
-# (merge Release PR -> tag -> build.yml). Use this workflow only when the
-# automated track is unavailable (e.g. expired RELEASE_PLEASE_TOKEN) or for a
-# rebuild/re-publish of an already-decided version. Never use it to overtake a
-# release-please tag: the precheck below fails closed if the tag exists.
 name: Release
 
 on:
@@ -42,16 +37,6 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-
-      - name: Emergency guard - fail closed if the tag already exists
-        shell: pwsh
-        run: |
-          $tag = 'v' + '${{ inputs.version }}'.TrimStart('v')
-          $code = gh api "repos/${{ github.repository }}/git/ref/tags/$tag" --silent; $exists = $LASTEXITCODE -eq 0
-          if ($exists) { throw "Tag $tag already exists - emergency release would overtake the release-please track. Aborting." }
-          "Emergency guard OK: $tag is free"
-        env:
-          GH_TOKEN: ${{ github.token }}
 
       - name: Setup .NET
         uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68

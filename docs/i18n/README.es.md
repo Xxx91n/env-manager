@@ -131,10 +131,6 @@ env-manager-service.exe es un binario Rust independiente que gestiona el ciclo d
 
 ## Mantenedores
 
-## Publicaciones
-
-Las publicaciones siguen la vía única de release-please: envía commits convencionales a main, revisa y fusiona el PR automático `chore(main): release X.Y.Z`, y la etiqueta `vX.Y.Z` dispara el pipeline completo de artefactos (portable / solo CLI / MSI para x64/x86/arm64, con atestados de procedencia de compilación). El flujo manual queda reservado para emergencias. Ver [docs/build-and-release.md](docs/build-and-release.md), sección "How to Release".
-
 ## Contribuciones
 
 Se aceptan issues y PR. Lee primero AGENTS.md para conocer los límites de arquitectura y la política de pruebas.

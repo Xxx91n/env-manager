@@ -259,10 +259,6 @@ env-manager-cli.exe audit verify-ledger
 
 [@Xxx91n](https://github.com/Xxx91n)
 
-## 发版
-
-发版走 release-please 单轨流程:向 main 提交 Conventional Commits,人工评审并合并自动生成的 `chore(main): release X.Y.Z` PR,`vX.Y.Z` tag 即触发完整产物流水线(portable / 仅 CLI / MSI,x64/x86/arm64,附构建溯源证明)。手动 release workflow 仅作应急保留。详见 [docs/build-and-release.md](docs/build-and-release.md) 的 "How to Release" 一节。
-
 
 ## 贡献
 

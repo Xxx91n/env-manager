@@ -3,9 +3,6 @@ name: release-please
 on:
   push:
     branches: [main]
-  # manual re-run hook (ticket 30 drill: a bad run can otherwise only be retried
-  # by pushing a commit, since tag/release events belong to the next cycle)
-  workflow_dispatch:
 
 permissions:
   contents: write
@@ -19,9 +16,5 @@ jobs:
       - uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7  # v5.0.0
         id: release
         with:
-          # PAT (not GITHUB_TOKEN): events created by GITHUB_TOKEN never trigger
-          # other workflows (GitHub recursive protection), so the tag this action
-          # creates must carry a PAT identity for build.yml tags: ['v*'] to fire.
-          token: ${{ secrets.RELEASE_PLEASE_TOKEN }}
-          config-file: release-please-config.json
-          manifest-file: .release-please-manifest.json
+          release-type: simple
+          package-name: env-manager

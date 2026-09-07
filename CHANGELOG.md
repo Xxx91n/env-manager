@@ -5,57 +5,6 @@ All notable changes to Env Manager will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.10.1](https://github.com/Xxx91n/env-manager/compare/v0.10.0...v0.10.1) (2026-09-06)
-
-
-### Bug Fixes
-
-* **ci:** repin attest-build-provenance to v4.2.2 (ticket 30 drill finding) ([#49](https://github.com/Xxx91n/env-manager/issues/49)) ([a8f2dd2](https://github.com/Xxx91n/env-manager/commit/a8f2dd2a4c0dfab43ff40baf92a545f6610aede3))
-* **release:** add workflow_dispatch trigger to release-please for manual re-runs (ticket 30 drill finding) ([#51](https://github.com/Xxx91n/env-manager/issues/51)) ([92764cb](https://github.com/Xxx91n/env-manager/commit/92764cb14e7178cb2fa39232208c9fd86a899705))
-
-## [0.10.0](https://github.com/Xxx91n/env-manager/compare/v0.9.30...v0.10.0) (2026-09-05)
-
-
-### Features
-
-* **brand:** add animated hero GIF + demo GIF + hero motion spec ([61ee5a2](https://github.com/Xxx91n/env-manager/commit/61ee5a2c5943a5c6d49dc509ac6f5347901a63db))
-* **ci:** isolate CI user-state via ENVMANAGER_LOCALAPPDATA redirect seam (issue 24) ([c6d4dc8](https://github.com/Xxx91n/env-manager/commit/c6d4dc8ef8f46465ddc398f0993695dea426606f))
-* **preflight:** two-tier profile validation with warn tier, --strict, and exit code 2 (issue 19) ([58072a0](https://github.com/Xxx91n/env-manager/commit/58072a08101ddaa0ca1f254317cc7c48db3fa284))
-* **scripts:** add check-readme-i18n.ps1 and record-demo.py helper scripts ([528d651](https://github.com/Xxx91n/env-manager/commit/528d651455938a02aca5d05bd6d013ec53a760f7))
-* **scripts:** add rsvg-convert wrapper scripts (JS + cmd) using @resvg/resvg-js ([c7d7750](https://github.com/Xxx91n/env-manager/commit/c7d7750ee140a71712d0ff11a8c66091a74fc07e))
-
-
-### Bug Fixes
-
-* **ci:** add missing cargo test --locked steps to build.yml verify job ([afa2ae3](https://github.com/Xxx91n/env-manager/commit/afa2ae3a6613e9a5c4d1f51275f2086acc7858ee))
-* **ci:** compare PATH semantically (entry list, case-sensitive) instead of byte-exact - CLI normalizes empty segments on write, CI image PATH is dirty by construction ([152a951](https://github.com/Xxx91n/env-manager/commit/152a951cd5661a18b5cd9ee9506e22f1cacc8b4d))
-* **ci:** doc-sync expects docs/i18n/README.zh_CN.md (README_CN.md superseded by i18n suite); local AGENTS.md has no stale refs ([45a5ba3](https://github.com/Xxx91n/env-manager/commit/45a5ba3bb15d615729d8eb07cdc46f8a1add6598))
-* **ci:** drop unused HITS var in wix-watchdog (actionlint SC2034 - HITS computed but never read) ([cad1905](https://github.com/Xxx91n/env-manager/commit/cad19056764ded4174aa784ef2761bdef6424bc6))
-* **ci:** MSI smoke probes installed CLI with bare args (build.mjs version-probe protocol); CLI has no --version flag ([fc53ad2](https://github.com/Xxx91n/env-manager/commit/fc53ad23ab2bfd8fa6525eb1bd29db9e1396daf6))
-* **ci:** package job installs WiX 3.14 to %LOCALAPPDATA%\tauri\WixTools314 (windows-2025 image no longer bundles it); build.mjs copies loose exes beside ZIPs to match release layout contract ([d082a9c](https://github.com/Xxx91n/env-manager/commit/d082a9c78aebb6b5dc732e98388280a06847ae8c))
-* **ci:** pass -CliExe pointing to Release binary so test-with-restore.ps1 finds CLI on CI (was defaulting to release/cli-only which CI never builds) ([0d3cb9c](https://github.com/Xxx91n/env-manager/commit/0d3cb9c5cf21201f402dc7590cee52a197bbea8c))
-* **ci:** PATH snapshot compares entries semantically (case+order), folding empty-segment noise the CLI normalizes on write on dirty CI images ([516dcbf](https://github.com/Xxx91n/env-manager/commit/516dcbf322b0810de1a8cd65066482fd8a9b5b6a))
-* **ci:** pin WIX env to extracted WixTools314 path (windows-2025 image preset WIX shadows it with a removed dir) ([c0b9e69](https://github.com/Xxx91n/env-manager/commit/c0b9e69dfac07b2808260ccba9bf7392251f39fe))
-* **ci:** replace rustsec/audit-check (v2.0.0 'Unexpected end of JSON input' bug) with taiki-e/install-action + cargo audit on both workspaces ([40ac008](https://github.com/Xxx91n/env-manager/commit/40ac008dbd39c8767fe0660fa7adde9848946976))
-* **ci:** restore all workflow failures - build.yml YAML corruption, mirror action input rename, release-please dead SHA ([e8ad626](https://github.com/Xxx91n/env-manager/commit/e8ad626201d0c3b03bf5ed92b75cc6f9c605cc01))
-* **ci:** run root npm ci in package job so scripts/build.mjs finds archiver (ERR_MODULE_NOT_FOUND) ([5cfb7a9](https://github.com/Xxx91n/env-manager/commit/5cfb7a90da81bfd4af20116096d8db44753a9cf0))
-* **ci:** seed frontendDist placeholder for generate_context! in verify (issue 17) ([96abc6b](https://github.com/Xxx91n/env-manager/commit/96abc6bcc5aaaf473b11279fc9e4cc3616ec37c5))
-* **deps:** archiver v8 is ESM with named exports - use ZipArchive class (fixes 'does not provide an export named default' in package job) ([ff63983](https://github.com/Xxx91n/env-manager/commit/ff63983bfce7854f54fd7f3d5d2a4525175bc921))
-* **deps:** regenerate lock with npm 10 (CI Node 20=npm 10; npm 11-generated lock failed npm 10 ci peer validation on esbuild@0.28.2) ([e05e6a4](https://github.com/Xxx91n/env-manager/commit/e05e6a41b573d6f940045f10c20e9ea53f606ef0))
-* **deps:** revert bits-ui to 0.22.0 (v2 peer-requires Svelte 5; project on Svelte 4 chain) ([b114ed4](https://github.com/Xxx91n/env-manager/commit/b114ed481bd847bb116be8e4de56401fddf2e6c3))
-* **engine:** route test-with-restore launch target away from System32 and sync docs after enforced guard (issue 04 B1) ([828af15](https://github.com/Xxx91n/env-manager/commit/828af152b5196e34a4b73fd13baa252b0a99e153))
-* **frontend:** regenerate package-lock.json against registry.npmjs.org; pin registry via .npmrc (npmmirror cache caused version-graph mismatch breaking npm ci in CI) ([b079c39](https://github.com/Xxx91n/env-manager/commit/b079c39cea5de17a0154476405c0bac14c346f3f))
-* **frontend:** sync package-lock.json with package.json (npm ci EUSAGE in CI) ([4a9f43a](https://github.com/Xxx91n/env-manager/commit/4a9f43a245793287a4c5f265bb91d7fb29767f5d))
-* **l1:** harness PutSecretValue ClientRequestToken; vault bounded health poll replaces query-string wait (issue 15) ([61891ad](https://github.com/Xxx91n/env-manager/commit/61891ad520cdeffcfe16523e7a1c9cb14875ab72))
-* **l1:** SigV4 ClientRequestToken idempotency token; vault dev-server -dev command (issue 15) ([112dd0d](https://github.com/Xxx91n/env-manager/commit/112dd0d93d9b2e084de33dea7835f5759dc441f4))
-* **l1:** wire Azure vault URI env, SigV4 header validation bypass, SecretStore round-trip gate, serialize container fixtures; record 1password linux stack overflow (issue 15) ([a478b9d](https://github.com/Xxx91n/env-manager/commit/a478b9dbd7aec46d6d08c60cdf6317c30810c21c))
-* **preflight:** make %VAR% defined-check hermetic via process env (issue 19 rework 2) ([b64b6fd](https://github.com/Xxx91n/env-manager/commit/b64b6fdfdcfae055bf160a1d02796d15bf8b8c52))
-* **profile:** recognize --help/-h/-?//? in profile create name position as help request (issue 20) ([4f6f7db](https://github.com/Xxx91n/env-manager/commit/4f6f7dba20ce93eaa9557e2c6832ea138317ca40))
-* **release:** align hard-boundaries v0.7.14 statement with release-please single track (ticket 30) ([#47](https://github.com/Xxx91n/env-manager/issues/47)) ([c03c252](https://github.com/Xxx91n/env-manager/commit/c03c252e3201659784201b1b422da4610e2b0cfd))
-* **test:** preserve CLI stderr on failure and stamp round-trip name (issue 22+24) ([3890e6a](https://github.com/Xxx91n/env-manager/commit/3890e6a01551860b898bc77150e527c6f0fdfb12))
-* **test:** replace hardcoded D:/Aworker absolute paths with repo-relative resolve() in secret tests (CI runner has no D:/Aworker) ([fc8ada3](https://github.com/Xxx91n/env-manager/commit/fc8ada3ba3be814ea0f2bd20729e578d00ece10e))
-* **test:** use unique fixture path C:\EM_TEST_TRAILING_BACKSLASH\ in trailing-backslash case (PS7 install dir may preexist in CI runner user PATH, breaking snapshot equality) ([1c6ef82](https://github.com/Xxx91n/env-manager/commit/1c6ef82e37906df461a92ffdb2d25df51ad4cadf))
-
 ## [Unreleased]
 
 ### Added
