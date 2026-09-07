@@ -7,11 +7,11 @@ namespace EnvManager;
 /// expand command domain (architecture-recovery issue 06): members moved verbatim
 /// from EnvFeatures.cs. Behavior unchanged.
 /// </summary>
-partial class Program
+internal static class ExpandCommand
 {
     static readonly Regex ExpandPattern = new("%([^%]+)%", RegexOptions.Compiled);
 
-    static int RunExpand(string value)
+    internal static int Run(string value)
     {
         string expanded = value;
         for (int depth = 0; depth < 8; depth++)

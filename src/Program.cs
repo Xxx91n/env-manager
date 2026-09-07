@@ -6,6 +6,12 @@ using System.Text.Json.Serialization;
 
 namespace EnvManager;
 
+// Ticket 27 step 1: dispatch-only command domains (AgentsCommand, UpdateCommand, ExpandCommand)
+// have been extracted from partial class Program into internal static classes. Program.cs is now
+// restricted to Main + the cross-cutting try/catch/finally flow; remaining domains still live as
+// partial class Program while ticket 27 ramps. The reflection guard Program.MethodBudgetTests
+// (added in tests/EnvManager.Engine.Tests) pins this thinning so a future regression that re-fattens
+// Program fails the build instead of landing silently.
 partial class Program
 {
     static int Main(string[] args)
@@ -87,12 +93,12 @@ partial class Program
                 "validate" => args.Length < 2 ? ArgError("Usage: env-manager validate <file>") : ValidateBackup(args[1]),
                 "profile" => RunProfileCommand(args),
                 "path" => RunPathCommand(args),
-                "agents" => RunAgents(args),
+                "agents" => AgentsCommand.Run(args),
                 "history" => RunHistoryCommand(args),
                 "bulk" => RunBulkCommand(args),
-                "expand" => args.Length < 2 ? ArgError("Usage: env-manager expand <value>") : RunExpand(args[1]),
+                "expand" => args.Length < 2 ? ArgError("Usage: env-manager expand <value>") : ExpandCommand.Run(args[1]),
                 "protection" => RunProtectionCommand(args),
-                "update" => RunUpdate(args),
+                "update" => UpdateCommand.Run(args),
                 "service" => RunServiceCommand(args),
                 "audit" => RunAuditCommand(args),
                 "export-state" => RunExportState(args),
