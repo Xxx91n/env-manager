@@ -434,11 +434,18 @@ public class ProfileCommandCharacterizationTests : VerifyBase
     public async Task SetLaunch_Success_StdoutIsStable()
     {
         using var tmp = new TempProfileDir();
+        // Ticket 32-fix v2: --target must point to an existing file outside System32
+        // (src/ProfileCommand.cs L1320 ValidateLaunchTarget: existence + non-System32 guard).
+        // Create a real .cmd target in the hermetic temp dir - mirrors ProfileSeamValidationTests
+        // (TempTargetPath = em-test-target.cmd). Using cmd.exe in System32 is rejected by the
+        // system32-hijacking guard (T04-SYS32-FIX, ProfileCommand.cs L1332-1335).
+        var launchTarget = Path.Combine(tmp.Dir, "em32-launch-target.cmd");
+        File.WriteAllText(launchTarget, "@echo launched");
         SeedProfiles(MkProfile("em32_launch", "launch", target: "em32-old.exe"));
         var cap = CaptureConsole();
         try
         {
-            int code = Program.RunProfileCommand(new[] { "profile", "set-launch", "em32_launch", "--target", "em32-launch.exe", "--args", "--flag value" });
+            int code = Program.RunProfileCommand(new[] { "profile", "set-launch", "em32_launch", "--target", launchTarget, "--args", "--flag value" });
             Assert.Equal(0, code);
             await VerifyText(ReleaseConsole(cap));
         }
