@@ -32,6 +32,19 @@ Contract tests wire all three clients to that schema, so protocol drift fails CI
 | Tauri shell (Rust) | `ipc_contract_tests` in `frontend/src-tauri/src/main.rs` (`cargo test`) | The watchdog `ping` and GUI-exit `shutdown` pipe payloads match the request contract and their methods exist in the golden samples. |
 
 Deliberate schema changes: rename the field in `service/src/ipc.rs`, regenerate with `ENVMANAGER_REGENERATE_IPC_GOLDEN=1 cargo test -p env-manager-service ipc`, commit the golden-file diff, and update the C#/TS mirrors in the same commit. Every consumer test goes red until the clients follow - that is the drift alarm working as designed. `cargo test --locked` runs for both Rust crates in the `build.yml` verify job.
+
+## Service Resilience Fault Injection (watchdog/SCM recovery)
+
+The service crate's lifecycle resilience terms (watchdog, heartbeat enrichment, SCM recovery, pipe reconnect) are pinned by `service/src/resilience_tests.rs` (architecture-recovery ticket 33), which runs as part of the existing `cargo test --locked` step in the build.yml verify job - the tier-3 Rust test layer, chosen because the scenarios exercise the service process lifecycle itself and need no C#/Pester harness:
+
+- `pipe_half_open_then_reconnect` - a client sends a request and drops the connection without reading the response (half-open); the server must absorb the broken pipe and a reconnecting watchdog `ping` must still get `ok:true`. Pins the reconnect semantics the GUI watchdog relies on.
+- `ipc_read_timeout_fires_on_hung_server` - a mock server accepts and reads the request line but never responds; the client-side bounded read must surface a timeout instead of blocking forever. Pins the `cli_gateway` timeout contract.
+- `ipc_schema_compliance_under_faults` - every `ok:false` response sample in `docs/schemas/ipc-samples.json` carries a `message`; the envelope survives fault-shaped conditions without drifting from the ticket 08 golden contract.
+
+Documented-only scenarios (runnable `#[ignore]` tests with the reason inline): the kill -9 → watchdog detection → restart → `secretMount.json` persistence sequence needs administrator process control and is exercised by the manual script `.scratch/architecture-recovery/manual/kill-9-test.ps1`; the reconcile loop's 30s warmup (SCM boot-timeout guard) touches `LOCALAPPDATA` through `secret_mount_path()`, conflicting with the issue 24 CI user-state isolation, so it is pinned as documentation until the warmup becomes seam-parameterized.
+
+Test-infrastructure constraints baked into these tests (learned in CI): the wire protocol is newline-delimited, client opens must retry `ERROR_PIPE_BUSY` (a successful open consumes the server's pending instance), and every mock wait is bounded so a regression fails fast instead of wedging the runner to the job timeout.
+
 ## Cross-View Refresh
 
 The `refreshTrigger` store in `stores.ts` is a counter incremented when the header refresh button is clicked. Each page component (Variables, ProfilePage, PathEditor) subscribes to it via a reactive statement (`$: if ($refreshTrigger > 0) { refresh() }`) and re-fetches its data. This ensures the current view's data is refreshed regardless of which page is active.
