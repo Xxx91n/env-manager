@@ -66,13 +66,13 @@ partial class Program
         "validate", "help", "profile", "path", "agents", "history", "bulk", "expand", "protection", "update", "service", "audit", "export-state", "import-state"
     };
 
-    static readonly JsonSerializerOptions JsonOpts = new()
+    internal static readonly JsonSerializerOptions JsonOpts = new()
     {
         PropertyNameCaseInsensitive = true,
         WriteIndented = false
     };
 
-    static readonly JsonSerializerOptions JsonOptsIndented = new()
+    internal static readonly JsonSerializerOptions JsonOptsIndented = new()
     {
         PropertyNameCaseInsensitive = true,
         WriteIndented = true
@@ -135,7 +135,7 @@ partial class Program
         public void Dispose() { if (!_disposed && _buffer != null) Array.Clear(_buffer); _disposed = true; }
     }
 
-    static int ArgError(string msg)
+    internal static int ArgError(string msg)
     {
         Console.Error.WriteLine(msg);
         return 1;

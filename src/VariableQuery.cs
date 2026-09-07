@@ -236,7 +236,7 @@ partial class Program
 
     /// Gets a variable value from registry without expanding environment variables.
     /// </summary>
-    static string? GetVariableValue(string name, string scope)
+    internal static string? GetVariableValue(string name, string scope)
     {
         var (hive, path) = GetScopeTarget(scope);
         using (var key = hive?.OpenSubKey(path, false))
