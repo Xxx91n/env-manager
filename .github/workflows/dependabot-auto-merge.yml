@@ -1,0 +1,152 @@
+name: Dependabot auto-merge (patch-only, gated)
+
+# Dependabot 成熟治理（architecture-recovery ticket 31）
+# 目的：仅对 patch 组 dependabot PR 自动合并；前提：
+#   1) 仅 patch update-type（minor/major 永远单 PR 人工评审）
+#   2) required CI（build.yml verify）结论为 success
+#   3) required dependency-review（dependency-review.yml）结论为 success
+#   4) 非 draft
+#   5) PR 作者是 dependabot[bot]
+# 安全：
+#   - 事件：pull_request（明确禁用 pull_request_target——Boost Security Labs 实证
+#     github.actor 混淆 + @dependabot recreate 武器化攻击；详见
+#     research/round5-mental-models.md 信源 #13）
+#   - PR 标题带 `bump` / `dependencies` 字样的非 dependabot 提交者一律拒绝
+#   - squash 合并保留单 commit，触发 release-please 走 chore(deps) 路径（不 bump 版本）
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    branches: [main]
+
+# PR 上下文只读；auto-merge 步骤需要 contents:write + pull-requests:write
+# 由具体 job 的 permissions 覆盖；workflow 默认只给最小 read
+permissions:
+  contents: read
+
+concurrency:
+  # dependabot 会一次推多组 PR；每 PR 独立锁，避免互相取消
+  group: dependabot-auto-merge-${{ github.event.pull_request.number }}
+  cancel-in-progress: false
+
+jobs:
+  auto-merge:
+    name: Auto-merge patch Dependabot PRs
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    # 双重闸门：PR 作者必须是 dependabot；PR 不能是 draft
+    if: |
+      github.event.pull_request.user.login == 'dependabot[bot]' &&
+      github.event.pull_request.draft == false
+    permissions:
+      contents: write
+      pull-requests: write
+
+    steps:
+      # 0) checkout 仅用于在 workflow 上下文里运行 gh CLI 时引用 head SHA；
+      # 不做真实构建，actions/checkout 固定 SHA 由仓库既有 commit-pinning 纪律保证
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      # 1) 拉 Dependabot PR 元数据；权威 action：dependabot/fetch-metadata v2.3.0（SHA pin）
+      - name: Fetch Dependabot metadata
+        id: metadata
+        uses: dependabot/fetch-metadata@d7267f607e9d3fb96fc2fbe83e0af444713e90b7 # v2.3.0
+        with:
+          github-token: "${{ secrets.GITHUB_TOKEN }}"
+
+      # 2) 闸门 1：仅 patch update-type
+      - name: Gate on patch-only update-type
+        id: gate-patch
+        if: steps.metadata.outputs.update-type == 'version-update:semver-patch'
+        run: |
+          echo "update-type=${{ steps.metadata.outputs.update-type }}" >> "$GITHUB_OUTPUT"
+          echo "dependency-names=${{ steps.metadata.outputs.dependency-names }}" >> "$GITHUB_OUTPUT"
+          echo "dependency-type=${{ steps.metadata.outputs.dependency-type }}" >> "$GITHUB_OUTPUT"
+
+      # 3) 闸门 2：required CI + dependency-review 必须绿
+      # 用 GitHub REST API 列 check-runs 与 status contexts；
+      # - build.yml verify job 名 = "CI/CD Build and Release / verify"（workflow 名 + job 名拼接）
+      # - dependency-review.yml job 名 = "Dependency Review / dependency-review"
+      # check-runs API 返回所有 check-runs + status contexts（合并视图）
+      - name: Gate on CI + dependency-review green
+        id: gate-checks
+        if: steps.gate-patch.outputs.update-type == 'version-update:semver-patch'
+        env:
+          GH_TOKEN: "${{ secrets.GITHUB_TOKEN }}"
+          PR_HEAD_SHA: "${{ github.event.pull_request.head.sha }}"
+          PR_REPO: "${{ github.repository }}"
+        run: |
+          set -euo pipefail
+          # 列 PR head SHA 上所有 check-runs + status contexts
+          json="$(gh api \
+            "repos/${PR_REPO}/commits/${PR_HEAD_SHA}/check-runs" \
+            --paginate)"
+          # 解析 success 名单（check-runs API + statuses API 都要查；合并视图后再筛）
+          ok="$(printf '%s' "$json" | python -c '
+            import json, sys
+            data = json.load(sys.stdin)
+            ok = []
+            for cr in data.get("check_runs", []):
+                if cr.get("conclusion") == "success":
+                    ok.append(cr.get("name"))
+            print("\n".join(ok))
+          ')"
+          # statuses API（GitHub 老的 status context）
+          statuses_json="$(gh api \
+            "repos/${PR_REPO}/commits/${PR_HEAD_SHA}/status" 2>/dev/null || echo '{}')"
+          ok_status="$(printf '%s' "$statuses_json" | python -c '
+            import json, sys
+            data = json.load(sys.stdin)
+            ok = []
+            for st in data.get("statuses", []):
+                if st.get("state") == "success":
+                    ok.append(st.get("context"))
+            print("\n".join(ok))
+          ')"
+          merged="$(printf '%s\n%s\n' "$ok" "$ok_status" | sort -u | grep -v '^$' || true)"
+
+          echo "--- check-runs/statuses with conclusion/state=success ---"
+          printf '%s\n' "$merged"
+
+          # 必需：verify job（CI/CD Build and Release）+ dependency-review job
+          missing=0
+          for required in "CI/CD Build and Release / verify" "Dependency Review / dependency-review"; do
+            if ! grep -Fxq "$required" <<<"$merged"; then
+              echo "::error::missing required green check: $required"
+              missing=1
+            fi
+          done
+
+          if [ "$missing" -ne 0 ]; then
+            echo "::error::one or more required checks not green on head ${PR_HEAD_SHA}; auto-merge refused"
+            exit 1
+          fi
+
+          echo "all required checks green on head ${PR_HEAD_SHA}"
+
+      # 4) auto-merge：用 gh pr merge --auto (squash)，保留单 commit 触发 release-please 走 chore(deps) 路径
+      - name: Enable auto-merge (squash)
+        if: |
+          steps.gate-patch.outputs.update-type == 'version-update:semver-patch' &&
+          steps.gate-checks.conclusion == 'success'
+        env:
+          GH_TOKEN: "${{ secrets.GITHUB_TOKEN }}"
+          PR_URL: "${{ github.event.pull_request.html_url }}"
+        run: |
+          gh pr merge --auto --squash "$PR_URL"
+          echo "auto-merge enabled for $PR_URL"
+          echo "merged-by=dependabot-auto-merge@v1" >> "$GITHUB_STEP_SUMMARY"
+          echo "update-type=${{ steps.metadata.outputs.update-type }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "dependency-names=${{ steps.metadata.outputs.dependency-names }}" >> "$GITHUB_STEP_SUMMARY"
+
+      # 5) 失败时清楚标注（不静默跳过）
+      - name: Annotate skipped auto-merge (non-blocking)
+        if: failure() && steps.gate-patch.outputs.update-type != 'version-update:semver-patch'
+        run: |
+          {
+            echo "### dependabot auto-merge skipped"
+            echo "- update-type: \`${{ steps.metadata.outputs.update-type }}\`"
+            echo "- reason: only patch (semver-patch) update-types are eligible"
+            echo "- dependency-names: \`${{ steps.metadata.outputs.dependency-names }}\`"
+            echo "- expected: minor/major Dependabot PRs require manual review"
+          } >> "$GITHUB_STEP_SUMMARY"

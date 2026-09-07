@@ -1,30 +1,160 @@
 version: 2
+
+# Dependabot 成熟治理（architecture-recovery ticket 31）
+# - 4 个生态系统：C# / Rust service / Rust Tauri shell / npm / GitHub Actions
+# - 噪音治理：weekly → monthly；open-pull-requests-limit 2-3
+# - 安全更新独立组（不等 minor/patch 批），critical advisory 不被日常 bump 队列阻塞
+# - patch 组 auto-merge（仅 patch，CI + dependency-review 双绿门）
+# - ignore 仅用于「钉死不升」的 major（理由见下方注释）
+# 详见 .scratch/architecture-recovery/reports/31-dependabot-governance.md
+
 updates:
-  - package-ecosystem: github-actions
+  # ===== nuget — C# 引擎 + Tests + Fuzz =====
+  - package-ecosystem: nuget
     directory: /
     schedule:
-      interval: weekly
-    open-pull-requests-limit: 5
+      interval: monthly
+      # 周一上午跑（避开周末）；与 release-please push 不同步
+      day: monday
+      time: "09:00"
+      timezone: "UTC"
+    open-pull-requests-limit: 3
+    # 所有 PR 统一打这两个 label（group label 会附加）
+    labels:
+      - "dependencies"
+      - "ecosystem:nuget"
+    # dependabot 默认从 PR 标题前缀推断 commit type（chore(deps)）；
+    # 团队沿用 conventional-commit 故此处不覆盖 commit-message
     groups:
-      # minor/patch 聚为一组；major 保留单 PR 逐个评审（GitHub 官方 Example 3 模式）
-      actions-minor-patch:
+      nuget-minor-patch:
         applies-to: version-updates
-        update-types: ["minor", "patch"]
+        update-types:
+          - minor
+          - patch
+        # group 默认会带 "dependencies" label；附加 ecosystem+分组标签便于过滤
+      nuget-security-updates:
+        applies-to: security-updates
+        # security 组与 minor-patch 组不混批——critical advisory 不被日常 bump 队列阻塞
+    # 钉死不升的 major：依赖本次窗口不升；理由见注释
+    ignore:
+      # Microsoft.Extensions.Compliance.Redaction 升级会牵动 9.0→10.0 主线特性集（net10 SDK 切换）
+      # 等 .NET 11 走稳或团队评审通过后再升；当前 9.0.0 满足 PII 标 redact 用例。
+      - dependency-name: "Microsoft.Extensions.Compliance.Redaction"
+        versions: [">= 10.0.0"]
+        # （deferred major：等待团队评审 .NET 主线升级决议）
+
+  # ===== cargo — Rust service crate =====
+  - package-ecosystem: cargo
+    directory: /service
+    schedule:
+      interval: monthly
+      day: monday
+      time: "09:00"
+      timezone: "UTC"
+    open-pull-requests-limit: 3
+    labels:
+      - "dependencies"
+      - "ecosystem:cargo"
+      - "component:service"
+    groups:
+      service-cargo-minor-patch:
+        applies-to: version-updates
+        update-types:
+          - minor
+          - patch
+      service-cargo-security-updates:
+        applies-to: security-updates
+
+  # ===== cargo — Tauri shell =====
   - package-ecosystem: cargo
     directory: /frontend/src-tauri
     schedule:
-      interval: weekly
-    open-pull-requests-limit: 5
+      interval: monthly
+      day: monday
+      time: "09:00"
+      timezone: "UTC"
+    open-pull-requests-limit: 3
+    labels:
+      - "dependencies"
+      - "ecosystem:cargo"
+      - "component:tauri-shell"
     groups:
-      cargo-minor-patch:
+      tauri-cargo-minor-patch:
         applies-to: version-updates
-        update-types: ["minor", "patch"]
+        update-types:
+          - minor
+          - patch
+      tauri-cargo-security-updates:
+        applies-to: security-updates
+
+  # ===== npm — Svelte frontend =====
   - package-ecosystem: npm
     directory: /frontend
     schedule:
-      interval: weekly
-    open-pull-requests-limit: 5
+      interval: monthly
+      day: monday
+      time: "09:00"
+      timezone: "UTC"
+    open-pull-requests-limit: 3
+    labels:
+      - "dependencies"
+      - "ecosystem:npm"
+      - "component:frontend"
     groups:
       npm-minor-patch:
         applies-to: version-updates
-        update-types: ["minor", "patch"]
+        update-types:
+          - minor
+          - patch
+      npm-security-updates:
+        applies-to: security-updates
+    # 钉死不升的 major：依赖本次窗口不升；理由见注释
+    ignore:
+      # svelte 5：项目深度依赖 svelte-i18n 4.x + svelte-preprocess 6.x 生态（与 Svelte 4 兼容
+      # 矩阵），升 5 触发 runes + reactivity 重写 + 测试基线全部漂移。票 26 拆分 / 票 32 快照 /
+      # 票 34 元变形三票均依赖 Svelte 4 编译器行为；下一次 svelte 5 升级须独立工单评审。
+      - dependency-name: "svelte"
+        versions: ["5.x"]
+        # （deferred major：等待独立工单评审 svelte 5 迁移成本 + 既有 4.x 编译器依赖处置）
+      # typescript 5.x：本项目类型严格度匹配 TS 5 系列；TS 7 属未来版本（5.x 仍在维护）。
+      # 升 7 触发 lib 升级 + 类型推断行为变化 + svelte-check / vitest 类型基线漂移。
+      # 钉在 5.x 直到团队评审 + 兼容矩阵重做。
+      - dependency-name: "typescript"
+        versions: ["7.x"]
+        # （deferred major：等待团队评审 TS 6/7 + 与现有 Svelte/Vite 类型工具链兼容矩阵）
+      # vite 5.x：本项目 vite-plugin-svelte 3.x + vitest 4.x 与 vite 5 锁版本；vite 6/7/8
+      # 任一 major 都需要重新跑 e2e + bundle 大小回归。钉在 5.x。
+      - dependency-name: "vite"
+        versions: ["6.x", "7.x", "8.x"]
+        # （deferred major：等待 vite-plugin-svelte 兼容矩阵重做 + bundle 回归基线更新）
+      # tailwind-merge 3：当前 2.x 与 tailwindcss 3.x 匹配；3.x 改 API + 改 typescript
+      # 类型导出，触发所有 `twMerge` 调用点重新评审。钉在 2.x。
+      - dependency-name: "tailwind-merge"
+        versions: ["3.x"]
+        # （deferred major：等待 tailwindcss 主线升级 + 调用点 grep 通过后再升）
+      # jsdom 30：项目测试环境用 jsdom 25（vitest 默认）；30 跳多个 major，需要重测
+      # DOM 模拟行为差异（MutationObserver/IntersectionObserver 语义）。钉在 25.x。
+      - dependency-name: "jsdom"
+        versions: [">= 26.0.0"]
+        # （deferred major：等待 DOM 模拟语义审计 + vitest jsdom env 回归通过）
+
+  # ===== github-actions =====
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+      day: monday
+      time: "09:00"
+      timezone: "UTC"
+    open-pull-requests-limit: 2
+    labels:
+      - "dependencies"
+      - "ecosystem:github-actions"
+    groups:
+      actions-minor-patch:
+        applies-to: version-updates
+        update-types:
+          - minor
+          - patch
+      actions-security-updates:
+        applies-to: security-updates
