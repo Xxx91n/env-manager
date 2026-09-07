@@ -92,10 +92,6 @@ env-manager-service.exe est un binaire Rust autonome gérant le cycle de vie des
 - Watchdog : récupération à deux niveaux — redémarrage automatique SCM (mode Service) + watchdog de ping de 30 s de la GUI (mode Background)
 ## Documentation
 ## Maintainers
-## Publications
-
-Les publications suivent la voie unique release-please : poussez des commits conventionnels sur main, relisez puis fusionnez la PR automatique `chore(main): release X.Y.Z` ; le tag `vX.Y.Z` déclenche alors le pipeline complet des artefacts (portable / CLI seul / MSI pour x64/x86/arm64, avec attestations de provenance). Le flux manuel reste réservé aux urgences. Voir [docs/build-and-release.md](docs/build-and-release.md), section "How to Release".
-
 ## Contributing
 Les issues et les PR sont les bienvenues. Lisez d'abord AGENTS.md pour les limites d'architecture et la politique de test.
 ## License
