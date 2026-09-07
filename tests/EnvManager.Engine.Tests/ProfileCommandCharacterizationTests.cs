@@ -195,14 +195,14 @@ public class ProfileCommandCharacterizationTests : VerifyBase
 
         var variables = root.GetProperty("variables");
         Assert.Equal(4, variables.GetArrayLength());
-        Assert.Equal("EM32_INJ_A", variables[0].GetProperty("name").GetString());
-        Assert.Equal("child-override", variables[0].GetProperty("value").GetString());
-        Assert.Equal("EM32_INJ_PARENT_ONLY", variables[1].GetProperty("name").GetString());
-        Assert.Equal("p-only", variables[1].GetProperty("value").GetString());
-        Assert.Equal("EM32_INJ_SECRET", variables[3].GetProperty("name").GetString());
+        Assert.Equal("EM32_INJ_A", variables[0].GetProperty("Name").GetString());
+        Assert.Equal("child-override", variables[0].GetProperty("Value").GetString());
+        Assert.Equal("EM32_INJ_PARENT_ONLY", variables[1].GetProperty("Name").GetString());
+        Assert.Equal("p-only", variables[1].GetProperty("Value").GetString());
+        Assert.Equal("EM32_INJ_SECRET", variables[3].GetProperty("Name").GetString());
         // Secret contract: preview reports the stored ciphertext-level value and can
         // never report plaintext (none exists in the store).
-        Assert.Equal("em32-fake-envelope-ciphertext", variables[3].GetProperty("value").GetString());
+        Assert.Equal("em32-fake-envelope-ciphertext", variables[3].GetProperty("Value").GetString());
         Assert.DoesNotContain("em32-plaintext-canary", stdout);
 
         var paths = root.GetProperty("pathEntries");
@@ -438,7 +438,7 @@ public class ProfileCommandCharacterizationTests : VerifyBase
         var cap = CaptureConsole();
         try
         {
-            int code = Program.RunProfileCommand(new[] { "profile", "set-launch", "em32_launch", "--args", "--flag value" });
+            int code = Program.RunProfileCommand(new[] { "profile", "set-launch", "em32_launch", "--target", "em32-launch.exe", "--args", "--flag value" });
             Assert.Equal(0, code);
             await VerifyText(ReleaseConsole(cap));
         }
