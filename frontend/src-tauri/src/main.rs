@@ -1407,6 +1407,7 @@ std::mem::forget(_guard);
             cli_diagnostics,
             update_tray_locale,
             check_for_updates,
+            app_version,
             read_gui_setting,
             write_gui_setting,
             frontend_log,
