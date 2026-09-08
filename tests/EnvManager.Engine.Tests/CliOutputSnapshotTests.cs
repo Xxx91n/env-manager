@@ -402,7 +402,21 @@ public class CliOutputSnapshotTests : VerifyBase
         Assert.Contains("Error: Cannot rename protected variable",
             Scrub("Error: Cannot rename protected variable (source protected): X"));
     }
+
+    // ticket 42 aggregate-root: ProfileData setters are private; build via domain methods.
+    private static ProfileData MkSnapLaunch()
+    {
+        var p = new ProfileData();
+        p.SetName("snap-launch");
+        p.SetProfileType("launch");
+        p.SetSecretVariables(new List<string> { "EM_SNAP_SECRET" });
+        p.AddVariable("EM_SNAP_SECRET", "ciphertext-not-plaintext");
+        return p;
+    }
+
 }
+
+
 
 /// <summary>Serializes every test class that flips process-global static state:
 /// Console redirection (snapshot/stdout/help suites) and the Program static seams
@@ -430,16 +444,5 @@ sealed class TempProfileDir : IDisposable
         Program.SetAuditFilePathForTests(null);
         Program.SetAuditKeyPathForTests(null);
         try { Directory.Delete(Dir, true); } catch { /* best effort */ }
-    }
-
-    // ticket 42 aggregate-root: ProfileData setters are private; build via domain methods.
-    private static ProfileData MkSnapLaunch()
-    {
-        var p = new ProfileData();
-        p.SetName("snap-launch");
-        p.SetProfileType("launch");
-        p.SetSecretVariables(new List<string> { "EM_SNAP_SECRET" });
-        p.AddVariable("EM_SNAP_SECRET", "ciphertext-not-plaintext");
-        return p;
     }
 }
