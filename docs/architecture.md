@@ -376,6 +376,15 @@ Phase 6 (SOPS Encrypted Envelopes) and Phase 7 (Azure Key Vault) are implemented
 
 Each phase is opt-in via secret-providers.json; the default remains Phase 0 so existing installations upgrade without reconfiguration.
 
+## Two-Layer Secret Port (ISecretStore facade, ticket 39)
+
+Architecture-recovery ticket 39 (spec Phase 6 story 19) adds the domain facade port above the transport adapters:
+
+- **ISecretStore** (`src/Secrets/Core/ISecretStore.cs`, `EnvManager.Secrets.Core`): exactly five domain verbs - `Mount` (encrypt to envelope), `Reveal` (decrypt), `Rotate` (re-encrypt all profile secrets with the active provider), `Export` (DPAPI-encrypted backup blob), `Import` (restore from backup).
+- **SecretProviderManager** (`EnvManager.Secrets.Manager`) is the single implementation: `internal sealed class` + `internal static readonly SecretProviderManager.Instance`; the five verbs are explicit interface implementations delegating to the unchanged static routing core (Encrypt/Decrypt/RotateAll/ExportSecrets/ImportSecrets), so behavior is bit-identical (0 behavior change).
+- **Call sites consume the port, not the manager**: `Program.SecretStore` (CliRuntime.cs, `internal static readonly ISecretStore`) is wired from `SecretProviderManager.Instance`; ProfileSecretCommand (add/edit/reveal/rotate/export/import), ProfileLaunchCommand (launch injection), CliRuntime.TryDecryptSafe (show-with-reveal), and AuditCommand encrypt-file all go through `SecretStore.<verb>`. Provider routing (GetActiveProvider/Delete/ListProviders/SetActiveProvider) stays on the manager.
+- **Adapter boundary**: `ISecretProvider` keeps its 4 transport methods (Encrypt/Decrypt/Rotate/Delete). All 8 adapters are BCL-only (HttpClient/Process/P-Invoke) - external SDK types (KeyVaultSecret / AWSSDK.SecretsManager.* / op JSON) do not exist in the codebase and cannot cross the boundary; `SecretStorePortTests` pins the five-verb surface and fail-closed reveal routing.
+
 ## Secret Provider Contract Test Suite (L0/L1/L2 layering)
 
 The eight `ISecretProvider` implementations share one contract suite in `tests/EnvManager.Engine.Tests/` (architecture-recovery issue 10): an abstract `SecretProviderContractTests` base asserts four behaviors — fail-closed decryption, round-trip, stable malformed-format error, plaintext-never-in-the-envelope — each expressed only through the `ISecretProviderHarness` seam (`CreateProvider` / `SeedSecret` neutral-write / `ReadRawSecret` neutral-read, so a symmetric read/write bug cannot hide). Every provider mounts one sealed subclass; the `SecretProviderContractComplianceTests` reflection gate fails the build when an implementation lacks a mount.

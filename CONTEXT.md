@@ -17,7 +17,7 @@ The Phase A v0.8.0 schema v2 unit. Lives in `secretMount.json`, referenced by id
 _Avoid_: mount point, secret reference, secret link
 
 **SecretStore**:
-The Phase B v0.8.5 controller class behind `ISecretProvider`. Owns provider registry, mount metadata, health surface. Replaces direct `SecretProviderManager` routing for mount-aware operations.
+The two-layer domain port (ticket 39, spec Phase 6 story 19): `ISecretStore` in `EnvManager.Secrets.Core` with five domain verbs (Mount/Reveal/Rotate/Export/Import); `SecretProviderManager` (EnvManager.Secrets.Manager) is its implementation. CLI call sites consume the port via `Program.SecretStore`. Sits above the transport-level `Provider` contract - SDK types never cross the adapter boundary.
 _Avoid_: secret manager, provider router, secret backend
 
 **Launch Profile**:
