@@ -115,7 +115,7 @@ internal sealed class CredentialManagerProvider : ISecretProvider
             if (!CredReadW(parsed.TargetName, CRED_TYPE_GENERIC, 0, out credPtr))
             {
                 int err = Marshal.GetLastWin32Error();
-                throw new SecretProviderErrors.MappedWin32(Name, SecretProviderErrors.OpDecrypt,
+                throw SecretProviderErrors.MappedWin32(Name, SecretProviderErrors.OpDecrypt,
                     $"CredReadW failed for target '{parsed.TargetName}' (Win32 error {err})",
                     new System.ComponentModel.Win32Exception(err), parsed.TargetName);
             }

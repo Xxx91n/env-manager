@@ -200,17 +200,15 @@ partial class Program
             return 1;
         }
 
-        var newProfile = new ProfileData
-        {
-            Id = Guid.NewGuid().ToString(),
-            Name = profileName,
-            IsEnabled = false
-        };
+        var newProfile = new ProfileData();
+        newProfile.SetId(Guid.NewGuid().ToString());
+        newProfile.SetName(profileName);
+        newProfile.SetEnabled(false);
 
         if (doc.RootElement.TryGetProperty("inherits", out var inheritsElement))
-            newProfile.Inherits = inheritsElement.EnumerateArray().Select(item => item.GetString() ?? "").Where(item => item.Length > 0).ToList();
+            newProfile.SetInherits(inheritsElement.EnumerateArray().Select(item => item.GetString() ?? "").Where(item => item.Length > 0).ToList());
         if (doc.RootElement.TryGetProperty("pathEntries", out var pathsElement))
-            newProfile.PathEntries = pathsElement.EnumerateArray().Select(item => item.GetString() ?? "").Where(item => item.Length > 0).ToList();
+            newProfile.SetPathEntries(pathsElement.EnumerateArray().Select(item => item.GetString() ?? "").Where(item => item.Length > 0).ToList());
 
         foreach (var varElem in doc.RootElement.GetProperty("variables").EnumerateArray())
         {
@@ -218,7 +216,7 @@ partial class Program
             string varValue = varElem.GetProperty("value").GetString() ?? "";
             if (!string.IsNullOrEmpty(varName))
             {
-                newProfile.Variables.Add(new ProfileVariable { Name = varName, Value = varValue });
+                newProfile.AddVariable(varName, varValue);
             }
         }
 
@@ -269,7 +267,7 @@ partial class Program
         }
 
         string oldProfileName = profile.Name;
-        profile.Name = newName;
+        profile.SetName(newName);
         SaveProfiles(profiles);
 
         if (wasEnabled)
@@ -410,17 +408,17 @@ partial class Program
             return 1;
         }
 
-        var profile = new ProfileData
+        var profile = new ProfileData();
+        profile.SetId(Guid.NewGuid().ToString());
+        profile.SetName(name);
+        profile.SetEnabled(false);
+        profile.SetProfileType(isLaunch ? "launch" : "global");
+        if (isLaunch)
         {
-            Id = Guid.NewGuid().ToString(),
-            Name = name,
-            IsEnabled = false,
-            Variables = new List<ProfileVariable>(),
-            ProfileType = isLaunch ? "launch" : "global",
-            TargetExecutable = isLaunch ? StripVerbatimPrefix(target) : null,
-            LaunchArguments = isLaunch ? launchArgs : null,
-            WorkingDirectory = isLaunch ? StripVerbatimPrefix(workingDirectory) : null,
-        };
+            profile.SetLaunchTarget(StripVerbatimPrefix(target));
+            profile.SetLaunchArguments(launchArgs);
+            profile.SetWorkingDirectory(StripVerbatimPrefix(workingDirectory));
+        }
         try
         {
             SaveProfiles(profiles.Append(profile).ToList());
@@ -472,44 +470,37 @@ partial class Program
         // calling 'profile show' for structural inspection never inadvertently receives or
         // records plaintext. Use 'profile show <name> --reveal' to surface decrypted values
         // (DPAPI-bound to the current user; decryption fails on any other user account).
-        var masked = new ProfileData
-        {
-            Id = profile.Id,
-            Name = profile.Name,
-            IsEnabled = profile.IsEnabled,
-            AppliedAt = profile.AppliedAt,
-            Inherits = profile.Inherits,
-            PathEntries = profile.PathEntries,
-            PathScopes = profile.PathScopes,
-            ProfileType = profile.ProfileType,
-            TargetExecutable = profile.TargetExecutable,
-            LaunchArguments = profile.LaunchArguments,
-            WorkingDirectory = profile.WorkingDirectory,
-            SecretVariables = profile.SecretVariables,
-        };
+        var masked = new ProfileData();
+        masked.SetId(profile.Id);
+        masked.SetName(profile.Name);
+        masked.SetEnabled(profile.IsEnabled);
+        masked.SetAppliedAt(profile.AppliedAt);
+        masked.SetInherits(profile.Inherits);
+        masked.SetPathEntries(profile.PathEntries);
+        masked.SetPathScopes(profile.PathScopes);
+        masked.SetProfileType(profile.ProfileType);
+        masked.SetLaunchTarget(profile.TargetExecutable);
+        masked.SetLaunchArguments(profile.LaunchArguments);
+        masked.SetWorkingDirectory(profile.WorkingDirectory);
+        masked.SetSecretVariables(profile.SecretVariables);
         // v0.9.16: Use ResolveProfileVariablesWithSource to populate Scope + SourceProfile for each variable.
         var resolvedVars = ResolveProfileVariablesWithSource(profile, profiles);
         foreach (var rv in resolvedVars)
         {
             if (profile.SecretVariables.Contains(rv.Name, StringComparer.OrdinalIgnoreCase))
             {
-                masked.Variables.Add(new ProfileVariable
-                {
-                    Name = rv.Name,
-                    Value = revealSecrets ? TryDecryptSafe(profile.Variables.First(pv => pv.Name.Equals(rv.Name, StringComparison.OrdinalIgnoreCase)).Value) : "<encrypted>",
-                    Scope = rv.Scope,
-                    SourceProfile = rv.SourceProfile,
-                });
+                masked.AddVariable(rv.Name,
+                    revealSecrets ? TryDecryptSafe(profile.Variables.First(pv => pv.Name.Equals(rv.Name, StringComparison.OrdinalIgnoreCase)).Value) : "<encrypted>",
+                    rv.Scope, rv.SourceProfile);
             }
             else
             {
-                masked.Variables.Add(new ProfileVariable { Name = rv.Name, Value = rv.Value, Scope = rv.Scope, SourceProfile = rv.SourceProfile });
+                masked.AddVariable(rv.Name, rv.Value, rv.Scope, rv.SourceProfile);
             }
         }
         // v0.9.16: Also include resolved PATH entries with sourceProfile for each inherited path.
-        // v0.9.16: Also include resolved PATH entries with sourceProfile for each inherited path.
-        masked.ResolvedPaths = ResolveProfilePathsWithSource(profile, profiles)
-            .Select(p => new ResolvedPathEntry { Path = p.path, Scope = p.scope, SourceProfile = p.sourceProfile }).ToList();
+        masked.SetResolvedPaths(ResolveProfilePathsWithSource(profile, profiles)
+            .Select(p => new ResolvedPathEntry { Path = p.path, Scope = p.scope, SourceProfile = p.sourceProfile }).ToList());
         Console.WriteLine(JsonSerializer.Serialize(masked, JsonOptsIndented));
         return 0;
     }
@@ -564,8 +555,8 @@ partial class Program
         foreach (var other in profiles.Where(p => p.IsEnabled && p.Id != profile.Id).ToList())
         {
             UnapplyProfile(other);
-            other.IsEnabled = false;
-            other.AppliedAt = null;
+            other.SetEnabled(false);
+            other.SetAppliedAt(null);
             Console.WriteLine($"Unapplied profile: {other.Name} (single-profile policy)");
         }
         // If this profile is already applied, it's a no-op.
@@ -576,8 +567,8 @@ partial class Program
         }
 
         ApplyProfile(profile);
-        profile.IsEnabled = true;
-        profile.AppliedAt = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+        profile.SetEnabled(true);
+        profile.SetAppliedAt(DateTimeOffset.UtcNow.ToUnixTimeMilliseconds());
         try
         {
             SaveProfiles(profiles);
@@ -585,8 +576,8 @@ partial class Program
         catch
         {
             UnapplyProfile(profile);
-            profile.IsEnabled = false;
-            profile.AppliedAt = null;
+            profile.SetEnabled(false);
+            profile.SetAppliedAt(null);
             throw;
         }
         Console.WriteLine($"Applied profile: {name} ({profile.Variables.Count} variables)");
@@ -615,9 +606,9 @@ partial class Program
             return ArgError("Error: A later-applied profile depends on overlapping variables; unapply it first");
 
         UnapplyProfile(profile);
-        profile.IsEnabled = false;
+        profile.SetEnabled(false);
         long? previousAppliedAt = profile.AppliedAt;
-        profile.AppliedAt = null;
+        profile.SetAppliedAt(null);
         try
         {
             SaveProfiles(profiles);
@@ -625,8 +616,8 @@ partial class Program
         catch
         {
             ApplyProfile(profile);
-            profile.IsEnabled = true;
-            profile.AppliedAt = previousAppliedAt;
+            profile.SetEnabled(true);
+            profile.SetAppliedAt(previousAppliedAt);
             throw;
         }
         Console.WriteLine($"Unapplied profile: {name}");
@@ -721,9 +712,8 @@ partial class Program
         if (profile.IsEnabled)
             return ArgError("Error: Unapply the profile before changing its variables");
 
-        profile.Variables.RemoveAll(v => v.Name.Equals(varName, StringComparison.OrdinalIgnoreCase));
         var addedVar = new ProfileVariable { Name = varName, Value = varValue, Scope = scope };
-        profile.Variables.Add(addedVar);
+        profile.AddVariable(varName, varValue, scope);
         SaveProfiles(profiles);
 
         // If profile is currently applied, propagate the change to the registry
@@ -753,7 +743,7 @@ partial class Program
             return ArgError("Error: Unapply the profile before changing its variables");
 
         var removedVar = profile.Variables.FirstOrDefault(v => v.Name.Equals(varName, StringComparison.OrdinalIgnoreCase));
-        int removed = profile.Variables.RemoveAll(v => v.Name.Equals(varName, StringComparison.OrdinalIgnoreCase));
+        int removed = profile.RemoveVariable(varName) ? 1 : 0;
         if (removed == 0)
         {
             Console.Error.WriteLine($"Warning: Variable '{varName}' not found in profile '{profileName}'");
@@ -986,7 +976,7 @@ static int ProfileSetInherits(string[] args)
         }
         bool wasEnabled = profile.IsEnabled;
         if (wasEnabled) UnapplyProfile(profile);
-        profile.Inherits = args.Skip(3).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        profile.SetInherits(args.Skip(3).ToList());
         // v0.7.7: if the inheritance chain is somehow already poisoned (e.g. a
         // hand-edited profiles.json that bypassed CLI validation), ResolveProfile*
         // throws InvalidDataException. Wrap so set-inherits itself does not brick.
@@ -1024,15 +1014,8 @@ static int ProfileSetInherits(string[] args)
         if (profile == null) return ArgError("Error: Profile not found");
         if (profile.IsEnabled) return ArgError("Error: Unapply the profile before changing PATH entries");
         ValidatePathFragment(path);
-        if (!profile.PathEntries.Any(p => NormalizePathEntry(p).Equals(NormalizePathEntry(path), StringComparison.OrdinalIgnoreCase)))
-        {
-            profile.PathEntries.Add(path);
-            // Track the scope the user chose for this entry. The list is parallel to
-            // PathEntries; older profiles.json files without PathScopes are treated
-            // as "user" by ProfileApply (index-based lookup with out-of-range guard).
-            while (profile.PathScopes.Count < profile.PathEntries.Count - 1) profile.PathScopes.Add("user");
-            profile.PathScopes.Add(scope);
-        }
+        // NormalizePathEntry invariant + PathScopes bookkeeping live in the domain method.
+        profile.AddPathEntry(path, scope);
         SaveProfiles(profiles);
         Console.WriteLine("Added PATH entry to profile: " + profileName);
         return 0;
@@ -1044,14 +1027,8 @@ static int ProfileSetInherits(string[] args)
         var profile = FindProfile(profiles, profileName);
         if (profile == null) return ArgError("Error: Profile not found");
         if (profile.IsEnabled) return ArgError("Error: Unapply the profile before changing PATH entries");
-        int idx = profile.PathEntries.FindIndex(p => NormalizePathEntry(p).Equals(NormalizePathEntry(path), StringComparison.OrdinalIgnoreCase));
-        if (idx >= 0)
-        {
-            profile.PathEntries.RemoveAt(idx);
-            // Keep PathScopes in lockstep with PathEntries by index. If PathScopes
-            // was shorter (legacy profile), simply drop the matching tail entry.
-            if (idx < profile.PathScopes.Count) profile.PathScopes.RemoveAt(idx);
-        }
+        // NormalizePathEntry invariant + PathScopes lockstep removal live in the domain method.
+        profile.RemovePathEntry(path);
         SaveProfiles(profiles);
         Console.WriteLine("Removed PATH entry from profile: " + profileName);
         return 0;

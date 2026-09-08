@@ -87,16 +87,16 @@ internal sealed class SopsProvider : ISecretProvider
         try
         {
             using var proc = System.Diagnostics.Process.Start(psi);
-            if (proc == null) throw new SecretProviderNotFoundException(Name, "probe", "sops binary not found");
+            if (proc == null) throw new SecretProviderNotFoundException("sops", "probe", "sops binary not found");
             proc.WaitForExit(5000);
             if (!proc.HasExited || proc.ExitCode != 0)
-                throw new SecretProviderUnavailableException(Name, "probe", "sops binary not functional");
+                throw new SecretProviderUnavailableException("sops", "probe", "sops binary not functional");
             // v0.9.13 Phase 4F: record provider binary hash for tamper detection
-            try { Program.RecordProviderHash("sops", SOPS_BINARY); } catch (Exception ex) { SecretProviderErrors.SwallowBestEffort(Name, "provider-hash", ex); }
+            try { Program.RecordProviderHash("sops", SOPS_BINARY); } catch (Exception ex) { SecretProviderErrors.SwallowBestEffort("sops", "provider-hash", ex); }
         }
         catch (System.ComponentModel.Win32Exception ex)
         {
-            throw new SecretProviderNotFoundException(Name, "probe",
+            throw new SecretProviderNotFoundException("sops", "probe",
                 "sops binary not found. Install sops and ensure it is on PATH, or set SOPS_PATH env var. " +
                 "See https://github.com/getsops/sops for installation instructions.", null, ex);
         }

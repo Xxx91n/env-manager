@@ -134,9 +134,7 @@ partial class Program
                     Console.Error.WriteLine("Error: A profile named " + restored.Name + " already exists; undo would shadow it. Rename or delete that profile first.");
                     return false;
                 }
-                restored.Inherits ??= new();
-                restored.PathEntries ??= new();
-                restored.Variables ??= new();
+                restored.EnsureCollections();
                 profiles.Add(restored);
                 SaveProfiles(profiles);
                 return true;

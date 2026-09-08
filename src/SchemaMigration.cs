@@ -67,7 +67,7 @@ partial class Program
         if (changed)
         {
             // Stamp all profiles with current version and persist.
-            foreach (var p in profiles) p.SchemaVersion = CurrentProfilesSchemaVersion;
+            foreach (var p in profiles) p.SetSchemaVersion(CurrentProfilesSchemaVersion);
             AtomicWriteProfiles(profiles, createBackup: true);
             DebugLog($"Profiles migrated to schema v{CurrentProfilesSchemaVersion}");
         }
@@ -128,11 +128,7 @@ partial class Program
     {
         foreach (var p in profiles)
         {
-            p.PathScopes ??= new();
-            p.Inherits ??= new();
-            p.Variables ??= new();
-            p.PathEntries ??= new();
-            p.SecretVariables ??= new();
+            p.EnsureCollections();
         }
     }
 

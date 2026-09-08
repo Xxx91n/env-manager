@@ -141,7 +141,7 @@ internal sealed class AwsSecretsManagerProvider : ISecretProvider
         string secretKey = Environment.GetEnvironmentVariable("AWS_SECRET_ACCESS_KEY") ?? "";
         string sessionToken = Environment.GetEnvironmentVariable("AWS_SESSION_TOKEN") ?? "";
         if (string.IsNullOrEmpty(accessKey) || string.IsNullOrEmpty(secretKey))
-            throw new SecretProviderAuthFailedException(Name, "aws-api", "AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY required");
+            throw new SecretProviderAuthFailedException("aws-secretsmanager", "aws-api", "AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY required");
 
         string amzDate = DateTimeOffset.UtcNow.ToString("yyyyMMddTHHmmssZ");
         string dateStamp = DateTimeOffset.UtcNow.ToString("yyyyMMdd");
@@ -183,7 +183,7 @@ internal sealed class AwsSecretsManagerProvider : ISecretProvider
         // issue 40: transport failures map at the boundary; the HttpRequestException can
         // carry the request URL but never the signed Authorization header value, and the
         // raw message is dropped entirely (classification-only mandate).
-        return SecretProviderErrors.Send(Name, "aws-api", () => client.SendAsync(request).GetAwaiter().GetResult(), discardRawMessage: true);
+        return SecretProviderErrors.Send("aws-secretsmanager", "aws-api", () => client.SendAsync(request).GetAwaiter().GetResult(), discardRawMessage: true);
     }
 
     private static string HexSHA256(string s)

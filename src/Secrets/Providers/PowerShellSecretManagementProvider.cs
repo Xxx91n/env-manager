@@ -132,7 +132,7 @@ internal sealed class PowerShellSecretManagementProvider : ISecretProvider
             "if ($null -eq $m) { Write-Output 'MISSING_MODULE' } else { Write-Output 'OK' }";
         string moduleCheck = RunPowerShell(probe);
         if (!moduleCheck.Contains("OK"))
-            throw new SecretProviderNotFoundException(Name, "probe",
+            throw new SecretProviderNotFoundException("powershell-secretmanagement", "probe",
                 "PowerShell SecretManagement module is not installed. " +
                 "Run: pwsh -Command \"Install-Module Microsoft.PowerShell.SecretManagement, Microsoft.PowerShell.SecretStore -Scope CurrentUser -Force\" " +
                 "then retry. (Vault: " + VaultName + ")");
@@ -145,7 +145,7 @@ internal sealed class PowerShellSecretManagementProvider : ISecretProvider
     {
         string probe =
             "$ErrorActionPreference='Stop'; " +
-            "try { $v = Get-SecretVault -Name '" + EscapeForPowerShell(VaultName) + "' -ErrorAction Stop; if ($null -ne $v) { Write-Output 'OK' } else { Write-Output 'REGISTER' } } " +
+            "try { $v = Get-SecretVault -"powershell-secretmanagement" '" + EscapeForPowerShell(VaultName) + "' -ErrorAction Stop; if ($null -ne $v) { Write-Output 'OK' } else { Write-Output 'REGISTER' } } " +
             "catch { Write-Output 'REGISTER' }";
         string vaultCheck = RunPowerShell(probe);
         if (!vaultCheck.Contains("OK"))
@@ -160,12 +160,12 @@ internal sealed class PowerShellSecretManagementProvider : ISecretProvider
                 // file was found in any module directory." even after the
                 // documented Install-Module command has been run, because the
                 // actual installed module name is 'Microsoft.PowerShell.SecretStore'.
-                "Register-SecretVault -Name '" + EscapeForPowerShell(VaultName) + "' " +
+                "Register-SecretVault -"powershell-secretmanagement" '" + EscapeForPowerShell(VaultName) + "' " +
                 "-ModuleName Microsoft.PowerShell.SecretStore -DefaultVault -AllowClobber; " +
                 "Write-Output 'OK'";
             string reg = RunPowerShell(register);
             if (!reg.Contains("OK"))
-                throw new SecretProviderUnavailableException(Name, "vault-register", "Failed to register SecretManagement vault '" + VaultName + "': " + StripClixml(reg));
+                throw new SecretProviderUnavailableException("powershell-secretmanagement", "vault-register", "Failed to register SecretManagement vault '" + VaultName + "': " + StripClixml(reg));
         }
     }
 
@@ -202,7 +202,7 @@ internal sealed class PowerShellSecretManagementProvider : ISecretProvider
         };
 
         using var proc = System.Diagnostics.Process.Start(psi);
-        if (proc == null) throw new SecretProviderUnavailableException(Name, "pwsh", "Failed to start pwsh process");
+        if (proc == null) throw new SecretProviderUnavailableException("powershell-secretmanagement", "pwsh", "Failed to start pwsh process");
         // Per .NET guidance (MS docs: "WaitForExit" + multiple redirected
         // streams): synchronously ReadToEnd after WaitForExit can deadlock when
         // either pipe fills before we read from it, which is the real cause of
@@ -216,7 +216,7 @@ internal sealed class PowerShellSecretManagementProvider : ISecretProvider
         proc.BeginOutputReadLine();
         proc.BeginErrorReadLine();
         proc.WaitForExit(30000); // 30s timeout
-        if (!proc.HasExited) { try { proc.Kill(); } catch (Exception killEx) { SecretProviderErrors.SwallowBestEffort(Name, "pwsh", killEx); } throw new SecretProviderTimeoutException(Name, "pwsh", "pwsh timed out after 30s"); }
+        if (!proc.HasExited) { try { proc.Kill(); } catch (Exception killEx) { SecretProviderErrors.SwallowBestEffort("powershell-secretmanagement", "pwsh", killEx); } throw new SecretProviderTimeoutException("powershell-secretmanagement", "pwsh", "pwsh timed out after 30s"); }
         // For async-redirected streams WaitForExit(int) may return while the
         // async drains are still flushing: call WaitForExit() (no timeout) to
         // guarantee both async readers have delivered all data before we read.
@@ -224,7 +224,7 @@ internal sealed class PowerShellSecretManagementProvider : ISecretProvider
         string stdout = stdoutBuf.ToString();
         string stderr = stderrBuf.ToString();
         if (proc.ExitCode != 0)
-            throw new SecretProviderUnavailableException(Name, "pwsh", "pwsh exited " + proc.ExitCode + ": " + StripClixml(stderr));
+            throw new SecretProviderUnavailableException("powershell-secretmanagement", "pwsh", "pwsh exited " + proc.ExitCode + ": " + StripClixml(stderr));
         return stdout;
     }
 

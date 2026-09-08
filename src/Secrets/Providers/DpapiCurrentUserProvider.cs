@@ -61,7 +61,7 @@ internal sealed class DpapiCurrentUserProvider : ISecretProvider
         }
         catch (System.ComponentModel.Win32Exception w32)
         {
-            throw new SecretProviderErrors.MappedWin32(Name, SecretProviderErrors.OpDecrypt,
+            throw SecretProviderErrors.MappedWin32(Name, SecretProviderErrors.OpDecrypt,
                 "DPAPI decrypt failed (Win32 error " + w32.NativeErrorCode + ")", w32);
         }
     }

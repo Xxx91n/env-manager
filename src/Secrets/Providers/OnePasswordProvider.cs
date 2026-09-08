@@ -80,16 +80,16 @@ internal sealed class OnePasswordProvider : ISecretProvider
         try
         {
             using var proc = System.Diagnostics.Process.Start(psi);
-            if (proc == null) throw new SecretProviderNotFoundException(Name, "probe", "1Password CLI (op) binary not found");
+            if (proc == null) throw new SecretProviderNotFoundException("1password", "probe", "1Password CLI (op) binary not found");
             proc.WaitForExit(5000);
             if (!proc.HasExited || proc.ExitCode != 0)
-                throw new SecretProviderUnavailableException(Name, "probe", "1Password CLI (op) binary not functional");
+                throw new SecretProviderUnavailableException("1password", "probe", "1Password CLI (op) binary not functional");
             // v0.9.13 Phase 4F: record provider binary hash for tamper detection
-            try { Program.RecordProviderHash("op", OP_BINARY); } catch (Exception ex) { SecretProviderErrors.SwallowBestEffort(Name, "provider-hash", ex); }
+            try { Program.RecordProviderHash("op", OP_BINARY); } catch (Exception ex) { SecretProviderErrors.SwallowBestEffort("1password", "provider-hash", ex); }
         }
         catch (System.ComponentModel.Win32Exception ex)
         {
-            throw new SecretProviderNotFoundException(Name, "probe",
+            throw new SecretProviderNotFoundException("1password", "probe",
                 "1Password CLI (op) not found. Install op and ensure it is on PATH, or set OP_PATH env var.", null, ex);
         }
     }

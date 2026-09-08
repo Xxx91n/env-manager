@@ -29,9 +29,7 @@ partial class Program
         var profiles = JsonSerializer.Deserialize<List<ProfileData>>(File.ReadAllText(path), JsonOpts) ?? new();
         foreach (var profile in profiles)
         {
-            profile.Inherits ??= new();
-            profile.PathEntries ??= new();
-            profile.Variables ??= new();
+            profile.EnsureCollections();
         }
         // v0.9.9: Versioned schema migration (replaces ad-hoc MigrateSecretsToMounts call).
         // The registry detects schema version, runs pending steps sequentially, and persists.
