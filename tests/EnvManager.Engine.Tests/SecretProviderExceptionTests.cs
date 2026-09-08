@@ -75,7 +75,7 @@ public class SecretProviderExceptionTests
         var padded = AuthHeaderEcho + new string('x', 600);
         var ex = new SecretProviderAuthFailedException("aws-secretsmanager", "decrypt", "AWS create failed: Authorization: " + padded);
 
-        Assert.StartsWith("AWS create failed: Authorization: <redacted>", ex.Message);
+        Assert.StartsWith("AWS create failed: Authorization:<redacted>", ex.Message);
         Assert.DoesNotContain(AuthHeaderEcho, ex.Message);
         Assert.True(ex.Message.Length <= 512, "message must be truncated to the 512-char cap, was " + ex.Message.Length);
     }
@@ -216,8 +216,9 @@ public class SecretProviderExceptionTests
                 TargetName = "us-east-1|em-t40-echo-secret"
             }.Serialize();
 
-            Assert.True(serverTask.Wait(TimeSpan.FromSeconds(10)), "echo mock never answered");
+            // Decrypt triggers the HTTP call that makes the echo mock complete; wait AFTER the call.
             var ex = Assert.ThrowsAny<SecretProviderException>(() => provider.Decrypt(envelope, "em-t40\\VAR"));
+            Assert.True(serverTask.Wait(TimeSpan.FromSeconds(10)), "echo mock never answered");
             Assert.True(ex is SecretProviderAuthFailedException, "expected AuthFailed for HTTP 401, got " + ex.GetType().Name);
             // Classification-only contract: the status survives, neither the echoed header
             // nor the credential id does.
