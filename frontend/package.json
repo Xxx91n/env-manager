@@ -37,7 +37,6 @@
   },
   "dependencies": {
     "@tauri-apps/plugin-dialog": "^2.7.1",
-    "@tauri-apps/plugin-updater": "^2.11.0",
     "bits-ui": "^0.22.0",
     "clsx": "^2.1.1",
     "lucide-svelte": "^1.0.1",
@@ -46,3 +45,4 @@
   },
   "license": "Apache-2.0"
 }
+

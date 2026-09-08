@@ -35,10 +35,6 @@ _Avoid_: system profile, applied profile
 The declared per-provider metadata on `ISecretProvider` (ticket 41, spec Phase 6): `RefreshCapable` / `CertAuthRequired` / `RequiresNetwork` / `Available`. RefreshCapable means a service mount may run refresh policy "Periodic" (else CreatedOnly); CertAuthRequired marks certificate-bound production auth models (Vault AppRole/TLS, Azure SP certificate); RequiresNetwork separates pure-local providers from remote-backend ones; Available is the cheap declared self-check (required env config / resolved binary, no I/O) that `SecretProviderManager.ListProviders` composes with the sentinel probe for network providers only. Surfaced through `secret-provider list` output tags and consumed by the GUI's generic parser.
 _Avoid_: hardcoded Periodic refusal, hardcoded provider list, capability flags keyed on provider names
 
-**Updater Port**:
-The auto-update transport seam (ticket 37, spec Phase 6 story 17): tauri-plugin-updater is the wired transport (Rust commands `check_update_plugin` / `download_and_install` over the `latest.json` endpoint + minisign pubkey in `tauri.conf.json`); the legacy PowerShell `check_for_updates` GitHub-API probe remains in `main.rs` only as the browser-fallback transport. The frontend consumes both through the same `UpdateInfo` shape, so swapping transports never reshapes the Settings dialog contract. Install path is signature-verified MSI; on Windows the app exits itself once the installer launches.
-_Avoid_: version literal in the GUI, pending-update State plumbing, auto-install without user action
-
 **Provider**:
 An `ISecretProvider` implementation (8 total: dpapi-current-user, credential-manager, powershell-secretmanagement, vault-kv2, sops, azure-keyvault, 1password, aws-secretsmanager). Five-method interface: Name/Encrypt/Decrypt/CanRotate/Rotate/Delete. Stays as-is through all phases.
 _Avoid_: backend, vault (ambiguous with HashiCorp Vault), store
