@@ -458,6 +458,7 @@
   "secrets.policy.createdOnly": "Только при создании",
   "secrets.policy.onDemand": "По запросу",
   "secrets.policy.periodic": "Периодически",
+  "secrets.providerUnavailable": "недоступен",
   "errors.chunkLoadFailed": "Не удалось загрузить компонент. Повторите попытку.",
   "common.retry": "Повторить",
   "app.minimize": "Свернуть",

@@ -33,6 +33,7 @@
     secretProviderList,
     secretProviderSet,
   } from '../api'
+import { parseSecretProviderList } from '../secret-provider-list'
   import type { ProfileData, EnvVariable } from '../api'
   let profileList: ProfileData[] = []
   let selectedProfile: ProfileData | null = null
@@ -57,6 +58,9 @@
   // v0.8 secret provider state
   let activeProvider = 'dpapi-current-user'
   let availableProviders: string[] = []
+  // Ticket 41: providers the CLI reports as (unavailable) + declared capability flags.
+  let unavailableProviders: string[] = []
+  let providerCapabilities: Record<string, { refresh: boolean; certauth: boolean; network: boolean }> = {}
 
 
   // Input validation for variable names and PATH entries (v0.7.5 hard boundary).
@@ -96,25 +100,16 @@
   async function loadProviderInfo() {
     try {
       const result = await secretProviderList()
-      const lines = result.split('\n')
-      for (const line of lines) {
-        if (line.startsWith('Active provider:')) {
-          activeProvider = line.split(':')[1].trim()
-        } else if (line.trim().startsWith('dpapi-current-user') ||
-                   line.trim().startsWith('credential-manager') ||
-                   line.trim().startsWith('powershell-secretmanagement') ||
-                   line.trim().startsWith('vault-kv2') ||
-                   line.trim().startsWith('sops') ||
-                   line.trim().startsWith('azure-keyvault') ||
-                   line.trim().startsWith('1password') ||
-                   line.trim().startsWith('aws-secretsmanager')) {
-          // This is an available provider line (possibly with "(active)" suffix)
-          const name = line.trim().replace('(active)', '').trim()
-          if (name && !availableProviders.includes(name)) {
-            availableProviders = [...availableProviders, name]
-          }
-        }
-      }
+      // Ticket 41: capability-aware generic parse — no hardcoded provider id list
+      // (hard boundary v0.7.3). Availability and capability flags come from the CLI
+      // line data; pre-capability CLI output parses with all flags false.
+      const parsed = parseSecretProviderList(result)
+      if (parsed.activeProvider) activeProvider = parsed.activeProvider
+      availableProviders = parsed.providers.map(p => p.name)
+      unavailableProviders = parsed.providers.filter(p => !p.available).map(p => p.name)
+      providerCapabilities = Object.fromEntries(
+        parsed.providers.map(p => [p.name, { refresh: p.refreshCapable, certauth: p.certAuthRequired, network: p.requiresNetwork }]),
+      )
     } catch {
       // keep defaults
     }
@@ -1002,8 +997,8 @@
                      }}
                    >
                      {#each availableProviders as prov}
-                       <option value={prov} selected={prov === activeProvider}>
-                         {providerDisplayName(prov)}{prov === activeProvider ? ' (active)' : ''}
+                       <option value={prov} selected={prov === activeProvider} disabled={unavailableProviders.includes(prov)}>
+                         {providerDisplayName(prov)}{prov === activeProvider ? ' (active)' : ''}{unavailableProviders.includes(prov) ? ` (${$t('secrets.providerUnavailable')})` : ''}
                        </option>
                      {/each}
                    </select>

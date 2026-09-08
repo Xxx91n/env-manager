@@ -168,7 +168,7 @@ Pass `--debug` or `-d` to enable verbose stderr logging with timestamps. Logs re
 
 ## v0.8 Secret Providers
 
-Secret variables (added via `profile add-secret` on a LAUNCH profile only) are routed to the active provider declared in `%LOCALAPPDATA%\EnvManager\secret-providers.json`. List and switch providers via `profile secret-provider list` and `profile secret-provider set <name>`. `set` runs a no-op Encrypt/Decrypt/Delete probe before committing the config switch - a provider that fails its probe (pwsh missing module, Vault no `VAULT_ADDR`, cloud credentials missing, network down) is REJECTED at config time with an actionable message, never silently swapped.
+Secret variables (added via `profile add-secret` on a LAUNCH profile only) are routed to the active provider declared in `%LOCALAPPDATA%\EnvManager\secret-providers.json`. List and switch providers via `profile secret-provider list` and `profile secret-provider set <name>`. `list` reports real per-provider availability (declared capability gate, sentinel probe for network providers) and machine-readable capability tags `[refresh=yes|no certauth=yes|no network=yes|no]` per provider. `set` runs a no-op Encrypt/Decrypt/Delete probe before committing the config switch - a provider that fails its probe (pwsh missing module, Vault no `VAULT_ADDR`, cloud credentials missing, network down) is REJECTED at config time with an actionable message, never silently swapped.
 | `%LOCALAPPDATA%\EnvManager\secretMount.json` | Secret mount metadata (provider, refresh policy, lifecycle) |
 | `%LOCALAPPDATA%\EnvManager\gui-settings.json` | GUI settings (locale, darkMode, fontScale) persisted via Rust IPC |
 | `%ProgramData%\EnvManager\audit-ledger.jsonl` | Hash-chained audit ledger (service-mode, append-only) |

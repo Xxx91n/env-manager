@@ -31,6 +31,9 @@ _Avoid_: local profile (ambiguous — "local" means local-scope PATH entry too),
 **Global Profile**:
 A profile whose variables are applied to HKCU/HKLM registry on `profile apply`. Cannot carry secrets (IsProfileApplicable rejects). May inherit from other Global profiles.
 _Avoid_: system profile, applied profile
+**Capability Descriptor**:
+The declared per-provider metadata on `ISecretProvider` (ticket 41, spec Phase 6): `RefreshCapable` / `CertAuthRequired` / `RequiresNetwork` / `Available`. RefreshCapable means a service mount may run refresh policy "Periodic" (else CreatedOnly); CertAuthRequired marks certificate-bound production auth models (Vault AppRole/TLS, Azure SP certificate); RequiresNetwork separates pure-local providers from remote-backend ones; Available is the cheap declared self-check (required env config / resolved binary, no I/O) that `SecretProviderManager.ListProviders` composes with the sentinel probe for network providers only. Surfaced through `secret-provider list` output tags and consumed by the GUI's generic parser.
+_Avoid_: hardcoded Periodic refusal, hardcoded provider list, capability flags keyed on provider names
 
 **Provider**:
 An `ISecretProvider` implementation (8 total: dpapi-current-user, credential-manager, powershell-secretmanagement, vault-kv2, sops, azure-keyvault, 1password, aws-secretsmanager). Five-method interface: Name/Encrypt/Decrypt/CanRotate/Rotate/Delete. Stays as-is through all phases.

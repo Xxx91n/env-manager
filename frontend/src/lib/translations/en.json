@@ -458,6 +458,7 @@
   "secrets.policy.createdOnly": "CreatedAt only",
   "secrets.policy.onDemand": "On-demand",
   "secrets.policy.periodic": "Periodic",
+  "secrets.providerUnavailable": "unavailable",
   "errors.chunkLoadFailed": "Failed to load component. Please retry.",
   "common.retry": "Retry",
   "app.minimize": "Minimize",

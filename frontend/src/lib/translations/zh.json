@@ -458,6 +458,7 @@
   "secrets.policy.createdOnly": "仅创建时",
   "secrets.policy.onDemand": "按需",
   "secrets.policy.periodic": "定期",
+  "secrets.providerUnavailable": "不可用",
   "errors.chunkLoadFailed": "组件加载失败，请重试。",
   "common.retry": "重试",
   "app.minimize": "最小化",

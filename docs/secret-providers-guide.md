@@ -13,6 +13,25 @@ The six external providers below require host-side setup. Each section lists the
 
 ---
 
+### Capability matrix (ticket 41)
+
+Every provider declares its capability descriptors on `ISecretProvider`, and `profile secret-provider list` reports them per line as `[refresh=yes|no certauth=yes|no network=yes|no]` plus real availability (`(unavailable)` when the cheap environment gate fails):
+
+| Provider | Periodic refresh | Cert-bound auth | Network | Cheap availability gate |
+|----------|------------------|-----------------|---------|--------------------------|
+| dpapi-current-user | no (CreatedOnly) | no | no | always usable on Windows |
+| credential-manager | no (CreatedOnly) | no | no | always usable on Windows |
+| powershell-secretmanagement | no (CreatedOnly) | no | no | declared usable; module check fails closed at activation |
+| vault-kv2 | yes (Periodic) | yes (AppRole/TLS) | yes | VAULT_ADDR + VAULT_TOKEN set |
+| sops | no (CreatedOnly) | no | no | resolved sops binary exists |
+| azure-keyvault | yes (Periodic) | yes (SP certificate) | yes | AZURE_KEYVAULT_URI set |
+| 1password | yes (Periodic) | no | yes | resolved op binary exists |
+| aws-secretsmanager | yes (Periodic) | no (IAM role / keys) | yes | region + access key + secret key set |
+
+Network providers additionally survive a sentinel Encrypt/Decrypt/Delete round-trip before `list` reports them available (same probe `set` has always run); local providers never probe.
+
+---
+
 ## PowerShell SecretManagement
 
 Official docs: [Microsoft.PowerShell.SecretManagement (Gallery)](https://www.powershellgallery.com/packages/Microsoft.PowerShell.SecretManagement) · [Microsoft.PowerShell.SecretStore (Gallery)](https://www.powershellgallery.com/packages/Microsoft.PowerShell.SecretStore) · [SecretManagement module guide (learn.microsoft.com)](https://learn.microsoft.com/powershell/module/microsoft.powershell.secretmanagement/).

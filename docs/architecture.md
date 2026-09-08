@@ -320,7 +320,7 @@ Phase 1 (Versioned Envelopes) and Phase 2 (Windows Credential Manager) are imple
 - **DpapiCurrentUserProvider**: wraps existing `DpapiHelper` in a JSON envelope `{ provider, version, createdAt, ciphertext }`.
 - **CredentialManagerProvider**: uses `advapi32.dll` P/Invoke `CredWriteW`/`CredReadW`/`CredDeleteW` with `CRED_TYPE_GENERIC` and `CRED_PERSIST_ENTERPRISE`. The CredMan blob is DPAPI-encrypted before storage; the profile stores only the CRED target name.
 - **SecretProviderManager**: reads `%LOCALAPPDATA%\EnvManager\secret-providers.json` to determine the active provider. Unknown providers are fail-closed. Bare pre-v0.8 DPAPI base64 blobs are auto-detected and decrypted via `DpapiCurrentUserProvider`.
-- **CLI commands**: `profile secret-provider list` (read) and `profile secret-provider set <name>` (write).
+- **CLI commands**: `profile secret-provider list` (read) and `profile secret-provider set <name>` (write). Ticket 41: `list` computes real per-provider availability (declared capability gate + sentinel probe for network providers only) and appends machine-readable capability tags `[refresh=yes|no certauth=yes|no network=yes|no]` to each line; the GUI parser (`frontend/src/lib/secret-provider-list.ts`) is generic - no hardcoded provider ids - and disables providers reported as (unavailable) with the localized `secrets.providerUnavailable` label.
 - **GUI**: ProfilePage shows the active provider as a toggle badge; clicking switches between dpapi-current-user and credential-manager.
 - **Backwards compatibility**: existing profiles with bare DPAPI base64 blobs continue to work transparently.
 

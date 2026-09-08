@@ -194,7 +194,15 @@ partial class Program
                 foreach (var (name, available) in providers)
                 {
                     string marker = name.Equals(active, StringComparison.OrdinalIgnoreCase) ? " (active)" : "";
-                    Console.WriteLine($"  {name}{marker}{(available ? "" : " (unavailable)")}");
+                    // Ticket 41: machine-readable capability descriptors ride the same line; the
+                    // GUI parser stays generic (no hardcoded provider id list).
+                    var caps = SecretProviderManager.GetCapabilities(name);
+                    Console.WriteLine(
+                        $"  {name}{marker}{(available ? "" : " (unavailable)")}" +
+                        $" [refresh={(caps.RefreshCapable ? "yes" : "no")}" +
+                        $" certauth={(caps.CertAuthRequired ? "yes" : "no")}" +
+                        $" network={(caps.RequiresNetwork ? "yes" : "no")}"]
+                    );
                 }
                 return 0;
 

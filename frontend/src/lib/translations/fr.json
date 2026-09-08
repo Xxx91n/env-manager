@@ -458,6 +458,7 @@
   "secrets.policy.createdOnly": "À la création seulement",
   "secrets.policy.onDemand": "À la demande",
   "secrets.policy.periodic": "Périodique",
+  "secrets.providerUnavailable": "indisponible",
   "errors.chunkLoadFailed": "Échec du chargement du composant. Veuillez réessayer.",
   "common.retry": "Réessayer",
   "app.minimize": "Réduire",

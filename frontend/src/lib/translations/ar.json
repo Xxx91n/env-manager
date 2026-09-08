@@ -458,6 +458,7 @@
   "secrets.policy.createdOnly": "عند الإنشاء فقط",
   "secrets.policy.onDemand": "عند الطلب",
   "secrets.policy.periodic": "دوري",
+  "secrets.providerUnavailable": "غير متاح",
   "errors.chunkLoadFailed": "فشل تحميل المكون. يرجى إعادة المحاولة.",
   "common.retry": "إعادة المحاولة",
   "app.minimize": "تصغير",
