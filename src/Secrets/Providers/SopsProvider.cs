@@ -236,7 +236,7 @@ internal sealed class SopsProvider : ISecretProvider
             }
 
             using var proc = System.Diagnostics.Process.Start(psi);
-            if (proc == null) throw new SecretProviderUnavailableException(Name, SecretProviderErrors.OpDecrypt, "Failed to start sops process")
+            if (proc == null) throw new SecretProviderUnavailableException(Name, SecretProviderErrors.OpDecrypt, "Failed to start sops process");
             proc.WaitForExit(30000);
             if (!proc.HasExited) { proc.Kill(); throw new SecretProviderTimeoutException(Name, SecretProviderErrors.OpDecrypt, "sops decryption timed out"); }
 

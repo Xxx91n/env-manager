@@ -6,7 +6,8 @@ using EnvManager.Secrets.Core;
 using System;
 using System.Runtime.InteropServices;
 
-// ticket 40: adapter-boundary typed error family (aliases below).
+// ticket 40: adapter-boundary typed error family (family types resolve via the
+// EnvManager.Secrets.Core using at the top of this file).
 
 namespace EnvManager.Secrets.Providers;
 
@@ -67,13 +68,3 @@ internal sealed class DpapiCurrentUserProvider : ISecretProvider
 
     public bool CanRotate => false;
 }
-
-// ticket 40: file-local aliases - see CredentialManagerProvider.cs for the rationale.
-internal using SecretProviderException = EnvManager.Secrets.Core.SecretProviderException;
-internal using SecretProviderAuthFailedException = EnvManager.Secrets.Core.SecretProviderAuthFailedException;
-internal using SecretProviderNotFoundException = EnvManager.Secrets.Core.SecretProviderNotFoundException;
-internal using SecretProviderPermissionDeniedException = EnvManager.Secrets.Core.SecretProviderPermissionDeniedException;
-internal using SecretProviderUnavailableException = EnvManager.Secrets.Core.SecretProviderUnavailableException;
-internal using SecretProviderTimeoutException = EnvManager.Secrets.Core.SecretProviderTimeoutException;
-internal using SecretProviderInvalidEnvelopeException = EnvManager.Secrets.Core.SecretProviderInvalidEnvelopeException;
-internal using SecretProviderErrors = EnvManager.Secrets.Core.SecretProviderErrors;
