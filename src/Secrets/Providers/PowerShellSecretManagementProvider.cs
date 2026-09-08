@@ -145,7 +145,7 @@ internal sealed class PowerShellSecretManagementProvider : ISecretProvider
     {
         string probe =
             "$ErrorActionPreference='Stop'; " +
-            "try { $v = Get-SecretVault -"powershell-secretmanagement" '" + EscapeForPowerShell(VaultName) + "' -ErrorAction Stop; if ($null -ne $v) { Write-Output 'OK' } else { Write-Output 'REGISTER' } } " +
+            "try { $v = Get-SecretVault -Name '" + EscapeForPowerShell(VaultName) + "' -ErrorAction Stop; if ($null -ne $v) { Write-Output 'OK' } else { Write-Output 'REGISTER' } } " +
             "catch { Write-Output 'REGISTER' }";
         string vaultCheck = RunPowerShell(probe);
         if (!vaultCheck.Contains("OK"))
@@ -160,7 +160,7 @@ internal sealed class PowerShellSecretManagementProvider : ISecretProvider
                 // file was found in any module directory." even after the
                 // documented Install-Module command has been run, because the
                 // actual installed module name is 'Microsoft.PowerShell.SecretStore'.
-                "Register-SecretVault -"powershell-secretmanagement" '" + EscapeForPowerShell(VaultName) + "' " +
+                "Register-SecretVault -Name '" + EscapeForPowerShell(VaultName) + "' " +
                 "-ModuleName Microsoft.PowerShell.SecretStore -DefaultVault -AllowClobber; " +
                 "Write-Output 'OK'";
             string reg = RunPowerShell(register);
