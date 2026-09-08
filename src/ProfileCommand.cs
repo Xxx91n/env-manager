@@ -993,10 +993,10 @@ static int ProfileSetInherits(string[] args)
         SaveProfiles(profiles);
         if (wasEnabled)
         {
-            if (IsProfileApplicable(profile)) { ApplyProfile(profile); profile.AppliedAt = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(); SaveProfiles(profiles); }
+            if (IsProfileApplicable(profile)) { ApplyProfile(profile); profile.SetAppliedAt(DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()); SaveProfiles(profiles); }
             else
             {
-                profile.IsEnabled = false;
+                profile.SetEnabled(false);
                 SaveProfiles(profiles);
                 Console.Error.WriteLine("Warning: Profile '" + profile.Name + "' is no longer applicable after the inheritance change (e.g. it now pulls in a secret variable). It has been disabled; fix the inheritance chain before re-applying.");
             }

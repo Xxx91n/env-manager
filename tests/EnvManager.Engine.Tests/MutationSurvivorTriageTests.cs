@@ -101,12 +101,10 @@ public class MutationSurvivorTriageTests : IDisposable
     public void Unapply_RemovesAppliedSystemVariableWithoutBackup()
     {
         var env = new InMemoryScope();
-        var profile = new ProfileData
-        {
-            Name = "EM_T18_unapply_sys",
-            ProfileType = "global",
-            Variables = new List<ProfileVariable> { new() { Name = FreeName, Value = "from-profile", Scope = "system" } },
-        };
+        var profile = new ProfileData();
+        profile.SetName("EM_T18_unapply_sys");
+        profile.SetProfileType("global");
+        profile.AddVariable(FreeName, "from-profile", "system");
         Program.SaveProfiles(new List<ProfileData> { profile });
         var loaded = Program.LoadProfiles().First(p => p.Name == profile.Name);
 

@@ -91,14 +91,14 @@ partial class Program
 
         if (newType is not null)
         {
-            profile.ProfileType = newType.ToLowerInvariant();
-            if (profile.ProfileType == "global") profile.TargetExecutable = null;
+            profile.SetProfileType(newType.ToLowerInvariant());
+            if (profile.ProfileType == "global") profile.SetLaunchTarget(null);
         }
         if (profile.ProfileType.Equals("launch", StringComparison.OrdinalIgnoreCase))
         {
-            if (target is not null) profile.TargetExecutable = StripVerbatimPrefix(target);
-            if (launchArgs is not null) profile.LaunchArguments = launchArgs;
-            if (cwd is not null) profile.WorkingDirectory = StripVerbatimPrefix(cwd);
+            if (target is not null) profile.SetLaunchTarget(StripVerbatimPrefix(target));
+            if (launchArgs is not null) profile.SetLaunchArguments(launchArgs);
+            if (cwd is not null) profile.SetWorkingDirectory(StripVerbatimPrefix(cwd));
             if (string.IsNullOrWhiteSpace(profile.TargetExecutable))
             {
                 Console.Error.WriteLine("Error: Launch profile requires --target <exe>");

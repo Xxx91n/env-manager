@@ -64,11 +64,9 @@ partial class Program
             return ArgError("Error: Secrets can only be edited on Launch (local) profiles. Use \"profile set-launch <name> --target <exe>\" to convert first.");
         if (profile.IsEnabled) return ArgError("Error: Unapply the profile before changing its variables");
 
-        profile.Variables.RemoveAll(v => v.Name.Equals(varName, StringComparison.OrdinalIgnoreCase));
         string encrypted = SecretStore.Mount(varValue, profileName + "\\" + varName);
-        profile.Variables.Add(new ProfileVariable { Name = varName, Value = encrypted });
-        if (!profile.SecretVariables.Any(s => s.Equals(varName, StringComparison.OrdinalIgnoreCase)))
-            profile.SecretVariables.Add(varName);
+        profile.AddVariable(varName, encrypted);
+        profile.AddSecretVariable(varName);
         SaveProfiles(profiles);
 
         RecordProfileAudit("profile add-secret", profileName,
@@ -101,9 +99,8 @@ partial class Program
 
         if (!newVarName.Equals(oldVarName, StringComparison.OrdinalIgnoreCase))
         {
-            profile.SecretVariables.RemoveAll(s => s.Equals(oldVarName, StringComparison.OrdinalIgnoreCase));
-            if (wasMarkedSecret && !profile.SecretVariables.Any(s => s.Equals(newVarName, StringComparison.OrdinalIgnoreCase)))
-                profile.SecretVariables.Add(newVarName);
+            profile.RemoveSecretVariable(oldVarName);
+            if (wasMarkedSecret) profile.AddSecretVariable(newVarName);
         }
         SaveProfiles(profiles);
 
@@ -127,8 +124,8 @@ partial class Program
         // Delete provider-side state (e.g. CredMan entry) before removing from profile
         try { SecretProviderManager.Delete(v.Value, profileName + "\\" + varName); } catch { }
 
-        profile.Variables.Remove(v);
-        profile.SecretVariables.RemoveAll(s => s.Equals(varName, StringComparison.OrdinalIgnoreCase));
+        profile.RemoveVariable(varName);
+        profile.RemoveSecretVariable(varName);
         SaveProfiles(profiles);
 
         RecordProfileAudit("profile remove-secret", profileName, JsonSerializer.Serialize(new { name = varName }), null);

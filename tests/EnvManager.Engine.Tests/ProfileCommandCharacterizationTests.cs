@@ -122,17 +122,17 @@ public class ProfileCommandCharacterizationTests : VerifyBase
         List<string>? pathEntries = null, List<string>? secretVariables = null,
         bool isEnabled = false)
     {
-        return new ProfileData
-        {
-            Name = name,
-            ProfileType = type,
-            TargetExecutable = target,
-            Inherits = inherits ?? new List<string>(),
-            Variables = variables ?? new List<ProfileVariable>(),
-            PathEntries = pathEntries ?? new List<string>(),
-            SecretVariables = secretVariables ?? new List<string>(),
-            IsEnabled = isEnabled,
-        };
+        var p = new ProfileData();
+        p.SetName(name);
+        p.SetProfileType(type);
+        p.SetLaunchTarget(target);
+        p.SetInherits(inherits ?? new List<string>());
+        if (variables != null)
+            foreach (var v in variables) p.AddVariable(v.Name, v.Value, v.Scope);
+        p.SetPathEntries(pathEntries ?? new List<string>());
+        p.SetSecretVariables(secretVariables ?? new List<string>());
+        p.SetEnabled(isEnabled);
+        return p;
     }
 
     static ProfileVariable MkVar(string name, string value, string scope = "user")

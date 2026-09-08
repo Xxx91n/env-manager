@@ -155,7 +155,7 @@ partial class Program
                 if (entry.OldValue != null)
                 {
                     if (p.IsEnabled) UnapplyProfile(p);
-                    p.Name = entry.OldValue;
+                    p.SetName(entry.OldValue);
                     SaveProfiles(profiles);
                 }
                 return true;
