@@ -26,7 +26,7 @@ describe('Secret provider regression safety', () => {
 
   it('Rotation never deletes failed secrets: failed decrypt = skip + count, never delete', () => {
     const src = readSecretProviderSources()
-    const rotateSection = src.slice(src.indexOf('RotateAll'), src.indexOf('ExportSecrets'))
+    const rotateSection = src.slice(src.indexOf('public static (int total, int rotated, int failed) RotateAll'), src.indexOf('public static string ExportSecrets'))
     expect(rotateSection).toContain('failed')
     expect(rotateSection).toContain('catch')
     // The failed variable must NOT be removed - only counted
@@ -35,13 +35,13 @@ describe('Secret provider regression safety', () => {
 
   it('Export secrets: the backup is DPAPI-encrypted regardless of source provider', () => {
     const src = readSecretProviderSources()
-    const exportSection = src.slice(src.indexOf('ExportSecrets'), src.indexOf('ImportSecrets'))
+    const exportSection = src.slice(src.indexOf('public static string ExportSecrets'), src.indexOf('public static System.Collections.Generic.List<(string name, bool success)> ImportSecrets'))
     expect(exportSection).toContain('DpapiHelper.EncryptSecret')
   })
 
   it('Import secrets: trial-decryption before writing to profile', () => {
     const src = readSecretProviderSources()
-    const importSection = src.slice(src.indexOf('ImportSecrets'))
+    const importSection = src.slice(src.indexOf('public static System.Collections.Generic.List<(string name, bool success)> ImportSecrets'))
     expect(importSection).toContain('Decrypt')
     expect(importSection).toContain('Decrypt')
     expect(importSection).toContain('results.Add((name, false))')
@@ -145,15 +145,15 @@ describe('Secret provider regression safety', () => {
   it('Profile launch decrypts secrets in-process and never logs plaintext', () => {
     // Ticket 26 split ProfileCommand into three files; read all of them so the
     // source-gate assertions look at the post-split code surface.
-    // SecretProviderManager.Decrypt + SecretVariables.Contains now live in
-    // ProfileLaunchCommand.cs (env injection in ProfileLaunch) and
-    // ProfileSecretCommand.cs (reveal + add/edit secret JSON).
+    // Ticket 39 two-layer port: the env injection now goes through the ISecretStore
+    // facade (SecretStore.Reveal in ProfileLaunchCommand.cs); the reveal path lives
+    // in ProfileSecretCommand.cs. SecretVariables.Contains is unchanged.
     const programSrc = [
       readFileSync(resolve(__dirname, '..' , '..', '..', 'src', 'ProfileCommand.cs'), 'utf8'),
       readFileSync(resolve(__dirname, '..' , '..', '..', 'src', 'ProfileLaunchCommand.cs'), 'utf8'),
       readFileSync(resolve(__dirname, '..' , '..', '..', 'src', 'ProfileSecretCommand.cs'), 'utf8'),
     ].join('\n')
-    expect(programSrc).toContain('SecretProviderManager.Decrypt')
+    expect(programSrc).toContain('SecretStore.Reveal(valueToInject, profile.Name')
     expect(programSrc).toContain('SecretVariables.Contains(v.Name, StringComparer.OrdinalIgnoreCase)')
   })
 })

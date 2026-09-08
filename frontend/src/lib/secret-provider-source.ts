@@ -9,6 +9,7 @@ const SECRET_PROVIDER_MODULES = [
   'Secrets/Core/SecretEnvelopeJsonContext.cs',
   'Secrets/Core/ProviderConfigJsonContext.cs',
   'Secrets/Core/ISecretProvider.cs',
+  'Secrets/Core/ISecretStore.cs',
   'Secrets/Providers/DpapiCurrentUserProvider.cs',
   'Secrets/Providers/CredentialManagerProvider.cs',
   'Secrets/Providers/PowerShellSecretManagementProvider.cs',

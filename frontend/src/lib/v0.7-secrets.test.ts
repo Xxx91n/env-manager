@@ -85,14 +85,14 @@ describe('v0.7 secrets design invariants', () => {
   it('ProfileLaunch decrypts secrets in-process (never logs plaintext)', () => {
     // Ticket 26 split ProfileCommand into three files; read all of them so the
     // source-gate assertions look at the post-split code surface. The ProfileLaunch
-    // env-injection block (SecretVariables.Contains + SecretProviderManager.Decrypt)
-    // moved to ProfileLaunchCommand.cs.
+    // env-injection block (SecretVariables.Contains + SecretStore.Reveal port
+    // call, ticket 39) moved to ProfileLaunchCommand.cs.
     const src = [
       require('fs').readFileSync(resolve(__dirname, '..' , '..', '..', 'src', 'ProfileCommand.cs'), 'utf8'),
       require('fs').readFileSync(resolve(__dirname, '..' , '..', '..', 'src', 'ProfileLaunchCommand.cs'), 'utf8'),
       require('fs').readFileSync(resolve(__dirname, '..' , '..', '..', 'src', 'ProfileSecretCommand.cs'), 'utf8'),
     ].join('\n')
     expect(src).toContain('profile.SecretVariables.Contains(v.Name, StringComparer.OrdinalIgnoreCase)')
-    expect(src).toContain('SecretProviderManager.Decrypt(valueToInject, profile.Name')
+    expect(src).toContain('SecretStore.Reveal(valueToInject, profile.Name')
   })
 })

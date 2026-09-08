@@ -89,7 +89,7 @@ describe('v0.7.2 Phase 6-7 secret provider implementations', () => {
 
   it('Total 6 providers in _providers dictionary', () => {
     const src = readSecretProviderSources()
-    const managerSection = src.slice(src.indexOf('internal static class SecretProviderManager'))
+    const managerSection = src.slice(src.indexOf('internal sealed class SecretProviderManager'))
     const providerEntries = managerSection.match(/\["\w+-?[\w-]*"\] = new \w+Provider\(\)/g)
     expect(providerEntries).not.toBeNull()
     expect(providerEntries!.length).toBe(8)
@@ -171,7 +171,7 @@ describe('v0.7.2 Phase 6-7 secret provider implementations', () => {
 
   it('Total 8 providers in _providers dictionary', () => {
     const src = readSecretProviderSources()
-    const managerSection = src.slice(src.indexOf('internal static class SecretProviderManager'))
+    const managerSection = src.slice(src.indexOf('internal sealed class SecretProviderManager'))
     const providerEntries = managerSection.match(/\["[^"]+"\] = new \w+Provider\(\)/g)
     expect(providerEntries).not.toBeNull()
     expect(providerEntries!.length).toBe(8)
