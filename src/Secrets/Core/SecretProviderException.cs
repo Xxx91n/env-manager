@@ -97,6 +97,8 @@ internal static class SecretProviderErrors
         SecretProviderInvalidEnvelopeException => CatInvalidEnvelope,
         SecretProviderException => CatUnavailable,
         HttpRequestException => CatUnavailable,
+        Win32Exception w when w.NativeErrorCode == 1168 || w.NativeErrorCode == 1163 => CatNotFound,
+        Win32Exception w when w.NativeErrorCode == 5 || w.NativeErrorCode == 1008 || w.NativeErrorCode == 1314 => CatPermissionDenied,
         TaskCanceledException or TimeoutException => CatTimeout,
         JsonException => CatInvalidEnvelope,
         Win32Exception => CatUnavailable,

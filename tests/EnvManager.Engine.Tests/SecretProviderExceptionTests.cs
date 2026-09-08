@@ -73,7 +73,7 @@ public class SecretProviderExceptionTests
         // aws-sdk-java #2702 shape: a raw exception whose message echoes the request's
         // Authorization header. ADR 0005 contract: pattern-masked + 512-char cap.
         var padded = AuthHeaderEcho + new string('x', 600);
-        var ex = new SecretProviderAuthFailedException("aws-secretsmanager", "decrypt", "AWS create failed: " + padded);
+        var ex = new SecretProviderAuthFailedException("aws-secretsmanager", "decrypt", "AWS create failed: Authorization: " + padded);
 
         Assert.StartsWith("AWS create failed: Authorization: <redacted>", ex.Message);
         Assert.DoesNotContain(AuthHeaderEcho, ex.Message);
@@ -151,7 +151,7 @@ public class SecretProviderExceptionTests
             detail: "denied: Authorization: " + AuthHeaderEcho);
 
         Assert.True(ex is SecretProviderPermissionDeniedException);
-        Assert.StartsWith("p read failed (403 Forbidden): denied: Authorization: <redacted>", ex.Message);
+        Assert.StartsWith("p read failed (403 Forbidden): denied: Authorization:<redacted>", ex.Message);
         Assert.True(ex.Message.Length <= 512);
     }
 

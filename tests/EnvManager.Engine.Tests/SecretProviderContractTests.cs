@@ -42,7 +42,7 @@ public abstract class SecretProviderContractTests
         var provider = _harness.CreateProvider();
         var foreign = new SecretEnvelope { Provider = "em-contract-foreign-provider", Ciphertext = "aa" }.Serialize();
 
-        var ex = Assert.Throws<InvalidOperationException>(() => provider.Decrypt(foreign, "em-contract-context"));
+        var ex = Assert.Throws<SecretProviderInvalidEnvelopeException>(() => provider.Decrypt(foreign, "em-contract-context"));
 
         Assert.Contains("Provider mismatch", ex.Message);
         // ticket 40: every adapter maps envelope-format rejections onto the typed family
@@ -57,7 +57,7 @@ public abstract class SecretProviderContractTests
     {
         var provider = _harness.CreateProvider();
 
-        var ex = Assert.Throws<InvalidOperationException>(() => provider.Decrypt("not-a-valid-envelope!!", "em-contract-context"));
+        var ex = Assert.Throws<SecretProviderInvalidEnvelopeException>(() => provider.Decrypt("not-a-valid-envelope!!", "em-contract-context"));
 
         Assert.Contains("Invalid secret envelope", ex.Message);
         // ticket 40: same typed-family mapping guarantee on the malformed-format path.
