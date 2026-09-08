@@ -308,16 +308,7 @@ public class SecretProviderExceptionTests
 
             var profiles = new List<ProfileData>
             {
-                new()
-                {
-                    Name = "t40-rotate",
-                    SecretVariables = new List<string> { "A", "B" },
-                    Variables = new List<ProfileVariable>
-                    {
-                        new() { Name = "A", Value = awsEnvelope },                  // AWS adapter -> authFailed
-                        new() { Name = "B", Value = "not-a-valid-envelope!!" },     // manager guard -> unknown
-                    }
-                }
+                MkT40Rotate(awsEnvelope),
             };
 
             var failures = new Dictionary<string, int>();
@@ -338,5 +329,16 @@ public class SecretProviderExceptionTests
             Environment.SetEnvironmentVariable("AWS_SECRET_ACCESS_KEY", prevSecret);
             try { Directory.Delete(tempRoot, true); } catch { /* temp isolation dir */ }
         }
+    }
+
+    // ticket 42 aggregate-root: ProfileData setters are private; build via domain methods.
+    private static ProfileData MkT40Rotate(string awsEnvelope)
+    {
+        var p = new ProfileData();
+        p.SetName("t40-rotate");
+        p.SetSecretVariables(new List<string> { "A", "B" });
+        p.AddVariable("A", awsEnvelope);                          // AWS adapter -> authFailed
+        p.AddVariable("B", "not-a-valid-envelope!!");             // manager guard -> unknown
+        return p;
     }
 }

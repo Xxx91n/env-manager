@@ -51,19 +51,23 @@ public class ProfileSeamValidationTests : IDisposable
         catch (IOException) { }
     }
 
-    static ProfileData Global(string name, params ProfileVariable[] variables) => new()
+    static ProfileData Global(string name, params ProfileVariable[] variables)
     {
-        Name = name,
-        ProfileType = "global",
-        Variables = variables.ToList(),
+        var p = new ProfileData();
+        p.SetName(name);
+        p.SetProfileType("global");
+        foreach (var v in variables) p.AddVariable(v.Name, v.Value, v.Scope);
+        return p;
     };
 
-    static ProfileData Launch(string name, string? target, params string[] secrets) => new()
+    static ProfileData Launch(string name, string? target, params string[] secrets)
     {
-        Name = name,
-        ProfileType = "launch",
-        TargetExecutable = target,
-        SecretVariables = secrets.ToList(),
+        var p = new ProfileData();
+        p.SetName(name);
+        p.SetProfileType("launch");
+        p.SetLaunchTarget(target);
+        p.SetSecretVariables(secrets.ToList());
+        return p;
     };
 
     static void SeedStore(params ProfileData[] profiles)

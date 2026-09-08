@@ -73,8 +73,8 @@ public class MutationSurvivorTriageTests : IDisposable
 
     // ---- survivors #4337 / #4343: pre-flight topology guard (Global inheriting Launch) ----
 
-    static ProfileData Global(string name) => new() { Name = name, ProfileType = "global" };
-    static ProfileData Launch(string name) => new() { Name = name, ProfileType = "launch", TargetExecutable = "C:\\em-t18-target.cmd" };
+    static ProfileData Global(string name) { var p = new ProfileData(); p.SetName(name); p.SetProfileType("global"); return p; }
+    static ProfileData Launch(string name) { var p = new ProfileData(); p.SetName(name); p.SetProfileType("launch"); p.SetLaunchTarget("C:\\em-t18-target.cmd"); return p; }
 
     /// <summary>Global inheriting a SECRETLESS Launch profile must reject on the topology
     /// guard alone. Every pre-existing test used secret-bearing launch parents, where the

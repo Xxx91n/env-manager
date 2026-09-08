@@ -323,16 +323,7 @@ public class CliOutputSnapshotTests : VerifyBase
         using var tmp = new TempProfileDir();
         Program.SaveProfilesRawForTests(new List<ProfileData>
         {
-            new()
-            {
-                Name = "snap-launch",
-                ProfileType = "launch",
-                SecretVariables = new List<string> { "EM_SNAP_SECRET" },
-                Variables = new List<ProfileVariable>
-                {
-                    new() { Name = "EM_SNAP_SECRET", Value = "ciphertext-not-plaintext" },
-                },
-            },
+            MkSnapLaunch(),
         });
         var cap = CaptureConsole();
         try
@@ -369,16 +360,7 @@ public class CliOutputSnapshotTests : VerifyBase
         using var tmp = new TempProfileDir();
         Program.SaveProfilesRawForTests(new List<ProfileData>
         {
-            new()
-            {
-                Name = "snap-launch",
-                ProfileType = "launch",
-                SecretVariables = new List<string> { "EM_SNAP_SECRET" },
-                Variables = new List<ProfileVariable>
-                {
-                    new() { Name = "EM_SNAP_SECRET", Value = "ciphertext-not-plaintext" },
-                },
-            },
+            MkSnapLaunch(),
         });
         var cap = CaptureConsole();
         try
@@ -448,5 +430,16 @@ sealed class TempProfileDir : IDisposable
         Program.SetAuditFilePathForTests(null);
         Program.SetAuditKeyPathForTests(null);
         try { Directory.Delete(Dir, true); } catch { /* best effort */ }
+    }
+
+    // ticket 42 aggregate-root: ProfileData setters are private; build via domain methods.
+    private static ProfileData MkSnapLaunch()
+    {
+        var p = new ProfileData();
+        p.SetName("snap-launch");
+        p.SetProfileType("launch");
+        p.SetSecretVariables(new List<string> { "EM_SNAP_SECRET" });
+        p.AddVariable("EM_SNAP_SECRET", "ciphertext-not-plaintext");
+        return p;
     }
 }
