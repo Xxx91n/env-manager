@@ -3,7 +3,7 @@
   import { createEventDispatcher, onMount } from 'svelte'
   import { t, locale } from 'svelte-i18n'
   import { locales, defaultLanguage } from '../i18n'
-  import { isCliInPath, addCliToPath, removeCliFromPath, listPathEntries, checkForUpdates, bulkImport, bulkExport, pickOpenFile, pickSaveFile, serviceStatus, serviceHealth, servicePing, serviceRefreshMount, serviceRotateMount, serviceShutdown, serviceReload, serviceStart, serviceStop, exportState, importState } from '../api'
+  import { isCliInPath, addCliToPath, removeCliFromPath, listPathEntries, appVersion, checkUpdatePlugin, downloadAndInstall, bulkImport, bulkExport, pickOpenFile, pickSaveFile, serviceStatus, serviceHealth, servicePing, serviceRefreshMount, serviceRotateMount, serviceShutdown, serviceReload, serviceStart, serviceStop, exportState, importState } from '../api'
   import { get } from 'svelte/store'
   import { setSetting, frontendLog, getLightweightConfig as getLwConfig, setLightweightConfig as setLwConfig } from '../settingsStore'
   import { showToast } from '../stores'
@@ -45,6 +45,7 @@
   let updateAvailable: boolean | null = null
   let latestVersion = ''
   let releaseUrl = ''
+  let installing = false
   let bulkScope: 'user' | 'system' = 'user'
   let bulkLoading = false
 
@@ -59,6 +60,19 @@
     // Check real system PATH on mount
     cliInPath = await isCliInPath()
     void refreshServiceStatus()
+    // Ticket 37: silent background update check on dialog open (industry UX:
+    // VS Code update.mode default). Sets the badge only — no toast, no dialog.
+    try {
+      const info = await checkUpdatePlugin()
+      if (info.isUpdateAvailable) {
+        updateAvailable = true
+        latestVersion = info.latestVersion
+        releaseUrl = info.releaseUrl
+        void frontendLog('info', 'silent update check: update available v' + info.latestVersion).catch(() => {})
+      }
+    } catch {
+      // silent check must never surface an error to the user
+    }
   })
 
   function switchLocale(newLocale: string) {
@@ -278,13 +292,14 @@
     updateChecking = true
     updateAvailable = null
     try {
-      const version = '0.5.0'
-      const info = await checkForUpdates(version)
+      const version = await appVersion()
+      const info = await checkUpdatePlugin()
+      void frontendLog('info', 'manual update check: current v' + version + ', latest v' + info.latestVersion).catch(() => {})
       latestVersion = info.latestVersion
       releaseUrl = info.releaseUrl
       if (info.error) {
         updateAvailable = null
-        showToast($t('update.error'), 'error')
+        showToast($t('update.checkFailed'), 'error')
       } else if (info.isUpdateAvailable) {
         updateAvailable = true
         showToast($t('update.available', { values: { version: info.latestVersion } }), 'success')
@@ -294,12 +309,31 @@
       }
     } catch {
       updateAvailable = null
-      showToast($t('update.error'), 'error')
+      showToast($t('update.checkFailed'), 'error')
     } finally {
       updateChecking = false
     }
   }
 
+
+  // Ticket 37: in-app download + install via tauri-plugin-updater.
+  // The plugin verifies the minisign signature, downloads the MSI and runs it;
+  // on Windows the app exits itself once the installer launches. On failure the
+  // browser fallback (openReleasePage) lets the user grab the MSI manually.
+  async function handleDownloadAndInstall() {
+    if (installing) return
+    installing = true
+    try {
+      await downloadAndInstall()
+      // If we get here on Windows the installer already exited the app.
+      showToast($t('update.installPrompt'), 'info')
+    } catch (e) {
+      void frontendLog('error', 'download_and_install failed: ' + e).catch(() => {})
+      showToast($t('update.error'), 'error')
+      openReleasePage()
+      installing = false
+    }
+  }
 
   function openReleasePage() {
     if (releaseUrl) {
@@ -555,12 +589,16 @@
             {/if}
           </button>
           {#if updateAvailable === true}
-            <button
-              on:click={openReleasePage}
-              class="px-3 py-1.5 text-xs font-medium text-primary hover:underline"
-            >
-              {$t('update.download', { values: { version: latestVersion } })}
-            </button>
+            {#if installing}
+              <span class="text-xs text-muted-foreground">{$t('update.downloading')}</span>
+            {:else}
+              <button
+                on:click={handleDownloadAndInstall}
+                class="px-3 py-1.5 text-xs font-medium text-primary hover:underline"
+              >
+                {$t('update.download', { values: { version: latestVersion } })}
+              </button>
+            {/if}
           {:else if updateAvailable === false}
             <span class="text-xs text-primary">{$t('update.upToDate')}</span>
           {/if}
