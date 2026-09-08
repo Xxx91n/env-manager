@@ -201,8 +201,7 @@ partial class Program
                         $"  {name}{marker}{(available ? "" : " (unavailable)")}" +
                         $" [refresh={(caps.RefreshCapable ? "yes" : "no")}" +
                         $" certauth={(caps.CertAuthRequired ? "yes" : "no")}" +
-                        $" network={(caps.RequiresNetwork ? "yes" : "no")}"]
-                    );
+                        $" network={(caps.RequiresNetwork ? "yes" : "no")}");
                 }
                 return 0;
 
