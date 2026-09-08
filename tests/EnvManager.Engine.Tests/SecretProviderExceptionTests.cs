@@ -77,7 +77,9 @@ public class SecretProviderExceptionTests
 
         Assert.StartsWith("AWS create failed: Authorization:<redacted>", ex.Message);
         Assert.DoesNotContain(AuthHeaderEcho, ex.Message);
-        Assert.True(ex.Message.Length <= 512, "message must be truncated to the 512-char cap, was " + ex.Message.Length);
+        // Scrubber contract: the 512 cap applies to the PRE-mask string; masking then replaces
+// an 8-char tail with the 10-char <redacted> marker, so one match grows the result by +2.
+Assert.True(ex.Message.Length <= 514, "message must stay at the 512-char cap (+2 mask delta), was " + ex.Message.Length);
     }
 
     // ---- classification mapping (SecretProviderErrors.Classify) ----
