@@ -13,9 +13,23 @@ using System.Text.Json.Serialization;
 namespace EnvManager.Secrets.Manager;
 
 // --- Phase 1: SecretProviderManager (routes to active provider) ---
+// ticket 39: now also the ISecretStore implementation - the domain facade above the
+// ISecretProvider transport adapters (spec Phase 6 story 19). Call sites consume the
+// five domain verbs (Mount/Reveal/Rotate/Export/Import) via ISecretStore; provider
+// routing (GetActiveProvider/Delete/ListProviders/SetActiveProvider) stays here.
 
-internal static class SecretProviderManager
+internal sealed class SecretProviderManager : ISecretStore
 {
+    // Process-wide store instance (ticket 39 two-layer port).
+    internal static readonly SecretProviderManager Instance = new SecretProviderManager();
+
+    // --- ISecretStore domain facade (ticket 39): thin delegates over the routing core ---
+    string ISecretStore.Mount(string plaintext, string? context) => Encrypt(plaintext, context);
+    string ISecretStore.Reveal(string envelope, string? context) => Decrypt(envelope, context);
+    (int total, int rotated, int failed) ISecretStore.Rotate(List<ProfileData> profiles) => RotateAll(profiles);
+    string ISecretStore.Export(ProfileData profile) => ExportSecrets(profile);
+    List<(string name, bool success)> ISecretStore.Import(ProfileData profile, string encryptedBackup) => ImportSecrets(profile, encryptedBackup);
+
     private static readonly Dictionary<string, ISecretProvider> _providers = new(StringComparer.OrdinalIgnoreCase)
     {
         ["dpapi-current-user"] = new DpapiCurrentUserProvider(),
