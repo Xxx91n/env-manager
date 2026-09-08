@@ -419,6 +419,30 @@ Covered by `SecretProviderExceptionTests` (family surface, scrubber masking/trun
 classification theory, loopback echo-mock against the real AWS adapter, classified rotation) and
 two typed assertions in the shared contract base.
 
+## Profile Aggregate Root Encapsulation (ticket 42)
+
+Architecture-recovery ticket 42 (spec Phase 6 story 22) turns `ProfileData` (`src/Models.cs`) into an aggregate root:
+
+- **Private setters + `[JsonInclude]`**: every property keeps a public getter but a
+  private setter; `[JsonInclude]` (per property) lets System.Text.Json read/write the
+  private accessors, so profiles.json serialization is unchanged.
+- **Domain methods**: mutation goes through `AddVariable`/`RemoveVariable`,
+  `AddPathEntry`/`RemovePathEntry` (own the `NormalizePathEntry` invariant and the
+  `PathScopes` lockstep bookkeeping), `AddSecretVariable`/`RemoveSecretVariable`,
+  `SetLaunchTarget`/`SetLaunchArguments`/`SetWorkingDirectory`, and the scalar
+  `Set*` family (`SetName`/`SetEnabled`/`SetAppliedAt`/`SetProfileType`/`SetSchemaVersion`...).
+  Loading-time null-guards (`ProfileStorage.ReadProfilesFile`, `SchemaMigration`,
+  `ProfileAudit` undo replay) call `EnsureCollections()` instead of raw `??=` writes.
+- **SecretMount stays independent**: `ProfileData` never holds `SecretMount` objects -
+  only secret variable names plus `mount:<id>` references inside `Variables[].Value`
+  (the envelope lives in `secretMount.json`). No schema or lifecycle change (delta #3).
+- **Call-site migration**: `ProfileCommand.cs` (create/import/show/apply/rename/var/path/
+  set-inherits), `ProfileLaunchCommand.cs` (set-launch), `ProfileSecretCommand.cs`
+  (secret add/edit/remove) and the test fixtures (`ProfileCommandCharacterizationTests`,
+  `ProfileSeamValidationTests`, `MutationSurvivorTriageTests`, `CliOutputSnapshotTests`)
+  use the domain-method form. Behavior-preserving: snapshots, the Program method budget,
+  and the cognitive-complexity gate are unchanged.
+
 ## Secret Provider Contract Test Suite (L0/L1/L2 layering)
 
 The eight `ISecretProvider` implementations share one contract suite in `tests/EnvManager.Engine.Tests/` (architecture-recovery issue 10): an abstract `SecretProviderContractTests` base asserts four behaviors — fail-closed decryption, round-trip, stable malformed-format error, plaintext-never-in-the-envelope — each expressed only through the `ISecretProviderHarness` seam (`CreateProvider` / `SeedSecret` neutral-write / `ReadRawSecret` neutral-read, so a symmetric read/write bug cannot hide). Every provider mounts one sealed subclass; the `SecretProviderContractComplianceTests` reflection gate fails the build when an implementation lacks a mount.
