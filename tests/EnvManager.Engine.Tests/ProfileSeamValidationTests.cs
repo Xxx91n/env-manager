@@ -58,7 +58,7 @@ public class ProfileSeamValidationTests : IDisposable
         p.SetProfileType("global");
         foreach (var v in variables) p.AddVariable(v.Name, v.Value, v.Scope);
         return p;
-    };
+    }
 
     static ProfileData Launch(string name, string? target, params string[] secrets)
     {
@@ -68,7 +68,7 @@ public class ProfileSeamValidationTests : IDisposable
         p.SetLaunchTarget(target);
         p.SetSecretVariables(secrets.ToList());
         return p;
-    };
+    }
 
     static void SeedStore(params ProfileData[] profiles)
     {

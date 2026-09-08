@@ -8,6 +8,7 @@ use std::process::Command;
 use std::sync::RwLock;
 use std::sync::OnceLock;
 use zeroize::Zeroizing;
+use tauri_plugin_updater::UpdaterExt;
 
 mod lightweight;
 mod job_object;
@@ -1190,7 +1191,92 @@ fn version_is_newer(remote: &str, local: &str) -> bool {
         }
     }
     false
+}/// Ticket 37: Checks for updates through the tauri-plugin-updater transport
+/// (latest.json endpoint + minisign signature verification) instead of the
+/// PowerShell GitHub-API probe. Returns the same JSON shape as
+/// `check_for_updates` so the frontend UpdateInfo contract is unchanged; the
+/// plugin compares against the packaged version from tauri.conf.json (ADR 0003
+/// single version source) internally and only returns Some(update) when newer.
+#[tauri::command]
+async fn check_update_plugin(app: tauri::AppHandle) -> serde_json::Value {
+    match app.updater() {
+        Ok(updater) => match updater.check().await {
+            Ok(Some(update)) => {
+                let version = update.version.trim_start_matches('v').to_string();
+                info!("[check_update_plugin] update available: v{}", version);
+                serde_json::json!({
+                    "latestVersion": version,
+                    "releaseUrl": update.download_url.to_string(),
+                    "isUpdateAvailable": true,
+                })
+            }
+            Ok(None) => serde_json::json!({
+                "latestVersion": "",
+                "releaseUrl": "",
+                "isUpdateAvailable": false,
+            }),
+            Err(e) => {
+                warn!("[check_update_plugin] updater check failed: {}", e);
+                serde_json::json!({
+                    "latestVersion": "",
+                    "releaseUrl": "",
+                    "isUpdateAvailable": false,
+                    "error": "Failed to check for updates",
+                })
+            }
+        },
+        Err(e) => {
+            warn!("[check_update_plugin] updater unavailable: {}", e);
+            serde_json::json!({
+                "latestVersion": "",
+                "releaseUrl": "",
+                "isUpdateAvailable": false,
+                "error": "Failed to check for updates",
+            })
+        }
+    }
 }
+
+/// Ticket 37: Downloads and installs the pending update through
+/// tauri-plugin-updater (signature-verified MSI). Re-checks so the command
+/// stays stateless (no pending-update State plumbing). On Windows the plugin
+/// exits the app after launching the installer successfully.
+#[tauri::command]
+async fn download_and_install(app: tauri::AppHandle) -> Result<(), String> {
+    let updater = app.updater().map_err(|e| {
+        warn!("[download_and_install] updater unavailable: {}", e);
+        "Updater not available".to_string()
+    })?;
+    let update = updater
+        .check()
+        .await
+        .map_err(|e| {
+            warn!("[download_and_install] update check failed: {}", e);
+            "Failed to check for updates".to_string()
+        })?;
+    let Some(update) = update else {
+        info!("[download_and_install] no pending update");
+        return Err("There is no pending update".to_string());
+    };
+    info!("[download_and_install] downloading version {} from {}", update.version, update.download_url);
+    update
+        .download_and_install(
+            |chunk_length, content_length| {
+                debug!("[download_and_install] chunk {} bytes, total {:?}", chunk_length, content_length);
+            },
+            || {
+                info!("[download_and_install] download finished, launching installer");
+            },
+        )
+        .await
+        .map_err(|e| {
+            warn!("[download_and_install] download/install failed: {}", e);
+            format!("Failed to download and install update: {}", e)
+        })?;
+    info!("[download_and_install] update installed");
+    Ok(())
+}
+
 
 fn main() {
 // v0.9.30 (ADR-0012 D2): GUI logs now go to %LOCALAPPDATA%\\EnvManager\\logs (NOT
@@ -1256,6 +1342,7 @@ std::mem::forget(_guard);
 
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
             // If a second instance is launched, restore and focus the existing window.
            restore_window(app);
@@ -1407,6 +1494,8 @@ std::mem::forget(_guard);
             cli_diagnostics,
             update_tray_locale,
             check_for_updates,
+            check_update_plugin,
+            download_and_install,
             app_version,
             read_gui_setting,
             write_gui_setting,

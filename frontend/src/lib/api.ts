@@ -215,6 +215,35 @@ export async function checkForUpdates(currentVersion: string): Promise<UpdateInf
 }
 
 /**
+ * Ticket 37: Checks for updates through the tauri-plugin-updater transport
+ * (latest.json + minisign signature verification). Same UpdateInfo shape as
+ * checkForUpdates; the plugin compares versions internally (ADR 0003 source)
+ * and reports isUpdateAvailable only when the endpoint announces a newer one.
+ */
+export async function checkUpdatePlugin(): Promise<UpdateInfo> {
+  try {
+    return await invoke<UpdateInfo>('check_update_plugin')
+  } catch {
+    return {
+      latestVersion: '',
+      releaseUrl: '',
+      isUpdateAvailable: false,
+      error: 'Failed to check for updates',
+    }
+  }
+}
+
+/**
+ * Ticket 37: Downloads and installs the pending update through
+ * tauri-plugin-updater (signature-verified MSI). Resolves when the installer
+ * has been launched (the app exits itself on Windows); rejects with the
+ * backend error message otherwise.
+ */
+export async function downloadAndInstall(): Promise<void> {
+  await invoke('download_and_install')
+}
+
+/**
  * Updates the system tray menu text and tooltip to match the current GUI locale.
  */
 export async function updateTrayLocale(
