@@ -229,7 +229,7 @@ partial class Program
                {
                     // v0.8.0: resolve mount reference if the value is a "mount:" prefixed ID.
                     valueToInject = ResolveSecretMount(valueToInject) ?? valueToInject;
-                   valueToInject = SecretProviderManager.Decrypt(valueToInject, profile.Name + "\\" + v.Name);
+                   valueToInject = SecretStore.Reveal(valueToInject, profile.Name + "\\" + v.Name);
                }
                 catch (Exception)
                 {

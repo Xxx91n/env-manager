@@ -4,6 +4,7 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
+using EnvManager.Secrets.Core;
 using EnvManager.Secrets.Manager;
 
 namespace EnvManager;
@@ -359,6 +360,11 @@ static void AtomicWriteJson<T>(string path, T value)
         File.Move(temp, path, true);
     }
 
+    // ticket 39 two-layer port: the process-wide secret store facade. Secret domain
+    // verbs (Mount/Reveal/Rotate/Export/Import) go through ISecretStore; provider
+    // routing (active-provider/Delete/List/SetActiveProvider) stays on the manager.
+    internal static readonly ISecretStore SecretStore = SecretProviderManager.Instance;
+
     // Best-effort decrypt for the show-with-reveal path. Returns "<decryption-failed>"
     // on any exception (fail-closed UI signal: never echo ciphertext back to stdout).
     // v0.8.0: also resolves the v0.8 secret-mount envelope ("mount:" prefixed ID).
@@ -367,7 +373,7 @@ static void AtomicWriteJson<T>(string path, T value)
     // subdomains) and the ticket-28 acyclic guard prescribes CliRuntime.cs as its home.
     static string TryDecryptSafe(string ciphertext)
     {
-        try { return SecretProviderManager.Decrypt(ResolveSecretMount(ciphertext) ?? ciphertext); }
+        try { return SecretStore.Reveal(ResolveSecretMount(ciphertext) ?? ciphertext); }
         catch { return "<decryption-failed>"; }
     }
 

@@ -65,7 +65,7 @@ partial class Program
         if (profile.IsEnabled) return ArgError("Error: Unapply the profile before changing its variables");
 
         profile.Variables.RemoveAll(v => v.Name.Equals(varName, StringComparison.OrdinalIgnoreCase));
-        string encrypted = SecretProviderManager.Encrypt(varValue, profileName + "\\" + varName);
+        string encrypted = SecretStore.Mount(varValue, profileName + "\\" + varName);
         profile.Variables.Add(new ProfileVariable { Name = varName, Value = encrypted });
         if (!profile.SecretVariables.Any(s => s.Equals(varName, StringComparison.OrdinalIgnoreCase)))
             profile.SecretVariables.Add(varName);
@@ -95,7 +95,7 @@ partial class Program
         if (v == null) { Console.Error.WriteLine($"Error: Secret variable '{oldVarName}' not found in profile '{profileName}'"); return 1; }
 
         bool wasMarkedSecret = profile.SecretVariables.Any(s => s.Equals(oldVarName, StringComparison.OrdinalIgnoreCase));
-        string encryptedNew = SecretProviderManager.Encrypt(newVarValue, profileName + "\\" + newVarName);
+        string encryptedNew = SecretStore.Mount(newVarValue, profileName + "\\" + newVarName);
         v.Name = newVarName;
         v.Value = encryptedNew;
 
@@ -156,7 +156,7 @@ partial class Program
         {
             // v0.8.0: resolve mount reference if the value is a "mount:" prefixed ID.
             var envelope = ResolveSecretMount(v.Value) ?? v.Value;
-            using var secret = new SecretString(SecretProviderManager.Decrypt(envelope, profileName + "\\" + varName));
+            using var secret = new SecretString(SecretStore.Reveal(envelope, profileName + "\\" + varName));
             // Audit BEFORE printing plaintext so the audit trail records the
             // fact that a secret was revealed (for security forensics) but
             // never the value itself. Marked <redacted> twice over.
@@ -226,7 +226,7 @@ partial class Program
 
             case "rotate":
                 var profilesToRotate = LoadProfiles();
-                var (total, rotatedN, failedN) = SecretProviderManager.RotateAll(profilesToRotate);
+                var (total, rotatedN, failedN) = SecretStore.Rotate(profilesToRotate);
                 if (rotatedN > 0) SaveProfiles(profilesToRotate);
                 Console.WriteLine($"Rotation complete: {rotatedN}/{total} secrets re-encrypted, {failedN} failed");
                 if (rotatedN > 0)
@@ -267,7 +267,7 @@ partial class Program
         string? pathError = ValidateFilePath(outputFile, mustExist: false);
         if (pathError != null) { Console.Error.WriteLine($"Error: {pathError}"); return 1; }
 
-        string encrypted = SecretProviderManager.ExportSecrets(profile);
+        string encrypted = SecretStore.Export(profile);
         WriteAtomicUtf8(outputFile, encrypted);
         int secretCount = profile.SecretVariables.Count;
         Console.WriteLine($"Exported {secretCount} secret(s) from profile '{profileName}' to '{outputFile}'");
@@ -297,7 +297,7 @@ partial class Program
         if (!File.Exists(inputFile)) { Console.Error.WriteLine($"Error: File '{inputFile}' not found"); return 1; }
 
         string encryptedBackup = File.ReadAllText(inputFile);
-        var results = SecretProviderManager.ImportSecrets(profile, encryptedBackup);
+        var results = SecretStore.Import(profile, encryptedBackup);
         SaveProfiles(profiles);
 
         int succeeded = results.Count(r => r.success);

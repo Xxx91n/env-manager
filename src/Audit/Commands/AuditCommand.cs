@@ -72,7 +72,7 @@ partial class Program
                         return 1;
                     }
                    using var plainSecret = new SecretString(File.ReadAllText(inputPath));
-                   string cipherBase64 = SecretProviderManager.Encrypt(plainSecret.ToString(), "audit-survival-kit");
+                   string cipherBase64 = SecretStore.Mount(plainSecret.ToString(), "audit-survival-kit");
                    WriteAtomicUtf8(outputPath, cipherBase64);
                     Console.WriteLine("Encrypted: " + outputPath + " (" + cipherBase64.Length + " chars)");
                     return 0;
