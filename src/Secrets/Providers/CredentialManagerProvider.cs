@@ -8,6 +8,9 @@ using System.ComponentModel;
 using System.Runtime.InteropServices;
 using System.Text;
 
+// ticket 40: adapter-boundary typed error family (type aliases resolve to the
+// EnvManager.Secrets.Core family at the bottom of this file).
+
 namespace EnvManager.Secrets.Providers;
 
 // --- Phase 2: CredentialManagerProvider (advapi32.dll P/Invoke) ---
@@ -15,6 +18,16 @@ namespace EnvManager.Secrets.Providers;
 internal sealed class CredentialManagerProvider : ISecretProvider
 {
     public string Name => "credential-manager";
+
+    // Capability descriptors (ticket 41, spec Phase 6): declared per provider,
+    // consumed by SecretProviderManager.ListProviders and surfaced through
+    // `profile secret-provider list` so the GUI gates on data, not name lists.
+    public bool RefreshCapable => false;
+    public bool CertAuthRequired => false;
+    public bool RequiresNetwork => false;
+
+    // Local Credential Manager via advapi32: platform feature, always usable on Windows.
+    public bool Available => true;
 
     // CRED_TYPE_GENERIC = 1
     private const int CRED_TYPE_GENERIC = 1;
@@ -30,7 +43,7 @@ internal sealed class CredentialManagerProvider : ISecretProvider
         if (plaintext == null) plaintext = "";
         byte[] plainBytes = Encoding.UTF8.GetBytes(plaintext);
         if (plainBytes.Length > MAX_CRED_BLOB)
-            throw new InvalidOperationException(
+            throw new SecretProviderUnavailableException(Name, SecretProviderErrors.OpEncrypt,
                 $"Credential Manager blob too large ({plainBytes.Length} bytes, max {MAX_CRED_BLOB}). " +
                 "Use dpapi-current-user provider for larger secrets.");
 
@@ -62,8 +75,9 @@ internal sealed class CredentialManagerProvider : ISecretProvider
             if (!CredWriteW(ref cred, 0))
             {
                 int err = Marshal.GetLastWin32Error();
-                throw new System.ComponentModel.Win32Exception(err,
-                    $"CredWriteW failed (Win32 error {err})");
+                throw new SecretProviderPermissionDeniedException(Name, SecretProviderErrors.OpEncrypt,
+                    $"CredWriteW failed (Win32 error {err})", null,
+                    new System.ComponentModel.Win32Exception(err));
             }
         }
         finally
@@ -89,11 +103,11 @@ internal sealed class CredentialManagerProvider : ISecretProvider
     public string Decrypt(string envelope, string? context = null)
     {
         var parsed = SecretEnvelope.TryParse(envelope)
-            ?? throw new InvalidOperationException("Invalid secret envelope format");
+            ?? throw new SecretProviderInvalidEnvelopeException(Name, SecretProviderErrors.OpDecrypt, "Invalid secret envelope format");
         if (parsed.Provider != Name)
-            throw new InvalidOperationException($"Provider mismatch: expected {Name}, got {parsed.Provider}");
+            throw new SecretProviderInvalidEnvelopeException(Name, SecretProviderErrors.OpDecrypt, $"Provider mismatch: expected {Name}, got {parsed.Provider}");
         if (string.IsNullOrEmpty(parsed.TargetName))
-            throw new InvalidOperationException("Missing targetName in envelope");
+            throw new SecretProviderInvalidEnvelopeException(Name, SecretProviderErrors.OpDecrypt, "Missing targetName in envelope", parsed.TargetName);
 
         IntPtr credPtr = IntPtr.Zero;
         try
@@ -101,13 +115,14 @@ internal sealed class CredentialManagerProvider : ISecretProvider
             if (!CredReadW(parsed.TargetName, CRED_TYPE_GENERIC, 0, out credPtr))
             {
                 int err = Marshal.GetLastWin32Error();
-                throw new System.ComponentModel.Win32Exception(err,
-                    $"CredReadW failed for target '{parsed.TargetName}' (Win32 error {err})");
+                throw new SecretProviderErrors.MappedWin32(Name, SecretProviderErrors.OpDecrypt,
+                    $"CredReadW failed for target '{parsed.TargetName}' (Win32 error {err})",
+                    new System.ComponentModel.Win32Exception(err), parsed.TargetName);
             }
 
             var cred = (CREDENTIALW)Marshal.PtrToStructure(credPtr, typeof(CREDENTIALW))!;
             if (cred.CredentialBlob == IntPtr.Zero || cred.CredentialBlobSize == 0)
-                throw new InvalidOperationException("Credential blob is empty");
+                throw new SecretProviderUnavailableException(Name, SecretProviderErrors.OpDecrypt, "Credential blob is empty", parsed.TargetName);
 
             byte[] credBlob = new byte[cred.CredentialBlobSize];
             Marshal.Copy(cred.CredentialBlob, credBlob, 0, cred.CredentialBlobSize);
@@ -176,3 +191,14 @@ internal sealed class CredentialManagerProvider : ISecretProvider
     [DllImport("advapi32.dll")]
     private static extern void CredFree(IntPtr cred);
 }
+
+// ticket 40: file-local aliases - the family types keep their canonical names in
+// EnvManager.Secrets.Core; providers without a Core using alias to them here.
+internal using SecretProviderException = EnvManager.Secrets.Core.SecretProviderException;
+internal using SecretProviderAuthFailedException = EnvManager.Secrets.Core.SecretProviderAuthFailedException;
+internal using SecretProviderNotFoundException = EnvManager.Secrets.Core.SecretProviderNotFoundException;
+internal using SecretProviderPermissionDeniedException = EnvManager.Secrets.Core.SecretProviderPermissionDeniedException;
+internal using SecretProviderUnavailableException = EnvManager.Secrets.Core.SecretProviderUnavailableException;
+internal using SecretProviderTimeoutException = EnvManager.Secrets.Core.SecretProviderTimeoutException;
+internal using SecretProviderInvalidEnvelopeException = EnvManager.Secrets.Core.SecretProviderInvalidEnvelopeException;
+internal using SecretProviderErrors = EnvManager.Secrets.Core.SecretProviderErrors;

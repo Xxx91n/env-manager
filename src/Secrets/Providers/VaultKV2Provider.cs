@@ -3,6 +3,11 @@ using EnvManager.Secrets.Core;
 // One-symbol-per-file split of the retired single-file secret provider module (issue 09); behavior unchanged.
 // License: Apache-2.0
 
+// ticket 40: adapter-boundary typed error family. HTTP failures map through
+// SecretProviderErrors (family message scrubbed once by the base constructor);
+// best-effort cleanup keeps its bare-catch semantics but reports through the
+// scrubbed family channel.
+
 using System;
 using System.Net.Http;
 using System.Text;
@@ -16,6 +21,18 @@ namespace EnvManager.Secrets.Providers;
 internal sealed class VaultKV2Provider : ISecretProvider
 {
     public string Name => "vault-kv2";
+
+    // Capability descriptors (ticket 41, spec Phase 6): declared per provider,
+    // consumed by SecretProviderManager.ListProviders and surfaced through
+    // `profile secret-provider list` so the GUI gates on data, not name lists.
+    public bool RefreshCapable => true;
+    public bool CertAuthRequired => true;   // AppRole / TLS client-cert auth model
+    public bool RequiresNetwork => true;
+
+    // Cheap gate mirroring Encrypt's fail-fast preconditions (no network I/O).
+    public bool Available =>
+        !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("VAULT_ADDR")) &&
+        !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("VAULT_TOKEN"));
 
     // Envelope: { provider, version, mountPath, secretPath, secretKey }
     // The profile stores only the mount path, secret path, and key name
@@ -33,15 +50,15 @@ internal sealed class VaultKV2Provider : ISecretProvider
 
         // Write to Vault
         string vaultAddr = Environment.GetEnvironmentVariable("VAULT_ADDR")
-            ?? throw new InvalidOperationException("VAULT_ADDR environment variable not set");
+            ?? throw new SecretProviderUnavailableException(Name, SecretProviderErrors.OpEncrypt, "VAULT_ADDR environment variable not set");
         string vaultToken = Environment.GetEnvironmentVariable("VAULT_TOKEN")
-            ?? throw new InvalidOperationException("VAULT_TOKEN environment variable not set");
+            ?? throw new SecretProviderAuthFailedException(Name, SecretProviderErrors.OpEncrypt, "VAULT_TOKEN environment variable not set");
 
         // Enforce TLS (refuse http:// unless explicitly localhost)
         if (!vaultAddr.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
         {
             if (!IsLocalhost(vaultAddr))
-                throw new InvalidOperationException("TLS mandatory: VAULT_ADDR must use https:// for non-localhost addresses");
+                throw new SecretProviderPermissionDeniedException(Name, SecretProviderErrors.OpEncrypt, "TLS mandatory: VAULT_ADDR must use https:// for non-localhost addresses");
         }
 
         // Build JSON payload: { "data": { "value": "<plaintext>" } }
@@ -54,11 +71,12 @@ internal sealed class VaultKV2Provider : ISecretProvider
         client.Timeout = TimeSpan.FromSeconds(10);
 
         var content = new System.Net.Http.StringContent(payload, Encoding.UTF8, "application/json");
-        var response = client.PostAsync(apiUrl, content).GetAwaiter().GetResult();
+        var response = SecretProviderErrors.Send(Name, SecretProviderErrors.OpEncrypt,
+            () => client.PostAsync(apiUrl, content).GetAwaiter().GetResult());
         if (!response.IsSuccessStatusCode)
         {
             string err = response.Content.ReadAsStringAsync().GetAwaiter().GetResult();
-            throw new InvalidOperationException($"Vault write failed ({response.StatusCode}): {err}");
+            throw SecretProviderErrors.FromStatus(Name, SecretProviderErrors.OpEncrypt, response.StatusCode, "write", err);
         }
 
         var envelope = new SecretEnvelope
@@ -74,11 +92,11 @@ internal sealed class VaultKV2Provider : ISecretProvider
     public string Decrypt(string envelope, string? context = null)
     {
         var parsed = SecretEnvelope.TryParse(envelope)
-            ?? throw new InvalidOperationException("Invalid secret envelope format");
+            ?? throw new SecretProviderInvalidEnvelopeException(Name, SecretProviderErrors.OpDecrypt, "Invalid secret envelope format");
         if (parsed.Provider != Name)
-            throw new InvalidOperationException($"Provider mismatch: expected {Name}, got {parsed.Provider}");
+            throw new SecretProviderInvalidEnvelopeException(Name, SecretProviderErrors.OpDecrypt, $"Provider mismatch: expected {Name}, got {parsed.Provider}");
         if (string.IsNullOrEmpty(parsed.TargetName))
-            throw new InvalidOperationException("Missing targetName in envelope");
+            throw new SecretProviderInvalidEnvelopeException(Name, SecretProviderErrors.OpDecrypt, "Missing targetName in envelope");
 
         // TargetName format: "secret/<path>:value"
         // Extract mount (secret), path, and key (value)
@@ -90,14 +108,14 @@ internal sealed class VaultKV2Provider : ISecretProvider
         string secretPath = slashIdx >= 0 ? mountAndPath.Substring(slashIdx + 1) : "";
 
         string vaultAddr = Environment.GetEnvironmentVariable("VAULT_ADDR")
-            ?? throw new InvalidOperationException("VAULT_ADDR environment variable not set");
+            ?? throw new SecretProviderUnavailableException(Name, SecretProviderErrors.OpDecrypt, "VAULT_ADDR environment variable not set");
         string vaultToken = Environment.GetEnvironmentVariable("VAULT_TOKEN")
-            ?? throw new InvalidOperationException("VAULT_TOKEN environment variable not set");
+            ?? throw new SecretProviderAuthFailedException(Name, SecretProviderErrors.OpDecrypt, "VAULT_TOKEN environment variable not set");
 
         if (!vaultAddr.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
         {
             if (!IsLocalhost(vaultAddr))
-                throw new InvalidOperationException("TLS mandatory: VAULT_ADDR must use https:// for non-localhost addresses");
+                throw new SecretProviderPermissionDeniedException(Name, SecretProviderErrors.OpDecrypt, "TLS mandatory: VAULT_ADDR must use https:// for non-localhost addresses");
         }
 
         string apiUrl = vaultAddr.TrimEnd('/') + "/v1/" + mount + "/data/" + secretPath;
@@ -106,22 +124,26 @@ internal sealed class VaultKV2Provider : ISecretProvider
         client.DefaultRequestHeaders.Add("X-Vault-Token", vaultToken);
         client.Timeout = TimeSpan.FromSeconds(10);
 
-        var response = client.GetAsync(apiUrl).GetAwaiter().GetResult();
+        var response = SecretProviderErrors.Send(Name, SecretProviderErrors.OpDecrypt,
+            () => client.GetAsync(apiUrl).GetAwaiter().GetResult());
         if (!response.IsSuccessStatusCode)
         {
             string err = response.Content.ReadAsStringAsync().GetAwaiter().GetResult();
-            throw new InvalidOperationException($"Vault read failed ({response.StatusCode}): {err}");
+            throw SecretProviderErrors.FromStatus(Name, SecretProviderErrors.OpDecrypt, response.StatusCode, "read", err);
         }
 
-        string json = response.Content.ReadAsStringAsync().GetAwaiter().GetResult();
-        // Parse the Vault KV v2 response: { "data": { "data": { "value": "<plaintext>" } } }
-        using var doc = System.Text.Json.JsonDocument.Parse(json);
-        var data = doc.RootElement.GetProperty("data").GetProperty("data");
-        if (data.TryGetProperty(secretKey, out var val))
+        return SecretProviderErrors.Send(Name, SecretProviderErrors.OpDecrypt, () =>
         {
-            return val.GetString() ?? "";
-        }
-        throw new InvalidOperationException($"Key '{secretKey}' not found in Vault secret at path '{mount}/{secretPath}'");
+            string json = response.Content.ReadAsStringAsync().GetAwaiter().GetResult();
+            // Parse the Vault KV v2 response: { "data": { "data": { "value": "<plaintext>" } } }
+            using var doc = System.Text.Json.JsonDocument.Parse(json);
+            var data = doc.RootElement.GetProperty("data").GetProperty("data");
+            if (data.TryGetProperty(secretKey, out var val))
+            {
+                return val.GetString() ?? "";
+            }
+            throw new SecretProviderNotFoundException(Name, SecretProviderErrors.OpDecrypt, $"Key '{secretKey}' not found in Vault secret at path '{mount}/{secretPath}'", parsed.TargetName);
+        });
     }
 
     public void Delete(string envelope, string? context = null)
@@ -146,9 +168,10 @@ internal sealed class VaultKV2Provider : ISecretProvider
                 using var client = new System.Net.Http.HttpClient();
                 client.DefaultRequestHeaders.Add("X-Vault-Token", vaultToken);
                 client.Timeout = TimeSpan.FromSeconds(10);
-                client.DeleteAsync(apiUrl).GetAwaiter().GetResult();
+                SecretProviderErrors.Send(Name, SecretProviderErrors.OpDelete,
+                    () => client.DeleteAsync(apiUrl).GetAwaiter().GetResult());
             }
-            catch { }
+            catch (Exception ex) { SecretProviderErrors.SwallowBestEffort(Name, SecretProviderErrors.OpDelete, ex); }
         }
     }
 

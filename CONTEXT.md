@@ -20,6 +20,10 @@ _Avoid_: mount point, secret reference, secret link
 The two-layer domain port (ticket 39, spec Phase 6 story 19): `ISecretStore` in `EnvManager.Secrets.Core` with five domain verbs (Mount/Reveal/Rotate/Export/Import); `SecretProviderManager` (EnvManager.Secrets.Manager) is its implementation. CLI call sites consume the port via `Program.SecretStore`. Sits above the transport-level `Provider` contract - SDK types never cross the adapter boundary.
 _Avoid_: secret manager, provider router, secret backend
 
+**Provider Error Family**:
+The typed `SecretProviderException` family in `EnvManager.Secrets.Core` (ticket 40, spec Phase 6 story 20): base class carrying Provider/Operation/MountId context plus six sealed subtypes - AuthFailed, NotFound, PermissionDenied, Unavailable, Timeout, InvalidEnvelope. Every adapter boundary catches raw transport/SDK failures and maps them onto the family; every family message passes `ScrubExceptionMessage` in the base constructor. AWS is classification-only (response bodies dropped, aws-sdk-java #2702 defense). Do not say "provider exception" for arbitrary `InvalidOperationException`s thrown by adapters before this ticket - those are legacy domain guards.
+_Avoid_: error codes, raw SDK exception, exception passthrough
+
 **Launch Profile**:
 A profile whose variables are injected into a child process via `env_clear + env(k,v)`. Never written to registry, never broadcasts `WM_SETTINGCHANGE`. The only profile type that may carry secrets.
 _Avoid_: local profile (ambiguous — "local" means local-scope PATH entry too), child profile

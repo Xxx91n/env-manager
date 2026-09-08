@@ -385,6 +385,40 @@ Architecture-recovery ticket 39 (spec Phase 6 story 19) adds the domain facade p
 - **Call sites consume the port, not the manager**: `Program.SecretStore` (CliRuntime.cs, `internal static readonly ISecretStore`) is wired from `SecretProviderManager.Instance`; ProfileSecretCommand (add/edit/reveal/rotate/export/import), ProfileLaunchCommand (launch injection), CliRuntime.TryDecryptSafe (show-with-reveal), and AuditCommand encrypt-file all go through `SecretStore.<verb>`. Provider routing (GetActiveProvider/Delete/ListProviders/SetActiveProvider) stays on the manager.
 - **Adapter boundary**: `ISecretProvider` keeps its 4 transport methods (Encrypt/Decrypt/Rotate/Delete). All 8 adapters are BCL-only (HttpClient/Process/P-Invoke) - external SDK types (KeyVaultSecret / AWSSDK.SecretsManager.* / op JSON) do not exist in the codebase and cannot cross the boundary; `SecretStorePortTests` pins the five-verb surface and fail-closed reveal routing.
 
+## Typed Provider Error Family (ticket 40)
+
+Every `ISecretProvider` adapter is an anti-corruption boundary: raw transport/SDK failures
+(HTTP status codes, `HttpRequestException`, `Win32Exception`, process spawn/exit, timeouts,
+malformed payloads) never escape untyped or unscrubbed. `src/Secrets/Core/SecretProviderException.cs`
+(ticket 40, spec Phase 6 story 20) defines the family:
+
+- `SecretProviderException` base: derives `InvalidOperationException` (pre-existing
+  `Assert.Throws`/`catch` sites keep working), carries `Provider`/`Operation`/`MountId`
+  context, and passes every message through `Program.ScrubExceptionMessage` (512-char cap +
+  22-pattern masking, ADR 0005) inside the base constructor.
+- Six sealed subclasses: `SecretProviderAuthFailedException` (401, missing/invalid credentials),
+  `SecretProviderNotFoundException` (404, Win32 1168, missing module/binary),
+  `SecretProviderPermissionDeniedException` (403, Win32 5, TLS policy),
+  `SecretProviderUnavailableException` (5xx/429, network/binary failures),
+  `SecretProviderTimeoutException` (HTTP 408/504, `TaskCanceledException`, process timeouts),
+  `SecretProviderInvalidEnvelopeException` (envelope format/provider mismatch).
+- `SecretProviderErrors` helper: `Classify` (7 buckets for RotateAll accounting),
+  `FromStatus` (status → subtype), `Send<T>` (transport wrapper), `Map`/`MapPreserveMessage`
+  /`MappedWin32` (boundary mappers), `SwallowBestEffort` (scrubbed-and-dropped cleanup).
+
+Adapter rules: all 8 providers map boundary failures onto the family (Secrets-domain bare-catch
+count is zero); best-effort Delete/cleanup swallows report through `SwallowBestEffort`;
+envelope-format rejections keep their pinned message text (byte-identical to pre-ticket snapshots)
+while gaining the typed `SecretProviderInvalidEnvelopeException`. AWS is the audited adapter
+(aws-sdk-java #2702): it drops response bodies and raw transport messages entirely
+(`discardRawMessage: true`) - only the typed classification survives. Azure's identity-token
+stderr diagnostics are scrubbed (ADR 0005). `SecretProviderManager.RotateAll` classifies failures
+via `SecretProviderErrors.Classify` into an optional `failureCounts` dictionary; the
+`(total, rotated, failed)` contract and the skip-and-count (never delete) invariant are unchanged.
+Covered by `SecretProviderExceptionTests` (family surface, scrubber masking/truncation,
+classification theory, loopback echo-mock against the real AWS adapter, classified rotation) and
+two typed assertions in the shared contract base.
+
 ## Secret Provider Contract Test Suite (L0/L1/L2 layering)
 
 The eight `ISecretProvider` implementations share one contract suite in `tests/EnvManager.Engine.Tests/` (architecture-recovery issue 10): an abstract `SecretProviderContractTests` base asserts four behaviors — fail-closed decryption, round-trip, stable malformed-format error, plaintext-never-in-the-envelope — each expressed only through the `ISecretProviderHarness` seam (`CreateProvider` / `SeedSecret` neutral-write / `ReadRawSecret` neutral-read, so a symmetric read/write bug cannot hide). Every provider mounts one sealed subclass; the `SecretProviderContractComplianceTests` reflection gate fails the build when an implementation lacks a mount.

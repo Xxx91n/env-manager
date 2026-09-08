@@ -140,15 +140,50 @@ internal sealed class SecretProviderManager : ISecretStore
         }
     }
 
-    // List available providers and their status
+    // List providers with REAL availability (ticket 41): the provider's cheap
+    // declared Available gate first (env config / binary presence, no I/O), then
+    // an end-to-end sentinel probe (same Encrypt/Decrypt/Delete round-trip
+    // SetActiveProvider has used since v0.7.5) for network providers only.
+    // Local providers never probe, so a scrubbed environment stays deterministic
+    // with zero network I/O.
     public static List<(string Name, bool Available)> ListProviders()
     {
         var result = new List<(string, bool)>();
         foreach (var kvp in _providers)
         {
-            result.Add((kvp.Key, true));
+            result.Add((kvp.Key, IsProviderAvailable(kvp.Value)));
         }
         return result;
+    }
+
+    // Declared capability descriptors for one provider (machine-readable surface
+    // consumed by the `secret-provider list` output and the GUI parser).
+    public static (bool RefreshCapable, bool CertAuthRequired, bool RequiresNetwork) GetCapabilities(string name)
+    {
+        if (!_providers.TryGetValue(name, out var provider))
+            throw new InvalidOperationException($"Unknown secret provider: {name}");
+        return (provider.RefreshCapable, provider.CertAuthRequired, provider.RequiresNetwork);
+    }
+
+    // Availability computation (ticket 41): declared Available gate, then the
+    // sentinel round-trip for network providers. Internal so capability tests
+    // can pin the composition with fake providers (no network, no cloud).
+    internal static bool IsProviderAvailable(ISecretProvider provider)
+    {
+        try
+        {
+            if (!provider.Available) return false;
+            if (!provider.RequiresNetwork) return true;
+            const string probeContext = "__env_manager_compat_probe__";
+            string envelope = provider.Encrypt("__probe_value__", probeContext);
+            try { provider.Decrypt(envelope, probeContext); } catch { /* async/network providers may not round-trip immediately */ }
+            try { provider.Delete(envelope, probeContext); } catch { /* best-effort cleanup */ }
+            return true;
+        }
+        catch
+        {
+            return false;
+        }
     }
 
     // Get the active provider name from config
@@ -200,8 +235,18 @@ internal sealed class SecretProviderManager : ISecretStore
     }
 
     // Phase 3: Key Rotation - re-encrypt all secrets in all profiles with the active provider
-    // Returns (totalSecrets, rotatedCount, failedCount)
+    // Returns (totalSecrets, rotatedCount, failedCount).
+    // ticket 40: failures are also classified by the typed SecretProviderException family
+    // (failureCounts: authFailed/notFound/permissionDenied/unavailable/timeout/invalidEnvelope/
+    // unknown). The (total, rotated, failed) signature and the failed++ skip-and-count
+    // semantics are pinned by the frontend source gate (secret-regression.test.ts) and
+    // must not change - a failed secret is never deleted, only counted.
     public static (int total, int rotated, int failed) RotateAll(System.Collections.Generic.List<ProfileData> profiles)
+    {
+        return RotateAll(profiles, failureCounts: null);
+    }
+
+    public static (int total, int rotated, int failed) RotateAll(System.Collections.Generic.List<ProfileData> profiles, System.Collections.Generic.Dictionary<string, int>? failureCounts)
     {
         var provider = GetActiveProvider();
         int total = 0, rotated = 0, failed = 0;
@@ -221,10 +266,16 @@ internal sealed class SecretProviderManager : ISecretStore
                     v.Value = Encrypt(plaintext, profile.Name + "\\" + v.Name);
                     rotated++;
                 }
-                catch
+                catch (Exception ex)
                 {
-                    // Decryption failed (wrong provider, deleted CredMan entry, etc.)
+                    // Decryption failed (wrong provider, deleted CredMan entry, etc.):
+                    // skip + count, never delete. ticket 40: classify by error type.
                     failed++;
+                    if (failureCounts != null)
+                    {
+                        string cat = SecretProviderErrors.Classify(ex);
+                        failureCounts[cat] = failureCounts.TryGetValue(cat, out int n) ? n + 1 : 1;
+                    }
                 }
             }
         }

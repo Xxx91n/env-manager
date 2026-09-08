@@ -3,6 +3,10 @@ using EnvManager.Secrets.Core;
 // One-symbol-per-file split of the retired single-file secret provider module (issue 09); behavior unchanged.
 // License: Apache-2.0
 
+// ticket 40: adapter-boundary typed error family. sops process failures map onto
+// the family at the throw sites; temp-file cleanup keeps best-effort semantics but
+// reports through the scrubbed family channel.
+
 using System;
 using System.Diagnostics;
 using System.IO;
@@ -17,6 +21,18 @@ namespace EnvManager.Secrets.Providers;
 internal sealed class SopsProvider : ISecretProvider
 {
     public string Name => "sops";
+
+    // Capability descriptors (ticket 41, spec Phase 6): declared per provider,
+    // consumed by SecretProviderManager.ListProviders and surfaced through
+    // `profile secret-provider list` so the GUI gates on data, not name lists.
+    public bool RefreshCapable => false;
+    public bool CertAuthRequired => false;
+    public bool RequiresNetwork => false;
+
+    // Cheap gate: the resolved sops binary must exist on disk. When
+    // FindSopsBinary fell back to the bare "sops" literal the binary was
+    // not found, and File.Exists("sops") is false outside a coincidental cwd.
+    public bool Available => File.Exists(SOPS_BINARY);
 
     // Envelope: { provider, version, createdAt, ciphertext (sops-encrypted JSON) }
     // The profile stores the full sops-encrypted JSON as the ciphertext field.
@@ -71,18 +87,18 @@ internal sealed class SopsProvider : ISecretProvider
         try
         {
             using var proc = System.Diagnostics.Process.Start(psi);
-            if (proc == null) throw new InvalidOperationException("sops binary not found");
+            if (proc == null) throw new SecretProviderNotFoundException(Name, "probe", "sops binary not found");
             proc.WaitForExit(5000);
             if (!proc.HasExited || proc.ExitCode != 0)
-                throw new InvalidOperationException("sops binary not functional");
+                throw new SecretProviderUnavailableException(Name, "probe", "sops binary not functional");
             // v0.9.13 Phase 4F: record provider binary hash for tamper detection
-            try { Program.RecordProviderHash("sops", SOPS_BINARY); } catch { }
+            try { Program.RecordProviderHash("sops", SOPS_BINARY); } catch (Exception ex) { SecretProviderErrors.SwallowBestEffort(Name, "provider-hash", ex); }
         }
-        catch (System.ComponentModel.Win32Exception)
+        catch (System.ComponentModel.Win32Exception ex)
         {
-            throw new InvalidOperationException(
+            throw new SecretProviderNotFoundException(Name, "probe",
                 "sops binary not found. Install sops and ensure it is on PATH, or set SOPS_PATH env var. " +
-                "See https://github.com/getsops/sops for installation instructions.");
+                "See https://github.com/getsops/sops for installation instructions.", null, ex);
         }
     }
 
@@ -140,18 +156,18 @@ internal sealed class SopsProvider : ISecretProvider
             }
 
             using var proc = System.Diagnostics.Process.Start(psi);
-            if (proc == null) throw new InvalidOperationException("Failed to start sops process");
+            if (proc == null) throw new SecretProviderUnavailableException(Name, SecretProviderErrors.OpEncrypt, "Failed to start sops process");
             proc.WaitForExit(30000);
-            if (!proc.HasExited) { proc.Kill(); throw new InvalidOperationException("sops encryption timed out"); }
+            if (!proc.HasExited) { proc.Kill(); throw new SecretProviderTimeoutException(Name, SecretProviderErrors.OpEncrypt, "sops encryption timed out"); }
 
             if (proc.ExitCode != 0)
             {
                 string stderr = proc.StandardError.ReadToEnd();
-                throw new InvalidOperationException("sops encryption failed (exit " + proc.ExitCode + "): " + stderr);
+                throw new SecretProviderUnavailableException(Name, SecretProviderErrors.OpEncrypt, "sops encryption failed (exit " + proc.ExitCode + "): " + stderr);
             }
 
             if (!File.Exists(encFile))
-                throw new InvalidOperationException("sops did not produce encrypted output file");
+                throw new SecretProviderUnavailableException(Name, SecretProviderErrors.OpEncrypt, "sops did not produce encrypted output file");
 
             string encryptedJson = File.ReadAllText(encFile, Encoding.UTF8);
 
@@ -167,18 +183,18 @@ internal sealed class SopsProvider : ISecretProvider
         finally
         {
             try { if (Directory.Exists(tempDir)) Directory.Delete(tempDir, true); }
-            catch { }
+            catch (Exception ex) { SecretProviderErrors.SwallowBestEffort(Name, SecretProviderErrors.OpEncrypt + "-cleanup", ex); }
         }
     }
 
     public string Decrypt(string envelope, string? context = null)
     {
         var parsed = SecretEnvelope.TryParse(envelope)
-            ?? throw new InvalidOperationException("Invalid secret envelope format");
+            ?? throw new SecretProviderInvalidEnvelopeException(Name, SecretProviderErrors.OpDecrypt, "Invalid secret envelope format");
         if (parsed.Provider != Name)
-            throw new InvalidOperationException($"Provider mismatch: expected {Name}, got {parsed.Provider}");
+            throw new SecretProviderInvalidEnvelopeException(Name, SecretProviderErrors.OpDecrypt, $"Provider mismatch: expected {Name}, got {parsed.Provider}");
         if (string.IsNullOrEmpty(parsed.Ciphertext))
-            throw new InvalidOperationException("Missing ciphertext (sops-encrypted JSON) in envelope");
+            throw new SecretProviderInvalidEnvelopeException(Name, SecretProviderErrors.OpDecrypt, "Missing ciphertext (sops-encrypted JSON) in envelope");
 
         EnsureSopsAvailable();
 
@@ -220,29 +236,29 @@ internal sealed class SopsProvider : ISecretProvider
             }
 
             using var proc = System.Diagnostics.Process.Start(psi);
-            if (proc == null) throw new InvalidOperationException("Failed to start sops process");
+            if (proc == null) throw new SecretProviderUnavailableException(Name, SecretProviderErrors.OpDecrypt, "Failed to start sops process")
             proc.WaitForExit(30000);
-            if (!proc.HasExited) { proc.Kill(); throw new InvalidOperationException("sops decryption timed out"); }
+            if (!proc.HasExited) { proc.Kill(); throw new SecretProviderTimeoutException(Name, SecretProviderErrors.OpDecrypt, "sops decryption timed out"); }
 
             if (proc.ExitCode != 0)
             {
                 string stderr = proc.StandardError.ReadToEnd();
-                throw new InvalidOperationException("sops decryption failed (exit " + proc.ExitCode + "): " + stderr);
+                throw new SecretProviderUnavailableException(Name, SecretProviderErrors.OpDecrypt, "sops decryption failed (exit " + proc.ExitCode + "): " + stderr);
             }
 
             if (!File.Exists(plainFile))
-                throw new InvalidOperationException("sops did not produce decrypted output file");
+                throw new SecretProviderUnavailableException(Name, SecretProviderErrors.OpDecrypt, "sops did not produce decrypted output file");
 
             string decryptedJson = File.ReadAllText(plainFile, Encoding.UTF8);
             using var doc = System.Text.Json.JsonDocument.Parse(decryptedJson);
             if (doc.RootElement.TryGetProperty("value", out var val))
                 return val.GetString() ?? "";
-            throw new InvalidOperationException("Decrypted sops JSON does not contain value key");
+            throw new SecretProviderUnavailableException(Name, SecretProviderErrors.OpDecrypt, "Decrypted sops JSON does not contain value key");
         }
         finally
         {
             try { if (Directory.Exists(tempDir)) Directory.Delete(tempDir, true); }
-            catch { }
+            catch (Exception ex) { SecretProviderErrors.SwallowBestEffort(Name, SecretProviderErrors.OpDecrypt + "-cleanup", ex); }
         }
     }
 

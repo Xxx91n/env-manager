@@ -45,6 +45,9 @@ public abstract class SecretProviderContractTests
         var ex = Assert.Throws<InvalidOperationException>(() => provider.Decrypt(foreign, "em-contract-context"));
 
         Assert.Contains("Provider mismatch", ex.Message);
+        // ticket 40: every adapter maps envelope-format rejections onto the typed family
+        // (subclass of InvalidOperationException, message text unchanged).
+        Assert.IsAssignableFrom<SecretProviderInvalidEnvelopeException>(ex);
     }
 
     // ---- core assertion 2: stable error on malformed format (backend independent) ----
@@ -57,6 +60,8 @@ public abstract class SecretProviderContractTests
         var ex = Assert.Throws<InvalidOperationException>(() => provider.Decrypt("not-a-valid-envelope!!", "em-contract-context"));
 
         Assert.Contains("Invalid secret envelope", ex.Message);
+        // ticket 40: same typed-family mapping guarantee on the malformed-format path.
+        Assert.IsAssignableFrom<SecretProviderInvalidEnvelopeException>(ex);
     }
 
     // ---- core assertion 3: round-trip (backend dependent; wired per subclass) ----

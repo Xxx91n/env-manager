@@ -3,6 +3,10 @@ using EnvManager.Secrets.Core;
 // One-symbol-per-file split of the retired single-file secret provider module (issue 09); behavior unchanged.
 // License: Apache-2.0
 
+// ticket 40: adapter-boundary typed error family. pwsh probe/process failures map
+// onto the family at the throw sites (messages already CLIXML-stripped, then
+// scrubbed once by the family base constructor).
+
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -15,6 +19,18 @@ namespace EnvManager.Secrets.Providers;
 internal sealed class PowerShellSecretManagementProvider : ISecretProvider
 {
     public string Name => "powershell-secretmanagement";
+
+    // Capability descriptors (ticket 41, spec Phase 6): declared per provider,
+    // consumed by SecretProviderManager.ListProviders and surfaced through
+    // `profile secret-provider list` so the GUI gates on data, not name lists.
+    public bool RefreshCapable => false;
+    public bool CertAuthRequired => false;
+    public bool RequiresNetwork => false;
+
+    // Local pwsh SecretManagement vault: no cheap deterministic gate without
+    // spawning pwsh, so declared availability stays true; the sentinel probe
+    // at activation time (and Encrypt itself) fail closed on missing modules.
+    public bool Available => true;
 
     // The envelope stores: { provider, version, vaultName, secretName }
     // The actual secret value lives in the PowerShell SecretManagement vault
@@ -40,7 +56,7 @@ internal sealed class PowerShellSecretManagementProvider : ISecretProvider
 
         string output = RunPowerShell(script);
         if (!output.Contains("OK"))
-            throw new InvalidOperationException("Set-Secret failed: " + StripClixml(output));
+            throw new SecretProviderUnavailableException(Name, SecretProviderErrors.OpEncrypt, "Set-Secret failed: " + StripClixml(output));
 
         var envelope = new SecretEnvelope
         {
@@ -55,15 +71,15 @@ internal sealed class PowerShellSecretManagementProvider : ISecretProvider
     public string Decrypt(string envelope, string? context = null)
     {
         var parsed = SecretEnvelope.TryParse(envelope)
-            ?? throw new InvalidOperationException("Invalid secret envelope format");
+            ?? throw new SecretProviderInvalidEnvelopeException(Name, SecretProviderErrors.OpDecrypt, "Invalid secret envelope format");
         if (parsed.Provider != Name)
-            throw new InvalidOperationException("Provider mismatch: expected " + Name + ", got " + parsed.Provider);
+            throw new SecretProviderInvalidEnvelopeException(Name, SecretProviderErrors.OpDecrypt, "Provider mismatch: expected " + Name + ", got " + parsed.Provider);
         if (string.IsNullOrEmpty(parsed.TargetName))
-            throw new InvalidOperationException("Missing targetName in envelope");
+            throw new SecretProviderInvalidEnvelopeException(Name, SecretProviderErrors.OpDecrypt, "Missing targetName in envelope", parsed.TargetName);
 
         var parts = parsed.TargetName.Split("\\");
         if (parts.Length < 2)
-            throw new InvalidOperationException("Invalid targetName format, expected vault\\secretName");
+            throw new SecretProviderInvalidEnvelopeException(Name, SecretProviderErrors.OpDecrypt, "Invalid targetName format, expected vault\\secretName", parsed.TargetName);
 
         string vaultName = parts[0];
         string secretName = parts[1];
@@ -92,7 +108,7 @@ internal sealed class PowerShellSecretManagementProvider : ISecretProvider
                     "$ErrorActionPreference='Stop'; " +
                     "Remove-Secret -Name '" + EscapeForPowerShell(parts[1]) + "' " +
                     "-Vault '" + EscapeForPowerShell(parts[0]) + "' -ErrorAction SilentlyContinue";
-                try { RunPowerShell(script); } catch { }
+                try { RunPowerShell(script); } catch (Exception ex) { SecretProviderErrors.SwallowBestEffort(Name, SecretProviderErrors.OpDelete, ex); }
             }
         }
     }
@@ -116,7 +132,7 @@ internal sealed class PowerShellSecretManagementProvider : ISecretProvider
             "if ($null -eq $m) { Write-Output 'MISSING_MODULE' } else { Write-Output 'OK' }";
         string moduleCheck = RunPowerShell(probe);
         if (!moduleCheck.Contains("OK"))
-            throw new InvalidOperationException(
+            throw new SecretProviderNotFoundException(Name, "probe",
                 "PowerShell SecretManagement module is not installed. " +
                 "Run: pwsh -Command \"Install-Module Microsoft.PowerShell.SecretManagement, Microsoft.PowerShell.SecretStore -Scope CurrentUser -Force\" " +
                 "then retry. (Vault: " + VaultName + ")");
@@ -149,7 +165,7 @@ internal sealed class PowerShellSecretManagementProvider : ISecretProvider
                 "Write-Output 'OK'";
             string reg = RunPowerShell(register);
             if (!reg.Contains("OK"))
-                throw new InvalidOperationException("Failed to register SecretManagement vault '" + VaultName + "': " + StripClixml(reg));
+                throw new SecretProviderUnavailableException(Name, "vault-register", "Failed to register SecretManagement vault '" + VaultName + "': " + StripClixml(reg));
         }
     }
 
@@ -186,7 +202,7 @@ internal sealed class PowerShellSecretManagementProvider : ISecretProvider
         };
 
         using var proc = System.Diagnostics.Process.Start(psi);
-        if (proc == null) throw new InvalidOperationException("Failed to start pwsh process");
+        if (proc == null) throw new SecretProviderUnavailableException(Name, "pwsh", "Failed to start pwsh process");
         // Per .NET guidance (MS docs: "WaitForExit" + multiple redirected
         // streams): synchronously ReadToEnd after WaitForExit can deadlock when
         // either pipe fills before we read from it, which is the real cause of
@@ -200,7 +216,7 @@ internal sealed class PowerShellSecretManagementProvider : ISecretProvider
         proc.BeginOutputReadLine();
         proc.BeginErrorReadLine();
         proc.WaitForExit(30000); // 30s timeout
-        if (!proc.HasExited) { try { proc.Kill(); } catch { } throw new InvalidOperationException("pwsh timed out after 30s"); }
+        if (!proc.HasExited) { try { proc.Kill(); } catch (Exception killEx) { SecretProviderErrors.SwallowBestEffort(Name, "pwsh", killEx); } throw new SecretProviderTimeoutException(Name, "pwsh", "pwsh timed out after 30s"); }
         // For async-redirected streams WaitForExit(int) may return while the
         // async drains are still flushing: call WaitForExit() (no timeout) to
         // guarantee both async readers have delivered all data before we read.
@@ -208,7 +224,7 @@ internal sealed class PowerShellSecretManagementProvider : ISecretProvider
         string stdout = stdoutBuf.ToString();
         string stderr = stderrBuf.ToString();
         if (proc.ExitCode != 0)
-            throw new InvalidOperationException("pwsh exited " + proc.ExitCode + ": " + StripClixml(stderr));
+            throw new SecretProviderUnavailableException(Name, "pwsh", "pwsh exited " + proc.ExitCode + ": " + StripClixml(stderr));
         return stdout;
     }
 

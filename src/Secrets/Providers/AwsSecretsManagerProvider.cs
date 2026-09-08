@@ -3,6 +3,11 @@ using EnvManager.Secrets.Core;
 // One-symbol-per-file split of the retired single-file secret provider module (issue 09); behavior unchanged.
 // License: Apache-2.0
 
+// ticket 40: adapter-boundary typed error family. AWS is the audited provider
+// (aws-sdk-java #2702): the Authorization header (SigV4 Credential=<accessKey>/...)
+// is echoed into service error payloads, so this adapter DISCARDS the response body
+// and any raw SDK/transport message - only the typed classification survives.
+
 using System;
 using System.Collections.Generic;
 using System.Globalization;
@@ -20,6 +25,20 @@ internal sealed class AwsSecretsManagerProvider : ISecretProvider
 {
     public string Name => "aws-secretsmanager";
 
+    // Capability descriptors (ticket 41, spec Phase 6): declared per provider,
+    // consumed by SecretProviderManager.ListProviders and surfaced through
+    // `profile secret-provider list` so the GUI gates on data, not name lists.
+    public bool RefreshCapable => true;
+    public bool CertAuthRequired => false;  // IAM role / static keys, no cert
+    public bool RequiresNetwork => true;
+
+    // Cheap gate mirroring Encrypt's fail-fast preconditions (no network I/O).
+    public bool Available =>
+        (!string.IsNullOrEmpty(Environment.GetEnvironmentVariable("AWS_REGION")) ||
+         !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("AWS_DEFAULT_REGION"))) &&
+        !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("AWS_ACCESS_KEY_ID")) &&
+        !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("AWS_SECRET_ACCESS_KEY"));
+
     // Envelope: { provider, version, createdAt, targetName (region|secretId) }
     // Uses AWS SigV4 signed REST API calls. TLS mandatory (HTTPS only).
 
@@ -31,15 +50,16 @@ internal sealed class AwsSecretsManagerProvider : ISecretProvider
         if (plaintext == null) plaintext = "";
         string region = Environment.GetEnvironmentVariable("AWS_REGION")
             ?? Environment.GetEnvironmentVariable("AWS_DEFAULT_REGION")
-            ?? throw new InvalidOperationException("AWS_REGION or AWS_DEFAULT_REGION not set");
+            ?? throw new SecretProviderUnavailableException(Name, SecretProviderErrors.OpEncrypt, "AWS_REGION or AWS_DEFAULT_REGION not set");
         string secretId = context != null ? SanitizeSecretId(context) : "env-manager-" + Guid.NewGuid().ToString("N").Substring(0, 12);
 
         // ClientRequestToken: AWS-recommended idempotency token; LocalStack (issue 15 L1
         // lane) rejects CreateSecret without it. A per-call UUID is the documented pattern
         // and is safe in production (retries dedupe).
         string body = "{\"Name\":\"" + JsonEscape(secretId) + "\",\"SecretString\":\"" + JsonEscape(plaintext) + "\",\"ClientRequestToken\":\"" + Guid.NewGuid().ToString("N") + "\"}";
-        var response = CallAwsApi(region, "secretsmanager.CreateSecret", body);
-        if (!response.IsSuccessStatusCode) throw new InvalidOperationException($"AWS create failed ({response.StatusCode}): {response.Content.ReadAsStringAsync().GetAwaiter().GetResult()}");
+        var response = SecretProviderErrors.Send(Name, SecretProviderErrors.OpEncrypt,
+            () => CallAwsApi(region, "secretsmanager.CreateSecret", body), discardRawMessage: true);
+        if (!response.IsSuccessStatusCode) throw SecretProviderErrors.FromStatus(Name, SecretProviderErrors.OpEncrypt, response.StatusCode, "create");
 
         var env = new SecretEnvelope { Provider = Name, Version = 1, CreatedAt = DateTimeOffset.UtcNow.ToString("O"), TargetName = region + "|" + secretId };
         return env.Serialize();
@@ -47,23 +67,26 @@ internal sealed class AwsSecretsManagerProvider : ISecretProvider
 
     public string Decrypt(string envelope, string? context = null)
     {
-        var parsed = SecretEnvelope.TryParse(envelope) ?? throw new InvalidOperationException("Invalid secret envelope format");
-        if (parsed.Provider != Name) throw new InvalidOperationException($"Provider mismatch: expected {Name}, got {parsed.Provider}");
-        if (string.IsNullOrEmpty(parsed.TargetName)) throw new InvalidOperationException("Missing targetName");
+        var parsed = SecretEnvelope.TryParse(envelope) ?? throw new SecretProviderInvalidEnvelopeException(Name, SecretProviderErrors.OpDecrypt, "Invalid secret envelope format");
+        if (parsed.Provider != Name) throw new SecretProviderInvalidEnvelopeException(Name, SecretProviderErrors.OpDecrypt, $"Provider mismatch: expected {Name}, got {parsed.Provider}");
+        if (string.IsNullOrEmpty(parsed.TargetName)) throw new SecretProviderInvalidEnvelopeException(Name, SecretProviderErrors.OpDecrypt, "Missing targetName", parsed.TargetName);
 
         var parts = parsed.TargetName.Split('|');
-        if (parts.Length < 2) throw new InvalidOperationException("Invalid targetName format");
+        if (parts.Length < 2) throw new SecretProviderInvalidEnvelopeException(Name, SecretProviderErrors.OpDecrypt, "Invalid targetName format", parsed.TargetName);
         string region = parts[0];
         string secretId = parts[1];
 
         string body = "{\"SecretId\":\"" + JsonEscape(secretId) + "\"}";
         var response = CallAwsApi(region, "secretsmanager.GetSecretValue", body);
-        if (!response.IsSuccessStatusCode) throw new InvalidOperationException($"AWS read failed ({response.StatusCode}): {response.Content.ReadAsStringAsync().GetAwaiter().GetResult()}");
+        if (!response.IsSuccessStatusCode) throw SecretProviderErrors.FromStatus(Name, SecretProviderErrors.OpDecrypt, response.StatusCode, "read", mountId: parsed.TargetName);
 
-        string json = response.Content.ReadAsStringAsync().GetAwaiter().GetResult();
-        using var doc = System.Text.Json.JsonDocument.Parse(json);
-        if (doc.RootElement.TryGetProperty("SecretString", out var val)) return val.GetString() ?? "";
-        throw new InvalidOperationException("AWS response does not contain SecretString");
+        return SecretProviderErrors.Send(Name, SecretProviderErrors.OpDecrypt, () =>
+        {
+            string json = response.Content.ReadAsStringAsync().GetAwaiter().GetResult();
+            using var doc = System.Text.Json.JsonDocument.Parse(json);
+            if (doc.RootElement.TryGetProperty("SecretString", out var val)) return val.GetString() ?? "";
+            throw new SecretProviderUnavailableException(Name, SecretProviderErrors.OpDecrypt, "AWS response does not contain SecretString", parsed.TargetName);
+        }, parsed.TargetName, discardRawMessage: true);
     }
 
     public void Delete(string envelope, string? context = null)
@@ -75,9 +98,10 @@ internal sealed class AwsSecretsManagerProvider : ISecretProvider
             var parts = parsed.TargetName.Split('|');
             if (parts.Length < 2) return;
             string body = "{\"SecretId\":\"" + JsonEscape(parts[1]) + "\",\"ForceDeleteWithoutRecovery\":true}";
-            CallAwsApi(parts[0], "secretsmanager.DeleteSecret", body);
+            SecretProviderErrors.Send(Name, SecretProviderErrors.OpDelete,
+                () => CallAwsApi(parts[0], "secretsmanager.DeleteSecret", body), discardRawMessage: true);
         }
-        catch { }
+        catch (Exception ex) { SecretProviderErrors.SwallowBestEffort(Name, SecretProviderErrors.OpDelete, ex); }
     }
 
     public bool CanRotate => true;
@@ -89,8 +113,9 @@ internal sealed class AwsSecretsManagerProvider : ISecretProvider
         var parts = parsed.TargetName.Split('|');
         if (parts.Length < 2) return Encrypt(plaintext, context);
         string body = "{\"SecretId\":\"" + JsonEscape(parts[1]) + "\",\"SecretString\":\"" + JsonEscape(plaintext) + "\"}";
-        var resp = CallAwsApi(parts[0], "secretsmanager.PutSecretValue", body);
-        if (!resp.IsSuccessStatusCode) throw new InvalidOperationException("AWS rotation (PutSecretValue) failed");
+        var resp = SecretProviderErrors.Send(Name, SecretProviderErrors.OpRotate,
+            () => CallAwsApi(parts[0], "secretsmanager.PutSecretValue", body), parsed?.TargetName, discardRawMessage: true);
+        if (!resp.IsSuccessStatusCode) throw SecretProviderErrors.FromStatus(Name, SecretProviderErrors.OpRotate, resp.StatusCode, "rotation (PutSecretValue)", mountId: parsed?.TargetName);
         return oldEnvelope;
     }
 
@@ -116,7 +141,7 @@ internal sealed class AwsSecretsManagerProvider : ISecretProvider
         string secretKey = Environment.GetEnvironmentVariable("AWS_SECRET_ACCESS_KEY") ?? "";
         string sessionToken = Environment.GetEnvironmentVariable("AWS_SESSION_TOKEN") ?? "";
         if (string.IsNullOrEmpty(accessKey) || string.IsNullOrEmpty(secretKey))
-            throw new InvalidOperationException("AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY required");
+            throw new SecretProviderAuthFailedException(Name, "aws-api", "AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY required");
 
         string amzDate = DateTimeOffset.UtcNow.ToString("yyyyMMddTHHmmssZ");
         string dateStamp = DateTimeOffset.UtcNow.ToString("yyyyMMdd");
@@ -155,7 +180,10 @@ internal sealed class AwsSecretsManagerProvider : ISecretProvider
         // live-verified); the SigV4 string is well-formed by construction.
         request.Headers.TryAddWithoutValidation("Authorization", auth);
         if (!string.IsNullOrEmpty(sessionToken)) request.Headers.TryAddWithoutValidation("X-Amz-Security-Token", sessionToken);
-        return client.SendAsync(request).GetAwaiter().GetResult();
+        // issue 40: transport failures map at the boundary; the HttpRequestException can
+        // carry the request URL but never the signed Authorization header value, and the
+        // raw message is dropped entirely (classification-only mandate).
+        return SecretProviderErrors.Send(Name, "aws-api", () => client.SendAsync(request).GetAwaiter().GetResult(), discardRawMessage: true);
     }
 
     private static string HexSHA256(string s)

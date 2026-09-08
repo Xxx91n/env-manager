@@ -3,6 +3,10 @@ using EnvManager.Secrets.Core;
 // One-symbol-per-file split of the retired single-file secret provider module (issue 09); behavior unchanged.
 // License: Apache-2.0
 
+// ticket 40: adapter-boundary typed error family. Process spawn/exit failures map
+// onto the family at the throw sites; best-effort cleanup reports through the
+// scrubbed family channel (SecretProviderErrors.SwallowBestEffort).
+
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -18,6 +22,17 @@ namespace EnvManager.Secrets.Providers;
 internal sealed class OnePasswordProvider : ISecretProvider
 {
     public string Name => "1password";
+
+    // Capability descriptors (ticket 41, spec Phase 6): declared per provider,
+    // consumed by SecretProviderManager.ListProviders and surfaced through
+    // `profile secret-provider list` so the GUI gates on data, not name lists.
+    public bool RefreshCapable => true;
+    public bool CertAuthRequired => false;
+    public bool RequiresNetwork => true;
+
+    // Cheap gate: the resolved op binary must exist on disk (FindOpBinary
+    // falls back to the bare "op" literal when the CLI was not found).
+    public bool Available => File.Exists(OP_BINARY);
 
     // Envelope: { provider, version, createdAt, targetName (vault|itemId|field) }
     // The actual secret value is fetched via the 1Password CLI (op) at launch time.
@@ -65,17 +80,17 @@ internal sealed class OnePasswordProvider : ISecretProvider
         try
         {
             using var proc = System.Diagnostics.Process.Start(psi);
-            if (proc == null) throw new InvalidOperationException("1Password CLI (op) binary not found");
+            if (proc == null) throw new SecretProviderNotFoundException(Name, "probe", "1Password CLI (op) binary not found");
             proc.WaitForExit(5000);
             if (!proc.HasExited || proc.ExitCode != 0)
-                throw new InvalidOperationException("1Password CLI (op) binary not functional");
+                throw new SecretProviderUnavailableException(Name, "probe", "1Password CLI (op) binary not functional");
             // v0.9.13 Phase 4F: record provider binary hash for tamper detection
-            try { Program.RecordProviderHash("op", OP_BINARY); } catch { }
+            try { Program.RecordProviderHash("op", OP_BINARY); } catch (Exception ex) { SecretProviderErrors.SwallowBestEffort(Name, "provider-hash", ex); }
         }
-        catch (System.ComponentModel.Win32Exception)
+        catch (System.ComponentModel.Win32Exception ex)
         {
-            throw new InvalidOperationException(
-                "1Password CLI (op) not found. Install op and ensure it is on PATH, or set OP_PATH env var.");
+            throw new SecretProviderNotFoundException(Name, "probe",
+                "1Password CLI (op) not found. Install op and ensure it is on PATH, or set OP_PATH env var.", null, ex);
         }
     }
 
@@ -111,13 +126,13 @@ internal sealed class OnePasswordProvider : ISecretProvider
         psi.EnvironmentVariables["no_proxy"] = "localhost,127.0.0.1,::1";
 
         using var proc = System.Diagnostics.Process.Start(psi);
-        if (proc == null) throw new InvalidOperationException("Failed to start op process");
+        if (proc == null) throw new SecretProviderUnavailableException(Name, SecretProviderErrors.OpEncrypt, "Failed to start op process");
         proc.WaitForExit(30000);
-        if (!proc.HasExited) { proc.Kill(); throw new InvalidOperationException("1Password CLI timed out"); }
+        if (!proc.HasExited) { proc.Kill(); throw new SecretProviderTimeoutException(Name, SecretProviderErrors.OpEncrypt, "1Password CLI timed out"); }
         if (proc.ExitCode != 0)
         {
             string stderr = proc.StandardError.ReadToEnd();
-            throw new InvalidOperationException("1Password CLI create failed (exit " + proc.ExitCode + "): " + stderr);
+            throw new SecretProviderUnavailableException(Name, SecretProviderErrors.OpEncrypt, "1Password CLI create failed (exit " + proc.ExitCode + "): " + stderr);
         }
 
         string json = proc.StandardOutput.ReadToEnd();
@@ -127,7 +142,7 @@ internal sealed class OnePasswordProvider : ISecretProvider
             using var doc = System.Text.Json.JsonDocument.Parse(json);
             if (doc.RootElement.TryGetProperty("id", out var id)) itemId = id.GetString() ?? "";
         }
-        catch { }
+        catch (System.Text.Json.JsonException) { /* best-effort: itemId stays empty on non-JSON output */ }
 
         var env = new SecretEnvelope
         {
@@ -142,13 +157,13 @@ internal sealed class OnePasswordProvider : ISecretProvider
     public string Decrypt(string envelope, string? context = null)
     {
         var parsed = SecretEnvelope.TryParse(envelope)
-            ?? throw new InvalidOperationException("Invalid secret envelope format");
-        if (parsed.Provider != Name) throw new InvalidOperationException($"Provider mismatch: expected {Name}, got {parsed.Provider}");
-        if (string.IsNullOrEmpty(parsed.TargetName)) throw new InvalidOperationException("Missing targetName in envelope");
+            ?? throw new SecretProviderInvalidEnvelopeException(Name, SecretProviderErrors.OpDecrypt, "Invalid secret envelope format");
+        if (parsed.Provider != Name) throw new SecretProviderInvalidEnvelopeException(Name, SecretProviderErrors.OpDecrypt, $"Provider mismatch: expected {Name}, got {parsed.Provider}");
+        if (string.IsNullOrEmpty(parsed.TargetName)) throw new SecretProviderInvalidEnvelopeException(Name, SecretProviderErrors.OpDecrypt, "Missing targetName in envelope", parsed.TargetName);
 
         EnsureOpAvailable();
         var parts = parsed.TargetName.Split('|');
-        if (parts.Length < 2) throw new InvalidOperationException("Invalid targetName format, expected vault|itemId|field");
+        if (parts.Length < 2) throw new SecretProviderInvalidEnvelopeException(Name, SecretProviderErrors.OpDecrypt, "Invalid targetName format, expected vault|itemId|field", parsed.TargetName);
 
         string itemId = parts[1];
         string fieldName = parts.Length > 2 ? parts[2] : "password";
@@ -183,13 +198,13 @@ internal sealed class OnePasswordProvider : ISecretProvider
         psi.EnvironmentVariables["no_proxy"] = "localhost,127.0.0.1,::1";
 
         using var proc = System.Diagnostics.Process.Start(psi);
-        if (proc == null) throw new InvalidOperationException("Failed to start op process");
+        if (proc == null) throw new SecretProviderUnavailableException(Name, SecretProviderErrors.OpDecrypt, "Failed to start op process", parsed.TargetName);
         proc.WaitForExit(30000);
-        if (!proc.HasExited) { proc.Kill(); throw new InvalidOperationException("1Password CLI timed out"); }
+        if (!proc.HasExited) { proc.Kill(); throw new SecretProviderTimeoutException(Name, SecretProviderErrors.OpDecrypt, "1Password CLI timed out", parsed.TargetName); }
         if (proc.ExitCode != 0)
         {
             string stderr = proc.StandardError.ReadToEnd();
-            throw new InvalidOperationException("1Password CLI get failed (exit " + proc.ExitCode + "): " + stderr);
+            throw new SecretProviderUnavailableException(Name, SecretProviderErrors.OpDecrypt, "1Password CLI get failed (exit " + proc.ExitCode + "): " + stderr, parsed.TargetName);
         }
         string output = proc.StandardOutput.ReadToEnd().TrimEnd();
         // --format=json returns the field value as a JSON string ("value"); plain
@@ -227,7 +242,7 @@ internal sealed class OnePasswordProvider : ISecretProvider
             using var proc = System.Diagnostics.Process.Start(psi);
             if (proc != null) proc.WaitForExit(15000);
         }
-        catch { }
+        catch (Exception ex) { SecretProviderErrors.SwallowBestEffort(Name, SecretProviderErrors.OpDelete, ex); }
     }
 
     public bool CanRotate => true;
