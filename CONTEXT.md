@@ -43,6 +43,14 @@ _Avoid_: profile model (ambiguous with the GUI profile view), DTO with public se
 The auto-update transport seam (ticket 37, spec Phase 6 story 17): tauri-plugin-updater is the wired transport (Rust commands `check_update_plugin` / `download_and_install` over the `latest.json` endpoint + minisign pubkey in `tauri.conf.json`); the legacy PowerShell `check_for_updates` GitHub-API probe remains in `main.rs` only as the browser-fallback transport. The frontend consumes both through the same `UpdateInfo` shape, so swapping transports never reshapes the Settings dialog contract. Install path is signature-verified MSI; on Windows the app exits itself once the installer launches.
 _Avoid_: version literal in the GUI, pending-update State plumbing, auto-install without user action
 
+**Updater Manifest (latest.json)**:
+The Tauri plugin v2 JSON document the GUI polls from the `tauri.conf.json` `plugins.updater.endpoints` URL (the GitHub release `latest.json` download path). Emitted by `scripts/gen-latest-json.mjs` (ticket 44) from the signed package-job artifacts and uploaded alongside the release. Schema: `{ version, notes, pub_date (RFC3339), platforms.windows-x86_64.{url, signature} }`, where `signature` is the verbatim single-line minisign base64 from the `.msi.zip.sig` file (never fabricated; missing `.sig` is fail-closed and exits 1). Schema pinned by `scripts/gen-latest-json.test.mjs`.
+_Avoid_: appcast, sparkle xml (this is the tauri schema, not the legacy apple format), inline version probe
+
+**SLSA Build Provenance (release)**:
+The signed attestation `actions/attest-build-provenance` (SLSA L2) writes for every release artifact, produced in the `build.yml` release job (the step subject-path covers `artifacts/*` including the MSI, the updater bundle, the signature, and `latest.json`). Per the WORKFLOW.md §6 ticket-30 lesson log, every release-chain action pin is verified reachable upstream via `gh api repos/<owner>/<repo>/commits/<sha>` before first real release run; the current `actions/attest-build-provenance` pin is v4.2.2 = `4d101475d8...` (re-pinned in ticket 44 after the v4.1.0 SHA `97770d5af...` disappeared upstream).
+_Avoid_: provenance-as-scope, signature (different thing - signature is the minisign file; provenance is the attestation)
+
 **Provider**:
 An `ISecretProvider` implementation (8 total: dpapi-current-user, credential-manager, powershell-secretmanagement, vault-kv2, sops, azure-keyvault, 1password, aws-secretsmanager). Five-method interface: Name/Encrypt/Decrypt/CanRotate/Rotate/Delete. Stays as-is through all phases.
 _Avoid_: backend, vault (ambiguous with HashiCorp Vault), store
