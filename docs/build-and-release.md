@@ -298,13 +298,14 @@ Runs on push to main and pull requests. Verifies code quality (tests, lint, buil
 
 The verify job stages the five `tauri.conf.json` `bundle.resources` (`env-manager-cli.exe`/`.dll`/`.runtimeconfig.json`/`.deps.json` plus `AGENTS.cli.md`) from the CLI build output (`bin/Release/net10.0-windows/`) and the repo root into `frontend/src-tauri/bin/` immediately after the "Build CLI" step and before any cargo compile (service crate tests, Tauri crate tests, cargo check). The step is fail-closed: any of the five missing fails the job. This mirrors the local staging done by `frontend/scripts/prebuild.mjs` during `npm run build`/`tauri build`; `scripts/build.mjs` responsibilities are unchanged.
 
-### release.yml (Manual release)
-Triggered manually via GitHub Actions `workflow_dispatch` with a version input. Builds x64, x86, and arm64 packages in parallel, then creates a GitHub Release with all artifacts:
-- Portable ZIPs (per arch)
-- CLI-only ZIPs (per arch)
-- MSI installers (per arch, Windows only)
+### release-please.yml (release automation takeover, ticket 45)
+Runs on every push to main. `googleapis/release-please-action` (pinned v5.0.0 SHA) maintains a release PR from conventional commits; merging it bumps versions, creates the `vX.Y.Z` tag, and publishes the GitHub Release with release notes.
 
-The release workflow does NOT auto-trigger on tags or pushes - it must be manually dispatched.
+- `include-component-in-tag: false` — tags are plain `vX.Y.Z` (repo convention, matches the `build.yml` `tags: ['v*']` trigger), not `env-manager-vX.Y.Z`.
+- `.release-please-manifest.json` pins the released version (`0.12.0` at first establishment, ticket 45).
+- `extra-files` syncs the three version carriers the `build.yml` release job's version gate checks (`env-manager.csproj` `<Version>`, `frontend/src-tauri/tauri.conf.json` and `frontend/package.json` root `version`). Cargo crate versions and lockfiles are NOT release-please-managed (cargo --locked consistency); they move only in manual version-bump commits.
+
+Tag releases are built by the `build.yml` release job (ticket 44): x64 MSI + portable/CLI-only zips, signed updater triple, fail-closed `latest.json`, SLSA L2 provenance, draft release. The legacy manual `release.yml` (`workflow_dispatch`; built x86/arm64 MSIs but could not produce updater artifacts) was retired with ticket 45 — release assets are x64-only via the single tag pipeline.
 
 ### CI user-state isolation and env-block snapshot semantics (architecture-recovery issue 24)
 
@@ -386,7 +387,7 @@ The live CLI smoke test harness `scripts/test-with-restore.ps1` snapshots every 
 2. Flip via GH CLI: `gh repo edit Xxx91n/env-manager --visibility public`.
 3. Add GitHub Actions variables `GITLAB_USER` and `CODEBERG_USER`, plus secrets `GITLAB_TOKEN` and `CODEBERG_TOKEN` (write scope, minimal expiry).
 4. `.github/workflows/mirror.yml` runs on every push to `main` and keeps GitLab / Codeberg in sync; do not push to mirrors manually.
-5. release-please (`release-please.yml`) drives CHANGELOG / version PRs after the public flip; this repository does not yet contain git tags, so release-please is configured in advance but the first release remains gated behind the "开始发布" user confirmation.
+5. release-please (`release-please.yml`) drives CHANGELOG / version PRs from conventional commits. Established with the v0.12.0 release (ticket 45, HARD GATE authorized): plain `vX.Y.Z` tags, `.release-please-manifest.json`, and `extra-files` keeping csproj / tauri.conf.json / package.json in lockstep with the version gate. Tag pushes trigger the `build.yml` release job (updater triple + `latest.json` + SLSA L2 provenance, draft release).
 6. Provenance attestation (`actions/attest-build-provenance`) runs in the `build.yml` release job so every tagged release carries SLSA L2 provenance automatically. Pinned to v4.2.2 (`4d101475d8...`) per ticket 44 - the prior v4.1.0 SHA (`97770d5af...`) disappeared upstream, the same force-push event recorded in WORKFLOW.md §6 ticket-30 lesson log (`unable to find version` on the first release rehearsal). Before re-pinning any release-chain action, verify the SHA with `gh api repos/<owner>/<repo>/commits/<sha>`.
 7. Tauri updater: `tauri signer generate` executed once; public key committed in `frontend/src-tauri/tauri.conf.json` under `plugins.updater.pubkey`; private key kept only in GitHub Secrets (`TAURI_SIGNING_PRIVATE_KEY`, `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`). Reference: ADR 0008. End-to-end updater chain (ticket 44): the package job zips the MSI to `Env Manager_<version>_<arch>.msi.zip`, signs the zip via `@tauri-apps/cli` (`npx --no-install tauri signer sign`) producing `<basename>.msi.zip.sig`, and uploads the `.msi` + `.msi.zip` + `.msi.zip.sig` triple through the `env-manager-msi` artifact. The release job then runs `scripts/gen-latest-json.mjs` against the downloaded artifacts to assemble `latest.json` (the manifest schema `@tauri-apps/plugin-updater` polls from the `plugins.updater.endpoints` URL declared in `tauri.conf.json`); the file is uploaded alongside the artifacts. The generator refuses to invent a signature, so an unsigned package job run (for example a fork without the secrets) fails the release step rather than publishing a manifest that points at unsigned bytes.
 

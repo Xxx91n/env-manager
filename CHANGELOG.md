@@ -7,7 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.12.0] - 2026-09-09
+
+Release-infrastructure milestone (architecture-recovery Round 7, tickets 44-45): first release cut from the tag-driven CI pipeline, with release-please taking over subsequent version bumps.
+
 ### Added
+- Release infrastructure (ticket 44): tag-triggered `build.yml` release job — updater triple (`.msi` + `.msi.zip` + `.msi.zip.sig`), `latest.json` assembled by `scripts/gen-latest-json.mjs` (fail-closed on missing signature), SLSA L2 build provenance attestation
+- Tauri updater wiring (ticket 37): `tauri-plugin-updater` with silent update check and in-app download-and-install
+- Release automation takeover (ticket 45): `release-please.yml` manifest config — plain `vX.Y.Z` tags (`include-component-in-tag: false`), `.release-please-manifest.json` pinning the released version, `extra-files` syncing the version carriers checked by the release job's version gate; legacy manual `release.yml` retired
+- v0.12.0 tag + GitHub Release with the four updater asset classes (.msi, .msi.zip, .msi.zip.sig, latest.json)
 - CI hardening (P0): actionlint gate, dependency-review on PRs, Dependabot for GitHub Actions/cargo/npm, `timeout-minutes` on all jobs, `Swatinem/rust-cache` in verify + package jobs
 - CI hardening (P1): RustSec audit (src-tauri + service), NuGet vulnerability audit, MSI quiet install/run/uninstall smoke test, release version-consistency gate (tag vs csproj vs tauri.conf vs package.json)
 
