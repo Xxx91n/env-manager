@@ -5,6 +5,96 @@ All notable changes to Env Manager will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.10.0](https://github.com/Xxx91n/env-manager/compare/v0.9.30...v0.10.0) (2026-09-09)
+
+
+### Features
+
+* **audit:** ticket 43 - extract src/Audit/ bounded context + audit verify --strict CI gate (squashed for CI verify) ([709f6bd](https://github.com/Xxx91n/env-manager/commit/709f6bdb05b809380e213a48a05f931fad18934e))
+* **brand:** add animated hero GIF + demo GIF + hero motion spec ([61ee5a2](https://github.com/Xxx91n/env-manager/commit/61ee5a2c5943a5c6d49dc509ac6f5347901a63db))
+* **ci:** isolate CI user-state via ENVMANAGER_LOCALAPPDATA redirect seam (issue 24) ([c6d4dc8](https://github.com/Xxx91n/env-manager/commit/c6d4dc8ef8f46465ddc398f0993695dea426606f))
+* **gui:** wire tauri-plugin-updater - register plugin + check_update_plugin/download_and_install commands, updater:default capability, SettingsDialog plugin transport + silent onMount check, i18n x10 (ticket 37) ([f4a20fe](https://github.com/Xxx91n/env-manager/commit/f4a20feb52771b3d19ec67f127423b9337fb3c24))
+* **preflight:** two-tier profile validation with warn tier, --strict, and exit code 2 (issue 19) ([58072a0](https://github.com/Xxx91n/env-manager/commit/58072a08101ddaa0ca1f254317cc7c48db3fa284))
+* **scripts:** add check-readme-i18n.ps1 and record-demo.py helper scripts ([528d651](https://github.com/Xxx91n/env-manager/commit/528d651455938a02aca5d05bd6d013ec53a760f7))
+* **scripts:** add rsvg-convert wrapper scripts (JS + cmd) using @resvg/resvg-js ([c7d7750](https://github.com/Xxx91n/env-manager/commit/c7d7750ee140a71712d0ff11a8c66091a74fc07e))
+* **secrets:** capability descriptors on ISecretProvider + real ListProviders availability + GUI generic parser (ticket 41) ([8b9c990](https://github.com/Xxx91n/env-manager/commit/8b9c990e212b037045e4bd5fc0093d11734d55aa))
+* **secrets:** typed SecretProviderException family + adapter boundary scrub integration (ticket 40) ([d913d8f](https://github.com/Xxx91n/env-manager/commit/d913d8f26a2142da860fe8cb55bfa1a3e25a6f6e))
+* **service:** add resilience fault injection tests for watchdog/SCM recovery (ticket 33) ([be819b4](https://github.com/Xxx91n/env-manager/commit/be819b469719ab875c9268a0aee181b866a95dab))
+
+
+### Bug Fixes
+
+* **ci:** add missing cargo test --locked steps to build.yml verify job ([afa2ae3](https://github.com/Xxx91n/env-manager/commit/afa2ae3a6613e9a5c4d1f51275f2086acc7858ee))
+* **ci:** audit verify --strict gate step must exit 0 after assertions (ticket 43 step, stacked-run unblock) ([c42eed7](https://github.com/Xxx91n/env-manager/commit/c42eed720a5a2e35351d13c879e177b92813e768))
+* **ci:** compare PATH semantically (entry list, case-sensitive) instead of byte-exact - CLI normalizes empty segments on write, CI image PATH is dirty by construction ([152a951](https://github.com/Xxx91n/env-manager/commit/152a951cd5661a18b5cd9ee9506e22f1cacc8b4d))
+* **ci:** doc-sync expects docs/i18n/README.zh_CN.md (README_CN.md superseded by i18n suite); local AGENTS.md has no stale refs ([45a5ba3](https://github.com/Xxx91n/env-manager/commit/45a5ba3bb15d615729d8eb07cdc46f8a1add6598))
+* **ci:** drop unused HITS var in wix-watchdog (actionlint SC2034 - HITS computed but never read) ([cad1905](https://github.com/Xxx91n/env-manager/commit/cad19056764ded4174aa784ef2761bdef6424bc6))
+* **ci:** MSI smoke probes installed CLI with bare args (build.mjs version-probe protocol); CLI has no --version flag ([fc53ad2](https://github.com/Xxx91n/env-manager/commit/fc53ad23ab2bfd8fa6525eb1bd29db9e1396daf6))
+* **ci:** package job installs WiX 3.14 to %LOCALAPPDATA%\tauri\WixTools314 (windows-2025 image no longer bundles it); build.mjs copies loose exes beside ZIPs to match release layout contract ([d082a9c](https://github.com/Xxx91n/env-manager/commit/d082a9c78aebb6b5dc732e98388280a06847ae8c))
+* **ci:** pass -CliExe pointing to Release binary so test-with-restore.ps1 finds CLI on CI (was defaulting to release/cli-only which CI never builds) ([0d3cb9c](https://github.com/Xxx91n/env-manager/commit/0d3cb9c5cf21201f402dc7590cee52a197bbea8c))
+* **ci:** PATH snapshot compares entries semantically (case+order), folding empty-segment noise the CLI normalizes on write on dirty CI images ([516dcbf](https://github.com/Xxx91n/env-manager/commit/516dcbf322b0810de1a8cd65066482fd8a9b5b6a))
+* **ci:** pin WIX env to extracted WixTools314 path (windows-2025 image preset WIX shadows it with a removed dir) ([c0b9e69](https://github.com/Xxx91n/env-manager/commit/c0b9e69dfac07b2808260ccba9bf7392251f39fe))
+* **ci:** repin attest-build-provenance to v4.2.2 (ticket 30 drill finding) ([#49](https://github.com/Xxx91n/env-manager/issues/49)) ([a8f2dd2](https://github.com/Xxx91n/env-manager/commit/a8f2dd2a4c0dfab43ff40baf92a545f6610aede3))
+* **ci:** replace rustsec/audit-check (v2.0.0 'Unexpected end of JSON input' bug) with taiki-e/install-action + cargo audit on both workspaces ([40ac008](https://github.com/Xxx91n/env-manager/commit/40ac008dbd39c8767fe0660fa7adde9848946976))
+* **ci:** restore all workflow failures - build.yml YAML corruption, mirror action input rename, release-please dead SHA ([e8ad626](https://github.com/Xxx91n/env-manager/commit/e8ad626201d0c3b03bf5ed92b75cc6f9c605cc01))
+* **ci:** run root npm ci in package job so scripts/build.mjs finds archiver (ERR_MODULE_NOT_FOUND) ([5cfb7a9](https://github.com/Xxx91n/env-manager/commit/5cfb7a90da81bfd4af20116096d8db44753a9cf0))
+* **ci:** seed frontendDist placeholder for generate_context! in verify (issue 17) ([96abc6b](https://github.com/Xxx91n/env-manager/commit/96abc6bcc5aaaf473b11279fc9e4cc3616ec37c5))
+* **deps:** archiver v8 is ESM with named exports - use ZipArchive class (fixes 'does not provide an export named default' in package job) ([ff63983](https://github.com/Xxx91n/env-manager/commit/ff63983bfce7854f54fd7f3d5d2a4525175bc921))
+* **deps:** regenerate lock with npm 10 (CI Node 20=npm 10; npm 11-generated lock failed npm 10 ci peer validation on esbuild@0.28.2) ([e05e6a4](https://github.com/Xxx91n/env-manager/commit/e05e6a41b573d6f940045f10c20e9ea53f606ef0))
+* **deps:** revert bits-ui to 0.22.0 (v2 peer-requires Svelte 5; project on Svelte 4 chain) ([b114ed4](https://github.com/Xxx91n/env-manager/commit/b114ed481bd847bb116be8e4de56401fddf2e6c3))
+* **engine:** complete ticket-42 aggregate-root call-site migration absorbed mid-flight into zks - ProfileAudit SetName + secret CRUD via domain methods + test fixtures migrated (ticket-41 CI unblock 4) ([6336ad9](https://github.com/Xxx91n/env-manager/commit/6336ad98d938e5e39bf34f81eb8a8fbb8ddf00a5))
+* **engine:** move TryDecryptSafe to CliRuntime.cs + Main reflection sees private entry point - ticket-28 base red blocks CI (ticket 36 unblock 2) ([3e48c0a](https://github.com/Xxx91n/env-manager/commit/3e48c0a0db1f1d144267e8c29707e3f43b8b6465))
+* **engine:** route test-with-restore launch target away from System32 and sync docs after enforced guard (issue 04 B1) ([828af15](https://github.com/Xxx91n/env-manager/commit/828af152b5196e34a4b73fd13baa252b0a99e153))
+* **frontend:** regenerate package-lock.json against registry.npmjs.org; pin registry via .npmrc (npmmirror cache caused version-graph mismatch breaking npm ci in CI) ([b079c39](https://github.com/Xxx91n/env-manager/commit/b079c39cea5de17a0154476405c0bac14c346f3f))
+* **frontend:** sync package-lock.json with package.json (npm ci EUSAGE in CI) ([4a9f43a](https://github.com/Xxx91n/env-manager/commit/4a9f43a245793287a4c5f265bb91d7fb29767f5d))
+* **gui:** register app_version on invoke_handler (ticket 36) ([8a2b561](https://github.com/Xxx91n/env-manager/commit/8a2b5614c3a20d31b777bbc71a5be0fa70b9e32b))
+* **gui:** restore updater deps in both lockfiles + npm10 esbuild@0.28.2 sync (ticket 37 CI unblock) ([bb4805f](https://github.com/Xxx91n/env-manager/commit/bb4805fd342c3ea5bab253a70cfa68aa067530e4))
+* **gui:** SettingsDialog reads runtime version via app_version, retires hardcoded 0.5.0 (ticket 36) ([e1672de](https://github.com/Xxx91n/env-manager/commit/e1672de83f6a58fe420dd34ff74122bf4bf7776b))
+* **gui:** SettingsDialog reads runtime version via app_version, retires hardcoded 0.5.0 (ticket 36) ([851ca6b](https://github.com/Xxx91n/env-manager/commit/851ca6bf0e011699d33a65768aa4b467d0270bf4))
+* **gui:** sync package-lock.json esbuild@0.28.2 vitest-nested entries for npm 10 CI (ticket 37 CI unblock) ([cc13093](https://github.com/Xxx91n/env-manager/commit/cc130931cb7fe95d9ee1aa3b0113ee5ea61a54e8))
+* **l1:** harness PutSecretValue ClientRequestToken; vault bounded health poll replaces query-string wait (issue 15) ([61891ad](https://github.com/Xxx91n/env-manager/commit/61891ad520cdeffcfe16523e7a1c9cb14875ab72))
+* **l1:** SigV4 ClientRequestToken idempotency token; vault dev-server -dev command (issue 15) ([112dd0d](https://github.com/Xxx91n/env-manager/commit/112dd0d93d9b2e084de33dea7835f5759dc441f4))
+* **l1:** wire Azure vault URI env, SigV4 header validation bypass, SecretStore round-trip gate, serialize container fixtures; record 1password linux stack overflow (issue 15) ([a478b9d](https://github.com/Xxx91n/env-manager/commit/a478b9dbd7aec46d6d08c60cdf6317c30810c21c))
+* **path,rename:** normalize dedupe/add duplicate guards and refuse case-only renames (ticket 34) ([24fea5e](https://github.com/Xxx91n/env-manager/commit/24fea5e1ba51ee79b04979c2b6d1bbe36abc5f92))
+* **preflight:** make %VAR% defined-check hermetic via process env (issue 19 rework 2) ([b64b6fd](https://github.com/Xxx91n/env-manager/commit/b64b6fdfdcfae055bf160a1d02796d15bf8b8c52))
+* **profile:** recognize --help/-h/-?//? in profile create name position as help request (issue 20) ([4f6f7db](https://github.com/Xxx91n/env-manager/commit/4f6f7dba20ce93eaa9557e2c6832ea138317ca40))
+* **program:** expose CliRuntime helpers (JsonOpts / ArgError / ScrubExceptionMessage / GetVariableValue) as internal so ramp-1 migrated domains (Agents / Update / Expand) compile (ticket 27 fix) ([a57a7ed](https://github.com/Xxx91n/env-manager/commit/a57a7ed04ba4aa70abe48432dbfb3deb2c61d99a))
+* **program:** internal access level + Program. qualified call sites for extracted domains (ticket 27 fix v5) ([fcf1ac9](https://github.com/Xxx91n/env-manager/commit/fcf1ac94f3a52d82e86b51da1be64b83d43263cf))
+* **program:** promote CliRuntime + VariableQuery helpers to public so ramp-1 domains compile (ticket 27 fix v2) ([49d77c8](https://github.com/Xxx91n/env-manager/commit/49d77c895ce7a18958c684cf11467d4dae65b8ba))
+* **program:** qualify CliRuntime helper call sites with Program. prefix so extracted domains compile (ticket 27 fix v3) ([93cf39f](https://github.com/Xxx91n/env-manager/commit/93cf39fda2107d8a9ad10d3a764f177314c0ed9a))
+* **release:** add workflow_dispatch trigger to release-please for manual re-runs (ticket 30 drill finding) ([#51](https://github.com/Xxx91n/env-manager/issues/51)) ([92764cb](https://github.com/Xxx91n/env-manager/commit/92764cb14e7178cb2fa39232208c9fd86a899705))
+* **release:** align hard-boundaries v0.7.14 statement with release-please single track (ticket 30) ([#47](https://github.com/Xxx91n/env-manager/issues/47)) ([c03c252](https://github.com/Xxx91n/env-manager/commit/c03c252e3201659784201b1b422da4610e2b0cfd))
+* **secrets:** byte-exact restore of frontend/package-lock.json to main blob - un-race the concurrent lock regen, nested esbuild@0.28.2 entry back (npm ci) (ticket-41 CI unblock 8) ([946acd5](https://github.com/Xxx91n/env-manager/commit/946acd5140af92000d1b96999e36d2148830564a))
+* **secrets:** CliRuntime.cs TryDecryptSafe gains using EnvManager.Secrets.Manager (ticket 38 caller sync) ([12836b5](https://github.com/Xxx91n/env-manager/commit/12836b58172c5d97ef5ad36966c08d0109e4146c))
+* **secrets:** close capability tag interpolation + orphan paren in secret-provider list output (ticket 41 typo) ([eb64aea](https://github.com/Xxx91n/env-manager/commit/eb64aea2bde84588357461a004719b5aed426b3c))
+* **secrets:** lock restore attempt 2 - byte-exact main blob with nested esbuild@0.28.2 (ticket-41 CI unblock 9) ([64c0690](https://github.com/Xxx91n/env-manager/commit/64c06909847fed27cf7e32ef501cc14e0d0eb7d2))
+* **secrets:** remove illegal file-tail 'internal using' alias blocks (CS1529/CS0116) + missing semicolon in SopsProvider Decrypt - ticket-40 base unblock on ticket-41 CI ([05f1eba](https://github.com/Xxx91n/env-manager/commit/05f1eba2b7b6b6dd20c601d11cfd3c96de03cce4))
+* **secrets:** restore cmdlet -Name params inside PS script strings over-replaced by the CS0120 fix (ticket-40 unblock 3) ([c326700](https://github.com/Xxx91n/env-manager/commit/c3267003722b107e1b24377227d2444864730d27))
+* **secrets:** ticket-40 compile unblock 2 - static hosts reference provider name literals instead of instance Name (CS0120), drop new on static MappedWin32 mapper (CS0426) ([8984060](https://github.com/Xxx91n/env-manager/commit/8984060b89a70c0bc5c02aa2d62f5f4315997396))
+* **service:** bound the timeout-injection mock server loop (ticket 33) ([0858194](https://github.com/Xxx91n/env-manager/commit/085819456e5af4961fd0888d6af2e2ea7fb22664))
+* **service:** make resilience tests compile-clean and CI-safe (ticket 33) ([1d73ae7](https://github.com/Xxx91n/env-manager/commit/1d73ae79b8199eea6d4f33685dce22d984976cca))
+* **service:** materialize remaining busy-retry hunks in resilience tests (ticket 33) ([31f512a](https://github.com/Xxx91n/env-manager/commit/31f512ab714272bb821552f36eec00daa408c2bf))
+* **service:** materialize the timeout-injection call site of open_with_retry (ticket 33) ([88d2f14](https://github.com/Xxx91n/env-manager/commit/88d2f140564fc62a9d58205e09c6fadef831bd6a))
+* **service:** newline-delimited requests + bounded read in resilience tests (ticket 33) ([a28d9c2](https://github.com/Xxx91n/env-manager/commit/a28d9c256cd3758c81ee5bea3a713fae0a3e73f0))
+* **service:** retry ERROR_PIPE_BUSY and release probe connections in resilience tests (ticket 33) ([88e428f](https://github.com/Xxx91n/env-manager/commit/88e428fdb58167be47d7f3eec96155a2d407ddde))
+* **service:** single-layer Result unwrap on named pipe read (ticket 33) ([9fa9839](https://github.com/Xxx91n/env-manager/commit/9fa98395688b683883ada61507b1c9c81cfd6290))
+* **test:** 2-arg Assert.Empty is not a xunit 2.9.3 overload - CS1501 blocks all CI (ticket 36 unblock, base defect from ticket 28) ([2ea985a](https://github.com/Xxx91n/env-manager/commit/2ea985adac09d565b0c1cc9238a3d008905cfd6f))
+* **test:** preserve CLI stderr on failure and stamp round-trip name (issue 22+24) ([3890e6a](https://github.com/Xxx91n/env-manager/commit/3890e6a01551860b898bc77150e527c6f0fdfb12))
+* **test:** replace hardcoded D:/Aworker absolute paths with repo-relative resolve() in secret tests (CI runner has no D:/Aworker) ([fc8ada3](https://github.com/Xxx91n/env-manager/commit/fc8ada3ba3be814ea0f2bd20729e578d00ece10e))
+* **tests:** drop stray semicolons after converted helper method blocks (CS1597) - ticket-41 CI unblock 6 ([155cb5b](https://github.com/Xxx91n/env-manager/commit/155cb5b52003ff2c5ea092efabb3f2b18ab1023d))
+* **tests:** migrate ProfileData object initializers to aggregate-root domain methods (CS0200) - ticket-42 call-site completion in test fixtures (ticket-41 CI unblock 5) ([f7982f2](https://github.com/Xxx91n/env-manager/commit/f7982f24c0fc165cb47b1c9a78ca5b8c61b61068))
+* **tests:** move MkSnapLaunch helper inside CliOutputSnapshotTests class body (CS0103) - ticket-41 CI unblock 7 ([3072ce6](https://github.com/Xxx91n/env-manager/commit/3072ce63645963b6f7306a42244b9834bc4657e6))
+* **tests:** ticket-40 unblock 10 - Assert.Throws on the exact family type (xunit Throws is exact-match), align scrub-echo test input with its assertion, Win32-aware Classify mapping (1168/1163-&gt;notFound, 5/1008/1314-&gt;permissionDenied per MappedWin32) ([802d28a](https://github.com/Xxx91n/env-manager/commit/802d28a621d8d2f445d9d4ea96e752e2b4526568))
+* **tests:** ticket-40 unblock 11 - wait for echo mock AFTER Decrypt triggers the HTTP call (test deadlocked on pre-call Wait), align last scrub assertion with no-space mask output ([289528b](https://github.com/Xxx91n/env-manager/commit/289528b23cff28744a59304b07085c279e7f363e))
+* **tests:** ticket-40 unblock 12 - scrub length assertion aligned with documented contract (512 cap pre-mask + 2-char mask delta) ([0a4ea94](https://github.com/Xxx91n/env-manager/commit/0a4ea94b28e35f5661071f8868ba6b1e3ac846c9))
+* **test:** use unique fixture path C:\EM_TEST_TRAILING_BACKSLASH\ in trailing-backslash case (PS7 install dir may preexist in CI runner user PATH, breaking snapshot equality) ([1c6ef82](https://github.com/Xxx91n/env-manager/commit/1c6ef82e37906df461a92ffdb2d25df51ad4cadf))
+
+
+### Reverts
+
+* **secrets:** strip ticket-37 auto-update wiring absorbed by the no-ID commit onq (WORKFLOW 4.2 lesson repeated) - restores package/lock consistency (npm ci) and hands ticket-37 delta back to its own window; ticket-41 artifacts untouched ([c77bfdf](https://github.com/Xxx91n/env-manager/commit/c77bfdf6658c2204c3b199d46e280b36006b586d))
+* ticket 30 (user option 2 rollback) ([5a1bd90](https://github.com/Xxx91n/env-manager/commit/5a1bd90d73a7d5278a6005ae0b6e1f25005fec51))
+
 ## [Unreleased]
 
 ### Added
