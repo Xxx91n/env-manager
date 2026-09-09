@@ -577,7 +577,7 @@ jobs:
       - name: Generate latest.json (ticket 44)
         shell: pwsh
         run: |
-          $tag = ${{ github.ref_name }}
+          $tag = '${{ github.ref_name }}'
           $version = $tag -replace '^v', ''
           $urlBase = "https://github.com/${{ github.repository }}/releases/download/$tag/"
           node scripts/gen-latest-json.mjs `
