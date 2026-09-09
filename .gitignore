@@ -46,6 +46,7 @@ Thumbs.db
 *.omx
 omx_wiki/
 .codex/
+.zcode/
 .docs/
 .opencode/
 
