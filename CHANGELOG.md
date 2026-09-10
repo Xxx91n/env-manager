@@ -5,6 +5,13 @@ All notable changes to Env Manager will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.12.1](https://github.com/Xxx91n/env-manager/compare/v0.12.0...v0.12.1) (2026-09-10)
+
+
+### Bug Fixes
+
+* **ci:** scope portable/cli-only artifacts to their zips - loose runtime files leaked into v0.12.0 release assets (review finding) ([a97b451](https://github.com/Xxx91n/env-manager/commit/a97b451c47a81039240b3323800f4df9babf66e1))
+
 ## [Unreleased]
 
 ## [0.12.0] - 2026-09-09
