@@ -478,8 +478,11 @@ jobs:
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: env-manager-portable
+          # Review finding (v0.12.0): the previous "release/portable/*" glob pulled
+          # the loose runtime files (env-manager.exe, service exe, CLI runtime DLLs)
+          # into the artifact and they leaked onto the GitHub Release via the
+          # release job's "files: artifacts/*". Scope the artifact to the zip only.
           path: |
-            release/portable/*
             release/portable/Env-Manager_portable_*_x64.zip
           if-no-files-found: error
 
@@ -487,7 +490,6 @@ jobs:
         with:
           name: env-manager-cli-only
           path: |
-            release/cli-only/*
             release/cli-only/Env-Manager_cli-only_*_x64.zip
           if-no-files-found: error
 
