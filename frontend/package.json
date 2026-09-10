@@ -15,7 +15,7 @@
     "test:coverage": "vitest --coverage"
   },
   "devDependencies": {
-    "@playwright/test": "^1.61.1",
+    "@playwright/test": "^1.63.0",
     "@sveltejs/vite-plugin-svelte": "^3.0.0",
     "@tauri-apps/api": "^2.0.0",
     "@tauri-apps/cli": "^2.0.0",
@@ -24,9 +24,9 @@
     "@vitest/coverage-v8": "^4.1.10",
     "@vitest/ui": "^4.1.10",
     "archiver": "^7.0.1",
-    "autoprefixer": "^10.4.0",
+    "autoprefixer": "^10.5.5",
     "jsdom": "^25.0.1",
-    "postcss": "^8.4.0",
+    "postcss": "^8.5.28",
     "svelte": "^4.0.0",
     "svelte-i18n": "^4.0.1",
     "svelte-preprocess": "^6.0.5",
@@ -36,7 +36,7 @@
     "vitest": "^4.1.10"
   },
   "dependencies": {
-    "@tauri-apps/plugin-dialog": "^2.7.1",
+    "@tauri-apps/plugin-dialog": "^2.7.3",
     "@tauri-apps/plugin-updater": "^2.11.0",
     "bits-ui": "^0.22.0",
     "clsx": "^2.1.1",
