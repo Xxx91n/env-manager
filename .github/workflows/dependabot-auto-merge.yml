@@ -59,9 +59,11 @@ jobs:
         id: gate-patch
         if: steps.metadata.outputs.update-type == 'version-update:semver-patch'
         run: |
-          echo "update-type=${{ steps.metadata.outputs.update-type }}" >> "$GITHUB_OUTPUT"
-          echo "dependency-names=${{ steps.metadata.outputs.dependency-names }}" >> "$GITHUB_OUTPUT"
-          echo "dependency-type=${{ steps.metadata.outputs.dependency-type }}" >> "$GITHUB_OUTPUT"
+          {
+            echo "update-type=${{ steps.metadata.outputs.update-type }}"
+            echo "dependency-names=${{ steps.metadata.outputs.dependency-names }}"
+            echo "dependency-type=${{ steps.metadata.outputs.dependency-type }}"
+          } >> "$GITHUB_OUTPUT"
 
       # 3) 闸门 2：required CI + dependency-review 必须绿
       # 用 GitHub REST API 列 check-runs 与 status contexts；
@@ -135,9 +137,11 @@ jobs:
         run: |
           gh pr merge --auto --squash "$PR_URL"
           echo "auto-merge enabled for $PR_URL"
-          echo "merged-by=dependabot-auto-merge@v1" >> "$GITHUB_STEP_SUMMARY"
-          echo "update-type=${{ steps.metadata.outputs.update-type }}" >> "$GITHUB_STEP_SUMMARY"
-          echo "dependency-names=${{ steps.metadata.outputs.dependency-names }}" >> "$GITHUB_STEP_SUMMARY"
+          {
+            echo "merged-by=dependabot-auto-merge@v1"
+            echo "update-type=${{ steps.metadata.outputs.update-type }}"
+            echo "dependency-names=${{ steps.metadata.outputs.dependency-names }}"
+          } >> "$GITHUB_STEP_SUMMARY"
 
       # 5) 失败时清楚标注（不静默跳过）
       - name: Annotate skipped auto-merge (non-blocking)
