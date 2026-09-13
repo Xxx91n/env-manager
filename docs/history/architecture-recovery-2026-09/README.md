@@ -6,6 +6,8 @@
 （2026-09-03：票 09/10 大脑会话复核通过，登记 done；追加 Wave 8 —— 测试心智模型升级三件套 + 补强，atomcode 调研驱动，依据 research/next-wave-patterns.md。）
 （2026-09-04：Wave 8 六票（11–16）大脑会话复核通过，登记 done；reviews/11..16 全量落盘；分支合入 origin/main 待用户授权。）
 
+（2026-09-13：票 49 证据回填 —— 票 29 AC3 红先 CI 证据 = 红 run 34145172855（Cognitive complexity hard gate NEW VIOLATION exit 1）+ 绿 run 34147964443；结构 fitness 注入-红-还原 = 红 run 34149414639（StructuralFitnessTests 精确红）+ 绿 run 34147964443；票 33 kill -9 CI 补证 = build.yml `kill9-resilience` dispatch job，绿 run 34773105351（9/9 断言，runner 按 job 隔离满足票 33 用户态约束；SCM-mode 恢复维持 documented-only——service 未实现 SCM 调度协议）。）
+
 ## 波次与状态（由 issue Blocked by 推导 + 大脑验收结论）
 
 | 波次 | 票 | 状态 |
