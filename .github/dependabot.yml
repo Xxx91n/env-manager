@@ -137,6 +137,14 @@ updates:
       - dependency-name: "jsdom"
         versions: [">= 26.0.0"]
         # （deferred major：等待 DOM 模拟语义审计 + vitest jsdom env 回归通过）
+      # vitest 5.x 三件套（vitest / @vitest/ui / @vitest/coverage-v8）：5.x 生态尚未稳定，
+      # 等 5.x 生态稳定后下轮评估（Round 8 ticket 48 / D-004 裁定：major 三连 PR close + ignore）。
+      - dependency-name: "vitest"
+        versions: ["5.x"]
+      - dependency-name: "@vitest/ui"
+        versions: ["5.x"]
+      - dependency-name: "@vitest/coverage-v8"
+        versions: ["5.x"]
 
   # ===== github-actions =====
   - package-ecosystem: github-actions
