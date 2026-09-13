@@ -405,4 +405,4 @@ Modes:
 | `node scripts/cognitive-complexity.mjs --selftest` | 21 golden snippets; run after any rule change |
 | `node scripts/cognitive-complexity.mjs --demo-gate` | Gate semantics demonstration (red -> grandfathered-green -> regression-red) |
 
-CI (build.yml verify job): report step (non-blocking) -> `cognitive-complexity-report` artifact -> hard-gate step. The baseline JSON pins all `src/*.cs` methods; 32 legacy over-threshold methods are tiered T1/T2/T3 with a remediation schedule in `.scratch/architecture-recovery/reports/29-cognitive-complexity-guard.md`. Renaming an over-threshold method reads as a NEW violation until `--update-baseline` runs in the same PR with reviewer-approved rationale.
+CI (build.yml verify job): report step (non-blocking) -> `cognitive-complexity-report` artifact -> hard-gate step. The baseline JSON pins all `src/*.cs` methods; 32 legacy over-threshold methods are tiered T1/T2/T3 with a remediation schedule in the ticket-29 report (architecture-recovery process archive). Renaming an over-threshold method reads as a NEW violation until `--update-baseline` runs in the same PR with reviewer-approved rationale.
