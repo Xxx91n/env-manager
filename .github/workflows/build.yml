@@ -701,7 +701,7 @@ jobs:
           New-Item -ItemType Directory -Force -Path test-results | Out-Null
           ./scripts/test-service-kill9-resilience.ps1 `
             -CliExe (Join-Path $PWD 'bin\Release\net10.0-windows\env-manager-cli.exe') `
-            -ServiceExe (Join-Path $PWD 'service\target\release\env-manager-service.exe') `
+            -ServiceExe (Join-Path $PWD 'service\target\x86_64-pc-windows-msvc\release\env-manager-service.exe') `
             -LogDir (Join-Path $PWD 'test-results') *>&1 | Tee-Object -FilePath test-results\kill9-resilience.log
           exit $LASTEXITCODE
 

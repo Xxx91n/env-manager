@@ -77,6 +77,15 @@ function Start-ServiceProc([string]$tag) {
 }
 
 $script:CliExe = (Resolve-Path $CliExe).Path
+# Repo .cargo/config.toml sets build.target = x86_64-pc-windows-msvc, so cargo
+# places artifacts under target/<triple>/release rather than target/release.
+# If the caller-passed path misses, probe any target/*/release dir for the exe.
+if (-not (Test-Path $ServiceExe)) {
+    $targetRoot = Split-Path (Split-Path $ServiceExe -Parent) -Parent
+    $probe = Get-ChildItem -Path $targetRoot -Recurse -Filter (Split-Path $ServiceExe -Leaf) `
+        -ErrorAction SilentlyContinue | Where-Object { $_.FullName -match 'release' } | Select-Object -First 1
+    if ($probe) { $ServiceExe = $probe.FullName }
+}
 $script:ServiceExe = (Resolve-Path $ServiceExe).Path
 New-Item -ItemType Directory -Force -Path $LogDir | Out-Null
 $script:LogDir = (Resolve-Path $LogDir).Path
