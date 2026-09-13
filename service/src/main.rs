@@ -26,7 +26,7 @@ pub enum RuntimeMode {
 
 impl RuntimeMode {
     /// Resolve from --mode=<x> argv or SCM service args.
-    /// Pattern borrowed from D:\Aworker\photo RuntimeModeResolver.
+    /// Pattern provenance: CONTEXT.md term "A7 (service binary entry surface, photo pattern)" (design-review session; see docs/history/design-review-research.md).
     pub fn resolve(args: &[String]) -> Self {
         for arg in args {
             if let Some(val) = arg.strip_prefix("--mode=") {
