@@ -35,3 +35,12 @@
 - origin/main = dfa84699；四 workflow（CI/CD、Workflow Lint、release-please、Mirror）全绿。
 - CI/CD verify 16 步全绿（dotnet 306、vitest 437、Pester 11、gen-latest-json 22、cognitive gate、audit verify --strict、doc-sync、i18n drift）。
 - GitHub Release v0.12.0：6 资产 + SLSA L2 attestation；updater 端到端链路（接线→manifest→签名→发布）全通。
+
+## Wave 6.1 违规裁定（2026-09-13）
+
+> 源裁定 = Round 8 decision-ledger D-003（2026-09-13 用户裁定，经 atomcode 深度调研背书，source: atomcode-p5-governance）。冻结区 README（.scratch/architecture-recovery/）违规登记不改（D-006），两处裁定回填本节；工作区 README（.scratch/round8-backlog-grill/README.md）已登记指针。条款落地 = 工作区现役 WORKFLOW.md（Round 8 副本）§4.2.y + §6（票 47）。
+
+1. **#36 vmu/ztw 越界修复归属 → P5a=(a)**（裁定原文）：追认必要 + 归属票 28 返修（三笔分层成立：vmu=编译阻断机械修复；ztw-Main 反射=测试本身落库即错；ztw-TryDecryptSafe=acyclic 守卫规定修法即根治，无需另开 owner issue）。
+2. **#38 gh api 演练分支清理 → P5b=(c) 双轨**（裁定原文）：接受 + §4.2 补结果不变量条款（结果不变量写法）——具名（红先演练分支，DO NOT MERGE 标记）+ 触发条件（but CLI 无远端分支删除能力）+ 披露要求 + 退场机制（工具缺口收敛后条款收窄）；§6 教训日志记工具缺口（but 缺远端删除能力，收敛动作=评估 GitHub auto-delete head branches 或 but 补能力）。
+
+> D-003 显式约束（逐字）：例外条款禁止写成"允许用平台 API 操作分支"（防临时批准变永久特权）；cherry-pick 不执行（vmu/ztw 内容已 land 进 main）；执行动作全部并入 P9 扩名"过程治理小票" = §6 五条教训补录 + §4.2 结果导向条款 + README 违规表两处裁定回填 + auto-delete 开关评估一条（池内唯一调整，随本条生效）。
