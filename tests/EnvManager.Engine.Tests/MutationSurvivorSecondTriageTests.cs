@@ -73,7 +73,7 @@ public class MutationSurvivorSecondTriageTests : IDisposable
         int rc = CaptureProfileStatus(child.Name, out string stdout);
 
         Assert.Equal(0, rc);
-        Assert.Matches("\"isApplicable\":\s*false", stdout);
+        Assert.Matches("\"isApplicable\":\\s*false", stdout);
     }
 
     // ---- survivor #3382 (ProfileEffective.cs:66, >=255 -> >255 in IsProfileApplicable) ----
@@ -91,7 +91,7 @@ public class MutationSurvivorSecondTriageTests : IDisposable
         int rc = CaptureProfileStatus(profile.Name, out string stdout);
 
         Assert.Equal(0, rc);
-        Assert.Matches("\"isApplicable\":\s*false", stdout);
+        Assert.Matches("\"isApplicable\":\\s*false", stdout);
     }
 
     // ---- survivor #3414 (ProfileEffective.cs:110, same >=255 -> >255 in
