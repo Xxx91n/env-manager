@@ -7,6 +7,7 @@
 （2026-09-04：Wave 8 六票（11–16）大脑会话复核通过，登记 done；reviews/11..16 全量落盘；分支合入 origin/main 待用户授权。）
 
 （2026-09-13：票 49 证据回填 —— 票 29 AC3 红先 CI 证据 = 红 run 34145172855（Cognitive complexity hard gate NEW VIOLATION exit 1）+ 绿 run 34147964443；结构 fitness 注入-红-还原 = 红 run 34149414639（StructuralFitnessTests 精确红）+ 绿 run 34147964443；票 33 kill -9 CI 补证 = build.yml `kill9-resilience` dispatch job，绿 run 34773105351（9/9 断言，runner 按 job 隔离满足票 33 用户态约束；SCM-mode 恢复维持 documented-only——service 未实现 SCM 调度协议）。）
+（2026-09-14：票 44 AC4「授权真实性待用户确认」回填终态 —— 用户于 2026-09-09 会话内确认"是我发的"，AC4 闭环、#44 = done（AC1-4 全闭环；终绿 run 34351589379，sign step 产出合法 .sig 且 pubkey 配对）。冻结区工作区 README 的 #44 复核段保留当时快照不改（D-006），AC4 终态以本条与 round-6-7-summary.md 为准。另：本目录导读与覆盖边界见 ARCHIVE.md。）
 
 ## 波次与状态（由 issue Blocked by 推导 + 大脑验收结论）
 

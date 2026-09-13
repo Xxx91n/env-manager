@@ -41,7 +41,7 @@ The service crate's lifecycle resilience terms (watchdog, heartbeat enrichment, 
 - `ipc_read_timeout_fires_on_hung_server` - a mock server accepts and reads the request line but never responds; the client-side bounded read must surface a timeout instead of blocking forever. Pins the `cli_gateway` timeout contract.
 - `ipc_schema_compliance_under_faults` - every `ok:false` response sample in `docs/schemas/ipc-samples.json` carries a `message`; the envelope survives fault-shaped conditions without drifting from the ticket 08 golden contract.
 
-Documented-only scenarios (runnable `#[ignore]` tests with the reason inline): the kill -9 → watchdog detection → restart → `secretMount.json` persistence sequence needs administrator process control and is exercised by the manual script `.scratch/architecture-recovery/manual/kill-9-test.ps1`; the reconcile loop's 30s warmup (SCM boot-timeout guard) touches `LOCALAPPDATA` through `secret_mount_path()`, conflicting with the issue 24 CI user-state isolation, so it is pinned as documentation until the warmup becomes seam-parameterized.
+Documented-only scenarios (runnable `#[ignore]` tests with the reason inline): the kill -9 → watchdog detection → restart → `secretMount.json` persistence sequence needs administrator process control and is exercised by the manual script `kill-9-test.ps1` (retained in the architecture-recovery process archive, untracked); the reconcile loop's 30s warmup (SCM boot-timeout guard) touches `LOCALAPPDATA` through `secret_mount_path()`, conflicting with the issue 24 CI user-state isolation, so it is pinned as documentation until the warmup becomes seam-parameterized.
 
 Test-infrastructure constraints baked into these tests (learned in CI): the wire protocol is newline-delimited, client opens must retry `ERROR_PIPE_BUSY` (a successful open consumes the server's pending instance), and every mock wait is bounded so a regression fails fast instead of wedging the runner to the job timeout.
 
@@ -63,6 +63,16 @@ Concurrent reads (e.g. loading variables list + loading profiles) run in paralle
 The frontend also serializes write operations via a `writeChain` promise in `api.ts`. This ensures that even if a user double-clicks a button, the write operations execute in order rather than racing. Read operations (`runRead()`) are not serialized on the frontend side, allowing them to fire concurrently.
 
 The `is_read_only()` function in `main.rs` determines the lock type by inspecting both the command and its first argument (subcommand for `profile` and `path`).
+
+### Per-Layer Threat Model
+
+Writes are serialized by three cooperating layers. Each layer guards a scope the others cannot reach, which is why three layers exist instead of one:
+
+- **`Local\EnvManager.RegistryMutation` named mutex (CLI)** - defends *cross-process* writers: concurrent CLI invocations from GUI subprocesses, agent/automation calls, parallel scripts, or double-clicked console runs. Without it, two CLI processes could interleave registry mutations - torn PATH lists, lost updates, and pre/post-mutation snapshots captured mid-flight would produce false audit diffs. It is the outermost layer and the only one that can see other OS processes; no inner layer can substitute for it.
+- **`CLI_RWLOCK` (Rust Tauri shell)** - defends *intra-shell* concurrency: Tauri `invoke` handlers run on a thread pool, so simultaneous GUI-triggered commands could otherwise spawn overlapping CLI subprocesses. The write lock serializes shell-issued mutations and the read lock keeps reads parallel. Without it, the OS mutex would still prevent torn writes, but mutex acquisition order is arbitrary - two rapid GUI writes could execute out of order, and a GUI-issued read could interleave with an in-flight write subprocess.
+- **`writeChain` promise chain (frontend `api.ts`)** - defends *UI-order* races: rapid user actions (double-clicks, queued edits, optimistic saves) issue invokes in the order the user confirmed them. Without it, promise scheduling could reorder submissions - later confirms landing before earlier ones, stale overwrite prompts, and UI state diverging from applied state.
+
+The OS mutex cannot see thread-pool or promise ordering, the Rust lock cannot see non-GUI processes, and the frontend chain cannot see other shells or consoles - the three threat surfaces are disjoint, so each layer is load-bearing.
 
 ## System Tray
 
@@ -252,9 +262,16 @@ The frontend exposes `getCliAgentsSpec()` and `getCliAgentsPath()` in `api.ts` f
 
 The current DPAPI CurrentUser implementation is the local default (v0.7.0). Future secret providers must keep the CLI/native layer as the only encryption and persistence boundary; GUI and Rust IPC must never persist plaintext. Any provider extension needs a versioned envelope, explicit provider identity, redacted audit entries, rotation/export rules, and a refusal path when decryption fails. CRYPTPROTECT_LOCAL_MACHINE is not an acceptable default. Windows Credential Manager may be used only for small credential references; it is not a replacement for the encrypted profile store.
 
+**Version axes.** This document keeps two numbering axes deliberately separate:
+
+- **Roadmap axis ("Phase N")**: the staged-delivery plan below. Phase numbers denote delivery order; the parenthesized `vX.Y` tags on plan headings are the plan's *anticipated* release lines (written 2026-07-22), not release claims - several anticipated lines never shipped under those numbers.
+- **Release axis**: `CHANGELOG.md` is the single source of truth for what actually shipped and when (ADR 0003). The provider suite below (Phases 1-7) was implemented on 2026-07-23 and shipped in the v0.7.x line; the two axes do not convert into each other.
+
+The "Implementation Status" sections are keyed to the roadmap axis for phase identity and deliberately carry no release-version tags - release facts live in the changelog. The blueprint's Phase A-E axis (`docs/secret-architecture-blueprint.md`) is a third, superseded axis kept for historical reference; it self-marks SUPERSEDED and must not be read as the current plan.
+
 ### Staged Industrial-Grade Plan
 
-The current DPAPI-CurrentUser implementation corresponds to Phase 0 below. Each phase adds an opt-in provider while keeping the local default zero-operative without the provider installed or configured. No phase introduces plaintext persistence or weakens existing invariants.
+The current DPAPI-CurrentUser implementation corresponds to Phase 0 below. Provider phases (0-2 and 4-7) each add an opt-in provider while keeping the local default zero-operative without the provider installed or configured; Phase 3 adds the provider-agnostic rotation and export/import capability. No phase introduces plaintext persistence or weakens existing invariants.
 
 **Phase 0 - Local DPAPI (v0.7.0, current)**
 
@@ -263,42 +280,50 @@ The current DPAPI-CurrentUser implementation corresponds to Phase 0 below. Each 
 - Boundary: CRYPTPROTECT_LOCAL_MACHINE is forbidden. The audit log records only the variable name plus a redacted marker. Plaintext is zeroed after use in the launcher process.
 - Limitations: no machine-to-machine portability; an adversary with the interactive user session can call profile reveal-secret and read the plaintext.
 
-**Phase 1 - Versioned Envelopes (v0.8)**
+**Phase 1 - Versioned Envelopes (planned: v0.8)**
 
 - Wrap the existing base64 DPAPI blob in a JSON envelope { provider, version, createdAt, ciphertext } so future providers can coexist and the CLI can refuse unknown providers rather than guess.
 - Add profile secret-provider config file (%LOCALAPPDATA%\EnvManager\secret-providers.json) declaring the active provider and fallback policy. Default to "dpapi-current-user" with fail-closed behavior when the configured provider is missing or rejects the key.
 - Add a provider interface in DpapiHelper.cs (ISecretProvider: Encrypt/Decrypt/CanRotate/Rotate) so Phase 2+ providers plug in without touching the profile storage layer.
 - Audit entries gain a "provider" field so dashboards and future rotation tooling know which envelope produced/decrypted each secret.
 
-**Phase 2 - Windows Credential Manager Reference Adapter (v0.8)**
+**Phase 2 - Windows Credential Manager Reference Adapter (planned: v0.8)**
 
 - Implement ISecretProvider for Windows Credential Manager using CredRead/CredWrite via advapi32.dll. Store a small CRED persistence entry whose credential blob is the DPAPI-CurrentUser-encrypted secret; the env-manager profile stores only the CRED target name.
 - Suitability: small per-app credentials and API keys that need to survive user re-logins but still user-bound. Windows Credential Manager is the Microsoft-recommended surface for Windows-native single-machine credential storage. It is NOT a replacement for the encrypted profile store; it only references small credential entries.
 - Boundary: the profile never stores plaintext; CredRead returns the blob only to the env-manager process; the launcher decrypts and zeroes as today.
 - Limitation: still per-user, still single-machine; no portability across machines or for headless services.
 
-**Phase 3 - PowerShell SecretManagement + SecretStore Provider (v0.9)**
+**Phase 3 - Key Rotation + Secret Export/Import (delivered)**
+
+- `profile secret-provider rotate` re-encrypts every profile secret from its original provider to the active provider; failed decryptions are counted and skipped, never deleted.
+- `profile export-secrets` / `profile import-secrets` move a profile's secrets through a DPAPI-encrypted portable JSON blob; import verifies each entry by trial-decryption before writing.
+- Suitability: provider-agnostic maintenance - keeps every provider phase rotatable and portable within the same user account.
+- Boundary: no plaintext persistence; audit entries record operation name, file path, and success/failure counts only - never secret or ciphertext values.
+- Limitation: exports are bound to the same user account (DPAPI); they are not a cross-machine migration path.
+
+**Phase 4 - PowerShell SecretManagement + SecretStore Provider (planned: v0.9)**
 
 - Implement ISecretProvider that delegates to PowerShell SecretManagement (Microsoft.SecretManagement + Microsoft.SecretStore modules) so env-manager secrets live in the same store used by PowerShell automation workflows. The provider calls Get-Secret/Set-Secret via a hosted PowerShell runspace.
 - Suitability: Windows 10/11 + PowerShell 7 operators who already use SecretStore for CI scripts. Zero extra binary dependency; the modules are installed via Install-Module and managed by the operator.
 - Boundary: invocation is done via a constrained PSHost runspace with NoProfile; only the two cmdlets are exposed; VaultName is configured in secret-providers.json; fail-closed if the module is not installed. Audit entry adds "vault" field. Rotation = Remove-Secret + Set-Secret.
 - Limitation: requires PowerShell 7 and the SecretManagement modules; still no machine-to-machine portability unless the operator backs the vault to a syncable store.
 
-**Phase 4 - HashiCorp Vault Adapter (v1.0)**
+**Phase 5 - HashiCorp Vault Adapter (planned: v1.0)**
 
 - Implement ISecretProvider that reads from a HashiCorp Vault KV v2 secret engine reference. The env-manager profile stores only the mount path + secret name; the provider calls the Vault HTTP API with a vault token pulled from VAULT_TOKEN env var or a configured token helper. Decryption happens in the launcher process memory.
 - Suitability: team-wide or production machines with network access to a Vault server. Enables access auditing, dynamic credentials, and secret rotation without touching env-manager storage.
 - Boundary: TLS mandatory; the provider refuses to dial a non-TLS Vault; token is not persisted by env-manager; fail-closed if Vault is unreachable or returns 403/404; audit entry adds "mount" and "version" fields; no plaintext in the audit log.
 - Limitation: introduces a network dependency; the env-manager CLI must not cache decrypted material beyond the lifetime of the launcher process.
 
-**Phase 5 - sops Encrypted Envelopes (v1.0)**
+**Phase 6 - sops Encrypted Envelopes (planned: v1.0)**
 
 - Implement ISecretProvider that consumes and produces sops-encrypted JSON envelopes. The profile JSON value becomes a sops envelope (with per-field Age/PGP/KMS key references); the provider shells out to a verified sops binary (-d / -e) under CREATE_NO_WINDOW.
 - Suitability: GitOps workflows where secrets are versioned alongside terraform/ansible configs; supports Age, PGP, AWS KMS, and Azure Key Vault decryptors; enables rotation via key re-encryption without CLI changes.
 - Boundary: the sops binary must be on PATH (verified at provider init); the profile never stores plaintext; the audit log records only the sops key reference name, not the key material.
 - Limitation: extra binary dependency; misconfigured age/pgp keys make secrets unrecoverable; operator must manage key material.
 
-**Phase 6 - Azure Key Vault Provider (v1.1)**
+**Phase 7 - Azure Key Vault Provider (planned: v1.1)**
 
 - Implement ISecretProvider for Azure Key Vault via a managed-identity or service-principal access token. The profile stores only the vault URI and secret name; the provider calls the Key Vault REST API with a cached Entra ID token.
 - Suitability: cloud-native Windows 11 + Entra ID environments where secrets rotate automatically and access is gated by RBAC.
@@ -312,9 +337,9 @@ The current DPAPI-CurrentUser implementation corresponds to Phase 0 below. Each 
 - The CLI will NOT implement CRYPTPROTECT_LOCAL_MACHINE. LocalMachine scope encryption reads the same on any user of the machine and contradicts the per-user plaintext-never-persisted invariant.
 
 
-## Phase 1-2 Implementation Status (v0.8)
+### Phase 1-2 Implementation Status
 
-Phase 1 (Versioned Envelopes) and Phase 2 (Windows Credential Manager) are implemented in `src/SecretEnvelope.cs`, `src/ISecretProvider.cs`, `src/DpapiCurrentUserProvider.cs`, and `src/CredentialManagerProvider.cs` (one symbol per file, issue 09 split):
+Phase 1 (Versioned Envelopes) and Phase 2 (Windows Credential Manager) are implemented in `src/Secrets/Core/SecretEnvelope.cs`, `src/Secrets/Core/ISecretProvider.cs`, `src/Secrets/Providers/DpapiCurrentUserProvider.cs`, and `src/Secrets/Providers/CredentialManagerProvider.cs` (one symbol per file after the issue-09 split and ticket-38 bounded-context move):
 
 - **ISecretProvider interface**: `Encrypt`, `Decrypt`, `CanRotate`, `Rotate`, `Delete` methods.
 - **DpapiCurrentUserProvider**: wraps existing `DpapiHelper` in a JSON envelope `{ provider, version, createdAt, ciphertext }`.
@@ -326,36 +351,27 @@ Phase 1 (Versioned Envelopes) and Phase 2 (Windows Credential Manager) are imple
 
 
 
-### Phase 4-5 Implementation Status (v0.9/v1.0)
+### Phase 3 Implementation Status
 
-Phase 4 (PowerShell SecretManagement) and Phase 5 (HashiCorp Vault KV v2) are implemented in `src/PowerShellSecretManagementProvider.cs` and `src/VaultKV2Provider.cs`:
+Phase 3 (Key Rotation + Secret Export/Import) is implemented in `src/Secrets/Manager/SecretProviderManager.cs`:
+
+- **Rotation**: `SecretProviderManager.RotateAll(profiles)` iterates all profiles and all secret variables, decrypts each with its original provider, re-encrypts with the active provider. Failed decryptions are counted and skipped (not deleted). CLI: `profile secret-provider rotate`.
+- **Export**: `SecretProviderManager.ExportSecrets(profile)` serializes all secrets from a profile to JSON, DPAPI-encrypts the entire blob, and writes to a file. The export is portable within the same user account regardless of the provider used. CLI: `profile export-secrets <profile> <file>`.
+- **Import**: `SecretProviderManager.ImportSecrets(profile, encryptedBackup)` decrypts the backup with DPAPI, parses the JSON, verifies each secret by trial-decryption, then writes verified secrets to the profile. CLI: `profile import-secrets <profile> <file>`.
+- **Audit**: Rotation, export, and import all create audit entries with the operation name, file path (for export/import), and success/failure counts. No plaintext or ciphertext values are ever recorded.
+
+### Phase 4-5 Implementation Status
+
+Phase 4 (PowerShell SecretManagement) and Phase 5 (HashiCorp Vault KV v2) are implemented in `src/Secrets/Providers/PowerShellSecretManagementProvider.cs` and `src/Secrets/Providers/VaultKV2Provider.cs`:
 
 - **PowerShellSecretManagementProvider**: delegates to `Get-Secret`/`Set-Secret`/`Remove-Secret` via hosted `pwsh` process with `CREATE_NO_WINDOW` and 30s timeout. Profile stores only vault name + secret name. Requires PowerShell 7 + Microsoft.SecretManagement + Microsoft.SecretStore modules.
 - **VaultKV2Provider**: calls Vault HTTP API (`GET`/`POST /v1/secret/data/<path>`). Profile stores only mount path + secret path + key. Token from `VAULT_TOKEN` env var. TLS mandatory for non-localhost. 10s timeout. Fail-closed on network errors.
 - Both providers registered in `SecretProviderManager._providers` alongside `dpapi-current-user` and `credential-manager`.
 - CLI: `profile secret-provider list` now shows all 4 providers; `profile secret-provider set <name>` supports all 4.
-### Phase 3 Implementation Status (v0.8.1)
 
-Phase 3 (Key Rotation + Secret Export/Import) is implemented in `src/SecretProviderManager.cs`:
+### Phase 6-7 Implementation Status
 
-- **Rotation**: `SecretProviderManager.RotateAll(profiles)` iterates all profiles and all secret variables, decrypts each with its original provider, re-encrypts with the active provider. Failed decryptions are counted and skipped (not deleted). CLI: `profile secret-provider rotate`.
-- **Export**: `SecretProviderManager.ExportSecrets(profile)` serializes all secrets from a profile to JSON, DPAPI-encrypts the entire blob, and writes to a file. The export is portable within the same user account regardless of the provider used. CLI: `profile export-secrets <profile> <file>`.
-- **Import**: `SecretProviderManager.ImportSecrets(profile, encryptedBackup)` decrypts the backup with DPAPI, parses the JSON, verifies each secret by trial-decryption, then writes verified secrets to the profile. CLI: `profile import-secrets <profile> <file>`.
-- **Audit**: Rotation, export, and import all create audit entries with the operation name, file path (for export/import), and success/failure counts. No plaintext or ciphertext values are ever recorded.
-
-
-### Phase 3 Implementation Status (v0.8.1)
-
-Phase 3 (Key Rotation + Secret Export/Import) is implemented in `src/SecretProviderManager.cs`:
-
-- **Rotation**: `SecretProviderManager.RotateAll(profiles)` iterates all profiles and all secret variables, decrypts each with its original provider, re-encrypts with the active provider. Failed decryptions are counted and skipped (not deleted). CLI: `profile secret-provider rotate`.
-- **Export**: `SecretProviderManager.ExportSecrets(profile)` serializes all secrets from a profile to JSON, DPAPI-encrypts the entire blob, and writes to a file. The export is portable within the same user account regardless of the provider used. CLI: `profile export-secrets <profile> <file>`.
-- **Import**: `SecretProviderManager.ImportSecrets(profile, encryptedBackup)` decrypts the backup with DPAPI, parses the JSON, verifies each secret by trial-decryption, then writes verified secrets to the profile. CLI: `profile import-secrets <profile> <file>`.
-- **Audit**: Rotation, export, and import all create audit entries with the operation name, file path (for export/import), and success/failure counts. No plaintext or ciphertext values are ever recorded.
-
-### Phase 6-7 Implementation Status (v0.7.2)
-
-Phase 6 (SOPS Encrypted Envelopes) and Phase 7 (Azure Key Vault) are implemented in `src/SopsProvider.cs` and `src/AzureKeyVaultProvider.cs`:
+Phase 6 (SOPS Encrypted Envelopes) and Phase 7 (Azure Key Vault) are implemented in `src/Secrets/Providers/SopsProvider.cs` and `src/Secrets/Providers/AzureKeyVaultProvider.cs`:
 
 - **SopsProvider**: shells out to a verified `sops` binary (`-e`/`-d`) under `CREATE_NO_WINDOW` with 30s timeout. The profile stores the full sops-encrypted JSON as the envelope `ciphertext` field. Supports Age, PGP, AWS KMS, Azure Key Vault, GCP KMS, and HashiCorp Vault decryptors via sops env vars (`SOPS_AGE_RECIPIENT`, `SOPS_AGE_KEY_FILE`, `SOPS_PGP_FP`, `SOPS_KMS_ARN`, etc.). Binary is discovered via `SOPS_PATH` env var, PATH search, or common install locations. Fail-closed if sops binary is missing or non-functional. Temp files are created in a per-operation isolated directory and securely cleaned up in a finally block.
 - **AzureKeyVaultProvider**: calls Azure Key Vault REST API (`PUT`/`GET /secrets/<name>?api-version=7.4`). Profile stores only vault URI + secret name as `TargetName` (format: `vaultUri|secretName`). TLS mandatory (HTTPS only). Token obtained via managed identity (IMDS `169.254.169.254`) or service principal (`AZURE_CLIENT_ID`/`AZURE_CLIENT_SECRET`/`AZURE_TENANT_ID`). Token cached in process memory only with 5-minute expiry buffer. 15s HTTP timeout. Fail-closed on 403/404. Supports rotation (decrypt + re-encrypt). Delete issues a soft-delete via DELETE API.
@@ -370,9 +386,9 @@ Phase 6 (SOPS Encrypted Envelopes) and Phase 7 (Azure Key Vault) are implemented
 
 - Single-user developer machine: Phase 0 (DPAPI CurrentUser); zero setup.
 - Windows-native single-machine with multi-relogin: Phase 2 (Windows Credential Manager).
-- PowerShell automation + CI on the same user account: Phase 3 (SecretManagement + SecretStore).
-- Team or production with network access: Phase 4 (HashiCorp Vault) or Phase 6 (Azure Key Vault).
-- GitOps workflow with secrets in version control: Phase 5 (sops).
+- PowerShell automation + CI on the same user account: Phase 4 (SecretManagement + SecretStore).
+- Team or production with network access: Phase 5 (HashiCorp Vault) or Phase 7 (Azure Key Vault).
+- GitOps workflow with secrets in version control: Phase 6 (sops).
 
 Each phase is opt-in via secret-providers.json; the default remains Phase 0 so existing installations upgrade without reconfiguration.
 
@@ -490,7 +506,7 @@ Two golden layers lock output contracts; both files are source-controlled, so an
 
 ## Test Mental Model Portfolio (paradigm → target → tool → CI tier)
 
-The test layers in this document are not a pyramid with a single narrative; they are a **composition** chosen to defend the engine against qualitatively different defect classes. Round-5 mental-model research ([research/round5-mental-models.md](.scratch/architecture-recovery/research/round5-mental-models.md) Q1 outdated-item 3) explicitly retires "the pyramid as the sole testing narrative" (Ham Vocke; Martin Fowler 2018 treats it as a heuristic, not doctrine). Twenty-six paradigms now coexist; each must earn its row by naming what defect class it catches, where it lives in the repo, what tool runs it, and at which CI tier it executes. The table below is the source of truth for that ledger -- every existing section ("IPC Schema Contract", "Service Resilience Fault Injection", "Secret Provider Contract Test Suite (L0/L1/L2 layering)", "Canary Zero-Leak Assertion Net and Golden/Snapshot Layers", "Secret Provider L1 Emulator Matrix", and the per-paradigm AGENTS.md paragraphs) cross-references this portfolio.
+The test layers in this document are not a pyramid with a single narrative; they are a **composition** chosen to defend the engine against qualitatively different defect classes. Round-5 mental-model research (round5-mental-models notes, Q1 outdated-item 3 - architecture-recovery process archive) explicitly retires "the pyramid as the sole testing narrative" (Ham Vocke; Martin Fowler 2018 treats it as a heuristic, not doctrine). Twenty-six paradigms now coexist; each must earn its row by naming what defect class it catches, where it lives in the repo, what tool runs it, and at which CI tier it executes. The table below is the source of truth for that ledger -- every existing section ("IPC Schema Contract", "Service Resilience Fault Injection", "Secret Provider Contract Test Suite (L0/L1/L2 layering)", "Canary Zero-Leak Assertion Net and Golden/Snapshot Layers", "Secret Provider L1 Emulator Matrix", and the per-paradigm AGENTS.md paragraphs) cross-references this portfolio.
 
 ### Portfolio mapping table (paradigm → target → tool → CI tier)
 
@@ -518,8 +534,8 @@ The test layers in this document are not a pyramid with a single narrative; they
 | 20 | Secret provider L1 (emulator matrix) | `*L1Harness` per provider: Vault dev server (Testcontainers hashicorp/vault:1.20.4), LocalStack 4.4.0, Lowkey Vault 4.0.0, real Windows CredMan + pwsh SecretStore (Authentication=None), sops 3.13.3 + age 1.3.2, op CLI 2.39.0 + `OpConnectMock`; `[SkippableFact]` `Category=L1` affinity-gated by `EM_L1_MATRIX=1` + Docker reachable | xUnit.skippablefact + Testcontainers + real tools + `EM_L1_MATRIX=1` | Tier 1-extra -- `verify-l1` job (ubuntu-latest, Docker preinstalled) |
 | 21 | Secret provider L2 (real cloud, deferred) | azure-keyvault / 1password / aws-secretsmanager round-trip on real cloud: credentials via env, release-only | xUnit.skippablefact + real cloud creds | Scheduled / release pipeline (not CI hard gate) |
 | 22 | Cognitive-complexity guard (structural fitness, method-level) | `scripts/cognitive-complexity.mjs` (Sonar S3776, zero-dep Node ESM): scan `src/*.cs` per method, threshold 15; default report (exit 0), `--gate` blocks NEW violations, 21-snippet `--selftest`; baseline `scripts/cognitive-complexity-baseline.json` pins 304 methods (32 over-threshold tiered) | Node ESM + baseline JSON | Tier 1-extra -- every PR (report + artifact + `--gate`) |
-| 23 | Structural-fitness dependency direction / domain isolation | `StructuralFitnessTests` (xUnit, `tests/EnvManager.Engine.Tests/`): custom reflection + file-level scan (NOT NetArchTest - secret/launch/CRUD subdomains are all `partial class Program` so type/namespace filtering cannot distinguish them). Three rule families: (a) domain isolation file-scan - `ProfileSecretCommand` does not mention `ProfileLaunchCommand` (and symmetric); `ProfileSecretCommand` does not call ProfileCommand CRUD helpers (ProfileCreate / ProfileEditVar / ProfileSetInherits / ProfileDelete / ProfileAddVar / ProfileRemoveVar / ProfileRename); (b) dispatch surface contract - `Ticket27_Ramp1_Domains_ExposeExactlyOneRunEntry` reflects AgentsCommand/UpdateCommand/ExpandCommand to assert exactly one `internal static int Run(...)` per type, `Program_StillDeclares_Main_AsTheSingleEntryPoint` confirms Program keeps exactly one Main; (c) acyclic dependency check - `ProfileCommand_LaunchCommand_SecretCommand_AreAcyclic` pairwise scans for mutual helper-method references using per-subdomain helper-name allowlists (shared CliRuntime infrastructure intentionally exempt). Runs in milliseconds; lives inside the verify job's `dotnet test` step. Red-first drill documented in `.scratch/architecture-recovery/reports/28-structural-fitness-functions.md`. | xUnit + custom reflection + regex file-scan | Tier 1 -- every PR |
-| 24 | Service fault injection / resilience | `service/src/resilience_tests.rs`: `pipe_half_open_then_reconnect`, `ipc_read_timeout_fires_on_hung_server`, `ipc_schema_compliance_under_faults`; `kill -9` keeps its `#[ignore]` doc-anchor plus CI E2E `scripts/test-service-kill9-resilience.ps1` in the dispatch-only `kill9-resilience` job (windows-latest: taskkill /F -> liveness detection -> harness restart -> secretMount.json persistence + health; SCM-mode stays documented-only - the binary has no service-control-dispatcher protocol; manual `.scratch/architecture-recovery/manual/kill-9-test.ps1` remains the admin-workstation variant) | cargo test --locked + pwsh E2E + manual script | Tier 4 -- every PR (parallel); kill -9 = `workflow_dispatch` (ticket 49) |
+| 23 | Structural-fitness dependency direction / domain isolation | `StructuralFitnessTests` (xUnit, `tests/EnvManager.Engine.Tests/`): custom reflection + file-level scan (NOT NetArchTest - secret/launch/CRUD subdomains are all `partial class Program` so type/namespace filtering cannot distinguish them). Three rule families: (a) domain isolation file-scan - `ProfileSecretCommand` does not mention `ProfileLaunchCommand` (and symmetric); `ProfileSecretCommand` does not call ProfileCommand CRUD helpers (ProfileCreate / ProfileEditVar / ProfileSetInherits / ProfileDelete / ProfileAddVar / ProfileRemoveVar / ProfileRename); (b) dispatch surface contract - `Ticket27_Ramp1_Domains_ExposeExactlyOneRunEntry` reflects AgentsCommand/UpdateCommand/ExpandCommand to assert exactly one `internal static int Run(...)` per type, `Program_StillDeclares_Main_AsTheSingleEntryPoint` confirms Program keeps exactly one Main; (c) acyclic dependency check - `ProfileCommand_LaunchCommand_SecretCommand_AreAcyclic` pairwise scans for mutual helper-method references using per-subdomain helper-name allowlists (shared CliRuntime infrastructure intentionally exempt). Runs in milliseconds; lives inside the verify job's `dotnet test` step. Red-first drill documented in the ticket-28 report (architecture-recovery process archive). | xUnit + custom reflection + regex file-scan | Tier 1 -- every PR |
+| 24 | Service fault injection / resilience | `service/src/resilience_tests.rs`: `pipe_half_open_then_reconnect`, `ipc_read_timeout_fires_on_hung_server`, `ipc_schema_compliance_under_faults`; `kill -9` keeps its `#[ignore]` doc-anchor plus CI E2E `scripts/test-service-kill9-resilience.ps1` in the dispatch-only `kill9-resilience` job (windows-latest: taskkill /F -> liveness detection -> harness restart -> secretMount.json persistence + health; SCM-mode stays documented-only - the binary has no service-control-dispatcher protocol; the manual `kill-9-test.ps1` script (architecture-recovery process archive, untracked) remains the admin-workstation variant) | cargo test --locked + pwsh E2E + manual script | Tier 4 -- every PR (parallel); kill -9 = `workflow_dispatch` (ticket 49) |
 | 25 | Metamorphic testing pilot | `MetamorphicPathTests`: 8 MR over `NormalizePathEntry` + case folding (MR-1..8 trailing-separator output-invariance, list-vs-health duplicate-classifier agreement, PATH round-trip, case-variant rename preservation, normalization-aware duplicate folding) | xUnit + InMemoryScope seam | Tier 1 -- every PR (parallel, pilot) |
 | 26 | SharpFuzz / libFuzzer argument fuzzing | `tests/EnvManager.Fuzz/` over CLI argument-parse surface (SharpFuzz 2.3.0 + libfuzzer-dotnet pinned SHA256); seed corpus in-tree; Format/Argument/Overflow swallowed, NRE/OOM/StackOverflow/AV classified as crash | libFuzzer + SharpFuzz | Nightly (1800s, windows-latest) + PR short-run 300s (continue-on-error, non-blocking) |
 
@@ -539,16 +555,14 @@ Every new test style that wants to land in this repo must (a) name which defect 
 
 ### Cross-references
 
-- IPC schema and three-client pin: see "IPC Schema Contract (single source of truth)" above (lines 18-34).
-- Service watchdog/SCM recovery: see "Service Resilience Fault Injection (watchdog/SCM recovery)" above (lines 36-46).
-- Secret provider layering (L0/L1/L2): see "Secret Provider Contract Test Suite" (lines 379-391) and "Secret Provider L1 Emulator Matrix" (lines 484-498, nested under Profile Drag Reorder).
-- Canary zero-leak + golden/snapshot: see "Canary Zero-Leak Assertion Net and Golden/Snapshot Layers" (lines 394-422).
+- IPC schema and three-client pin: see "IPC Schema Contract (single source of truth)" above.
+- Service watchdog/SCM recovery: see "Service Resilience Fault Injection (watchdog/SCM recovery)" above.
+- Secret provider layering (L0/L1/L2): see "Secret Provider Contract Test Suite (L0/L1/L2 layering)" and "Secret Provider L1 Emulator Matrix (issue 15)".
+- Canary zero-leak + golden/snapshot: see "Canary Zero-Leak Assertion Net and Golden/Snapshot Layers".
 - AGENTS.md Testing paragraphs (#1, #3, #5-26) match this table row-for-row; only the portfolio-narrative paragraph (this section) lives in architecture.md because the table is the source of truth.
 
 
-## Profile Drag Reorder (Pointer Events)
-
-Secret Provider L1 Emulator Matrix (issue 15)
+## Secret Provider L1 Emulator Matrix (issue 15)
 
 Issue 15 converts the 7 static Skips into affinity-gated real-backend tests. Skips become dynamic (xunit.skippablefact): the backend-independent assertions still always run, and the backend-dependent ones run whenever the host has the backend, skipping with the reason otherwise. All pins were verified live on 2026-09-03:
 
@@ -563,6 +577,8 @@ Issue 15 converts the 7 static Skips into affinity-gated real-backend tests. Ski
 | 1password | real op CLI 2.39.0 (pinned) against the in-repo OpConnectMock Connect REST stub on localhost | OP_CONNECT_HOST/OP_CONNECT_TOKEN; provider gained production Connect fixes (--vault always passed, --format=json on item get, JSON-string unwrap, NO_PROXY loopback bypass). The Encrypt-side assertions stay Skip: op item create is refused over Connect by design (live-verified v2.39.0) and otherwise requires a cloud account - target L2 |
 
 Affinity gating (L1MatrixAffinity): container backends require Docker reachable AND EM_L1_MATRIX=1 (a plain dotnet test never pulls images or downloads binaries; EM_L1_STRICT=1 flips affinity misses to hard failures); tool backends run wherever the binaries are discoverable, and their pinned downloads are also gated behind the matrix opt-in. CI: the verify-l1 job (ubuntu-latest) runs --filter Category=L1 with EM_L1_MATRIX=1 - Docker is preinstalled on Linux runners, which resolves the checkpoint-A assumption this ticket was created to verify. Two production seams were added by this issue (AWS_ENDPOINT_URL_SECRETS_MANAGER, IDENTITY_ENDPOINT/IDENTITY_HEADER); both are no-op in production deployments that do not set the variables.
+
+## Profile Drag Reorder (Pointer Events)
 
 The profile page supports drag-to-reorder using Pointer Events, NOT the HTML5 Drag and Drop API. Root cause: HTML5 DnD is intercepted at the OS level in WebView2, causing a persistent "forbidden" cursor and dropped events.
 

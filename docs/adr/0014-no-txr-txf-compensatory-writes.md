@@ -65,7 +65,7 @@ implemented in code and hereby binding by name:
 ### Mutation/model test first targets (by reference, not re-implementation)
 
 The architecture-recovery Phase 3 test upgrade (differential, state-machine
-model, mutation testing — see .scratch/architecture-recovery/spec.md Phase 3)
+model, mutation testing — see docs/history/architecture-recovery-2026-09/spec.md Phase 3)
 must hit these red lines first. The suites already exist or are specified in
 that spec; this ADR only names the targets and does not duplicate them:
 
