@@ -1,4 +1,5 @@
 {
+  "governance-note": "round-8 ticket 50: thresholds.break=60 is the aspirational target line, deliberately above the current score (46.83%-49.80%; CI runs 33966698434 / 34767318054). The gate stays local/PR-assist, deliberately NOT a CI hard gate (ticket-13 ruling); survivor second triage: .scratch/round8-backlog-grill/reports/50-survivor-registry.md",
   "stryker-config": {
     "project": "env-manager.csproj",
     "test-projects": [
