@@ -261,22 +261,24 @@ public class MutationSurvivorSecondTriageTests : IDisposable
         Assert.True(File.Exists(BuiltinFile));
     }
 
-    // ---- survivor #4476 (ProtectionCommand.cs:223, ?? defaults removed - a null-JSON
-    // ---- builtin file now returns null instead of falling back to the embedded
-    // ---- defaults, and the HashSet ctor throws ArgumentNullException) ----
+    // ---- survivor #4476 (ProtectionCommand.cs:223, ?? left operand removed -> the
+    // ---- method returns the embedded defaults unconditionally and the external file
+    // ---- is never read) ----
 
-    /// <summary>A corrupt (literal-null) builtin-protected-vars.json must fall back to
-    /// the embedded defaults, keeping TEMP protected in system scope. The mutant
-    /// propagates null into the HashSet constructor.</summary>
+    /// <summary>A builtin-protected-vars.json holding a strict subset of the embedded
+    /// defaults must be HONORED on the protection path itself: TEMP (absent from the
+    /// admin-edited file) stays writable in system scope. The mutant answers every read
+    /// with the embedded defaults, so TEMP is protected again. (A literal-null file
+    /// cannot distinguish this mutant - both arms yield the defaults.)</summary>
     [Fact]
-    public void BuiltinProtectedVarsFile_NullJsonFallsBackToDefaults()
+    public void BuiltinProtectedVarsFile_ExternalSubsetHonoredInSystemScope()
     {
-        File.WriteAllText(BuiltinFile, "null");
+        File.WriteAllText(BuiltinFile, JsonSerializer.Serialize(new[] { "ComSpec" }));
         var env = new InMemoryScope();
 
         int rc = Program.RunSet(new[] { "set", "TEMP", "x", "--scope", "system" }, env);
 
-        Assert.Equal(1, rc);
-        Assert.Null(env.ReadValue("TEMP", "system"));
+        Assert.Equal(0, rc);
+        Assert.Equal("x", env.ReadValue("TEMP", "system")?.Value);
     }
 }
