@@ -5,6 +5,16 @@ All notable changes to Env Manager will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.12.1](https://github.com/Xxx91n/env-manager/compare/v0.12.0...v0.12.1) (2026-09-14)
+
+
+### Bug Fixes
+
+* **ci:** collect stryker evidence even when break threshold trips (ticket 50) ([f736bc7](https://github.com/Xxx91n/env-manager/commit/f736bc7fda6dab211e0e421260bb4d2a62127e32))
+* **ci:** early-exit non-Dependabot PRs and bound required-check wait in auto-merge gate (ticket 48) ([2893cf4](https://github.com/Xxx91n/env-manager/commit/2893cf4fce974676053357a9018ee9b5fe8387a1))
+* **ci:** resolve service exe under cargo build.target triple dir (ticket 49) ([8c5940c](https://github.com/Xxx91n/env-manager/commit/8c5940ca72ebb91962549a1fe116f0a8f65d8cb2))
+* **ci:** scope portable/cli-only artifacts to their zips - loose runtime files leaked into v0.12.0 release assets (review finding) ([a97b451](https://github.com/Xxx91n/env-manager/commit/a97b451c47a81039240b3323800f4df9babf66e1))
+
 ## [Unreleased]
 
 ## [0.12.0] - 2026-09-09
