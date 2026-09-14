@@ -91,7 +91,31 @@ env-manager-cli agents --json     # 完整命令表结构化 JSON
 > [!WARNING]
 > Env Manager **未经代码签名**。Windows SmartScreen 可能会在首次启动时显示“未知应用”警告。点击“更多信息”然后选择“仍要运行”即可继续。代码签名计划在未来版本中实现。
 
-受保护的环境变量和 PATH 条目在删除前会被禁用，恢复时进行精确的注册表值类型验证。机密值通过各提供者专用机制加密（DPAPI、CredMan、Vault、SOPS、Azure KV、1Password、AWS SM）— 明文绝不持久化到磁盘或日志。命名管道 IPC 使用防劫持标志和输入验证（最大 64 参数，32767 字符上限，拒绝空字节）。漏洞报告请参见 [SECURITY.md](../../SECURITY.md)。
+受保护的环境变量和 PATH 条目在删除前会被禁用，恢复时进行精确的注册表值类型验证。命名管道 IPC 使用防劫持标志和输入验证（最大 64 参数，32767 字符上限，拒绝空字节）。漏洞报告请参见 [SECURITY.md](../../SECURITY.md)。
+
+**威胁模型（一句话）：** 本设计不设防的对手是运行在你自己 Windows 用户会话内的任何进程——它本就可以调用 `profile reveal-secret`、读取被启动子进程的环境块、或在下述临时文件的短暂存活期内截获它们；本设计真正约束的是：DPAPI-CurrentUser 密文对其他用户/其他机器不可解密、机密无法落入注册表、除 reveal 这条设计内路径外没有任何 sink 旨在承载机密值。
+
+### 明文可能的落点（机密边界表）
+
+| 落点（sink） | 是否落明文 | 生命周期 | 清理机制 | 依据 |
+|---|---|---|---|---|
+| `profiles.json` / `secretMount.json` | 否——仅信封 `{provider, version, createdAt, ciphertext, targetName}` | 直到该机密被移除 | `profile remove-secret` 删除信封及提供者侧状态 | ADR 0001；`plaintext-never-in-envelope` 契约断言 |
+| dpapi-current-user | 否——DPAPI `CryptProtectData`，CurrentUser 作用域 | 随信封存续 | 随信封删除 | 硬边界（v0.7.0） |
+| credential-manager | 否——CredMan blob 落盘前经 DPAPI 加密 | 直到提供者 `Delete` | remove-secret 时 `Delete` | [提供者指南](../../docs/secret-providers-guide.md) |
+| powershell-secretmanagement | SecretStore 库文件保持加密——但每次调用明文经 `pwsh -EncodedCommand` 参数（base64 脚本）过境 | pwsh 进程存续期；库条目直到移除 | 参数随进程消亡；库条目随 remove-secret 删除 | 硬边界（v0.7.4） |
+| vault-kv2 · azure-keyvault · aws-secretsmanager · 1password | 本地不落明文——配置文件仅存路径/secret-ID 引用，机密留在远端后端 | 后端侧取决于运营策略 | 提供者 `Delete`；`secret-provider rotate` 重加密 | [提供者指南](../../docs/secret-providers-guide.md) |
+| sops | 信封仅密文——但加解密期间在 `%TEMP%\env-manager-sops-*` 下落明文 `secret.json` / `secret.dec.json` | 每次调用数秒 | 尽力删除临时目录——崩溃可能遗留 | 硬边界（v0.7.11）；`SopsProvider` |
+| launcher 进程内存（`env-manager-cli`） | 是——解密字节在发起进程中短暂存在 | 毫秒级，至注入/reveal 完成 | `SecretString` 在 Dispose 时清零 `char[]`——**尽力而为**：GC 副本与 string 中间态可能存续更久 | ADR 0005 |
+| 被启动子进程的环境块 | 是——注入的环境变量在子进程内为明文 | 子进程存续期 | 无法清理——环境块按 OS 设计同用户进程可读 | Launch 配置文件设计 |
+| `profile reveal-secret` stdout | 是——**设计内**；唯一明文输出路径 | 直到终端回滚缓冲被清除 | 无——由用户主动触发 | 硬边界；canary 网刻意不扫描此 sink |
+| 生存包临时文件（`envmanager-kit-*.json`、`mount-survival-kit.tmp.json`） | 是——组装期间短暂落明文文件 | 数秒 | 加密完成后尽力删除 | `AuditLedgerMigration`；`service/src/audit_ledger.rs` |
+| `audit-ledger.jsonl` | 否——仅变量名 + `<redacted>`/`<encrypted>` 标记；CLI 侧条目另有 AES-256-GCM 静态加密（DEK 经 DPAPI 包裹） | 追加式，100MB 轮转 | 轮转 | ADR 0005；硬边界（v0.9.13） |
+| `export-state` 文件 | 否——双层：AES-256-GCM 载荷 + DPAPI 包裹 DEK + HMAC-SHA256 | 直到你删除该文件 | 用户自管 | `AuditCrypto`（v0.9.13） |
+| `logs/env-manager.log` / stderr | 设计上否——异常文本先经 22 条机密模式清洗；**尽力而为**白名单：未识别的机密格式仍可能泄漏，512 字符截断限制爆炸半径 | 日志保留期 | — | ADR 0005；`CanaryRedactionTests` + 7-sink canary 网 |
+| GUI（WebView2）/ Rust 服务 | 否——GUI 只渲染 `<encrypted>` 占位符且无 reveal 显示面；服务侧不持久化机密值 | — | — | 架构机密边界 |
+| Windows 注册表 | 否——`IsProfileApplicable` 拒绝 Global 配置文件携带机密；Launch 配置文件不写注册表 | — | — | 硬边界；`launch-env-injection.Tests.ps1` 不变量 |
+
+内存清零与日志清洗是尽力而为的卫生措施而非保证（ADR 0005）——与微软为 `SecureString` 声明的注意点相同（不可变 string、GC 搬迁、interop 副本）。可测试处皆有测试兜底：`tests/canary-redaction.Tests.ps1` 对 7 个输出 sink 植入 canary 扫描，共享契约套件对全部 8 个提供者断言 `plaintext-never-in-envelope`。
 
 
 ## 安装

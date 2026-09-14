@@ -46,7 +46,7 @@ The demo shows read-only CLI commands in action: `agents --summary`, `path healt
 
 - **Agent-native CLI** — 18+ commands with a first-class machine contract: `env-manager-cli agents --json` exposes a structured command spec, and every capability is documented in an agent-facing manual ([AGENTS.cli.md](AGENTS.cli.md)) that ships with the binary.
 - **Profiles & config** — Global profiles apply to the registry; Launch profiles inject an isolated env block into a single process (never touch the registry, never broadcast `WM_SETTINGCHANGE`). Inheritance, conflict previews, and safe reverse-order rollback included. Launch targets inside the Windows system folder (`System32`) are refused at profile save/launch to prevent system32 hijacking. Preflight validation is two-tier: suspicious-but-safe findings (undefined %VAR%, stale PATH entries, dangling launch targets) warn with exit code 2 instead of blocking; `--strict` escalates.
-- **8 secret providers, zero plaintext** — DPAPI, Credential Manager, SecretStore, HashiCorp Vault, SOPS, Azure Key Vault, 1Password, AWS Secrets Manager. Plaintext never persists to disk or logs.
+- **8 secret providers** — DPAPI, Credential Manager, SecretStore, HashiCorp Vault, SOPS, Azure Key Vault, 1Password, AWS Secrets Manager. Secrets persist only as ciphertext envelopes; the exact plaintext-exposure boundary is in the [Security](#security) table.
 - **Protected by default** — system variables and PATH entries cannot be deleted or renamed; every write is a three-layer serialized contract (mutex + write lock + verify-before-swap).
 - **PATH health** — detects duplicates and dead entries, with `--fix` / `--dry-run`.
 - **Audit ledger** — append-only, SHA256 hash-chained history with rollback and disaster-recovery export.
@@ -72,7 +72,31 @@ env-manager-cli agents --json     # full command table as structured JSON
 > [!WARNING]
 > Current builds are **not code-signed**. Windows SmartScreen may show an "unrecognized app" warning on first launch — click "More info" then "Run anyway". We have applied for free open-source code signing via the SignPath Foundation; once approved, all release artifacts (MSI + EXE) will be signed. See [Code signing policy](docs/code-signing-policy.md).
 
-Protected variables and PATH entries are disabled before deletion, with exact registry value-kind verification on restore. Secret values are encrypted via provider-specific mechanisms — plaintext never persists to disk or logs. Named pipe IPC uses anti-squatting flags and input validation (64 arg max, 32767 char cap, null byte rejection). See [SECURITY.md](SECURITY.md) for vulnerability reporting.
+Protected variables and PATH entries are disabled before deletion, with exact registry value-kind verification on restore. Named pipe IPC uses anti-squatting flags and input validation (64 arg max, 32767 char cap, null byte rejection). See [SECURITY.md](SECURITY.md) for vulnerability reporting.
+
+**Threat model.** The adversary we do *not* defend against is any process running inside your own Windows user session — it can already call `profile reveal-secret`, read a launched child's environment block, or catch the transient temp files below; what the design *does* bound is that DPAPI-CurrentUser ciphertext is undecryptable to another user or machine, secrets cannot land in the registry, and no sink other than the designed reveal path is *meant* to carry a secret value.
+
+### Where plaintext can exist (secret boundary table)
+
+| Sink | Plaintext lands? | Lifetime | Cleanup | Basis |
+|---|---|---|---|---|
+| `profiles.json` / `secretMount.json` | No — envelope `{provider, version, createdAt, ciphertext, targetName}` only | Until the secret is removed | `profile remove-secret` deletes the envelope and provider-side state | ADR 0001; `plaintext-never-in-envelope` contract assertion |
+| dpapi-current-user | No — DPAPI `CryptProtectData`, CurrentUser scope | Inside the envelope | With the envelope | hard boundary (v0.7.0) |
+| credential-manager | No — the CredMan blob is itself DPAPI-encrypted before persist | Until provider `Delete` | `Delete` on remove-secret | [providers guide](docs/secret-providers-guide.md) |
+| powershell-secretmanagement | SecretStore vault file stays encrypted — but plaintext transits the `pwsh -EncodedCommand` argument (base64 script) on each call | pwsh process lifetime; vault entry until removed | Argument dies with the process; vault entry deleted on remove-secret | hard boundary (v0.7.4) |
+| vault-kv2 · azure-keyvault · aws-secretsmanager · 1password | No plaintext locally — the profile holds a path/secret-ID reference; the secret stays in the remote backend | Operator policy, backend-side | Provider `Delete`; `secret-provider rotate` re-encrypts | [providers guide](docs/secret-providers-guide.md) |
+| sops | Envelope ciphertext only — **plus** plaintext `secret.json` / `secret.dec.json` under `%TEMP%\env-manager-sops-*` during encrypt/decrypt | Seconds per call | Best-effort `Directory.Delete` of the temp dir — a crash can orphan it | hard boundary (v0.7.11); `SopsProvider` |
+| Launcher process memory (`env-manager-cli`) | Yes — decrypted bytes are transient in the launching process | Milliseconds, until inject/reveal completes | `SecretString` zeroes its `char[]` on Dispose — **best-effort**: GC copies and string intermediates can outlive it | ADR 0005 |
+| Launched child env block | Yes — injected env vars are plaintext inside the child process | Child process lifetime | None possible — env blocks are same-user-readable by OS design | Launch profile design |
+| `profile reveal-secret` stdout | Yes — **by design**; the only plaintext output path | Until terminal scrollback is cleared | None — user-invoked | hard boundary; the canary net deliberately skips this sink |
+| Survival-kit temp files (`envmanager-kit-*.json`, `mount-survival-kit.tmp.json`) | Yes — a brief plaintext temp file during kit assembly | Seconds | Best-effort delete after encryption | `AuditLedgerMigration`; `service/src/audit_ledger.rs` |
+| `audit-ledger.jsonl` | No — variable names + `<redacted>`/`<encrypted>` markers only; CLI-side entries are additionally AES-256-GCM at rest (DEK DPAPI-wrapped) | Append-only, 100MB rotation | Rotation | ADR 0005; hard boundary (v0.9.13) |
+| `export-state` file | No — double layer: AES-256-GCM payload + DPAPI-wrapped DEK + HMAC-SHA256 | Until you delete the file | User-managed | `AuditCrypto` (v0.9.13) |
+| `logs/env-manager.log` / stderr | No by design — exception text is scrubbed of 22 secret-bearing patterns first; **best-effort** allow-list: an unrecognized secret format could still leak, capped by 512-char truncation | Log retention | — | ADR 0005; `CanaryRedactionTests` + 7-sink canary net |
+| GUI (WebView2) / Rust service | No — the GUI renders `<encrypted>` placeholders and has no reveal display; the service does not persist values | — | — | architecture secret boundary |
+| Windows registry | No — `IsProfileApplicable` refuses secrets on Global profiles; Launch profiles cannot write the registry | — | — | hard boundary; `launch-env-injection.Tests.ps1` invariant |
+
+Memory zeroing and log scrubbing are best-effort hygiene, not guarantees (ADR 0005) — the same caveat Microsoft documents for `SecureString` (immutable strings, GC relocation, interop copies). Where the claim can be tested it is: `tests/canary-redaction.Tests.ps1` scans 7 output sinks for a planted canary, and the shared contract suite asserts `plaintext-never-in-envelope` on all 8 providers.
 
 ## Install
 
