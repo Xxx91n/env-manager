@@ -38,7 +38,7 @@
   "dependencies": {
     "@tauri-apps/plugin-dialog": "^2.7.1",
     "@tauri-apps/plugin-updater": "^2.11.0",
-    "bits-ui": "^0.22.0",
+    "bits-ui": "^2.19.2",
     "clsx": "^2.1.1",
     "lucide-svelte": "^1.0.1",
     "tailwind-merge": "^2.6.1",
