@@ -38,6 +38,19 @@
 
 演示展示了只读 CLI 命令的实际效果：`agents --summary`、`path health`、`get PATH` 和 `agents --json`。使用 `vhs docs/assets/demo.tape` 重新生成。
 
+### 视频演示
+
+约 75 秒完整功能演示（英文界面、英文解说）：**[在 YouTube 观看](https://youtu.be/REPLACE_ME)** —— 仓库内同步附带 `docs/assets/demo/env-manager-demo.mp4`。
+
+### 截图图集
+
+| | | |
+|:-:|:-:|:-:|
+| ![变量视图](../../docs/assets/gallery/01-variables.png)<br>**变量视图** —— 搜索、作用域过滤、逐行操作 | ![System 作用域](../../docs/assets/gallery/02-variables-system.png)<br>**System 作用域** —— 受保护条目锁定 | ![PATH 编辑器](../../docs/assets/gallery/03-path-editor.png)<br>**PATH 编辑器** —— 失效与重复项检测 |
+| ![配置文件](../../docs/assets/gallery/04-profiles.png)<br>**配置文件** —— apply / launch / 继承 | ![历史与导入](../../docs/assets/gallery/05-history.png)<br>**历史与导入** —— 可撤销变更 | ![保护](../../docs/assets/gallery/06-protection.png)<br>**保护** —— 自定义锁定 |
+| ![审计账本](../../docs/assets/gallery/07-audit.png)<br>**审计账本** —— 哈希链式、可验证 | ![服务管理](../../docs/assets/gallery/08-service.png)<br>**服务管理** —— secret mounts | ![设置](../../docs/assets/gallery/09-settings-i18n.png)<br>**设置** —— 10 语言 i18n |
+| ![编辑对话框](../../docs/assets/gallery/10-edit-dialog.png)<br>**编辑对话框** —— 展开值预览 | ![浅色主题](../../docs/assets/gallery/11-variables-light.png)<br>**浅色主题**变体 | ![CLI](../../docs/assets/gallery/12-cli-terminal.png)<br>**CLI** —— JSON 优先、agent 友好 |
+
 
 ## 功能
 

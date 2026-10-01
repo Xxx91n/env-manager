@@ -42,6 +42,19 @@ A modern, lightweight **Windows environment-variable manager** — CLI and GUI d
 
 The demo shows read-only CLI commands in action: `agents --summary`, `path health`, `get PATH`, and `agents --json`. Regenerate with `vhs docs/assets/demo.tape`.
 
+### Video walkthrough
+
+Full ~75 s feature walkthrough (English UI, narrated): **[Watch on YouTube](https://youtu.be/REPLACE_ME)** — also bundled in-repo at `docs/assets/demo/env-manager-demo.mp4`.
+
+### Gallery
+
+| | | |
+|:-:|:-:|:-:|
+| ![Variables view](docs/assets/gallery/01-variables.png)<br>**Variables** — search, scope, per-row actions | ![System scope](docs/assets/gallery/02-variables-system.png)<br>**System scope** — protected entries locked | ![Path Editor](docs/assets/gallery/03-path-editor.png)<br>**Path Editor** — dead & duplicate detection |
+| ![Profiles](docs/assets/gallery/04-profiles.png)<br>**Profiles** — apply / launch / inherit | ![History & Import](docs/assets/gallery/05-history.png)<br>**History & Import** — undoable changes | ![Protection](docs/assets/gallery/06-protection.png)<br>**Protection** — custom locks |
+| ![Audit Ledger](docs/assets/gallery/07-audit.png)<br>**Audit Ledger** — hash-chained, verifiable | ![Service Manager](docs/assets/gallery/08-service.png)<br>**Service Manager** — secret mounts | ![Settings](docs/assets/gallery/09-settings-i18n.png)<br>**Settings** — 10-language i18n |
+| ![Edit dialog](docs/assets/gallery/10-edit-dialog.png)<br>**Edit dialog** — expanded-value preview | ![Light theme](docs/assets/gallery/11-variables-light.png)<br>**Light theme** variant | ![CLI](docs/assets/gallery/12-cli-terminal.png)<br>**CLI** — JSON-first, agent-native |
+
 ## Features
 
 - **Agent-native CLI** — 18+ commands with a first-class machine contract: `env-manager-cli agents --json` exposes a structured command spec, and every capability is documented in an agent-facing manual ([AGENTS.cli.md](AGENTS.cli.md)) that ships with the binary.
