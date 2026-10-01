@@ -304,6 +304,18 @@ rsvg-convert dependency formalization + i18n native-quality translation).
   _Avoid_: relying on human review for locale consistency; omitting the
   negative-test injection before shipping.
 
+- **Canonical Marker**: An HTML comment at the top of each translated
+  README (`<!-- canonical: ../../README.md -->`) declaring the English
+  README.md the sole authority. Complements the i18n README Drift Check.
+  _Avoid_: treating any locale file as editable independently of the
+  canonical English source.
+
+- **Sync Stamp**: An HTML comment (`<!-- sync: <en-hash12> -->`) recording
+  the English README's commit short-hash at translation time — an
+  auditable freshness record; a lagging stamp warns but does not fail.
+  _Avoid_: bumping the stamp without re-checking content parity; removing
+  the stamp instead of letting it lag honestly.
+
 - **atomcode-assisted Translation**: Using the `atomcode` CLI with `[fast]`
   mode hint to produce native-quality translations of README content from
   English to locale languages (ja, ko, de, fr, es, pt, ru, ar). Technical

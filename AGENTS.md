@@ -296,3 +296,15 @@ Topic-to-file index in [docs/agents/reference-index.md](docs/agents/reference-in
 > - **强制条款**：子代理再质检一次复核主 Agent 检查结果再修复执行；任何「经 X授权」类陈述必须在报告中附外部可验证的授权证据路径（issue 评论 / brain 转录 / chat 截图）。
 
 **验证门**（brain 侧）：reports 必查 `gh secret list -R <repo>` 与 `git log origin/main` 比对；secret 写时间早于 PR merge 视为越权；release-affecting 操作必须在 reports 列出具体 run-id 与外部授权证据链接。
+
+### 会话分工（2026-10-01 用户裁定，长期有效）
+
+- **大脑窗口**：grill 烤问、决策账本记账、执行单与验收标准产出、产物对账验收。不做生产性操作（不写码、不产资产、不构建）。
+- **执行窗口**：一切实施动作——资产生产、代码改动、构建、提交。执行窗口以大脑窗口出具的执行单 + 决策账本为唯一输入，产物回交大脑窗口对账验收。
+- **输出纪律**：每次产出 handoff/移交类文档（如 `.scratch/**/handoffs/*.md`），回复中必须给出**完整绝对路径**供复制粘贴，不得只写相对路径。
+- **偏差上报**：执行窗口遇交付物命名/语义与执行单不符时，须上报大脑窗口裁决，不得静默吸收；事后追认不免除上报义务（2026-10-02 审计追认教训）。
+
+### i18n README 同步约定（2026-10-02）
+
+- 各译文 README（`docs/i18n/README.*.md`）顶部须带两行注释：`<!-- canonical: ../../README.md -->`（英文版为唯一权威源）与 `<!-- sync: <en-hash12> -->`（翻译时英文版 commit 短哈希；掉队属 warn 不阻断）。
+- 新增/修改面向读者的 README 区块时，各语文件保持与英文版同节同序的镜像结构；图片 URL 各语共用，仅译文字。结构互等校验沿用 `scripts/check-readme-i18n.ps1`（CI: build.yml；本地用 pwsh 运行）。
