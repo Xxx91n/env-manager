@@ -40,7 +40,9 @@ A modern, lightweight **Windows environment-variable manager** — CLI and GUI d
   <img src="docs/assets/demo.gif" alt="Env Manager CLI demo: agents, path health, and get commands" width="100%">
 </p>
 
-The demo shows read-only CLI commands in action: `agents --summary`, `path health`, `get PATH`, and `agents --json`. Regenerate with `vhs docs/assets/demo.tape`.
+The demo shows read-only CLI commands in action: `agents --summary`, `path health`, `get PATH`, and `agents --json`. Regenerate with `node scripts/demo/capture.mjs`.
+
+*Demo terminal output above uses simulated data.*
 
 ### Video walkthrough
 

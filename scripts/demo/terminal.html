@@ -1,0 +1,71 @@
+<!doctype html>
+<meta charset="utf-8">
+<style>
+html,body{margin:0;height:100%;background:#0d1117;font-family:"Cascadia Mono",Consolas,"Courier New",monospace}
+.term{box-sizing:border-box;width:1280px;height:720px;padding:0;background:#0d1117;color:#c9d1d9;overflow:hidden;position:relative}
+.bar{height:44px;background:#161b22;border-bottom:1px solid #21262d;display:flex;align-items:center;gap:8px;padding:0 16px}
+.dot{width:12px;height:12px;border-radius:50%}
+.ttl{margin-left:10px;font-size:13px;color:#8b949e}
+pre{margin:0;padding:18px 26px;font-size:14.5px;line-height:1.5;white-space:pre-wrap;word-break:break-all;height:640px;overflow:hidden;box-sizing:border-box}
+.p{color:#7ee787}.c{color:#79c0ff}.k{color:#79c0ff}.s{color:#a5d6ff}.n{color:#79c0ff}.m{color:#8b949e}.ok{color:#7ee787;font-weight:600}
+.cur{display:inline-block;width:9px;height:19px;background:#c9d1d9;vertical-align:-3px;animation:b 1s steps(1) infinite}
+@keyframes b{50%{opacity:0}}
+</style>
+<div class="term">
+<div class="bar"><span class="dot" style="background:#ff5f57"></span><span class="dot" style="background:#febc2e"></span><span class="dot" style="background:#28c840"></span><span class="ttl" id="ttl">Terminal</span></div>
+<pre id="out"></pre></div>
+<script>
+(function(){
+  var S = window.__DEMO_SCRIPT__;
+  var out = document.getElementById('out');
+  var sleep = function(ms){ return new Promise(function(r){ setTimeout(r, ms); }); };
+  var esc = function(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); };
+  var scroll = function(){ out.scrollTop = out.scrollHeight; };
+  function colorize(line){
+    var h = esc(line);
+    h = h.replace(/&quot;|"/g, '"');
+    h = h.replace(/"([^"\\]*)"(\s*:)/g, '<span class="k">"$1"</span>$2');
+    h = h.replace(/: "([^"\\]*)"/g, ': <span class="s">"$1"</span>');
+    h = h.replace(/\b(true|false|null)\b/g, '<span class="n">$1</span>');
+    h = h.replace(/([:,]\s|\s|^)(\d+)([\s,}\]])/g, '$1<span class="n">$2</span>$3');
+    h = h.replace(/\b(healthy|duplicate|dead)\b/g, function(m){ return '<span class="'+(m==='healthy'?'ok':(m==='dead'?'k':'s'))+'">'+m+'</span>'; });
+    return h;
+  }
+  async function run(){
+    if(!S){ out.textContent = 'error: window.__DEMO_SCRIPT__ not injected'; window.__DEMO_DONE__ = true; return; }
+    document.getElementById('ttl').textContent = S.title || 'Terminal';
+    var T = S.typing;
+    for(var ci=0; ci<S.commands.length; ci++){
+      var c = S.commands[ci];
+      var line = document.createElement('div');
+      line.innerHTML = '<span class="p">'+esc(S.prompt)+'</span> <span class="c">'+esc(S.binary)+'</span> ';
+      var typed = document.createElement('span');
+      line.appendChild(typed);
+      out.appendChild(line); scroll();
+      for(var i=0;i<c.cmd.length;i++){ typed.textContent += c.cmd[i]; scroll(); await sleep(T.charDelayMs); }
+      await sleep(T.preOutputMs);
+      var chunk = c.chunkSize || T.chunkSize || 1;
+      var step = c.lineStepMs || T.lineStepMs;
+      for(var j=0;j<c.output.length;j+=chunk){
+        var grp = c.output.slice(j, j+chunk);
+        for(var g=0; g<grp.length; g++){
+          var d = document.createElement('div');
+          d.innerHTML = colorize(grp[g]);
+          out.appendChild(d);
+        }
+        scroll(); await sleep(step);
+      }
+      await sleep(c.postOutputMs != null ? c.postOutputMs : T.postOutputMs);
+      var blank = document.createElement('div');
+      blank.innerHTML = '&nbsp;';
+      out.appendChild(blank); scroll();
+    }
+    var fin = document.createElement('div');
+    fin.innerHTML = '<span class="p">'+esc(S.prompt)+'</span> <span class="cur"></span>';
+    out.appendChild(fin); scroll();
+    await sleep(T.finalDwellMs);
+    window.__DEMO_DONE__ = true;
+  }
+  run();
+})();
+</script>
