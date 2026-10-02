@@ -1,3 +1,6 @@
+<!-- canonical: ../../README.md -->
+<!-- sync: 6f0a201001cb -->
+
 <div align="center">
 
 <picture>
@@ -39,7 +42,28 @@
 </p>
 
 
-يوضح العرض التوضيحي أوامر CLI للقراءة فقط أثناء العمل: agents --summary وpath health وget PATH وagents --json. أعد إنشاءه باستخدام vhs docs/assets/demo.tape.
+يوضح العرض التوضيحي أوامر CLI للقراءة فقط أثناء العمل: agents --summary وpath health وget PATH وagents --json. أعد إنشاءه باستخدام `node scripts/demo/capture.mjs`.
+
+*مخرجات الطرفية في العرض أعلاه تستخدم بيانات محاكاة.*
+
+
+<div dir="rtl">
+
+### عرض توضيحي بالفيديو
+
+جولة كاملة للميزات بمدة ~75 ثانية (واجهة إنجليزية، مع تعليق صوتي): **[شاهد على YouTube](https://youtu.be/REPLACE_ME)** — متوفرة أيضًا مرفقة داخل المستودع في `docs/assets/demo/env-manager-demo.mp4`.
+
+### معرض الصور
+
+| | | |
+|:-:|:-:|:-:|
+| ![عرض المتغيرات](../../docs/assets/gallery/01-variables.png)<br>**المتغيرات** — بحث، نطاق، إجراءات لكل صف | ![نطاق النظام](../../docs/assets/gallery/02-variables-system.png)<br>**نطاق النظام** — العناصر المحمية مقفلة | ![محرر PATH](../../docs/assets/gallery/03-path-editor.png)<br>**محرر PATH** — كشف الإدخالات الميتة والمكررة |
+| ![الملفات الشخصية](../../docs/assets/gallery/04-profiles.png)<br>**الملفات الشخصية** — تطبيق / تشغيل / وراثة | ![السجل والاستيراد](../../docs/assets/gallery/05-history.png)<br>**السجل والاستيراد** — تغييرات قابلة للتراجع | ![الحماية](../../docs/assets/gallery/06-protection.png)<br>**الحماية** — أقفال مخصصة |
+| ![سجل التدقيق](../../docs/assets/gallery/07-audit.png)<br>**سجل التدقيق** — متسلسل بالهاش وقابل للتحقق | ![مدير الخدمة](../../docs/assets/gallery/08-service.png)<br>**مدير الخدمة** — نقاط تحميل الأسرار | ![الإعدادات](../../docs/assets/gallery/09-settings-i18n.png)<br>**الإعدادات** — i18n بعشر لغات |
+| ![نافذة التحرير](../../docs/assets/gallery/10-edit-dialog.png)<br>**نافذة التحرير** — معاينة القيمة الموسعة | ![السمة الفاتحة](../../docs/assets/gallery/11-variables-light.png)<br>**السمة الفاتحة** — نسخة السمة الفاتحة | ![CLI](../../docs/assets/gallery/12-cli-terminal.png)<br>**CLI** — JSON أولًا، صديق للوكلاء |
+
+</div>
+
 
 ## الميزات
 

@@ -1,3 +1,6 @@
+<!-- canonical: ../../README.md -->
+<!-- sync: 6f0a201001cb -->
+
 <div align="center">
 
 <picture>
@@ -39,7 +42,24 @@
 </p>
 
 
-Демо показывает работу команд CLI в режиме только для чтения: agents --summary, path health, get PATH и agents --json. Повторная генерация: vhs docs/assets/demo.tape.
+Демо показывает работу команд CLI в режиме только для чтения: agents --summary, path health, get PATH и agents --json. Повторная генерация: `node scripts/demo/capture.mjs`.
+
+*Вывод терминала в демо выше использует смоделированные данные.*
+
+
+### Видеопрезентация
+
+Полный обзор возможностей за ~75 с (интерфейс на английском, с озвучкой): **[Смотреть на YouTube](https://youtu.be/REPLACE_ME)** — также прилагается в репозитории: `docs/assets/demo/env-manager-demo.mp4`.
+
+### Галерея
+
+| | | |
+|:-:|:-:|:-:|
+| ![Просмотр переменных](../../docs/assets/gallery/01-variables.png)<br>**Переменные** — поиск, область, действия по строкам | ![Область system](../../docs/assets/gallery/02-variables-system.png)<br>**Область system** — защищённые записи заблокированы | ![Редактор PATH](../../docs/assets/gallery/03-path-editor.png)<br>**Редактор PATH** — обнаружение мёртвых и повторных записей |
+| ![Профили](../../docs/assets/gallery/04-profiles.png)<br>**Профили** — применить / запустить / наследовать | ![История и импорт](../../docs/assets/gallery/05-history.png)<br>**История и импорт** — отменяемые изменения | ![Защита](../../docs/assets/gallery/06-protection.png)<br>**Защита** — пользовательские блокировки |
+| ![Журнал аудита](../../docs/assets/gallery/07-audit.png)<br>**Журнал аудита** — хеш-цепочка, проверяемый | ![Диспетчер службы](../../docs/assets/gallery/08-service.png)<br>**Диспетчер службы** — монтирование секретов | ![Настройки](../../docs/assets/gallery/09-settings-i18n.png)<br>**Настройки** — i18n на 10 языках |
+| ![Диалог редактирования](../../docs/assets/gallery/10-edit-dialog.png)<br>**Диалог редактирования** — предпросмотр развёрнутого значения | ![Светлая тема](../../docs/assets/gallery/11-variables-light.png)<br>**Светлая тема** — вариант | ![CLI](../../docs/assets/gallery/12-cli-terminal.png)<br>**CLI** — JSON-first, для агентов |
+
 
 ## Возможности
 

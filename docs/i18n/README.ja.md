@@ -1,3 +1,6 @@
+<!-- canonical: ../../README.md -->
+<!-- sync: 6f0a201001cb -->
+
 <div align="center">
 
 <picture>
@@ -38,7 +41,24 @@
   <img src="../../docs/assets/demo.gif" alt="Env Manager CLI demo" width="100%">
 </p>
 
-デモでは読み取り専用の CLI コマンドの動作を紹介しています: agents --summary、path health、get PATH、agents --json。vhs docs/assets/demo.tape で再生成できます。
+デモでは読み取り専用の CLI コマンドの動作を紹介しています: agents --summary、path health、get PATH、agents --json。`node scripts/demo/capture.mjs` で再生成できます。
+
+*上記のデモ端末出力はシミュレーションデータを使用しています。*
+
+### 動画ウォークスルー
+
+約75秒の全機能ウォークスルー（英語UI、ナレーション付き）：**[YouTube で見る](https://youtu.be/REPLACE_ME)** — リポジトリー内にも `docs/assets/demo/env-manager-demo.mp4` として同梱しています。
+
+### ギャラリー
+
+| | | |
+|:-:|:-:|:-:|
+| ![変数ビュー](../../docs/assets/gallery/01-variables.png)<br>**変数** — 検索、スコープ、行ごとの操作 | ![System スコープ](../../docs/assets/gallery/02-variables-system.png)<br>**System スコープ** — 保護エントリはロック済み | ![PATH エディター](../../docs/assets/gallery/03-path-editor.png)<br>**PATH エディター** — 無効・重複エントリの検出 |
+| ![プロファイル](../../docs/assets/gallery/04-profiles.png)<br>**プロファイル** — 適用 / 起動 / 継承 | ![履歴とインポート](../../docs/assets/gallery/05-history.png)<br>**履歴とインポート** — 元に戻せる変更 | ![保護](../../docs/assets/gallery/06-protection.png)<br>**保護** — カスタムロック |
+| ![監査台帳](../../docs/assets/gallery/07-audit.png)<br>**監査台帳** — ハッシュチェーンで検証可能 | ![サービスマネージャー](../../docs/assets/gallery/08-service.png)<br>**サービスマネージャー** — シークレットのマウント | ![設定](../../docs/assets/gallery/09-settings-i18n.png)<br>**設定** — 10言語の i18n |
+| ![編集ダイアログ](../../docs/assets/gallery/10-edit-dialog.png)<br>**編集ダイアログ** — 展開後の値のプレビュー | ![ライトテーマ](../../docs/assets/gallery/11-variables-light.png)<br>**ライトテーマ** 版 | ![CLI](../../docs/assets/gallery/12-cli-terminal.png)<br>**CLI** — JSON ファースト、エージェントネイティブ |
+
+
 ## Features
 - エージェントネイティブな CLI — ファーストクラスの機械契約を備えた 18 以上のコマンド: env-manager-cli agents --json は構造化されたコマンド仕様を出力し、すべての機能はバイナリに同梱されるエージェント向けマニュアル (AGENTS.cli.md) に記載されています。
 - プロファイルと設定 — グローバルプロファイルはレジストリに適用されます。Launch プロファイルは単一プロセスに隔離された env ブロックを注入します (レジストリには一切触れず、WM_SETTINGCHANGE もブロードキャストしません)。継承、競合プレビュー、安全な逆順ロールバックに対応しています。

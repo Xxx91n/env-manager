@@ -1,3 +1,6 @@
+<!-- canonical: ../../README.md -->
+<!-- sync: 6f0a201001cb -->
+
 <div align="center">
 
 <picture>
@@ -36,7 +39,9 @@
   <img src="../../docs/assets/demo.gif" alt="Env Manager CLI 演示：agents、path health 和 get 命令" width="100%">
 </p>
 
-演示展示了只读 CLI 命令的实际效果：`agents --summary`、`path health`、`get PATH` 和 `agents --json`。使用 `vhs docs/assets/demo.tape` 重新生成。
+演示展示了只读 CLI 命令的实际效果：`agents --summary`、`path health`、`get PATH` 和 `agents --json`。使用 `node scripts/demo/capture.mjs` 重新生成。
+
+*上述演示终端输出为模拟数据。*
 
 ### 视频演示
 
