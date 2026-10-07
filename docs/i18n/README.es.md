@@ -49,7 +49,7 @@ La demo muestra comandos CLI de solo lectura en acción: agents --summary, path 
 
 ### Recorrido en video
 
-Recorrido completo de funciones de ~75 s (interfaz en inglés, narrado): **[Ver en YouTube](https://youtu.be/REPLACE_ME)** — también incluido en el repositorio en `docs/assets/demo/env-manager-demo.mp4`.
+Recorrido completo de funciones de ~51 s (bilingüe ZH/EN, narrado): **[Ver en YouTube](https://youtu.be/REPLACE_ME)** — también incluido en el repositorio: `docs/assets/demo/env-manager-demo.zh.mp4` / `docs/assets/demo/env-manager-demo.en.mp4`.
 
 ### Galería
 

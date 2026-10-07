@@ -47,7 +47,7 @@ Die Demo zeigt schreibgeschützte CLI-Befehle in Aktion: agents --summary, path 
 
 ### Video-Durchlauf
 
-Vollständiger Feature-Durchlauf von ~75 s (englische Oberfläche, mit Ton): **[Auf YouTube ansehen](https://youtu.be/REPLACE_ME)** — auch im Repository gebündelt unter `docs/assets/demo/env-manager-demo.mp4`.
+Vollständiger Feature-Durchlauf von ~51 s (zweisprachig ZH/EN, mit Ton): **[Auf YouTube ansehen](https://youtu.be/REPLACE_ME)** — auch im Repo enthalten: `docs/assets/demo/env-manager-demo.zh.mp4` / `docs/assets/demo/env-manager-demo.en.mp4`.
 
 ### Galerie
 

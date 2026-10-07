@@ -49,7 +49,7 @@ A demo mostra comandos CLI somente leitura em ação: agents --summary, path hea
 
 ### Demonstração em vídeo
 
-Passo a passo completo dos recursos em ~75 s (interface em inglês, com narração): **[Assistir no YouTube](https://youtu.be/REPLACE_ME)** — também incluído no repositório em `docs/assets/demo/env-manager-demo.mp4`.
+Passo a passo completo dos recursos em ~51 s (bilíngue ZH/EN, com narração): **[Assistir no YouTube](https://youtu.be/REPLACE_ME)** — também incluído no repositório: `docs/assets/demo/env-manager-demo.zh.mp4` / `docs/assets/demo/env-manager-demo.en.mp4`.
 
 ### Galeria
 

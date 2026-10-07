@@ -47,7 +47,7 @@ La démo montre des commandes CLI en lecture seule en action : agents --summary,
 
 ### Présentation vidéo
 
-Présentation complète des fonctionnalités (~75 s, interface en anglais, avec narration) : **[Regarder sur YouTube](https://youtu.be/REPLACE_ME)** — également incluse dans le dépôt : `docs/assets/demo/env-manager-demo.mp4`.
+Présentation complète des fonctionnalités (~51 s, bilingue ZH/EN, avec narration) : **[Regarder sur YouTube](https://youtu.be/REPLACE_ME)** — également fournie dans le dépôt : `docs/assets/demo/env-manager-demo.zh.mp4` / `docs/assets/demo/env-manager-demo.en.mp4`.
 
 ### Galerie
 

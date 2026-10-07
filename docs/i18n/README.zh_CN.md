@@ -45,7 +45,7 @@
 
 ### 视频演示
 
-约 75 秒完整功能演示（英文界面、英文解说）：**[在 YouTube 观看](https://youtu.be/REPLACE_ME)** —— 仓库内同步附带 `docs/assets/demo/env-manager-demo.mp4`。
+约 51 秒完整功能演示（中英双语解说）：**[在 YouTube 观看](https://youtu.be/REPLACE_ME)** —— 仓库内同步附带 `docs/assets/demo/env-manager-demo.zh.mp4` / `docs/assets/demo/env-manager-demo.en.mp4`。
 
 ### 截图图集
 

@@ -47,7 +47,7 @@
 
 ### 動画ウォークスルー
 
-約75秒の全機能ウォークスルー（英語UI、ナレーション付き）：**[YouTube で見る](https://youtu.be/REPLACE_ME)** — リポジトリー内にも `docs/assets/demo/env-manager-demo.mp4` として同梱しています。
+約51秒の全機能ウォークスルー（中国語・英語の二言語ナレーション）：**[YouTube で見る](https://youtu.be/REPLACE_ME)** — リポジトリー内にも `docs/assets/demo/env-manager-demo.zh.mp4` / `docs/assets/demo/env-manager-demo.en.mp4` として同梱しています。
 
 ### ギャラリー
 

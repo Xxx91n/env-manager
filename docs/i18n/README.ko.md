@@ -47,7 +47,7 @@
 
 ### 영상 워크스루
 
-약 75초 분량의 전체 기능 워크스루(영문 UI, 내레이션 포함): **[YouTube에서 보기](https://youtu.be/REPLACE_ME)** — 저장소에도 `docs/assets/demo/env-manager-demo.mp4`로 포함되어 있습니다.
+약 51초 분량의 전체 기능 워크스루(중/영 이중언어 내레이션): **[YouTube에서 보기](https://youtu.be/REPLACE_ME)** — 저장소에도 `docs/assets/demo/env-manager-demo.zh.mp4` / `docs/assets/demo/env-manager-demo.en.mp4`로 포함되어 있습니다.
 
 ### 갤러리
 

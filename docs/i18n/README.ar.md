@@ -51,7 +51,7 @@
 
 ### عرض توضيحي بالفيديو
 
-جولة كاملة للميزات بمدة ~75 ثانية (واجهة إنجليزية، مع تعليق صوتي): **[شاهد على YouTube](https://youtu.be/REPLACE_ME)** — متوفرة أيضًا مرفقة داخل المستودع في `docs/assets/demo/env-manager-demo.mp4`.
+جولة كاملة للميزات بمدة ~51 ثانية (ثنائية اللغة ZH/EN، مع تعليق صوتي): **[شاهد على YouTube](https://youtu.be/REPLACE_ME)** — متوفرة أيضًا مرفقة في المستودع: `docs/assets/demo/env-manager-demo.zh.mp4` / `docs/assets/demo/env-manager-demo.en.mp4`.
 
 ### معرض الصور
 
