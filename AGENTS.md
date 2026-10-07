@@ -103,6 +103,7 @@ env-manager/
 +- docs/agents/                # Agent-specific reference (issue-tracker, domain)
 +- docs/history/              # Process artifacts (ui-audit, session records)
 +- scripts/                    # Build orchestrator (build.mjs), test harness, rsvg-convert wrapper, migration scripts, snapshot scripts; cognitive-complexity guard + per-module Stryker scorer + Tauri updater latest.json generator (ticket 44) with node:test pin
++- scripts/demo/               # Deterministic demo asset regeneration path (capture.mjs drives Playwright; terminal.html renders the simulated CLI session; script.json holds the canned screenplay — sole regen path for docs/assets/demo.gif)
 +- service/                    # Rust service crate (env-manager-service.exe, named pipe IPC, reconcile loop, audit ledger)
 +- frontend/                   # Tauri GUI application (src/, src-tauri/, tests/)
 +- release/                    # Build output (gitignored): portable/, cli-only/, msi/
