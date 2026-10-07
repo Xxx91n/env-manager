@@ -339,3 +339,33 @@ rsvg-convert dependency formalization + i18n native-quality translation).
 
 **Architecture-recovery Round 7 收口（2026-09-09，票 45）**：v0.12.0 作为发版基础设施建立里程碑——首个由 build.yml tag 管线产出的 GitHub Release（4 类资产：.msi + .msi.zip + .msi.zip.sig + latest.json，附 SLSA L2 provenance）。版本载体 0.9.30 → 0.12.0 在同一提交内跨 csproj / tauri.conf.json / package.json / package-lock.json / 两个 Cargo.toml + 两个 Cargo.lock 同步（release job 版本一致性门的载体集）。manual release.yml 退役，发版单轨化：release-please 以 include-component-in-tag:false（plain v* tag）+ .release-please-manifest.json + extra-files（csproj/tauri.conf/package.json，即版本门三载体）接管后续 conventional commit → release PR → tag → release；Cargo 系版本（src-tauri/service）与 lockfile 版本不在 release-please 接管范围（cargo --locked 一致性），随人工版本升级提交同步。
   _Avoid_: re-introducing a second release path; bumping csproj without tauri.conf/package.json (version gate); fabricating signatures in latest.json.
+
+## Media Pipeline Terms (2026-10-07)
+
+- **$MPIPE_HOME**: Install root of the globally-installed `mpipe` video
+  toolchain (npm global package dir); hosts `videos/<slug>/` production
+  units (script.json / plan.json / recordings/ / segments/ / output/).
+  _Avoid_: copying owner voice handles, secrets, or machine paths from
+  $MPIPE_HOME into this repo — handles stay as env references.
+
+- **Factual Shot (事实画面)**: Screen visuals depicting the real product.
+  AI generation is banned for these (mpipe D-009); the sanctioned source
+  in this repo is a Playwright-recorded stub UI (real 0.12.x UI code +
+  canned data), identical in semantics to the gallery and demo.gif.
+  _Avoid_: recording the real installed app (stale binary, real-path
+  leakage) or AI-substituting factual visuals.
+
+- **Capture-complete (capture 完成态)**: An `awaiting-human` capture task
+  is satisfied by any real recording dropped at its `drop_path`; for this
+  project a machine-recorded stub UI counts as capture-complete (D-014).
+  _Avoid_: regenerating or mutating a dropped artifact — refilled
+  artifacts are frozen.
+
+- **Segment Contract**: `$MPIPE_HOME/docs/segment-contract.md` — the
+  producer interface for non-factual shots: comp (HTML/CSS/JS+GSAP,
+  motion-doctrine first) -> `npx hyperframes render` -> `segments/sN.mp4`
+  consumed by `render.json`. Bottom 15% of frame is the burned-caption
+  safe zone: no readable content.
+  _Avoid_: static cards posing as animation; CDN GSAP; silent lavfi
+  fallback.
+

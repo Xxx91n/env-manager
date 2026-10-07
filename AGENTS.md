@@ -308,3 +308,12 @@ Topic-to-file index in [docs/agents/reference-index.md](docs/agents/reference-in
 
 - 各译文 README（`docs/i18n/README.*.md`）顶部须带两行注释：`<!-- canonical: ../../README.md -->`（英文版为唯一权威源）与 `<!-- sync: <en-hash12> -->`（翻译时英文版 commit 短哈希；掉队属 warn 不阻断）。
 - 新增/修改面向读者的 README 区块时，各语文件保持与英文版同节同序的镜像结构；图片 URL 各语共用，仅译文字。结构互等校验沿用 `scripts/check-readme-i18n.ps1`（CI: build.yml；本地用 pwsh 运行）。
+
+### 媒体资产生产约定（2026-10-07）
+
+本仓视频/演示资产的正式生产面 = 全局安装的 **mpipe** 工具链（资产根 `$MPIPE_HOME`，
+内含 media-pipeline/media-direction/media-review 三件 skill 与 vendored heygen 教义）。
+链路：`mpipe init/validate/plan` → 事实画面回置 `recordings/`（本仓口径：Playwright
+录桩 UI 即 capture 完成态，禁 AI 生成、禁录真机）→ 非事实 shot 走 hyperframes comp
+渲染 `segments/` → `mpipe render` 终混 → `lint`/`gate1`/`gate0 scan` → owner 终审。
+provider 降级必须显式记 provenance，禁止静默换通道；回填产物冻结不重生。
