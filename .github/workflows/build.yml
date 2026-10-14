@@ -161,7 +161,7 @@ jobs:
       # Ticket 29 (architecture-recovery): method-level cognitive complexity guard.
       # Report mode never blocks the PR; the violation list is the standing baseline
       # report (grandfathered entries are scheduled in
-      # .scratch/architecture-recovery/reports/29-cognitive-complexity-guard.md).
+      # .scratch/gov-audit/backlog.md item B4; original report in git history tag cleanup-baseline).
       - name: Cognitive complexity report (ticket 29)
         run: node scripts/cognitive-complexity.mjs
 

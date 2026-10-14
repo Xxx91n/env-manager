@@ -27,7 +27,7 @@ namespace EnvManager.Engine.Tests;
 /// so the first run of dotnet test failed (proving the assertion has teeth). The
 /// baseline was then set to the actual post-migration count and a second run
 /// confirmed green; the red-first evidence lives in
-/// .scratch/architecture-recovery/reports/27-program-partial-convergence.md.
+/// git history at tag cleanup-baseline (originally .scratch/architecture-recovery/reports/27-program-partial-convergence.md).
 /// </summary>
 public class ProgramMethodBudgetTests
 {

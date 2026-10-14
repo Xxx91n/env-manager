@@ -40,3 +40,8 @@ Rejected: relying on the WiX toolchain's built-in copy (requires network-extract
 - Ponytail: no new source abstractions; one new .wxl file + four wxs elements + two build.mjs line changes.
 - No new external dependencies: WixUI_InstallDir is part of the existing Tauri-bundled WiX v3 toolchain; we only add the extension DLL and localization file.
 - The ARPPRODUCTICON decision is independent of the i18n README translations deferred to main.
+
+
+## Addendum (2026-10-14, folded from CONTEXT.md)
+
+**Decision 2 follow-up — InstallDir desktop-shortcut checkbox UI deliberately not implemented in v0.9.29 MSI:** only the `INSTALLDESKTOPSHORTCUT` public property + component Condition ship. Rationale: minimizing WixUI Extension surface (frozen WiX v3.14.1, EOL); a dialog fork is a high-risk change touching localized UI strings. If GUI surfacing becomes a requirement, implement it as a vendored `WixUI_InstallDir` fragment copy with renamed dialog IDs (e.g. `EnvMgrInstallDirDlg`) and a `<UI>` element in `frontend/scripts/`, never by mutating `WixUIExtension.dll` state. The watchdog covers WixUI_InstallDir localization asset availability.

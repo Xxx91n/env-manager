@@ -1,10 +1,10 @@
 # Env Manager
 > **Internal development process record — not user documentation.**
 > Architectural decisions are distilled into `docs/adr/`. Domain glossary
-> terms in `## Language` are canonical vocabulary; other sections are
-> session records.
+> terms are canonical vocabulary; session records live in
+> `docs/history/`.
 
-Env Manager is a Windows environment variable manager with a CLI backend (C# .NET 10), a Tauri/Rust shell, and a Svelte 4 frontend. This CONTEXT.md captures the domain language specific to the secrets architecture, resolved during the grill-with-docs session on the Phase A–E roadmap (docs/secret-architecture-blueprint.md).
+Env Manager is a Windows environment variable manager with a CLI backend (C# .NET 10), a Tauri/Rust shell, and a Svelte 4 frontend. This CONTEXT.md is the canonical domain glossary for the repository: vocabulary terms with _Avoid_ negative usage, accumulated across design sessions. Decisions live in `docs/adr/`; process records live in `docs/history/`.
 
 ## Language
 
@@ -78,36 +78,6 @@ _Avoid_: secrets folder (ambiguous with the on-disk secret stores), secrets modu
 > The original design review session decisions (A1-A11) and risk matrix
 > are archived in [docs/history/design-review-research.md](docs/history/design-review-research.md).
 
-Key decisions: [ADR 0001](docs/adr/0001-secret-architecture-revision.md) (Secret Architecture Revision)
-covers Phase A-E trade-offs (A5/A7/A8/A9 revised). ADR 0002-0007 cover
-service watchdog, version single-source, release readiness, sensitive data
-redaction, GUI z-index layering, and form control color-scheme override. ADR 0008 covers
-public release and mirror topologies. [ADR 0009](docs/adr/0009-stay-on-tauri-bundled-wix-v3.md)
-covers packaging: stay on Tauri-bundled WiX v3.14.1 and repair installer.wxs semantics
-(MajorUpgrade schedule + util:ServiceConfig + WIX_UPGRADE_DETECTED service stop).
-[ADR 0010](docs/adr/0010-msi-hygiene-guid-pinning-eol-test-pyramid.md) covers MSI hygiene:
-per-component RemoveFile residue wipe, pinned GUIDs on the three binaries, WiX EOL supply-chain
-watchdog, line-ending normalization chore, and the GUI test pyramid (Vitest + WDIO + MSI matrix).
-[ADR 0011](docs/adr/0011-msi-ui-wixui-installdir-desktop-shortcut.md) covers MSI UI:
-WixUI_InstallDir with en-US localization, optional desktop shortcut, ARPPRODUCTICON,
-MSI string-gate tests, and ICE suppression list. Cherry-picked from f073733.
-
-
-**ADR-0011 Decision 2 follow-up ponytail debt (added 2026-08-23 maintenance pass):** the InstallDir-dialog desktop-shortcut **checkbox UI** is deliberately not implemented in the v0.9.29 MSI — only the `INSTALLDESKTOPSHORTCUT` public property + component Condition ship. Rationale: minimizing WixUI Extension surface (frozen WiX v3.14.1, EOL); a dialog fork is a high-risk change touching localized UI strings. If GUI surfacing becomes a requirement, implement it as a vendored `WixUI_InstallDir` fragment copy with renamed dialog IDs (e.g. `EnvMgrInstallDirDlg`) and a `<UI>` element in `frontend/scripts/`, never by mutating `WixUIExtension.dll` state.
-watchdog covers WixUI_InstallDir localization asset availability.
-
-[ADR 0010 amendment (issue 04)](docs/adr/0010-msi-hygiene-guid-pinning-eol-test-pyramid.md) extends Decision 6: the test pyramid now covers the C# engine via the IEnvironmentScope seam (xUnit lane against InMemoryScope; registry adapter stays apex-smoke-only).
-
-[ADR 0012](docs/adr/0012-msi-uninstall-shortcut-logs-localappdata.md) covers MSI lifecycle: in-INSTALLDIR uninstall shortcut, log directory externalization to LocalAppData, legacy INSTALLDIR logs backstop, and 14-day log retention sweep.
-
-[ADR 0013](docs/adr/0013-resvg-js-for-svg-rendering.md) covers README asset rendering: use @resvg/resvg-js as committed npm devDependency instead of native rsvg-convert (Windows stdout corruption, no winget package). resvg does not support animation; the hero-motion.json per-frame composition architecture handles this.
-
-[ADR 0014](docs/adr/0014-no-txr-txf-compensatory-writes.md) bans TxR/TxF as non-goals: Microsoft documents TxF as deprecated (possibly removed in a future Windows release) and its official alternatives list has no registry multi-value transaction primitive. Compensatory writes + three-layer locking (mutex + CLI_RWLOCK + writeChain) + audit recovery are the institutionalized route for every registry mutation; rename write-verify-delete and apply backup preservation are the first mutation/model test targets.
-
-**Architecture-recovery landing (2026-09-02/03, issues 01-10):** C# sources moved under src/ (issue 05) and Program.cs reduced to a thin Main dispatcher plus shared runtime infra (441 lines, one partial-class module per command domain); EnvFeatures.cs retired by domain split into AuditCommand/ExpandCommand/BulkCommand/DpapiHelper (issue 06); IPC schema contract is Rust-owned with golden files under docs/schemas/ consumed by C#/TS/Tauri contract tests (issue 08); launch injection and canary redaction verified by the three-layer test net (issue 07); SecretProvider.cs split into one-symbol-per-file modules across the eight ISecretProvider implementations (issue 09); a shared ISecretProvider contract test suite — neutral harness seam plus reflection compliance gate — pins all eight providers (issue 10, DPAPI on the real local backend L0, the other seven skip-mounted L1/L2). Process record: docs/history/architecture-recovery-2026-09/.
-
-**Architecture-recovery round 3 (2026-09-04, issues 11-16):** the C# engine test mental model upgraded per the atomcode research digest (differential + model-based + mutation triad). Differential oracle tests pin InMemoryScope to real Windows registry semantics (REG_EXPAND_SZ %VAR% preservation, PATH boundaries, empty-entry semantics, `=` rejection, elevation-gated system scope) behind `EM_DIFFERENTIAL_ORACLE=1`, mounted only in scripts/test-with-restore.ps1 (issue 11). CsCheck write-path state-machine model tests run 1000-step random sequences over rename/change-scope/set/delete/PATH against a dictionary+count model with counter-example shrinking (issue 12). A Stryker.NET local/PR mutation gate mutates only the four red-line files (thresholds 85/70/60), deliberately not a CI hard gate (issue 13). Verify.Xunit snapshots lock CLI help/error/canary copy plus per-locale i18n renders (issue 14). The Testcontainers L1 emulator matrix converts the seven skip-mounted secret-provider backend assertions to real local backends (Vault dev server, LocalStack, Lowkey Vault, Credential Manager, pwsh SecretStore, sops+age, op CLI + in-repo Connect mock) behind `EM_L1_MATRIX=1` with a verify-l1 CI job (issue 15). ADR 0014 bans TxR/TxF and institutionalizes compensatory writes (issue 16).
-
 ## Language (continued)
 
 **Mount Refresh Policy**:
@@ -139,7 +109,7 @@ _Avoid_: launch mode, process mode
 
 ## Logging & Disaster Recovery Terms (v0.9.8+)
 
-Resolved during grill-with-docs session 2026-08-07 (decisions A1-A6, see .codex-tmp/grill-plan-logs-dr.md).
+Resolved during grill-with-docs session 2026-08-07 (decisions A1-A6).
 
 - **Unified Logging Backend**: `tracing` + `tracing-subscriber` + `tracing-appender` as the single logging crate across Rust GUI shell and Rust service, replacing `tauri-plugin-log` + `log`. C# CLI retains `DebugLog` to stderr (short-lived subprocess, host captures). Per-module filtering via `RUST_LOG` EnvFilter.
 - **Log Rotation**: `tracing-appender` `Rotation::Daily` + `max_log_files(10)` + 50MB per-file size cap + 7-day retention. Total worst-case ~350MB. Service heartbeat (reconcile loop 300s, watchdog 30s) logs at `debug`; only state changes log at `info`.
@@ -200,7 +170,7 @@ _Avoid_: mask list, secret patterns, redaction rules
 
 ## GUI Layer Terms (v0.9.26)
 
-Resolved during grill-with-docs session 2026-08-19 (5 GUI bug fixes, see .codex-tmp/grill-plan-path-move-dead-zindex-radio-input.md).
+Resolved during grill-with-docs session 2026-08-19 (5 GUI bug fixes).
 
 - **Staged Move**: The PathEditor reorder pattern where move-up/move-down clicks accumulate adjacent swaps locally on `stagedEntries` (new array ref per swap) without per-click IPC. The Apply button commits the whole sequence via `applyStagedMoves()` which re-reads live registry order and calls `movePathEntryUp` repeatedly. `ensureStagedActive()` is the single init entry that copies `entries.slice()` into `stagedEntries` and sets `stagedActive=true`. Guard order matters: the boundary guard MUST run after `ensureStagedActive()`, not before, or it reads an empty array and blocks the only init path.
 _Avoid_: staged reorder, pending moves, buffer reorder
@@ -213,7 +183,6 @@ _Avoid_: z-index scale, overlay stack, layer order
 
 - **Form Control color-scheme Override**: The element-level `color-scheme: light` on `input, select, textarea` that overrides the `:root` `color-scheme: light dark` (v0.9.24 scrollbar hard boundary). Binds form control fill/outline to app `data-theme` instead of Windows `prefers-color-scheme`. Paired with `accent-color: hsl(var(--primary))` for radio/checkbox fill and `outline: none` on focus (Tailwind `focus:ring` takes over). See ADR 0007.
 _Avoid_: form theme binding, control theme override, light-only controls
-
 
 ## Public Release & Mirror Terms (v0.9.26+)
 
@@ -263,8 +232,6 @@ _Avoid_: blanket `-sice` suppression without per-ICE comments.
 - **Icon Cherry-Pick (f073733)**: The frontend/src-tauri/icons emerald icon family (icon.ico, icon.png, 32x32.png, 128x128.png, 128x128@2x.png) plus docs/assets/brand/hero.svg, cherry-picked from main to codex/v1.0.0 as commit fb164b9. The icon.ico is the ARPPRODUCTICON source.
 - **WiX UI Extension Integration**: Adding WixUI_InstallDir requires `-ext WixUIExtension.dll` on both candle and light. The extension does NOT include .wxl files — `sdk\wixui\WixUI_en-US.wxl` must exist physically under the WiX toolchain directory or light will fail with LGHT0103.
 - **MSI String-Gate Tests**: Three canonical assertions on installer.wxs source: (1) `WIXUI_INSTALLDIR=INSTALLDIR`, (2) `<UIRef Id="WixUI_InstallDir"/>`, (3) `-ext WixUIExtension.dll` present in build.mjs candle/light args. These close the ICE blind spot that build+validate green but runtime error 2819.
-- **ICE Suppression List**: An inline-commented array in build.mjs naming every suppressed ICE with its rationale (e.g., ICE91 perMachine benign warning). Survives extensions by adding `// <ICE_ID> <reason>` lines.
-_Avoid_: blanket -sice suppression without per-ICE comments.
 
 ## MSI Lifecycle & Logging Terms (v0.9.30)
 
@@ -334,11 +301,6 @@ rsvg-convert dependency formalization + i18n native-quality translation).
   _Avoid_: animated SVG with SMIL/CSS (GitHub camo proxy breaks it);
   hardcoding version strings in hero.svg (use shields.io dynamic badge).
 
-
-**Architecture-recovery round 4 (2026-09-05, issues 17-25)**: CI 每次 main push 变绿的根因修复（票 17：verify job 在 cargo 前 staging CLI 五件套）、变异幸存者分诊三件套（票 18：登记 14 条 + 补杀测试 + CI 可跑 stryker job + 模块分算）、预检验证两级降级（票 19：error/warn 两档 + --strict + 退出码 2 仅 profile apply）、profile create --help 修复（票 20）、CliRuntime 拆出（票 21）、测试残留卫生（票 22：残留归零断言 + 自检命令）、architecture.md canary/golden 段（票 23）、CI 用户态隔离（票 24：ENVMANAGER_LOCALAPPDATA seam + 断言步骤）、SharpFuzz 夜间模糊（票 25：harness + 27 种子 + cron workflow）。三轮返修（19-fix2 去机器依赖、22+24 联合 harness 带戳名+stderr 捕获、14+18+19 静态 seam 串行化）与 PR #45 全栈绿（run 33963823146）为终验。九票全部合入待用户 land 授权。
-
-**Architecture-recovery Round 7 收口（2026-09-09，票 45）**：v0.12.0 作为发版基础设施建立里程碑——首个由 build.yml tag 管线产出的 GitHub Release（4 类资产：.msi + .msi.zip + .msi.zip.sig + latest.json，附 SLSA L2 provenance）。版本载体 0.9.30 → 0.12.0 在同一提交内跨 csproj / tauri.conf.json / package.json / package-lock.json / 两个 Cargo.toml + 两个 Cargo.lock 同步（release job 版本一致性门的载体集）。manual release.yml 退役，发版单轨化：release-please 以 include-component-in-tag:false（plain v* tag）+ .release-please-manifest.json + extra-files（csproj/tauri.conf/package.json，即版本门三载体）接管后续 conventional commit → release PR → tag → release；Cargo 系版本（src-tauri/service）与 lockfile 版本不在 release-please 接管范围（cargo --locked 一致性），随人工版本升级提交同步。
-  _Avoid_: re-introducing a second release path; bumping csproj without tauri.conf/package.json (version gate); fabricating signatures in latest.json.
 
 ## Media Pipeline Terms (2026-10-07)
 

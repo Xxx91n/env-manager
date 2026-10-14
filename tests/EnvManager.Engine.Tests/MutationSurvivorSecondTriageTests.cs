@@ -9,7 +9,7 @@ namespace EnvManager.Engine.Tests;
 /// Ticket 50 (round-8 second survivor triage) kill tests: one assertion target per
 /// currently-surviving Stryker mutant from the dispatched baseline (build.yml stryker job,
 /// run 34771955013). Dispositions are registered in
-/// .scratch/round8-backlog-grill/reports/50-survivor-registry.md - 13 killed here via
+/// docs/history/architecture-recovery-2026-09/reports/50-survivor-registry.md - 13 killed here via
 /// existing seams only (InMemoryScope, SetProfilesFilePathForTests,
 /// SetAppDataDirectoryForTests, SaveProfilesRawForTests, console capture), 3 registered
 /// as LLM-detection reserves (#3462/#3463 conditional-equivalent target resolution,

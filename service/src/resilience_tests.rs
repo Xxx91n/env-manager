@@ -2,7 +2,7 @@
 // Scenarios pinned here: pipe half-open reconnect, IPC read timeout, IPC schema
 // compliance under fault-shaped responses. The kill -9 / SCM-restart scenario needs
 // process-level control and is exercised by the manual script
-// .scratch/architecture-recovery/manual/kill-9-test.ps1 (administrator, local only).
+// scripts/kill-9-test.ps1 (administrator, local only).
 
 use std::sync::Arc;
 use std::time::Duration;
@@ -240,7 +240,7 @@ fn reconcile_warmup_constant_pinned() {
 /// Kill -9 / SCM-restart recovery. Requires process-level control (start, ping,
 /// taskkill /F, poll watchdog detection, restart, assert secretMount.json
 /// persistence) and administrator rights — unsafe for automated CI runners.
-/// Executed by the manual script .scratch/architecture-recovery/manual/kill-9-test.ps1.
+/// Executed by the manual script scripts/kill-9-test.ps1.
 #[test]
 #[ignore = "manual only — kill-9-test.ps1 requires administrator privileges and a local service build"]
 fn kill_9_watchdog_recovery() {
