@@ -179,14 +179,18 @@ describe('CLI/GUI race condition prevention', () => {
 
   it('concurrent read operations do not block each other (read lock allows parallel)', async () => {
     let listCallCount = 0
-    const startTime = Date.now()
+    let inFlight = 0
+    let maxInFlight = 0
 
     mockInvoke.mockImplementation((_cmd: string, opts: { command: string }) => {
       if (opts.command === 'list') {
         listCallCount++
+        inFlight++
+        maxInFlight = Math.max(maxInFlight, inFlight)
         return new Promise((resolve) => {
           // Simulate a 50ms read
           setTimeout(() => {
+            inFlight--
             resolve({ success: true, data: JSON.stringify([]), error: null })
           }, 50)
         })
@@ -203,9 +207,11 @@ describe('CLI/GUI race condition prevention', () => {
 
     // All 3 calls should succeed
     expect(listCallCount).toBe(3)
-    // With read locks, these should run concurrently (total ~50ms, not ~150ms)
-    const elapsed = Date.now() - startTime
-    expect(elapsed).toBeLessThan(120) // Allow some margin
+    // Read concurrency is a structural property: all three reads must be in flight at
+    // the same time. Do NOT assert wall-clock elapsed time here - the previous form
+    // (`elapsed < 120ms` around a 50ms timer) measured host timer resolution, not this
+    // property, and went red whenever the machine was under load.
+    expect(maxInFlight).toBe(3)
   })
 
   it('write operations are serialized on the frontend side', async () => {

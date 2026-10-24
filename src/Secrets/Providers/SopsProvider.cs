@@ -40,6 +40,13 @@ internal sealed class SopsProvider : ISecretProvider
 
     private static readonly string SOPS_BINARY = FindSopsBinary();
 
+    // Budget for the `sops --version` availability probe. Measured on a warm Windows
+    // host: 2.1-2.9s wall clock per start (antivirus scans the resolved binary), and it
+    // overshoots 5s under concurrent load. The probe MUST NOT be stricter than the
+    // encrypt/decrypt calls it guards (30s) - a 5s probe turns a slow host into a false
+    // "sops binary not functional" and fails the whole provider for the session.
+    private const int ProbeTimeoutMs = 30000;
+
     private static string FindSopsBinary()
     {
         // Check SOPS_PATH env var first, then search PATH
@@ -81,16 +88,40 @@ internal sealed class SopsProvider : ISecretProvider
             UseShellExecute = false,
             RedirectStandardOutput = true,
             RedirectStandardError = true,
-            CreateNoWindow = true
+            CreateNoWindow = true,
+            StandardOutputEncoding = Encoding.UTF8,
+            StandardErrorEncoding = Encoding.UTF8
         };
 
         try
         {
             using var proc = System.Diagnostics.Process.Start(psi);
             if (proc == null) throw new SecretProviderNotFoundException("sops", "probe", "sops binary not found");
-            proc.WaitForExit(5000);
-            if (!proc.HasExited || proc.ExitCode != 0)
-                throw new SecretProviderUnavailableException("sops", "probe", "sops binary not functional");
+
+            // Drain both pipes async-first, then wait: a child that fills a redirected
+            // pipe blocks before it can exit, and WaitForExit(int) cannot see that.
+            var stdoutBuf = new StringBuilder();
+            var stderrBuf = new StringBuilder();
+            proc.OutputDataReceived += (_, e) => { if (e.Data != null) stdoutBuf.AppendLine(e.Data); };
+            proc.ErrorDataReceived += (_, e) => { if (e.Data != null) stderrBuf.AppendLine(e.Data); };
+            proc.BeginOutputReadLine();
+            proc.BeginErrorReadLine();
+
+            if (!proc.WaitForExit(ProbeTimeoutMs))
+            {
+                // Kill first: a timed-out probe that is left running keeps a handle on
+                // the binary and piles up orphan processes across retries.
+                try { proc.Kill(entireProcessTree: true); } catch (Exception killEx) { SecretProviderErrors.SwallowBestEffort("sops", "probe", killEx); }
+                throw new SecretProviderTimeoutException("sops", "probe",
+                    "sops --version did not answer within " + (ProbeTimeoutMs / 1000) + "s; the binary is stalled (antivirus scan or slow disk), not missing");
+            }
+            // WaitForExit(int) may return while the async readers are still flushing.
+            proc.WaitForExit();
+
+            if (proc.ExitCode != 0)
+                throw new SecretProviderUnavailableException("sops", "probe",
+                    "sops --version exited " + proc.ExitCode + ": " + stderrBuf.ToString().Trim());
+
             // v0.9.13 Phase 4F: record provider binary hash for tamper detection
             try { Program.RecordProviderHash("sops", SOPS_BINARY); } catch (Exception ex) { SecretProviderErrors.SwallowBestEffort("sops", "provider-hash", ex); }
         }
