@@ -253,7 +253,7 @@ partial class Program
         }
     }
 
-    // v0.8 Phase 3: Export secrets from a profile to an encrypted file
+    // Export secrets from a profile to an encrypted file
     static int ProfileExportSecrets(string[] args)
     {
         if (args.Length < 4)
@@ -280,7 +280,7 @@ partial class Program
         return 0;
     }
 
-    // v0.8 Phase 3: Import secrets from an encrypted file into a profile
+    // Import secrets from an encrypted file into a profile
     static int ProfileImportSecrets(string[] args)
     {
         if (args.Length < 4)

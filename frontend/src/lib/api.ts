@@ -1360,7 +1360,7 @@ export async function secretProviderSet(providerName: string): Promise<string> {
   return await runWrite('profile', ['secret-provider', 'set', providerName])
 }
 
-// --- v0.8 Phase 3: Secret Export/Import ---
+// --- Secret Export/Import: encrypted profile backups and restores ---
 
 /**
  * Exports secrets from a profile to an encrypted backup file.
