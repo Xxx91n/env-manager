@@ -60,6 +60,13 @@ foreach ($entry in $selected) {
     if ($code -ne 0) { $failed++ }
 }
 
+# Keep the tree bounded: .test-logs gains one file per suite per run and nothing
+# else prunes it. Newest 20 files survive (about 10 full runs).
+$logs = @(Get-ChildItem -Path $LogDir -Filter '*.log' -ErrorAction SilentlyContinue | Sort-Object LastWriteTime -Descending)
+if ($logs.Count -gt 20) {
+    $logs | Select-Object -Skip 20 | Remove-Item -Force -ErrorAction SilentlyContinue
+}
+
 if ($failed -gt 0) {
     Write-Host ("FAILED suites: {0}" -f $failed)
     exit 1
