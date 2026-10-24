@@ -23,6 +23,10 @@ jobs:
       # All actions are pinned to immutable commit SHAs for supply-chain integrity.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
+      - name: Bare-id scanner self-test (proves the gate can fail; exit 0 = scanner fired when it should)
+        shell: pwsh
+        run: ./scripts/check-bare-ids.ps1 -SelfTest
+
       - name: Bare-id scan (no ticket/issue numbers outside the archive)
         shell: pwsh
         run: ./scripts/check-bare-ids.ps1
