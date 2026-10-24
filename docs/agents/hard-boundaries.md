@@ -15,7 +15,7 @@ Invariants a change must not violate; where a test pins one, that check is the a
 - No TxR/TxF (deprecated by Microsoft, no registry multi-value primitive). Compensatory writes + locking + audit recovery is the only route.
 - Ambiguous scope (same name in HKCU and HKLM) requires an explicit `--scope`; never auto-pick.
 - Launch profiles never reach the registry and never broadcast `WM_SETTINGCHANGE`.
-- Any smoke test against the real registry runs through `scripts/test-with-restore.ps1`. Raw write commands are a red line.
+- Any smoke test against the real registry runs through `scripts/test-with-restore.ps1`.
 
 ## Secrets
 
@@ -56,3 +56,4 @@ Invariants a change must not violate; where a test pins one, that check is the a
 ## Verification
 
 - `scripts/test-all.ps1` runs both suites, keeps the full log on disk and reports exit codes only. Engine tests never touch the real registry; the differential oracle is opt-in via `EM_DIFFERENTIAL_ORACLE=1` under `test-with-restore.ps1`.
+- `scripts/check-bare-ids.ps1` fails CI when a bare ticket/issue number or a version label survives outside `docs/history/` and `CHANGELOG.md`.
