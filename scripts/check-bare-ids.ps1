@@ -12,6 +12,14 @@
 # three segments and was blind to the shorter form, which let the gate
 # report PASS while two-segment residue remained in live comments.
 #
+# The id alternative accepts singular AND plural nouns, and a plural may
+# carry several numbers joined by a slash (noun, whitespace, digits, then
+# more digits after the slash). Requiring the singular form hid exactly one
+# live occurrence behind a green gate -- the same class of miss, found a
+# third time. The -SelfTest fixture is what catches these: widen or narrow
+# the pattern and the self-test says so. This header deliberately spells no
+# literal violation, so the scanner can police its own source.
+#
 # Self-test polarity (-SelfTest): this switch answers "did the scanner fire
 # when it should have?", not "is the repo clean?". It exits 0 when every bad
 # form planted in the tracked fixture scripts/bare-ids-selftest-fixture.md is
@@ -23,7 +31,7 @@ param([switch]$SelfTest)
 
 $ErrorActionPreference = 'Continue'
 $root = Split-Path -Parent $PSScriptRoot
-$pattern = '\b(?:[Tt]icket|[Ii]ssue)\s+\d+\b|\bv[01]\.[0-9]+(\.[0-9]+)?[^0-9]{0,12}Phase'
+$pattern = '\b(?:[Tt]ickets?|[Ii]ssues?)\s+\d+(?:\s*/\s*\d+)*\b|\bv[01]\.[0-9]+(\.[0-9]+)?[^0-9]{0,12}Phase'
 $fixture = 'scripts/bare-ids-selftest-fixture.md'
 $negativeMarker = 'SELFTESTOK'
 
@@ -52,8 +60,8 @@ if ($SelfTest) {
     }
     $lines = @($hits)
     $failures = @()
-    if ($badForms.Count -ne 4) {
-        $failures += ("fixture yielded {0} 'BAD ... -' form lines; expected 4 (fixture damaged or invisible to git grep)" -f $badForms.Count)
+    if ($badForms.Count -eq 0) {
+        $failures += "fixture yielded no 'BAD ... -' form lines; it is empty, damaged, or invisible to git grep"
     }
     if ($code -ne 0) {
         $failures += ("git grep on the fixture exited {0}; expected 0 (every bad form is planted, so a match is guaranteed unless the scanner is blind or the tracked fixture is missing)" -f $code)

@@ -658,7 +658,7 @@ jobs:
             stryker-module-scores.txt
           if-no-files-found: error
 
-  # Tickets 33/49 (architecture-recovery / round-8 evidence backfill): kill -9
+  # Evidence backfill (architecture-recovery / round-8): kill -9
   # fault-injection E2E for the service crate on a disposable windows-latest
   # runner. Dispatch-only (stryker precedent): heavyweight system-tier check
   # kept out of the per-PR path; the brain triggers it on demand and records
@@ -695,7 +695,7 @@ jobs:
         working-directory: service
         run: cargo build --release --locked
 
-      - name: kill -9 resilience E2E (tickets 33/49)
+      - name: kill -9 resilience E2E
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force -Path test-results | Out-Null

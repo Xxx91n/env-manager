@@ -9,5 +9,6 @@ BAD ticket 29 - bare ticket number in a comment.
 BAD Issue 38 - capitalized bare issue number in a comment.
 BAD v0.8 Phase 3 - two-segment version label that the old pattern missed.
 BAD v0.9.14 Phase - three-segment version label before the phase word.
+BAD Tickets 33/49 - plural noun carrying slash-joined numbers, the form a singular-only pattern misses.
 SELFTESTOK a real GitHub issue link: https://github.com/env-manager/env-manager/issues/38
 SELFTESTOK versions mentioned in prose, not as a leading label: the exporter landed before v0.8 shipped and the split into phases was decided later.

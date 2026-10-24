@@ -476,7 +476,7 @@ In this first round only DPAPI runs its backend-dependent assertions on a real b
 
 ## Canary Zero-Leak Assertion Net and Golden/Snapshot Layers
 
-Secret-leak defenses and output contracts are pinned by three complementary test layers (spec Phase 3/4, issues 07/08/14). They are deliberately non-overlapping: the IPC golden pins the wire schema, the CLI/i18n snapshots pin the human-readable output, and the canary net proves dynamically that secret plaintext never reaches a scanned sink.
+Secret-leak defenses and output contracts are pinned by three complementary test layers that do not overlap by design: the IPC golden pins the wire schema, the CLI/i18n snapshots pin the human-readable output, and the canary net proves dynamically that secret plaintext never reaches a scanned sink.
 
 ### Canary zero-leak assertion net
 
@@ -496,7 +496,7 @@ Secret-leak defenses and output contracts are pinned by three complementary test
 
 `profile reveal-secret` is the only designed plaintext-stdout path (hard boundary) and is deliberately not scanned as a sink. Masking placeholders are asserted positively: `<encrypted>` in show output (matched in its JSON-escaped `\u003Cencrypted\u003E` wire form) and `<revealed>` in the audit reveal entry. `CanaryRedactionTests` (xUnit) pins the pure-function core: format-shaped canaries (password=/Bearer/VAULT_TOKEN=) never survive `ScrubExceptionMessage`, `<redacted>` appears in their place, and un-patterned values pass through unchanged (documented best-effort behavior, ADR 0005).
 
-### Golden/snapshot layers (issues 08 + 14)
+### Golden/snapshot layers
 
 Two golden layers lock output contracts; both files are source-controlled, so any drift is an explicit, reviewable diff rather than a silent change:
 

@@ -90,7 +90,7 @@ $script:ServiceExe = (Resolve-Path $ServiceExe).Path
 New-Item -ItemType Directory -Force -Path $LogDir | Out-Null
 $script:LogDir = (Resolve-Path $LogDir).Path
 
-Log-Step "=== kill -9 resilience E2E (tickets 33/49) ==="
+Log-Step "=== kill -9 resilience E2E ==="
 Log-Step "CLI:     $CliExe"
 Log-Step "Service: $ServiceExe"
 
