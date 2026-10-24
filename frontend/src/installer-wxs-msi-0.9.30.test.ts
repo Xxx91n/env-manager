@@ -6,7 +6,7 @@ import { fileURLToPath } from 'url'
 const __dirname2 = typeof __dirname !== 'undefined' ? __dirname : dirname(fileURLToPath(import.meta.url))
 const wxs = readFileSync(join(__dirname2, '..', 'scripts', 'installer.wxs'), 'utf8')
 
-// ADR-0012 / grill-plan-msi-uninstall-shortcut-logs: uninstall shortcut in INSTALLDIR
+// v0.9.30 MSI uninstall + logs / grill-plan-msi-uninstall-shortcut-logs: uninstall shortcut in INSTALLDIR
 // + legacy INSTALLDIR\logs residue cleanup.
 describe('installer.wxs v0.9.30 MSI uninstall + logs externalization', () => {
   it('declares UninstallShortcut component targeting msiexec /x [ProductCode]', () => {

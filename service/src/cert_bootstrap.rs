@@ -2,7 +2,8 @@
 // Replaces static cloud credentials (VAULT_TOKEN, AZURE_CLIENT_SECRET, etc.)
 // with short-lived certificate auth. Certificates stored in Cert:\LocalMachine\My
 // with non-exportable private key ACL'd to per-service SID.
-// See docs/adr/0001-secret-architecture-revision.md decision A9.
+// Design: certificate bootstrap replaces passkey/Windows Hello, which a session-0 service cannot
+// surface; the private key is non-exportable and ACL'd to the per-service SID.
 
 use std::path::PathBuf;
 use base64::{engine::general_purpose, Engine as _};

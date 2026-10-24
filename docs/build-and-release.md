@@ -204,7 +204,7 @@ Remove-ItemProperty -Path 'HKCU:\Environment' -Name 'EM_TEST_DST'
 # or: reg delete "HKCU\Environment" /v EM_TEST_DST /f
 ```
 
-## MSI Silent-Install Validation Runbook (v0.9.27+, ADR-0009)
+## MSI Silent-Install Validation Runbook (v0.9.27+)
 
 Any change to `frontend/scripts/installer.wxs` MUST pass this local 4-step silent msiexec proof before commit. Runs on the build machine; takes under 2 minutes total when green.
 
@@ -232,7 +232,7 @@ $LASTEXITCODE -eq 0
 Get-Service EnvManagerService -ErrorAction SilentlyContinue  # must be $null (SCM entry removed)
 ```
 
-Failure triage: hang at `InstallFinalize` -> `StartServices` with lowest `ActionStart` op = service-start blocking regression (check `ServiceControl/@Start` is absent and `Wait="no"` in installer.wxs). See ADR-0009 for the validated root cause.
+Failure triage: hang at `InstallFinalize` -> `StartServices` with lowest `ActionStart` op = service-start blocking regression (check `ServiceControl/@Start` is absent and `Wait="no"` in installer.wxs). Root cause is documented in the `ServiceInstall` comment in `installer.wxs`.
 
 ## How to Release
 
@@ -241,8 +241,8 @@ Failure triage: hang at `InstallFinalize` -> `StartServices` with lowest `Action
 3. Update `AGENTS.md` if structure or commands changed
 4. Run `node scripts/build.mjs --arch x64` (or per-arch: `--arch x86`, `--arch arm64`)
    - Brand assets (logo, variants, favicons, social preview) live in `docs/assets/`; the brand guide is `docs/assets/brand/index.md`.
-   - **Brand Iconset** (CONTEXT.md Brand & Asset Terms): every file in `docs/assets/brand/` is the canonical source. README hero is `hero.svg` (mini hero, obsidian + Environment Color Token gradient). Do not change cosmetic colors ad hoc — palette decisions go through ADR.
-   - **Install Icon** (CONTEXT.md Brand & Asset Terms): the Windows-side icon family (desktop shortcut + exe resource + MSI installer + system tray) is driven by a **single source file** `frontend/src-tauri/icons/icon.ico` (multi-resolution 16/32/48/256). The `.png` siblings (`icon.png`, `128x128.png`, `128x128@2x.png`, `32x32.png`) are Tauri-derivation utilities — keep them in sync with the ICO. Install Icon is always the emerald logo; environment-specific icons are **not** bound to Dev/Staging/Prod (the Environment Color Token belongs only to the Brand Iconset layer).
+   - **Brand Iconset**: every file in `docs/assets/brand/` is the canonical source. README hero is `hero.svg` (mini hero, obsidian + Environment Color Token gradient). Do not change cosmetic colors ad hoc — the palette is fixed in `docs/assets/brand/index.md`.
+   - **Install Icon**: the Windows-side icon family (desktop shortcut + exe resource + MSI installer + system tray) is driven by a **single source file** `frontend/src-tauri/icons/icon.ico` (multi-resolution 16/32/48/256). The `.png` siblings (`icon.png`, `128x128.png`, `128x128@2x.png`, `32x32.png`) are Tauri-derivation utilities — keep them in sync with the ICO. Install Icon is always the emerald logo; environment-specific icons are **not** bound to Dev/Staging/Prod (the Environment Color Token belongs only to the Brand Iconset layer).
 5. Verify `release/portable/env-manager.exe` launches and shows variables
 6. Verify MSI installs and the app works
 7. Commit: `chore: release vX.Y.Z`

@@ -6,8 +6,9 @@ namespace EnvManager;
 
 // architecture-recovery ticket 43 (spec Phase 6, mental-model M1 bounded contexts):
 // "audit verify" - the hash-chain verification step for the shared append-only audit
-// ledger (audit-ledger.jsonl). ADR 0014 names the ledger as the audit-recovery
-// source; "a chain you never verify is still just a log" (AGT ADR-0017), so this
+// ledger (audit-ledger.jsonl). The ledger is the audit-recovery source for the sanctioned
+// mutation route (compensatory writes + three-layer locking, never TxR/TxF);
+// "a chain you never verify is still just a log", so this
 // command exists and build.yml gates the verify job on "audit verify --strict".
 //
 // Chain contract (ledger schema v1, written by audit migrate-audit and mirrored by

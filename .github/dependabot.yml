@@ -6,7 +6,7 @@ version: 2
 # - 安全更新独立组（不等 minor/patch 批），critical advisory 不被日常 bump 队列阻塞
 # - patch 组 auto-merge（仅 patch，CI + dependency-review 双绿门）
 # - ignore 仅用于「钉死不升」的 major（理由见下方注释）
-# 详见 git 历史 tag cleanup-baseline（原 .scratch/architecture-recovery/reports/31-dependabot-governance.md）
+# 详见 git 历史 tag cleanup-baseline（原始治理报告已随 .scratch 删除，全文在 tag 内）
 
 updates:
   # ===== nuget — C# 引擎 + Tests + Fuzz =====

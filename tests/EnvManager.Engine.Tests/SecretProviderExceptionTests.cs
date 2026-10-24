@@ -14,6 +14,7 @@ using System.Net;
 using System.Net.Http;
 using System.Net.Sockets;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 
 using EnvManager;
@@ -207,7 +208,22 @@ Assert.True(ex.Message.Length <= 514, "message must stay at the 512-char cap (+2
 
             // One-shot echo mock: capture the request's Authorization header, echo it back
             // in a 401 response body (aws-sdk-java #2702 leak shape).
-            var serverTask = Task.Run(() => EchoAuthHeaderOnce(listener));
+            //
+            // The stub runs on a dedicated background thread, NOT on the thread pool:
+            // Decrypt is synchronous and blocks the test thread for the whole HTTP round
+            // trip, so a pool-scheduled stub can be starved behind it when the machine is
+            // loaded (parallel build, concurrent frontend suite) and the completion wait
+            // then fails with "echo mock never answered" even though the adapter is fine.
+            var serverDone = new ManualResetEventSlim(false);
+            Exception? serverError = null;
+            var serverThread = new Thread(() =>
+            {
+                try { EchoAuthHeaderOnce(listener); }
+                catch (Exception e) { serverError = e; }
+                finally { serverDone.Set(); }
+            })
+            { IsBackground = true, Name = "em-t40-echo-mock" };
+            serverThread.Start();
 
             var provider = new EnvManager.Secrets.Providers.AwsSecretsManagerProvider();
             var envelope = new SecretEnvelope
@@ -220,7 +236,11 @@ Assert.True(ex.Message.Length <= 514, "message must stay at the 512-char cap (+2
 
             // Decrypt triggers the HTTP call that makes the echo mock complete; wait AFTER the call.
             var ex = Assert.ThrowsAny<SecretProviderException>(() => provider.Decrypt(envelope, "em-t40\\VAR"));
-            Assert.True(serverTask.Wait(TimeSpan.FromSeconds(10)), "echo mock never answered");
+            Assert.True(serverDone.Wait(TimeSpan.FromSeconds(10)), "echo mock never answered");
+            if (serverError != null)
+            {
+                throw new InvalidOperationException("echo mock thread faulted: " + serverError, serverError);
+            }
             Assert.True(ex is SecretProviderAuthFailedException, "expected AuthFailed for HTTP 401, got " + ex.GetType().Name);
             // Classification-only contract: the status survives, neither the echoed header
             // nor the credential id does.

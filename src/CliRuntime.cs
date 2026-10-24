@@ -146,7 +146,8 @@ partial class Program
 
     // v0.9.0 Phase B+C: CLI service subcommand - thin IPC gateway to env-manager-service.exe.
     // Sends a JSON request to the named pipe and prints the JSON response.
-    // See docs/adr/0001-secret-architecture-revision.md decision A7.
+    // Design: the CLI holds no mount state of its own - it is a thin gateway that forwards one
+    // JSON request to the service's named pipe and prints the JSON response.
     /// <summary>
     /// v1.0.0 Phase E: Audit ledger commands.
     /// "audit encrypt-file --input <path> --output <path>": DPAPI-encrypts a file

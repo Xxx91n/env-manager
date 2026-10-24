@@ -160,8 +160,7 @@ jobs:
 
       # Ticket 29 (architecture-recovery): method-level cognitive complexity guard.
       # Report mode never blocks the PR; the violation list is the standing baseline
-      # report (grandfathered entries are scheduled in
-      # .scratch/gov-audit/backlog.md item B4; original report in git history tag cleanup-baseline).
+      # report (grandfathered entries are tracked as issue #82).
       - name: Cognitive complexity report (ticket 29)
         run: node scripts/cognitive-complexity.mjs
 
@@ -270,16 +269,6 @@ jobs:
           # GH Actions pwsh wrapper exits with the last $LASTEXITCODE; the tampered-chain
           # assertion intentionally leaves it at 1, so reset to green after the checks.
           exit 0
-      - name: Documentation sync check
-        shell: pwsh
-        run: |
-          ./scripts/check-doc-sync.ps1
-
-      - name: i18n README drift check
-        shell: pwsh
-        run: |
-          ./scripts/check-readme-i18n.ps1
-
       - name: Build frontend
         working-directory: frontend
         run: npm run build

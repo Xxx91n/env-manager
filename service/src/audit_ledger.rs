@@ -2,7 +2,8 @@
 // audit-ledger.jsonl: append-only, hash-chained (sha256(prev||cur)),
 // GUID eventId (concurrent writes safe), 100MB rotation via atomic rename.
 // Tamper detection on parse.
-// See docs/adr/0001-secret-architecture-revision.md decision A10.
+// Design: wrap-key escrow was dropped - for cloud providers the backend itself is the recovery
+// source, and for user-bound ones loss is by-design - so this ledger is the recovery record.
 
 use serde::{Deserialize, Serialize};
 use sha2::{Sha256, Digest};

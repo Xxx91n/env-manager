@@ -1279,7 +1279,7 @@ async fn download_and_install(app: tauri::AppHandle) -> Result<(), String> {
 
 
 fn main() {
-// v0.9.30 (ADR-0012 D2): GUI logs now go to %LOCALAPPDATA%\\EnvManager\\logs (NOT
+// v0.9.30: GUI logs go to %LOCALAPPDATA%\\EnvManager\\logs (NOT
 // INSTALLDIR\\logs). Per-machine log placement was wix#1114 anti-pattern + Program Files
 // is read-only for standard users; industry default (PowerToys, 1Password 8, Chrome,
 // tauri-plugin-log v2) is LocalAppData. Service side unchanged: %ProgramData%\\EnvManager.
@@ -1288,7 +1288,7 @@ let log_dir = std::env::var("LOCALAPPDATA")
     .unwrap_or_else(|_| std::path::PathBuf::from("logs"));
 let _ = std::fs::create_dir_all(&log_dir);
 
-// v0.9.30 (ADR-0012 D4): 14-day log retention sweep. Aligns with 1Password 8 (14 days).
+// v0.9.30: 14-day log retention sweep. Aligns with 1Password 8 (14 days).
 // Ponytail: tracing-appender daily rotation already bounds a single run to ~24h per file;
 // sweep deletes stale ones at startup. Fire-and-forget on a helper thread.
 {

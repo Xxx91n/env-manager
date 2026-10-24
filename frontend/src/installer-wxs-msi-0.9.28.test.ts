@@ -6,10 +6,10 @@ import { fileURLToPath } from 'url'
 const __dirname2 = typeof __dirname !== 'undefined' ? __dirname : dirname(fileURLToPath(import.meta.url))
 const wxs = readFileSync(join(__dirname2, '..', 'scripts', 'installer.wxs'), 'utf8')
 
-// ADR-0010 / grill-plan-msi-residual-guid-v0928: string gates that must hold
+// v0.9.28 MSI hygiene / grill-plan-msi-residual-guid-v0928: string gates that must hold
 // for the v0.9.28 MSI hygiene pass (RemoveFile wildcard residue wipe, explicit
 // GUIDs on the three binaries, unconditional RemoveFolder on INSTALLDIR).
-describe('installer.wxs v0.9.28 MSI residue / GUID hygiene invariants (ADR-0010)', () => {
+describe('installer.wxs v0.9.28 MSI residue / GUID hygiene invariants', () => {
   it('every INSTALLDIR file component has RemoveFile Name="*.*" On="uninstall"', () => {
     const fileComponents = [
       'GuiExecutable', 'CliExecutable', 'CliLibrary', 'CliDeps',
@@ -48,7 +48,7 @@ describe('installer.wxs v0.9.28 MSI residue / GUID hygiene invariants (ADR-0010)
     // component's directory. Placing RemoveInstallDir inside EnvManagerDataComponent
     // (rooted at ProgramData\EnvManager) silently produces NO FolderRemove op for
     // INSTALLDIR on uninstall -- observed as residual INSTALLDIR in v0.9.30 smoke
-    // test. ADR-0012 amendment: the RemoveFolder must live on the UninstallShortcut
+    // test. v0.9.30 amendment: the RemoveFolder must live on the UninstallShortcut
     // component, which is rooted at INSTALLDIR via <DirectoryRef Id="INSTALLDIR">.
     const uninstallShortcutBody = wxs.match(/<Component Id="UninstallShortcut"[\s\S]*?<\/Component>/)
     expect(uninstallShortcutBody).not.toBeNull()

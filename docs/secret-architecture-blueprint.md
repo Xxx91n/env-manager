@@ -160,12 +160,11 @@ Rejected alternative: command-string allow-list. Already what AGENTS.md document
 
 ## Phased roadmap — SUPERSEDED
 
-> **This section is superseded by ADR 0001 and the Decision Summary.**
+> **This section is superseded by the Decision Summary.**
 > The design review (2026-08-02) revised four of the five phases after external research and codebase cross-validation. The authoritative decisions now live in:
 >
-> - **ADR**: [docs/adr/0001-secret-architecture-revision.md](adr/0001-secret-architecture-revision.md)
 > - **Decision Summary**: [docs/secret-architecture-decision-summary.md](secret-architecture-decision-summary.md)
-> - **Full design context + risk matrix**: [CONTEXT.md](../CONTEXT.md)
+> - **Domain vocabulary**: [GLOSSARY.md](../GLOSSARY.md)
 
 ### What changed and why
 
@@ -201,7 +200,7 @@ The original blueprint had an anti-rejection checklist as a per-phase gate. The 
 10. Memory pressure / startup timeout (SCM event 7009/7000, OOM-by-mount skipping, deferred cold-start full scan)
 11. IPC endpoint name (Global\pipe\ scope, RDP per-session CLI routing, machine rename no-op, locale no-op)
 
-Detailed failure modes + regression tests for each domain live in [CONTEXT.md](../CONTEXT.md) Risk Matrix.
+Detailed failure modes + regression tests for each domain live in the release-gate risk matrix of [docs/secret-architecture-decision-summary.md](secret-architecture-decision-summary.md).
 
 ### Original phase descriptions (historical, for reference only)
 

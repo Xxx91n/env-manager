@@ -293,7 +293,6 @@ env-manager-cli.exe audit verify --strict
 | [docs/backup-and-profiles.md](../backup-and-profiles.md) | 备份、还原、配置文件语义 |
 | [docs/secret-providers-guide.md](../secret-providers-guide.md) | 机密提供者设置 |
 | [docs/build-and-release.md](../build-and-release.md) | 构建和发布流程 |
-| [docs/adr/](../adr/) | 架构决策记录 |
 | [AGENTS.md](../../AGENTS.md) / [AGENTS.cli.md](../../AGENTS.cli.md) | Agent 指南 |
 
 

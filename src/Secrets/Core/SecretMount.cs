@@ -12,7 +12,9 @@ namespace EnvManager.Secrets.Core
 // A SecretMount decouples the secret envelope (provider + ciphertext/targetName)
 // from the profile's variable list. The profile stores only the mount ID and
 // variable name; the actual envelope lives in secretMount.json.
-// See docs/adr/0001-secret-architecture-revision.md decision A3.
+// Design: secretMount.json and profiles.json are separate files, each written atomically
+// (temp + fsync + rename); write order is mount first, profile second, delete in reverse.
+// That indirection is why a profile never holds secret material - only the mount id.
 class SecretMount
 {
     [JsonPropertyName("id")] public string Id { get; set; } = Guid.NewGuid().ToString("N");

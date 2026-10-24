@@ -3,7 +3,8 @@
 // Client: one-shot CLI gateway connects to pipe, sends request, prints response.
 // DACL: only EnvManagerService SID and current user can connect.
 // Anti-squatting: PIPE_FIRST_PIPE_INSTANCE flag rejects pre-existing pipe.
-// See docs/adr/0001-secret-architecture-revision.md decisions A7, A8 (Domain 2).
+// Design: the service runs as NT SERVICE\<svc> (virtual service account, no AD required), so the
+// named pipe is the only channel - the CLI stays a thin gateway and the GUI stays UI-only.
 
 use serde::{Deserialize, Serialize};
 use std::io;

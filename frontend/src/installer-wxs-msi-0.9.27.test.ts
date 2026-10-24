@@ -6,9 +6,9 @@ import { fileURLToPath } from 'url'
 const __dirname2 = typeof __dirname !== 'undefined' ? __dirname : dirname(fileURLToPath(import.meta.url))
 const wxs = readFileSync(join(__dirname2, '..', 'scripts', 'installer.wxs'), 'utf8')
 
-// ADR-0009 / grill-plan-msi-wix-v3-fix-v0927: string-gate invariants that must
+// v0.9.27 MSI hang fix / grill-plan-msi-wix-v3-fix-v0927: string-gate invariants that must
 // hold for the WiX v3 installer to not re-create the v0.9.26 silent-install hang.
-describe('installer.wxs v0.9.27 MSI hang-fix invariants (ADR-0009)', () => {
+describe('installer.wxs v0.9.27 MSI hang-fix invariants', () => {
   it('MajorUpgrade uses Schedule="afterInstallExecute" (remove old product BEFORE new-service start)', () => {
     expect(wxs).toMatch(/<MajorUpgrade\s+Schedule="afterInstallExecute"/)
   })

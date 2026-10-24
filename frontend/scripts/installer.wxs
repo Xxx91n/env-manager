@@ -8,7 +8,8 @@
                   DowngradeErrorMessage="A newer version of Env Manager is already installed." />
     <MediaTemplate EmbedCab="yes" />
 
-    <!-- v0.9.29 (ADR-0011): WixUI_InstallDir (browse dir + desktop-shortcut property) -->
+    <!-- v0.9.29: WixUI_InstallDir supplies a 4-dialog UI (Welcome, InstallDir, VerifyReady,
+         Finish) and INSTALLDESKTOPSHORTCUT (default 1) gates the desktop-shortcut component. -->
     <Property Id="WIXUI_INSTALLDIR" Value="INSTALLDIR" />
     <UIRef Id="WixUI_InstallDir" />
     <UIRef Id="WixUI_ErrorProgressText" />
@@ -41,7 +42,7 @@
     </Directory>
 
     <DirectoryRef Id="INSTALLDIR">
-      <!-- v0.9.30 (ADR-0012 D1): Uninstall shortcut in INSTALLDIR, next to the exe.
+      <!-- v0.9.30: Uninstall shortcut in INSTALLDIR, next to the exe.
            Per user request (cc-swich / ZCode parity). FireGiant How-To pattern:
            non-advertised shortcut to [System64Folder]msiexec.exe /x [ProductCode],
            paired with RegistryValue KeyPath for ICE compliance. -->
@@ -141,7 +142,7 @@
       </Component>
     </DirectoryRef>
 
-    <!-- v0.9.30 (ADR-0012 D3): backstop cleanup for legacy INSTALLDIR\logs residue.
+    <!-- v0.9.30: backstop cleanup for legacy INSTALLDIR\logs residue.
          Prior versions wrote GUI logs under [INSTALLDIR]\logs. Wildcard RemoveFile only
          matches the specific logs subdirectory (not the whole INSTALLDIR — wixsharp
          #1114 anti-pattern avoided). RemoveFolder removes the empty dir afterwards. -->

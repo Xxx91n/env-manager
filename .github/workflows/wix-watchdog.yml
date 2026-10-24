@@ -5,7 +5,9 @@ name: WiX v3 EOL supply-chain watch
 #   1. wixtoolset/wix3 releases beyond 3.14.1 (current pin)
 #   2. any new GHSA on wixtoolset
 #   3. Tauri tauri-bundler dev-branch WIX_URL stops pointing at wix314-binaries.zip
-# ADR-0010 Decision 4. Read-only: does not modify the repo.
+# Rationale: the pinned WiX v3.14.1 is EOL and frozen upstream (wixtoolset/wix3 archived
+# 2025-02-14 with 3.14.1 as the final release), so this watchdog is the only tripwire between
+# upstream drift and a shipped installer. Read-only: does not modify the repo.
 
 on:
   schedule:
@@ -75,7 +77,7 @@ jobs:
             if ('${{ steps.tauri.outputs.pin_drift }}' === 'true')
               lines.push('- Tauri WIX_URL no longer points at wix3141rtm/wix314-binaries.zip (saw: ' + '${{ steps.tauri.outputs.wix_url_token }}' + ')');
             const body = '### WiX v3 EOL supply-chain watch alert\n\n' + lines.join('\n') +
-              '\n\nSee ADR-0010 (Decision 4). Investigate before next release.';
+              '\n\nUpstream WiX v3 signal fired; investigate before the next release.';
             await github.rest.issues.create({
               owner: context.repo.owner, repo: context.repo.repo,
               title: '[watchdog] WiX v3 EOL signal drift',

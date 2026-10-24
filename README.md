@@ -241,7 +241,6 @@ See [docs/secret-providers-guide.md](docs/secret-providers-guide.md) for per-pro
 | [docs/backup-and-profiles.md](docs/backup-and-profiles.md) | Backup, restore, profile semantics |
 | [docs/secret-providers-guide.md](docs/secret-providers-guide.md) | Secret provider setup |
 | [docs/build-and-release.md](docs/build-and-release.md) | Build and release process |
-| [docs/adr/](docs/adr/) | Architecture decision records |
 | [AGENTS.md](AGENTS.md) / [AGENTS.cli.md](AGENTS.cli.md) | Agent-facing guides |
 
 ## Maintainers
