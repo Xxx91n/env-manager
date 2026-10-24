@@ -13,7 +13,7 @@ import pt from './translations/pt.json'
 import ru from './translations/ru.json'
 import ar from './translations/ar.json'
 
-// Architecture-recovery issue 14: i18n "human-readable contract" layer.
+// Architecture-recovery: i18n "human-readable contract" layer.
 // - Structural integrity (hard assertions): every locale carries the full recursive leaf
 //   key set of en, no type conflicts, no empty values, and identical ICU placeholder sets.
 // - Per-locale full-key rendered snapshots: every leaf of every locale, deterministically

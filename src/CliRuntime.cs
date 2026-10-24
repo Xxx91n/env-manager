@@ -11,7 +11,7 @@ namespace EnvManager;
 
 /// <summary>
 /// Shared CLI runtime infrastructure for the partial Program dispatch surface
-/// (architecture-recovery issue 21): members moved verbatim from Program.cs, which stays
+/// (architecture-recovery): members moved verbatim from Program.cs, which stays
 /// the thin Main dispatcher. Type name unchanged so all call sites compile without
 /// modification.
 /// </summary>
@@ -82,7 +82,7 @@ partial class Program
     };
 
     /// <summary>
-    /// v0.9.12: Scrubs potentially sensitive data from exception messages before
+    /// Scrubs potentially sensitive data from exception messages before
     /// writing to stderr or logs. Masks common secret-bearing patterns so provider
     /// error messages are traceable without leaking credentials. Bounded + best-effort.
     /// </summary>
@@ -123,7 +123,7 @@ partial class Program
     }
 
     /// <summary>
-    /// v0.9.12: SecretString wraps a decrypted secret value to prevent accidental
+    /// SecretString wraps a decrypted secret value to prevent accidental
     /// logging or serialization. Zeroes the underlying char[] on Dispose.
     /// Ponytail: minimal struct, no interface, no factory. The caller is responsible
     /// for using the value before Dispose; we do not add lifetime tracking.
@@ -144,12 +144,10 @@ partial class Program
         return 1;
     }
 
-    // v0.9.0 Phase B+C: CLI service subcommand - thin IPC gateway to env-manager-service.exe.
+    // CLI service subcommand - thin IPC gateway to env-manager-service.exe.
     // Sends a JSON request to the named pipe and prints the JSON response.
-    // Design: the CLI holds no mount state of its own - it is a thin gateway that forwards one
-    // JSON request to the service's named pipe and prints the JSON response.
     /// <summary>
-    /// v1.0.0 Phase E: Audit ledger commands.
+    /// Audit ledger commands.
     /// "audit encrypt-file --input <path> --output <path>": DPAPI-encrypts a file
     /// (used by the service's export_survival_kit to create machine+user-bound archives).
     /// "audit list": lists audit ledger events (read-only).
@@ -192,7 +190,7 @@ Commands:
         return 0;
     }
 
-    // v0.9.13 Phase 4F: Provider binary hash verification (best-effort)
+    // Provider binary hash verification (best-effort)
     // Computes SHA256 of sops/op binary on first use, warns on subsequent mismatch.
     private static readonly string ProviderHashPath = Path.Combine(
         LocalAppDataRoot, "EnvManager", "provider-hash.json");
@@ -233,9 +231,9 @@ Commands:
         catch (Exception ex) { DebugLog($"Provider hash recording failed: {ex.GetType().Name}"); }
     }
 
-    // --- shared runtime infrastructure (architecture-recovery issue 06, moved verbatim from EnvFeatures.cs) ---
+    // --- shared runtime infrastructure (architecture-recovery, moved verbatim from EnvFeatures.cs) ---
 
-    // CI user-state isolation (architecture-recovery issue 24): when
+    // CI user-state isolation (architecture-recovery): when
     // ENVMANAGER_LOCALAPPDATA is set, it replaces the per-user LocalApplicationData
     // root for ALL user-state file resolution (profiles.json, audit, secret mounts,
     // provider config/hash, protection stores). GetFolderPath does not honor a
@@ -264,7 +262,7 @@ Commands:
         }
     }
 
-    // Ticket 18 test seam: when non-null, AppDataDirectory returns this path so the
+    // Test seam: when non-null, AppDataDirectory returns this path so the
     // xUnit lane can redirect the protection JSON stores (protected-vars.json,
     // builtin-protected-vars.json) to a temp dir. Production never sets it.
     static string? _appDataDirectoryForTests;
@@ -286,7 +284,7 @@ Commands:
         return true;
     }
 
-    // Issue 25 fuzz seam: argv arrays arriving from the fuzzer are attacker-shaped;
+    // Fuzz seam: argv arrays arriving from the fuzzer are attacker-shaped;
     // null elements must be treated as malformed input (return false), not a crash.
     internal static bool IsWriteInvocationForFuzz(params string?[]? args)
     {
@@ -335,7 +333,7 @@ Commands:
 static void AtomicWriteJson<T>(string path, T value)
 {
     string temp = path + ".tmp." + Environment.ProcessId;
-    // v0.8.0 A3: fsync before rename to match Rust write_atomic.
+    // fsync before rename to match Rust write_atomic.
     using (var fs = File.Create(temp))
     {
         byte[] bytes = JsonSerializer.SerializeToUtf8Bytes(value, JsonOptsIndented);
@@ -361,15 +359,15 @@ static void AtomicWriteJson<T>(string path, T value)
         File.Move(temp, path, true);
     }
 
-    // ticket 39 two-layer port: the process-wide secret store facade. Secret domain
+    // Two-layer port: the process-wide secret store facade. Secret domain
     // verbs (Mount/Reveal/Rotate/Export/Import) go through ISecretStore; provider
     // routing (active-provider/Delete/List/SetActiveProvider) stays on the manager.
     internal static readonly ISecretStore SecretStore = SecretProviderManager.Instance;
 
     // Best-effort decrypt for the show-with-reveal path. Returns "<decryption-failed>"
     // on any exception (fail-closed UI signal: never echo ciphertext back to stdout).
-    // v0.8.0: also resolves the v0.8 secret-mount envelope ("mount:" prefixed ID).
-    // ticket 36 CI unblock: moved verbatim from ProfileSecretCommand.cs - it is shared
+    // also resolves the v0.8 secret-mount envelope ("mount:" prefixed ID).
+    // CI unblock: moved verbatim from ProfileSecretCommand.cs - it is shared
     // reveal-path infrastructure (ProfileCommand show-with-reveal consumes it across
     // subdomains) and the ticket-28 acyclic guard prescribes CliRuntime.cs as its home.
     static string TryDecryptSafe(string ciphertext)

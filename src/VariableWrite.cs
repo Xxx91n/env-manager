@@ -4,7 +4,7 @@ namespace EnvManager;
 
 /// <summary>
 /// Write-path command cores for set/delete/toggle and the PATH list helpers
-/// (architecture-recovery issue 03). Every core receives the IEnvironmentScope seam and the
+/// (architecture-recovery). Every core receives the IEnvironmentScope seam and the
 /// protection predicates explicitly, so xUnit tests drive them against InMemoryScope with
 /// synthetic protection lists while production wiring resolves to RegistryScope and the real
 /// protection files. Error messages reproduce the pre-seam CLI output verbatim.
@@ -243,7 +243,7 @@ partial class Program
     }
 
 
-    // --- VariableWrite members (architecture-recovery issue 06, moved verbatim from EnvFeatures.cs) ---
+    // --- VariableWrite members (architecture-recovery, moved verbatim from EnvFeatures.cs) ---
 
     static void ValidateVariableInput(string name, string value, string scope)
     {

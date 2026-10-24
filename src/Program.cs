@@ -6,17 +6,17 @@ using System.Text.Json.Serialization;
 
 namespace EnvManager;
 
-// Ticket 27 step 1: dispatch-only command domains (AgentsCommand, UpdateCommand, ExpandCommand)
+// Step 1: dispatch-only command domains (AgentsCommand, UpdateCommand, ExpandCommand)
 // have been extracted from partial class Program into internal static classes. Program.cs is now
 // restricted to Main + the cross-cutting try/catch/finally flow; remaining domains still live as
-// partial class Program while ticket 27 ramps. The reflection guard Program.MethodBudgetTests
+// partial class Program while ramps. The reflection guard Program.MethodBudgetTests
 // (added in tests/EnvManager.Engine.Tests) pins this thinning so a future regression that re-fattens
 // Program fails the build instead of landing silently.
 partial class Program
 {
     static int Main(string[] args)
     {
-        // v0.9.13 Phase 2D/4A: Disable WER crash dialogs + SEM_NOGPFAULTERRORBOX (best-effort)
+        // Disable WER crash dialogs + SEM_NOGPFAULTERRORBOX (best-effort)
         DisableCrashDialogs();
 
         // Route seam debug output (RegistryScope write/toggle failure logs) into the CLI
@@ -24,7 +24,7 @@ partial class Program
         // SetVariable/Toggle. No output change without --debug.
         RegistryScope.DebugSink = DebugLog;
 
-        // v0.7.1 fix: recover from the classic Windows "trailing backslash + quote"
+        // Fix: recover from the classic Windows "trailing backslash + quote"
         // tokenizer hazard, where values like "C:\Program Files\PowerShell\7\"
         // merge with following --scope/--overwrite flags. Main(args) follows
         // CommandLineToArgvW, treating an odd backslash count before a quote as
@@ -107,7 +107,7 @@ partial class Program
                 _ => 1
             };
 
-            // Ticket 19: exit 2 = success with preflight warnings; the write DID happen,
+            // Exit 2 = success with preflight warnings; the write DID happen,
             // so the environment audit snapshot must still be recorded (audit continuity).
             if (exitCode is 0 or 2 && beforeSnapshot != null)
             {

@@ -5,7 +5,7 @@ using Xunit;
 namespace EnvManager.Engine.Tests;
 
 /// <summary>
-/// Ticket 20 (architecture-recovery, spec Phase 4) regression net: `profile create --help`
+/// Architecture-recovery, spec Phase 4 regression net: `profile create --help`
 /// (and the -h/-?/? flag variants) is a help request, not a profile name. The pre-fix
 /// parser took args[2] verbatim as the profile name and persisted a profile literally
 /// named "--help" into profiles.json. Pinned contract: exit 0, usage on stdout, empty

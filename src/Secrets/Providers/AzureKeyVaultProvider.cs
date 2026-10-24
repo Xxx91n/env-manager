@@ -1,9 +1,9 @@
 using EnvManager.Secrets.Core;
-// AzureKeyVaultProvider.cs - secret provider architecture (ticket 09, architecture-recovery)
-// One-symbol-per-file split of the retired single-file secret provider module (issue 09); behavior unchanged.
+// AzureKeyVaultProvider.cs - secret provider architecture
+// One-symbol-per-file split of the retired single-file secret provider module; behavior unchanged.
 // License: Apache-2.0
 
-// ticket 40: adapter-boundary typed error family. HTTP failures map through
+// Adapter-boundary typed error family. HTTP failures map through
 // SecretProviderErrors; stderr diagnostics from the identity-token path are
 // scrubbed (ADR 0005); best-effort cleanup reports through the scrubbed channel.
 
@@ -22,7 +22,7 @@ internal sealed class AzureKeyVaultProvider : ISecretProvider
 {
     public string Name => "azure-keyvault";
 
-    // Capability descriptors (ticket 41, spec Phase 6): declared per provider,
+    // Capability descriptors: declared per provider,
     // consumed by SecretProviderManager.ListProviders and surfaced through
     // `profile secret-provider list` so the GUI gates on data, not name lists.
     public bool RefreshCapable => true;
@@ -189,7 +189,7 @@ internal sealed class AzureKeyVaultProvider : ISecretProvider
     {
         try
         {
-            // App Service / emulator convention (issue 15): IDENTITY_ENDPOINT overrides
+            // App Service / emulator convention: IDENTITY_ENDPOINT overrides
             // the hardcoded IMDS URL, IDENTITY_HEADER names the auth header. Production
             // never sets these; the L1 Lowkey Vault emulator does.
             string? identityEndpoint = Environment.GetEnvironmentVariable("IDENTITY_ENDPOINT");
@@ -217,7 +217,7 @@ internal sealed class AzureKeyVaultProvider : ISecretProvider
             var response = client.GetAsync(imdsUrl).GetAwaiter().GetResult();
             if (!response.IsSuccessStatusCode)
             {
-                // issue 15 diagnostics: surface the emulator/IMDS rejection reason; silent
+                // diagnostics: surface the emulator/IMDS rejection reason; silent
                 // null made the L1 lane failure undiagnosable (CI run 33853880605).
                 string body = response.Content.ReadAsStringAsync().GetAwaiter().GetResult();
                 Console.Error.WriteLine("[azure-keyvault] identity token request failed: " +

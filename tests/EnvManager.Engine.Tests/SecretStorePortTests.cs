@@ -5,7 +5,7 @@ using EnvManager.Secrets.Manager;
 namespace EnvManager.Engine.Tests;
 
 /// <summary>
-/// Ticket 39 port pin: the two-layer secret port (ISecretStore domain facade above
+/// Port pin: the two-layer secret port (ISecretStore domain facade above
 /// the ISecretProvider transport adapters, spec Phase 6 story 19). Pins the five
 /// domain-verb surface of the interface and the fail-closed reveal route through
 /// the port (same routing core as the transport-level Decrypt). Hermetic: no real

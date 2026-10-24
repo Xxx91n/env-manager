@@ -6,7 +6,7 @@ using System.Text.Json.Serialization;
 namespace EnvManager;
 
 /// <summary>
-/// Profile command domain (architecture-recovery issue 05): profile list/show/create/delete/apply/unapply,
+/// Profile command domain (architecture-recovery): profile list/show/create/delete/apply/unapply,
 /// variable/PATH editing, launch + preflight, secrets, secret-provider management, export/import, rename,
 /// and the secret-provider CLI routing, moved verbatim from Program.cs. Behavior unchanged.
 /// </summary>
@@ -45,9 +45,9 @@ partial class Program
             "export" => ProfileExport(args),
             "import" => ProfileImport(args),
             "rename" => args.Length < 4 ? ArgError("Usage: env-manager profile rename <old> <new>") : ProfileRename(args[2], args[3]),
-            // v0.6.0 Launch profile commands - one-line forward to the launch sub-domain module.
-            // v0.7.0 DPAPI secrets + v0.8 secret-provider management - one-line forward to the secret sub-domain module.
-            // The two modules live in ProfileLaunchCommand.cs and ProfileSecretCommand.cs (ticket 26 split).
+            // Launch profile commands - one-line forward to the launch sub-domain module.
+            // DPAPI secrets + v0.8 secret-provider management - one-line forward to the secret sub-domain module.
+            // The two modules live in ProfileLaunchCommand.cs and ProfileSecretCommand.cs.
             "set-launch" or "launch" => RunProfileLaunchCommand(args),
             "add-secret" or "edit-secret" or "remove-secret" or "reveal-secret"
                 or "export-secrets" or "import-secrets"
@@ -334,7 +334,7 @@ partial class Program
         return 0;
     }
 
-    // Ticket 20: `profile create --help` (and the -h/-?/? variants) is a help request,
+    // `profile create --help` (and the -h/-?/? variants) is a help request,
     // not a profile name. Before this check the parser took args[2] verbatim as the
     // name and persisted a profile literally named "--help" into profiles.json. The
     // bare word "help" stays a legal profile name: only flag forms are intercepted.
@@ -483,7 +483,7 @@ partial class Program
         masked.SetLaunchArguments(profile.LaunchArguments);
         masked.SetWorkingDirectory(profile.WorkingDirectory);
         masked.SetSecretVariables(profile.SecretVariables);
-        // v0.9.16: Use ResolveProfileVariablesWithSource to populate Scope + SourceProfile for each variable.
+        // Use ResolveProfileVariablesWithSource to populate Scope + SourceProfile for each variable.
         var resolvedVars = ResolveProfileVariablesWithSource(profile, profiles);
         foreach (var rv in resolvedVars)
         {
@@ -498,7 +498,7 @@ partial class Program
                 masked.AddVariable(rv.Name, rv.Value, rv.Scope, rv.SourceProfile);
             }
         }
-        // v0.9.16: Also include resolved PATH entries with sourceProfile for each inherited path.
+        // Also include resolved PATH entries with sourceProfile for each inherited path.
         masked.SetResolvedPaths(ResolveProfilePathsWithSource(profile, profiles)
             .Select(p => new ResolvedPathEntry { Path = p.path, Scope = p.scope, SourceProfile = p.sourceProfile }).ToList());
         Console.WriteLine(JsonSerializer.Serialize(masked, JsonOptsIndented));
@@ -508,7 +508,7 @@ partial class Program
 
     static int ProfileApply(string[] args, string? name)
     {
-        // Ticket 19: --strict promotes pre-flight warnings to hard failures (exit 1).
+        // --strict promotes pre-flight warnings to hard failures (exit 1).
         bool strict = args.Skip(2).Any(a => a.Equals("--strict", StringComparison.OrdinalIgnoreCase));
         var profiles = LoadProfiles();
         bool applyWarned = false;
@@ -519,7 +519,7 @@ partial class Program
             return 1;
         }
 
-        // v0.7.1 hard boundary: Launch profiles are *local* only - they spawn a child
+        // Hard boundary: Launch profiles are *local* only - they spawn a child
         // process with env_clear + inject and must NEVER be applied to the user
         // registry. Allowing apply would silently demote a Launch profile into a
         // Global-style persistent registry write, violating the locality contract
@@ -534,7 +534,7 @@ partial class Program
 
         // T04-PREFLIGHT: same v0.7.7 boundary set, now exercised through the seam core
         // (RunProfilePreflight) so the inherited-secret rejection is unit-testable.
-        // Ticket 19: two-tier validation - the error tier keeps the exact rejection copy;
+        // Two-tier validation - the error tier keeps the exact rejection copy;
         // the warn tier (undefined %VAR%, stale PATH entry, dangling launch target) is
         // advisory by default (exit 2 after a successful apply) and hard-fails under --strict.
         var preflight = RunProfilePreflightDetailed(profile, profiles, strict);
@@ -581,7 +581,7 @@ partial class Program
             throw;
         }
         Console.WriteLine($"Applied profile: {name} ({profile.Variables.Count} variables)");
-        // Ticket 19: warn-tier findings are advisory - the write went through, but the
+        // Warn-tier findings are advisory - the write went through, but the
         // process exit code records that the pre-flight had something to say (2 = warn).
         return applyWarned ? 2 : 0;
     }
@@ -783,7 +783,7 @@ partial class Program
         return varName + "_PowerToys_" + profileName;
     }
 
-    // --- ProfileCommand members (architecture-recovery issue 06, moved verbatim from EnvFeatures.cs) ---
+    // --- ProfileCommand members (architecture-recovery, moved verbatim from EnvFeatures.cs) ---
 
     static List<ProfileVariable> ResolveProfileVariables(ProfileData profile, List<ProfileData>? profiles = null)
     {
@@ -823,7 +823,7 @@ partial class Program
         stack.Remove(profile.Name);
     }
 
-    // v0.9.15: Resolve PATH entries with per-entry scope preserved.
+    // Resolve PATH entries with per-entry scope preserved.
     // Returns (path, scope) pairs index-aligned with PathEntries[i] / PathScopes[i].
     // Missing PathScopes[i] defaults to "user" (backward compat with pre-v0.7.1 profiles).
     static List<(string path, string scope)> ResolveProfilePathsWithScopes(ProfileData profile, List<ProfileData>? profiles = null)
@@ -852,7 +852,7 @@ partial class Program
         stack.Remove(profile.Name);
     }
 
-    // v0.9.16: Resolve PATH entries with per-entry scope AND source profile name preserved.
+    // Resolve PATH entries with per-entry scope AND source profile name preserved.
     // Returns (path, scope, sourceProfile) tuples tracking which profile contributed each entry.
     // Inherits chain walked depth-first; parent entries appear before child entries (same order as ResolveProfilePathsWithScopes).
     static List<(string path, string scope, string sourceProfile)> ResolveProfilePathsWithSource(ProfileData profile, List<ProfileData>? profiles = null)
@@ -880,7 +880,7 @@ partial class Program
         stack.Remove(profile.Name);
     }
 
-    // v0.9.16: Resolve variables with source profile name preserved.
+    // Resolve variables with source profile name preserved.
     // Returns ProfileVariable list with Scope + SourceProfile fields populated.
     // Child variables override parent variables by name (same semantics as ResolveProfileVariables).
     static List<ProfileVariable> ResolveProfileVariablesWithSource(ProfileData profile, List<ProfileData>? profiles = null)
@@ -914,7 +914,7 @@ partial class Program
         return 0;
     }
 
-    // v0.7.5: DFS to detect if adding parents would close a cycle. Walk
+    // DFS to detect if adding parents would close a cycle. Walk
 // every requested parent's existing Inherits chain; if any chain leads back
 // to the target profile name there is a cycle.
 static bool HasInheritanceCycle(string targetName, List<string> requestedParents, List<ProfileData> allProfiles)
@@ -937,7 +937,7 @@ static int ProfileSetInherits(string[] args)
         var profiles = LoadProfiles();
         var profile = FindProfile(profiles, args[2]);
         if (profile == null) return ArgError("Error: Profile not found");
-        // v0.7.5: reject self-inheritance and cycles. A cycle (A inherits B
+        // reject self-inheritance and cycles. A cycle (A inherits B
         // which inherits A) or a self-loop makes ResolveProfileVariables
         // infinite-loop and the profile un-recoverable.
         var requestedParents = args.Skip(3).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
@@ -945,7 +945,7 @@ static int ProfileSetInherits(string[] args)
             return ArgError("Error: A profile cannot inherit itself");
         if (HasInheritanceCycle(args[2], requestedParents, profiles))
             return ArgError("Error: Inheritance cycle detected. One of the requested parents already inherits (transitively) from '" + args[2] + "'.");
-        // v0.7.7 hard boundary: a Global profile MUST NOT inherit from a Launch profile.
+        // Hard boundary: a Global profile MUST NOT inherit from a Launch profile.
         // The Launch profile type carries DPAPI secrets that cannot be put in the user
         // registry as plaintext, and a Launch-targeted apply would never act on them
         // in the right scope. This is the same guard as IsProfileApplicable, applied
@@ -977,7 +977,7 @@ static int ProfileSetInherits(string[] args)
         bool wasEnabled = profile.IsEnabled;
         if (wasEnabled) UnapplyProfile(profile);
         profile.SetInherits(args.Skip(3).ToList());
-        // v0.7.7: if the inheritance chain is somehow already poisoned (e.g. a
+        // if the inheritance chain is somehow already poisoned (e.g. a
         // hand-edited profiles.json that bypassed CLI validation), ResolveProfile*
         // throws InvalidDataException. Wrap so set-inherits itself does not brick.
         try

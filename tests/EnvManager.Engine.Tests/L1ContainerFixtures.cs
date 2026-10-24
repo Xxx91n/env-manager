@@ -1,4 +1,4 @@
-// L1ContainerFixtures.cs - shared emulator containers + localhost Connect mock (issue 15)
+// L1ContainerFixtures.cs - shared emulator containers + localhost Connect mock
 // License: Apache-2.0
 //
 // One lazily-started container per emulator backend, shared across every test in the
@@ -18,7 +18,7 @@ namespace EnvManager.Engine.Tests;
 
 internal static class L1ContainerFixtures
 {
-    // ---- pinned images (issue 15 image pinning; verified live 2026-09-03) ----
+    // ---- pinned images ----
 
     internal const string VaultImage = "hashicorp/vault:1.20.4";
     internal const string LocalStackImage = "localstack/localstack:4.4.0";

@@ -7,7 +7,7 @@ using Xunit;
 namespace EnvManager.Engine.Tests;
 
 /// <summary>
-/// Domain: IPC schema contract (architecture-recovery issue 08).
+/// Domain: IPC schema contract (architecture-recovery).
 /// The authoritative protocol definition lives in the Rust service
 /// (service/src/ipc.rs IpcRequest/IpcResponse). docs/schemas/ holds golden
 /// files exported from it by the Rust golden test. These tests assert the

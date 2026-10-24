@@ -6,7 +6,7 @@ using Xunit;
 namespace EnvManager.Engine.Tests;
 
 /// <summary>
-/// Ticket 50 (round-8 second survivor triage) kill tests: one assertion target per
+/// Round-8 second survivor triage kill tests: one assertion target per
 /// currently-surviving Stryker mutant from the dispatched baseline (build.yml stryker job,
 /// run 34771955013). Dispositions are registered in
 /// docs/history/architecture-recovery-2026-09/reports/50-survivor-registry.md - 13 killed here via
@@ -56,7 +56,7 @@ public class MutationSurvivorSecondTriageTests : IDisposable
 
     // ---- survivor #3364 (ProfileEffective.cs:53, negated global-topology guard in
     // ---- IsProfileApplicable - the poisoned-store re-check, distinct from the
-    // ---- RunProfilePreflight twin already killed by ticket 18) ----
+    // ---- RunProfilePreflight twin already killed by ) ----
 
     /// <summary>A poisoned store where a Global profile inherits a SECRETLESS Launch
     /// parent must still report isApplicable=false - the set-inherits command-level guard

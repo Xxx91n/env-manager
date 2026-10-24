@@ -5,7 +5,7 @@ using Xunit;
 namespace EnvManager.Engine.Tests;
 
 /// <summary>
-/// Ticket 18 (mutation survivor triage) stdout kill test: change-scope's success
+/// Mutation survivor triage stdout kill test: change-scope's success
 /// confirmation line and the minimal 3-argument auto-detect invocation were unasserted
 /// (baseline survivors #6111 / #6126 / #6191). Console redirection joins the
 /// CliSnapshotSerial collection so parallel suites cannot interleave captured streams.

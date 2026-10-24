@@ -1,6 +1,6 @@
 using EnvManager.Secrets.Core;
-// CredentialManagerProvider.cs - secret provider architecture (ticket 09, architecture-recovery)
-// One-symbol-per-file split of the retired single-file secret provider module (issue 09); behavior unchanged.
+// CredentialManagerProvider.cs - secret provider architecture
+// One-symbol-per-file split of the retired single-file secret provider module; behavior unchanged.
 // License: Apache-2.0
 
 using System;
@@ -8,7 +8,7 @@ using System.ComponentModel;
 using System.Runtime.InteropServices;
 using System.Text;
 
-// ticket 40: adapter-boundary typed error family (family types resolve via the
+// Adapter-boundary typed error family (family types resolve via the
 // EnvManager.Secrets.Core using at the top of this file).
 
 namespace EnvManager.Secrets.Providers;
@@ -19,7 +19,7 @@ internal sealed class CredentialManagerProvider : ISecretProvider
 {
     public string Name => "credential-manager";
 
-    // Capability descriptors (ticket 41, spec Phase 6): declared per provider,
+    // Capability descriptors: declared per provider,
     // consumed by SecretProviderManager.ListProviders and surfaced through
     // `profile secret-provider list` so the GUI gates on data, not name lists.
     public bool RefreshCapable => false;

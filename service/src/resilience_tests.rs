@@ -1,4 +1,4 @@
-// Ticket 33 (architecture-recovery): service crate resilience fault-injection tests.
+// Architecture-recovery: service crate resilience fault-injection tests.
 // Scenarios pinned here: pipe half-open reconnect, IPC read timeout, IPC schema
 // compliance under fault-shaped responses. The kill -9 / SCM-restart scenario needs
 // process-level control and is exercised by the manual script
@@ -191,7 +191,7 @@ async fn ipc_read_timeout_fires_on_hung_server() {
 }
 
 /// IPC responses must keep the schema envelope under fault-shaped conditions:
-/// ok:false responses carry a message. Read-only check over the ticket 08 golden
+/// ok:false responses carry a message. Read-only check over the golden
 /// samples (same resolution walk as ipc.rs::golden_dir — tests run with CWD at
 /// the package root, so a bare relative path would not resolve).
 #[test]
@@ -228,10 +228,10 @@ fn ipc_schema_compliance_under_faults() {
 /// Reconcile warmup (30s) prevents SCM timeout on boot. Pinned as documentation
 /// only for now: driving the real reconcile_loop requires >31s wall time and its
 /// tick resolves secret_mount_path() against LOCALAPPDATA, which conflicts with
-/// the CI user-state isolation discipline (architecture-recovery issue 24).
+/// the CI user-state isolation discipline (architecture-recovery).
 /// Replace with a real loop-level assertion if the warmup becomes seam-parameterized.
 #[test]
-#[ignore = "30s warmup needs >31s wall time and touches LOCALAPPDATA (issue 24 isolation); pin via seam if warmup becomes configurable"]
+#[ignore = "30s warmup needs >31s wall time and touches LOCALAPPDATA (isolation); pin via seam if warmup becomes configurable"]
 fn reconcile_warmup_constant_pinned() {
     // Contract (reconcile.rs): 30s warmup before first tick, 300s interval.
     // Expected assertion once seamable: no tick before 30s, tick at 30s.

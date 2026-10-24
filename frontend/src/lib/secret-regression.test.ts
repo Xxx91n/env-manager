@@ -129,7 +129,7 @@ describe('Secret provider regression safety', () => {
   })
 
   it('Logs never record secret values - audit records only names and markers', () => {
-    // Ticket 26 split ProfileCommand into three files; read all of them so the
+    // Split ProfileCommand into three files; read all of them so the
     // source-gate assertions look at the post-split code surface. <redacted> now
     // lives in ProfileSecretCommand.cs (ProfileRevealSecret + add/edit-secret).
     const programSrc = [
@@ -143,9 +143,9 @@ describe('Secret provider regression safety', () => {
   })
 
   it('Profile launch decrypts secrets in-process and never logs plaintext', () => {
-    // Ticket 26 split ProfileCommand into three files; read all of them so the
+    // Split ProfileCommand into three files; read all of them so the
     // source-gate assertions look at the post-split code surface.
-    // Ticket 39 two-layer port: the env injection now goes through the ISecretStore
+    // Two-layer port: the env injection now goes through the ISecretStore
     // facade (SecretStore.Reveal in ProfileLaunchCommand.cs); the reveal path lives
     // in ProfileSecretCommand.cs. SecretVariables.Contains is unchanged.
     const programSrc = [

@@ -6,13 +6,13 @@ using System.Text.Json.Serialization;
 namespace EnvManager;
 
 /// <summary>
-/// Native interop helpers (architecture-recovery issue 05): WER crash-dialog suppression,
+/// Native interop helpers (architecture-recovery): WER crash-dialog suppression,
 /// ACL-restricted file writes, and the WM_SETTINGCHANGE broadcast P/Invoke, moved verbatim
 /// from Program.cs. Behavior unchanged.
 /// </summary>
 partial class Program
 {
-    // v0.9.13 Phase 2D/4A: WER disable + crash dump protection P/Invoke
+    // WER disable + crash dump protection P/Invoke
     [System.Runtime.InteropServices.DllImport("kernel32.dll", SetLastError = true)]
     private static extern uint SetErrorMode(uint uMode);
 
@@ -46,7 +46,7 @@ partial class Program
         catch { } // wer.dll may not be present
     }
 
-    // v0.9.13 Phase 3A: NTFS ACL restriction on audit files
+    // NTFS ACL restriction on audit files
     // Restricts access to current user + SYSTEM only. Removes inheritance.
     private static void SetFileAclRestricted(string path)
     {
@@ -87,7 +87,7 @@ partial class Program
 }
 
 /// <summary>
-/// LocalFree interop used by DpapiHelper buffer cleanup (architecture-recovery issue 06):
+/// LocalFree interop used by DpapiHelper buffer cleanup (architecture-recovery):
 /// moved verbatim from EnvFeatures.cs. Behavior unchanged.
 /// </summary>
 internal static partial class NativeMethods

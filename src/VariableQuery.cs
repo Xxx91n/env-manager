@@ -6,7 +6,7 @@ using System.Text.Json.Serialization;
 namespace EnvManager;
 
 /// <summary>
-/// Variable query/scoping helpers (architecture-recovery issue 05): --scope parsing, registry
+/// Variable query/scoping helpers (architecture-recovery): --scope parsing, registry
 /// hive targeting, list/get projection, raw unexpanded reads, and the WM_SETTINGCHANGE
 /// broadcast, moved verbatim from Program.cs. Behavior unchanged.
 /// </summary>

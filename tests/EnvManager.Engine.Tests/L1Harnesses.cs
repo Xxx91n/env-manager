@@ -1,4 +1,4 @@
-// L1Harnesses.cs - neutral L1 backend harnesses (issue 15, architecture-recovery)
+// L1Harnesses.cs - neutral L1 backend harnesses
 // License: Apache-2.0
 //
 // Per-provider ISecretProviderHarness implementations whose Seed/ReadRaw go straight
@@ -410,8 +410,8 @@ internal sealed class OnePasswordL1Harness(string opBinary, OpConnectMock mock) 
     public string SeedSecret(string plaintext, string context)
     {
         // Neutral write: seed the item straight into the Connect mock via POST
-        // (op item create is refused by the op CLI over Connect, live-verified
-        // v2.39.0), then let the provider's real Decrypt read it back.
+        // (op item create is refused by the op CLI over Connect, live-verified),
+        // then let the provider's real Decrypt read it back.
         var itemName = context.Split('/')[0];
         var body = JsonSerializer.Serialize(new
         {

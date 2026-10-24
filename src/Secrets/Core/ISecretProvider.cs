@@ -1,5 +1,5 @@
-// ISecretProvider.cs - secret provider architecture (ticket 09, architecture-recovery)
-// One-symbol-per-file split of the retired single-file secret provider module (issue 09); behavior unchanged.
+// ISecretProvider.cs - secret provider architecture
+// One-symbol-per-file split of the retired single-file secret provider module; behavior unchanged.
 // License: Apache-2.0
 
 namespace EnvManager.Secrets.Core;
@@ -28,7 +28,7 @@ internal interface ISecretProvider
     // Delete any provider-side state (e.g. CredMan entry) for a given envelope
     void Delete(string envelope, string? context = null) { }
 
-    // --- Capability descriptors (ticket 41, spec Phase 6: capability-descriptor matrix) ---
+    // --- Capability descriptors ---
 // Declared per provider from the 2026-09 backend facts (macro review §4.4); consumed by
 // SecretProviderManager.ListProviders and `profile secret-provider list` so capability is
 // data the GUI gates on instead of hardcoded provider-name rules.

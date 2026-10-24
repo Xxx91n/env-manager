@@ -4,7 +4,7 @@ using System.Security.Cryptography;
 
 namespace EnvManager;
 
-// v0.9.10: Phase E audit ledger unification.
+// Phase E audit ledger unification.
 // Migrates the CLI-level audit.json (List<AuditEntry>) into the service-level
 // audit-ledger.jsonl (append-only, hash-chained). The ledger lives at
 // %ProgramData%\EnvManager\audit-ledger.jsonl (same as service mode).
@@ -355,7 +355,7 @@ partial class Program
         return 0;
     }
 
-    // --- SafeSlice (architecture-recovery issue 06, moved verbatim from EnvFeatures.cs) ---
+    // --- SafeSlice (architecture-recovery, moved verbatim from EnvFeatures.cs) ---
 
     /// <summary>
     /// Safe string slice: returns substring up to maxLength, or full string if shorter.

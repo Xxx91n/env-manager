@@ -57,7 +57,7 @@ describe('Phase 5: Long-session memory safety', () => {
   it('C# SecretProvider: decrypted material only lives in transient process memory', () => {
     const src = readSecretProviderSources()
     expect(src).toContain('ciphertext')
-    // Ticket 26 split ProfileCommand into three files; read all of them so the
+    // Split ProfileCommand into three files; read all of them so the
     // source-gate assertions look at the post-split code surface. ProfileRevealSecret
     // now lives in ProfileSecretCommand.cs.
     const programSrc = [
@@ -69,7 +69,7 @@ describe('Phase 5: Long-session memory safety', () => {
   })
 
   it('C# Program.cs: secrets never written to profiles.json as plaintext', () => {
-    // Ticket 26 split ProfileCommand into three files; read all of them so the
+    // Split ProfileCommand into three files; read all of them so the
     // source-gate assertions look at the post-split code surface. <redacted> now
     // lives in ProfileSecretCommand.cs (ProfileRevealSecret error copy + add/edit
     // secret JSON projection).

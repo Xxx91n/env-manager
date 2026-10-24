@@ -6,7 +6,7 @@ import { fileURLToPath } from 'url'
 const __dirname2 = typeof __dirname !== 'undefined' ? __dirname : dirname(fileURLToPath(import.meta.url))
 const wxs = readFileSync(join(__dirname2, '..', 'scripts', 'installer.wxs'), 'utf8')
 
-// v0.9.29 MSI UI / grill-plan-msi-ui-v0929: WixUI_InstallDir UI + ARPPRODUCTICON + desktop shortcut gates.
+// MSI UI: WixUI_InstallDir UI + ARPPRODUCTICON + desktop shortcut gates.
 describe('installer.wxs MSI UI (v0.9.29)', () => {
   it('declares WIXUI_INSTALLDIR bound to INSTALLDIR (browse-dialog data flow)', () => {
     expect(wxs).toMatch(/<Property Id="WIXUI_INSTALLDIR" Value="INSTALLDIR"/)

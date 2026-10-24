@@ -1,4 +1,4 @@
-// v0.9.13 Phase 3B/3C: Audit at-rest encryption + Export-state double-layer crypto.
+// Audit at-rest encryption + Export-state double-layer crypto.
 
 using System;
 using System.IO;

@@ -1,4 +1,4 @@
-// Shared by the secret-provider gate tests (architecture-recovery issue 09): the
+// Shared by the secret-provider gate tests (architecture-recovery): the
 // engine's secret provider sources live in per-symbol modules under src/, listed
 // here in the original single-file order so slice-based assertions keep working.
 import { readFileSync } from 'fs'

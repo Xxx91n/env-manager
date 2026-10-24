@@ -5,7 +5,7 @@ using EnvManager.Secrets.Core;
 
 namespace EnvManager;
 
-// v0.9.9: Versioned schema migration framework.
+// Versioned schema migration framework.
 // Replaces the ad-hoc MigrateSecretsToMounts call with a registry-based
 // sequential migration system. Each config file (profiles.json, secretMount.json)
 // carries a schemaVersion field; on load, migrations are applied sequentially

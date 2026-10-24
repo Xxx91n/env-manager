@@ -31,7 +31,7 @@ partial class Program
         {
             profile.EnsureCollections();
         }
-        // v0.9.9: Versioned schema migration (replaces ad-hoc MigrateSecretsToMounts call).
+        // Versioned schema migration (replaces ad-hoc MigrateSecretsToMounts call).
         // The registry detects schema version, runs pending steps sequentially, and persists.
         MigrateProfiles(profiles);
         return profiles;
@@ -46,7 +46,7 @@ partial class Program
 static void AtomicWriteProfiles(List<ProfileData> profiles, bool createBackup)
 {
     string temp = ProfilesFilePath + ".tmp." + Environment.ProcessId;
-    // v0.8.0 A3: fsync before rename to match Rust write_atomic (sync_all before rename).
+    // fsync before rename to match Rust write_atomic (sync_all before rename).
     // Without this a crash after rename could lose temp content and resurrect
     // stale state - the same bug class that motivated the Rust-side guard.
     using (var fs = File.Create(temp))
@@ -108,7 +108,7 @@ static void AtomicWriteProfiles(List<ProfileData> profiles, bool createBackup)
     {
         get
         {
-            if (_profilesFilePathOverride != null) return _profilesFilePathOverride; // Ticket 04 test redirect
+            if (_profilesFilePathOverride != null) return _profilesFilePathOverride; // test redirect
             string dir = Path.Combine(
                 LocalAppDataRoot,
                 "EnvManager");
@@ -117,7 +117,7 @@ static void AtomicWriteProfiles(List<ProfileData> profiles, bool createBackup)
         }
     }
 
-    // Ticket 04 test seam: when non-null, ProfilesFilePath returns this path so the
+    // Test seam: when non-null, ProfilesFilePath returns this path so the
     // xUnit lane can redirect profiles.json to a temp dir. Production never sets it.
     static string? _profilesFilePathOverride;
 
@@ -126,7 +126,7 @@ static void AtomicWriteProfiles(List<ProfileData> profiles, bool createBackup)
         _profilesFilePathOverride = path;
     }
 
-    // Ticket 04 test seam: persist profiles WITHOUT ValidateProfiles, simulating a
+    // Test seam: persist profiles WITHOUT ValidateProfiles, simulating a
     // hand-edited profiles.json so the ApplyProfile protection guard (defense in depth
     // behind pre-flight) can be exercised against poisoned data.
     internal static void SaveProfilesRawForTests(List<ProfileData> profiles)

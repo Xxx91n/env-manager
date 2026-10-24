@@ -6,8 +6,8 @@ import { fileURLToPath } from 'url'
 const __dirname2 = typeof __dirname !== 'undefined' ? __dirname : dirname(fileURLToPath(import.meta.url))
 const wxs = readFileSync(join(__dirname2, '..', 'scripts', 'installer.wxs'), 'utf8')
 
-// v0.9.28 MSI hygiene / grill-plan-msi-residual-guid-v0928: string gates that must hold
-// for the v0.9.28 MSI hygiene pass (RemoveFile wildcard residue wipe, explicit
+// MSI hygiene: string gates that must hold
+// for the residue wipe (RemoveFile wildcard), explicit
 // GUIDs on the three binaries, unconditional RemoveFolder on INSTALLDIR).
 describe('installer.wxs v0.9.28 MSI residue / GUID hygiene invariants', () => {
   it('every INSTALLDIR file component has RemoveFile Name="*.*" On="uninstall"', () => {

@@ -5,7 +5,7 @@ using System.Text.Json;
 namespace EnvManager;
 
 /// <summary>
-/// Agents command domain (architecture-recovery issue 05 + ticket 27): the `agents` CLI spec emitter, extracted from partial class Program to its own internal class so that the Program type stops accumulating domain methods. Behaviour is verbatim - no source-level change to the body. The internal accessibility keeps cross-domain helpers invisible to other assemblies while leaving Program itself a thin Main dispatcher that calls <see cref="Run"/>.
+/// Agents command domain (architecture-recovery): the `agents` CLI spec emitter, extracted from partial class Program to its own internal class so that the Program type stops accumulating domain methods. Behaviour is verbatim - no source-level change to the body. The internal accessibility keeps cross-domain helpers invisible to other assemblies while leaving Program itself a thin Main dispatcher that calls <see cref="Run"/>.
 /// </summary>
 internal static class AgentsCommand
 {

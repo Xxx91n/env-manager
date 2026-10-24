@@ -49,7 +49,7 @@
   let bulkScope: 'user' | 'system' = 'user'
   let bulkLoading = false
 
-  // v0.9.0 Phase B+C: Service control panel state
+  // Service control panel state
   let serviceRunning = false
   let serviceHealthData: any = null
   let serviceLoading = false
@@ -60,7 +60,7 @@
     // Check real system PATH on mount
     cliInPath = await isCliInPath()
     void refreshServiceStatus()
-    // Ticket 37: silent background update check on dialog open (industry UX:
+    // Silent background update check on dialog open (industry UX:
     // VS Code update.mode default). Sets the badge only — no toast, no dialog.
     try {
       const info = await checkUpdatePlugin()
@@ -94,7 +94,7 @@
     themeStyle = style
     void setSetting('themeStyle', style)
     dispatch('themeStyleChange', style)
-    // v0.9.20 Add theme-changing class for smooth color base transition
+    // Add theme-changing class for smooth color base transition
     if (typeof document !== 'undefined' && document.body) {
       document.body.classList.add('theme-changing')
       setTimeout(() => {
@@ -154,7 +154,7 @@
     })
   }
 
-  // v0.9.0 Phase B+C: Service control panel handlers
+  // Service control panel handlers
   async function handleServicePing() {
     if (serviceLoading) return
     serviceLoading = true
@@ -196,7 +196,7 @@
     serviceLoading = true
     serviceError = null
     try {
-      // v0.9.3: Use direct Tauri IPC stop_service (not CLI relay) for faster stop.
+      // Use direct Tauri IPC stop_service (not CLI relay) for faster stop.
       // The service is a persistent daemon; only explicit user Stop kills it.
       await serviceStop()
       showToast(get(tStore)('settings.service.shutdown'), 'success')
@@ -273,7 +273,7 @@
   async function refreshServiceStatus() {
     try {
       const status = await serviceStatus()
-      // v0.9.2: api.ts now returns unified {ok, data, message}
+      // api.ts now returns unified {ok, data, message}
       serviceRunning = status?.ok === true && status?.data?.running === true
       if (serviceRunning) {
         const healthResult = await serviceHealth()
@@ -316,7 +316,7 @@
   }
 
 
-  // Ticket 37: in-app download + install via tauri-plugin-updater.
+  // In-app download + install via tauri-plugin-updater.
   // The plugin verifies the minisign signature, downloads the MSI and runs it;
   // on Windows the app exits itself once the installer launches. On failure the
   // browser fallback (openReleasePage) lets the user grab the MSI manually.
@@ -393,7 +393,7 @@
     dispatch('close')
   }
 
-  // v0.9.9: Full-state disaster recovery handlers
+  // Full-state disaster recovery handlers
   let drLoading = false
   let drError: string | null = null
 

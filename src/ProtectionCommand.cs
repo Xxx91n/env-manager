@@ -180,7 +180,7 @@ partial class Program
     }
 
 
-    // --- protection defaults storage (architecture-recovery issue 06, moved verbatim from EnvFeatures.cs) ---
+    // --- protection defaults storage (architecture-recovery, moved verbatim from EnvFeatures.cs) ---
 
     /// <summary>
     /// Path to the externally-editable built-in protected variables list.

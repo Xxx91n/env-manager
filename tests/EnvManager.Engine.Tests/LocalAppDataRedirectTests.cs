@@ -1,4 +1,4 @@
-// LocalAppDataRedirectTests.cs - CI user-state isolation seam (architecture-recovery issue 24)
+// LocalAppDataRedirectTests.cs - CI user-state isolation seam (architecture-recovery)
 // License: Apache-2.0
 
 using EnvManager;
@@ -8,13 +8,13 @@ using Xunit;
 namespace EnvManager.Engine.Tests;
 
 /// <summary>
-/// Pins the <c>ENVMANAGER_LOCALAPPDATA</c> production seam (architecture-recovery issue 24):
+/// Pins the <c>ENVMANAGER_LOCALAPPDATA</c> production seam (architecture-recovery):
 /// when the variable is set, <c>Program.LocalAppDataRoot</c> returns it and every user-state
 /// file resolution composed on that root (AppDataDirectory, profiles.json, audit, secret
 /// mounts, provider config, provider hash, protection stores) follows the redirect; when
 /// unset or empty, the resolution is byte-identical to the pre-issue-24 shell folder.
 /// This is the cross-process equivalent of the in-process SetAppDataDirectoryForTests seam
-/// (ticket 18): CI integration suites set the variable in the CLI subprocess environment so
+/// CI integration suites set the variable in the CLI subprocess environment so
 /// profiles.json and friends land in the job-private directory, not the runner user profile.
 ///
 /// The assertions deliberately stop at <c>LocalAppDataRoot</c>: the composed path getters

@@ -1,4 +1,4 @@
-// v0.9.0 Phase B+C: Reconcile loop.
+// Reconcile loop.
 // tokio::time::interval(300s) periodic full-scan.
 // Idempotent per-item handler: read observed state, fetch desired, write only if diff.
 // Crash resume on next start by reading file state.
@@ -13,7 +13,7 @@ use chrono::{DateTime, Utc};
 use tokio_util::sync::CancellationToken;
 use std::sync::Arc;
 use tokio::sync::Mutex; // Phase 4C: TOCTOU protection
-use std::os::windows::process::CommandExt; // v0.9.18: CREATE_NO_WINDOW for CLI subprocess
+use std::os::windows::process::CommandExt; // CREATE_NO_WINDOW for CLI subprocess
 
 /// SecretMount mirror of the C# SecretMount class.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -248,7 +248,7 @@ pub async fn get_mount_health() -> Result<serde_json::Value, String> {
 }
 
 async fn refresh_mount_internal(_provider: &str) -> Result<(), String> {
-    // v0.9.0: The service manages mount metadata lifecycle only.
+    // The service manages mount metadata lifecycle only.
     // Actual provider Decrypt/Encrypt happens at CLI launch time.
     // The service's reconcile tick checks if the mount's refresh interval
     // has elapsed and updates lastFetchedAt to indicate a check was done.
@@ -260,10 +260,10 @@ async fn refresh_mount_internal(_provider: &str) -> Result<(), String> {
   }
 
 async fn call_cli_rotate() -> Result<String, String> {
-    // v0.9.0: Rotation delegates to the CLI's existing secret-provider rotate path.
+    // Rotation delegates to the CLI's existing secret-provider rotate path.
     // This is NOT a circular dependency because rotate is a one-shot write
     // (mutates profiles.json/secretMount.json), not an IPC to the service.
-    // v0.9.18: CREATE_NO_WINDOW (0x08000000) prevents console window flash.
+    // CREATE_NO_WINDOW (0x08000000) prevents console window flash.
     //          --json removed: CLI rotate does not support it (exits non-zero).
     let cli_exe = find_cli_exe()?;
     let output = tokio::process::Command::new(&cli_exe)

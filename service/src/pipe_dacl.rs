@@ -1,4 +1,4 @@
-// v0.9.13 Phase 2A: Named pipe DACL (discretionary access control list).
+// Named pipe DACL (discretionary access control list).
 // Restricts pipe connections to current user + Administrators + SYSTEM only.
 // Called after pipe creation. Best-effort: logs a warn on failure, does not block.
 // ponytail: one free fn, SDDL string approach (no manual ACL building).

@@ -4,7 +4,7 @@ using System.Text.Json;
 
 namespace EnvManager;
 
-// architecture-recovery ticket 43 (spec Phase 6, mental-model M1 bounded contexts):
+// architecture-recovery spec Phase 6, mental-model M1 bounded contexts:
 // "audit verify" - the hash-chain verification step for the shared append-only audit
 // ledger (audit-ledger.jsonl). The ledger is the audit-recovery source for the sanctioned
 // mutation route (compensatory writes + three-layer locking, never TxR/TxF);

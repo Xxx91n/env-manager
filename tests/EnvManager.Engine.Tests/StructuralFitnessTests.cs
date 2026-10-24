@@ -7,7 +7,7 @@ using Xunit;
 namespace EnvManager.Engine.Tests;
 
 /// <summary>
-/// Domain: structural fitness functions (architecture-recovery ticket 28, spec
+/// Domain: structural fitness functions (architecture-recovery , spec
 /// Phase 5, mental-model M2 fitness functions). Three guards in this file:
 ///   - DomainIsolation: ProfileSecretCommand does not depend on
 ///     ProfileLaunchCommand or ProfileCommand internals.
@@ -16,7 +16,7 @@ namespace EnvManager.Engine.Tests;
 ///   - DependencyDirectionAcyclic: no two of ProfileCommand /
 ///     ProfileLaunchCommand / ProfileSecretCommand mutually reference one
 ///     another's helper methods.
-///   - SecretsIsolation (ticket 38): outside the src/Secrets/ bounded
+///   - SecretsIsolation: outside the src/Secrets/ bounded
 ///     context, only EnvManager.Secrets.Core and EnvManager.Secrets.Manager
 ///     may be consumed - EnvManager.Secrets.Providers implementation types
 ///     never leak past the adapter boundary.
@@ -73,7 +73,7 @@ public class StructuralFitnessTests
         // any direct call into ProfileCommand methods like `ProfileCreate`,
         // `ProfileEditVar`, `ProfileSetInherits`, etc. These are CRUD verbs
         // and reading them from the secret subdomain breaks the bounded-
-        // context boundary ticket 26 + ticket 27 set up.
+        // context boundary + set up.
         var src = ReadSource("src/ProfileSecretCommand.cs");
         var crudCallSites = new[]
         {
@@ -105,10 +105,10 @@ public class StructuralFitnessTests
             StringComparison.Ordinal);
     }
 
-    // -- Rule 4: Secrets bounded-context isolation (ticket 38) -----------------
+    // -- Rule 4: Secrets bounded-context isolation -----------------
 
     /// <summary>
-    /// Ticket 38 extraction: the 14 secret files moved under src/Secrets/
+    /// Extraction: the 14 secret files moved under src/Secrets/
     /// carry namespaces EnvManager.Secrets.{Core,Providers,Manager}. Outside
     /// the Secrets context (src/Secrets/), callers may consume only Core and
     /// Manager - the Providers layer is an internal adapter detail, and a
@@ -169,7 +169,7 @@ public class StructuralFitnessTests
             var src = File.ReadAllText(file);
             Assert.True(
                 allowed.Any(a => src.Contains(a)),
-                Path.GetFileName(file) + " under src/Secrets/ declares none of the EnvManager.Secrets namespaces (ticket 38 bounded-context invariant).");
+                Path.GetFileName(file) + " under src/Secrets/ declares none of the EnvManager.Secrets namespaces (bounded-context invariant).");
         }
     }
 
@@ -190,7 +190,7 @@ public class StructuralFitnessTests
     [Fact]
     public void Program_StillDeclares_Main_AsTheSingleEntryPoint()
     {
-        // Sanity that ticket 27 ramp-1 didn't accidentally remove Main or
+        // Sanity that ramp-1 didn't accidentally remove Main or
         // duplicate it across partials. NetArchTest / reflection confirms
         // exactly one static Main(string[]) on Program after the ramp. Main is
         // declared without an access modifier (private) - the flags must include

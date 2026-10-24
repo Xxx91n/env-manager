@@ -7,7 +7,7 @@ namespace EnvManager.Engine.Tests;
 
 /// <summary>
 /// Domain: write-path command behavior through the IEnvironmentScope seam
-/// (architecture-recovery issue 03). Every command core runs against InMemoryScope with
+/// (architecture-recovery). Every command core runs against InMemoryScope with
 /// synthetic protection predicates - no real registry access, no machine state.
 /// Protected-rejection, success-write, error-code, and broadcast-timing assertions lock the
 /// hard boundaries: protected entries are untouchable and rename/change-scope never
@@ -255,7 +255,7 @@ public class WritePathSeamTests
     /// <summary>
     /// Contract test for the rename hard boundary: the target write must be recorded
     /// BEFORE the source delete. Reordering the implementation to delete-then-write makes
-    /// this test fail (the falsification was demonstrated live during issue 03).
+    /// this test fail (the falsification was demonstrated live during).
     /// </summary>
     [Fact]
     public void Rename_WritesTargetBeforeDeletingSource()

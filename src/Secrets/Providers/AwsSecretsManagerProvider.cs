@@ -1,9 +1,9 @@
 using EnvManager.Secrets.Core;
-// AwsSecretsManagerProvider.cs - secret provider architecture (ticket 09, architecture-recovery)
-// One-symbol-per-file split of the retired single-file secret provider module (issue 09); behavior unchanged.
+// AwsSecretsManagerProvider.cs - secret provider architecture
+// One-symbol-per-file split of the retired single-file secret provider module; behavior unchanged.
 // License: Apache-2.0
 
-// ticket 40: adapter-boundary typed error family. AWS is the audited provider
+// Adapter-boundary typed error family. AWS is the audited provider
 // (aws-sdk-java #2702): the Authorization header (SigV4 Credential=<accessKey>/...)
 // is echoed into service error payloads, so this adapter DISCARDS the response body
 // and any raw SDK/transport message - only the typed classification survives.
@@ -25,7 +25,7 @@ internal sealed class AwsSecretsManagerProvider : ISecretProvider
 {
     public string Name => "aws-secretsmanager";
 
-    // Capability descriptors (ticket 41, spec Phase 6): declared per provider,
+    // Capability descriptors: declared per provider,
     // consumed by SecretProviderManager.ListProviders and surfaced through
     // `profile secret-provider list` so the GUI gates on data, not name lists.
     public bool RefreshCapable => true;
@@ -53,7 +53,7 @@ internal sealed class AwsSecretsManagerProvider : ISecretProvider
             ?? throw new SecretProviderUnavailableException(Name, SecretProviderErrors.OpEncrypt, "AWS_REGION or AWS_DEFAULT_REGION not set");
         string secretId = context != null ? SanitizeSecretId(context) : "env-manager-" + Guid.NewGuid().ToString("N").Substring(0, 12);
 
-        // ClientRequestToken: AWS-recommended idempotency token; LocalStack (issue 15 L1
+        // ClientRequestToken: AWS-recommended idempotency token; LocalStack (L1
         // lane) rejects CreateSecret without it. A per-call UUID is the documented pattern
         // and is safe in production (retries dedupe).
         string body = "{\"Name\":\"" + JsonEscape(secretId) + "\",\"SecretString\":\"" + JsonEscape(plaintext) + "\",\"ClientRequestToken\":\"" + Guid.NewGuid().ToString("N") + "\"}";
@@ -121,7 +121,7 @@ internal sealed class AwsSecretsManagerProvider : ISecretProvider
 
     private static System.Net.Http.HttpResponseMessage CallAwsApi(string region, string target, string body)
     {
-        // Official AWS service-specific endpoint override convention (issue 15):
+        // Official AWS service-specific endpoint override convention:
         // AWS_ENDPOINT_URL_SECRETS_MANAGER redirects all Secrets Manager calls -
         // production deployments never set it; the L1 LocalStack emulator does.
         // TLS stays mandatory for the default endpoint; an explicit override may
@@ -180,7 +180,7 @@ internal sealed class AwsSecretsManagerProvider : ISecretProvider
         // live-verified); the SigV4 string is well-formed by construction.
         request.Headers.TryAddWithoutValidation("Authorization", auth);
         if (!string.IsNullOrEmpty(sessionToken)) request.Headers.TryAddWithoutValidation("X-Amz-Security-Token", sessionToken);
-        // issue 40: transport failures map at the boundary; the HttpRequestException can
+        // transport failures map at the boundary; the HttpRequestException can
         // carry the request URL but never the signed Authorization header value, and the
         // raw message is dropped entirely (classification-only mandate).
         return SecretProviderErrors.Send("aws-secretsmanager", "aws-api", () => client.SendAsync(request).GetAwaiter().GetResult(), discardRawMessage: true);

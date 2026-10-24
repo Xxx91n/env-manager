@@ -5,11 +5,11 @@ using Xunit;
 namespace EnvManager.Engine.Tests;
 
 /// <summary>
-/// Domain: CLI "human-readable contract" snapshot suite (architecture-recovery issue 14,
+/// Domain: CLI "human-readable contract" snapshot suite (architecture-recovery,
 /// spec Phase 3). Verify.Xunit locks the exact user-facing output of the CLI - help text,
 /// command stdout, error messages, and the canary masking markers
 /// (<encrypted>/<revealed>) - so any wording drift becomes an explicit, reviewable diff.
-/// Complements the IPC schema golden files (issue 08); does not replace them.
+/// Complements the IPC schema golden files; does not replace them.
 ///
 /// Determinism contract: every captured stream passes through <see cref="Scrub"/>,
 /// which normalizes ONLY known-volatile fields (assembly version, profile GUIDs, audit
@@ -403,7 +403,7 @@ public class CliOutputSnapshotTests : VerifyBase
             Scrub("Error: Cannot rename protected variable (source protected): X"));
     }
 
-    // ticket 42 aggregate-root: ProfileData setters are private; build via domain methods.
+    // Aggregate-root: ProfileData setters are private; build via domain methods.
     private static ProfileData MkSnapLaunch()
     {
         var p = new ProfileData();
@@ -422,7 +422,7 @@ public class CliOutputSnapshotTests : VerifyBase
 /// Console redirection (snapshot/stdout/help suites) and the Program static seams
 /// (SetProfilesFilePathForTests / SetAppDataDirectoryForTests / SetAudit*PathForTests).
 /// xUnit v2 runs DisableParallelization collections strictly one at a time, never
-/// concurrently with any other collection (issue 14+18+19).</summary>
+/// concurrently with any other collection.</summary>
 [CollectionDefinition("CliSnapshotSerial", DisableParallelization = true)]
 public sealed class CliSnapshotSerialCollection;
 

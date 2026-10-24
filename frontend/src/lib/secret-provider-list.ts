@@ -1,4 +1,4 @@
-// Ticket 41: capability-aware parser for `profile secret-provider list` output.
+// Capability-aware parser for `profile secret-provider list` output.
 // The GUI derives providers and their capability descriptors from CLI output
 // only (hard boundary v0.7.3) — no hardcoded provider id list lives here.
 // Line contract (v0.12+): "  <name> [(active)] [(unavailable)]

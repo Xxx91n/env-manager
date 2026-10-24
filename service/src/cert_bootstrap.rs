@@ -1,4 +1,4 @@
-// v0.9.5 Phase D: Certificate-based bootstrap.
+// Certificate-based bootstrap.
 // Replaces static cloud credentials (VAULT_TOKEN, AZURE_CLIENT_SECRET, etc.)
 // with short-lived certificate auth. Certificates stored in Cert:\LocalMachine\My
 // with non-exportable private key ACL'd to per-service SID.
@@ -43,7 +43,7 @@ fn run_powershell(script: &str) -> Result<std::process::Output, String> {
 /// 6. On cert-based auth: if cert_thumbprint is provided, use TLS client cert
 ///    instead of AppRole. POST to {VAULT_ADDR}/v1/auth/cert/login with the cert.
 pub fn vault_bootstrap(cert_thumbprint: &str) -> Result<Zeroizing<String>, String> {
-    // v0.9.13: token wrapped in Zeroizing<String> for deterministic memory zeroing on drop.
+    // token wrapped in Zeroizing<String> for deterministic memory zeroing on drop.
     let vault_addr = std::env::var("VAULT_ADDR")
         .map_err(|_| "VAULT_ADDR environment variable not set".to_string())?;
 
@@ -53,7 +53,7 @@ pub fn vault_bootstrap(cert_thumbprint: &str) -> Result<Zeroizing<String>, Strin
 
     // Try cert-based auth first if thumbprint provided.
     if !cert_thumbprint.is_empty() {
-        // v0.9.5 skeleton: cert-based auth requires loading the cert from
+        // Skeleton: cert-based auth requires loading the cert from
         // Cert:\LocalMachine\My by thumbprint and using it as TLS client cert.
         // This requires the windows-sys crate's Cryptography API or the
         // reqwest crate with rustls feature for client cert auth.
@@ -101,7 +101,7 @@ $resp.auth.client_token"#,
 /// Azure SP cert auth — no reqwest/rustls dependency needed.
 /// See ADR 0001 A9: cert stored non-exportable, ACL'd to per-service SID.
 fn vault_cert_login(vault_addr: &str, thumbprint: &str) -> Result<Zeroizing<String>, String> {
-    // v0.9.13: token wrapped in Zeroizing<String> for deterministic memory zeroing on drop.
+    // token wrapped in Zeroizing<String> for deterministic memory zeroing on drop.
     // Script loads the cert by thumbprint and uses it for TLS client auth.
     // No secret values interpolated into the script body — thumbprint is
     // infrastructure metadata (non-secret), vault_addr is a URL.
@@ -152,7 +152,7 @@ $resp.auth.client_token"#,
 /// 6. Parse response for access_token + expires_in.
 /// 7. Return token. Caller caches with 5-min buffer.
 pub fn azure_sp_bootstrap(cert_thumbprint: &str) -> Result<Zeroizing<String>, String> {
-    // v0.9.13: token wrapped in Zeroizing<String> for deterministic memory zeroing on drop.
+    // token wrapped in Zeroizing<String> for deterministic memory zeroing on drop.
     let client_id = std::env::var("AZURE_CLIENT_ID")
         .map_err(|_| "AZURE_CLIENT_ID environment variable not set".to_string())?;
     let tenant_id = std::env::var("AZURE_TENANT_ID")
@@ -162,7 +162,7 @@ pub fn azure_sp_bootstrap(cert_thumbprint: &str) -> Result<Zeroizing<String>, St
         return Err("cert thumbprint is required for Azure SP cert auth".to_string());
     }
 
-    // v0.9.5 skeleton: Azure SP cert auth requires:
+    // Skeleton: Azure SP cert auth requires:
     // (a) Load cert by thumbprint from Cert:\LocalMachine\My
     // (b) Create and sign a JWT client assertion
     // (c) POST to Azure AD token endpoint

@@ -8,7 +8,7 @@ using EnvManager.Secrets.Manager;
 namespace EnvManager;
 
 /// <summary>
-/// Audit command domain (architecture-recovery issue 05): the `audit` subcommand (list, encrypt-file, ledger operation routing), moved verbatim from Program.cs; ticket 43 adds the `verify` hash-chain subcommand routed to AuditVerify.Run. Everything else unchanged.
+/// Audit command domain (architecture-recovery): the `audit` subcommand (list, encrypt-file, ledger operation routing), moved verbatim from Program.cs; adds the `verify` hash-chain subcommand routed to AuditVerify.Run. Everything else unchanged.
 /// </summary>
 partial class Program
 {
@@ -22,7 +22,7 @@ partial class Program
             Console.Error.WriteLine("  list [--mount <id>]                        List audit ledger events");
             Console.Error.WriteLine("  migrate-audit [--dry-run]                 Migrate audit.json to hash-chained ledger");
             Console.Error.WriteLine("  verify-ledger                              Verify audit ledger hash chain");
-            Console.Error.WriteLine("  verify [--ledger <file>] [--strict]        Verify hash-chain integrity (ticket 43)");
+            Console.Error.WriteLine("  verify [--ledger <file>] [--strict]        Verify hash-chain integrity");
             Console.Error.WriteLine("  export-survival-kit [--mount <id>] [--output <file>]  Export DPAPI-encrypted survival kit");
             Console.Error.WriteLine("  recover-from-ledger                        Recover mounts from ledger replay");
             return 1;
@@ -124,7 +124,7 @@ partial class Program
 
     /// <summary>
     /// Default ledger path for audit verify: the same %ProgramData% audit-ledger.jsonl
-    /// that verify-ledger reads (ticket 43). Overridable in tests via the --ledger flag.
+    /// that verify-ledger reads. Overridable in tests via the --ledger flag.
     /// </summary>
     internal static string ResolveAuditLedgerPathForCommand(string[] args)
     {
@@ -135,7 +135,7 @@ partial class Program
         return AuditLedgerPath;
     }
 
-    // --- audit/history storage + `history` command (architecture-recovery issue 06, moved verbatim from EnvFeatures.cs) ---
+    // --- audit/history storage + `history` command (architecture-recovery, moved verbatim from EnvFeatures.cs) ---
 
     const int MaxAuditEntries = 2000;
 
@@ -150,7 +150,7 @@ partial class Program
         if (!File.Exists(AuditFilePath)) return new();
         var info = new FileInfo(AuditFilePath);
         if (info.Length > MaxBackupFileSize) throw new InvalidDataException("Audit history exceeds the safety limit");
-        // v0.9.13 Phase 3B: decrypt AES-GCM encrypted audit content at rest
+        // decrypt AES-GCM encrypted audit content at rest
         string rawContent = File.ReadAllText(AuditFilePath);
         string plainJson = DecryptAuditContent(rawContent);
         return JsonSerializer.Deserialize<List<AuditEntry>>(plainJson, JsonOpts) ?? new();

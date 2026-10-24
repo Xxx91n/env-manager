@@ -1,4 +1,4 @@
-// SecretProviderException.cs - typed provider error family (ticket 40, architecture-recovery)
+// SecretProviderException.cs - typed provider error family
 // spec Phase 6 story 20: every ISecretProvider adapter boundary catches raw backend/transport
 // exceptions, maps them onto this family, and every family message passes
 // Program.ScrubExceptionMessage (ADR 0005) inside the base constructor - a secret-bearing
@@ -70,7 +70,7 @@ internal sealed class SecretProviderInvalidEnvelopeException : SecretProviderExc
         : base(provider, operation, message, mountId, inner) { }
 }
 
-// Classification + mapping helpers shared by the 8 provider adapters (ticket 40).
+// Classification + mapping helpers shared by the 8 provider adapters.
 internal static class SecretProviderErrors
 {
     public const string CatAuthFailed = "authFailed";
@@ -109,7 +109,7 @@ internal static class SecretProviderErrors
     // classification only plus the optional detail (response body) VERBATIM - the family
     // base constructor runs the assembled message through ScrubExceptionMessage exactly
     // once (the scrubber is not idempotent, so never pre-scrub before calling this).
-    // AWS passes detail: null - the adapter drops the response body entirely (issue 40).
+    // AWS passes detail: null - the adapter drops the response body entirely.
     public static SecretProviderException FromStatus(string provider, string operation, HttpStatusCode status, string action, string? detail = null, string? mountId = null)
     {
         string body = string.IsNullOrEmpty(detail) ? "" : ": " + detail;
@@ -124,7 +124,7 @@ internal static class SecretProviderErrors
     }
 
     // Boundary mapper for foreign (non-family) exceptions escaping an adapter. The raw
-    // message is dropped when discardRawMessage is set (AWS: issue 40 mandates
+    // message is dropped when discardRawMessage is set (AWS: mandates
     // classification-only); otherwise the raw message rides along and is scrubbed once
     // by the family base constructor.
     public static SecretProviderException Map(string provider, string operation, Exception ex, string? mountId = null, bool discardRawMessage = false)
@@ -156,7 +156,7 @@ internal static class SecretProviderErrors
     // transport failures (network, TLS, timeout, malformed payload) onto the family at
     // the adapter boundary. Family exceptions thrown by the wrapped call pass through
     // untouched (single-mapping guarantee). discardRawMessage drops the raw exception
-    // message - AWS passes true (issue 40 audit: classification-only).
+    // message - AWS passes true.
     public static T Send<T>(string provider, string operation, Func<T> call, string? mountId = null, bool discardRawMessage = false)
     {
         try { return call(); }

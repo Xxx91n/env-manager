@@ -1,4 +1,4 @@
-// AuditVerifyTests.cs - audit-ledger hash-chain verification (architecture-recovery ticket 43)
+// AuditVerifyTests.cs - audit-ledger hash-chain verification (architecture-recovery )
 // License: Apache-2.0
 
 using System.Security.Cryptography;
@@ -13,13 +13,13 @@ namespace EnvManager.Engine.Tests;
 
 /// <summary>
 /// Pins the <c>audit verify</c> hash-chain verification core (architecture-recovery
-/// ticket 43, spec Phase 6) against a synthetic audit-ledger.jsonl built through the
-/// canonical writer contract (the same one <c>audit migrate-audit</c> uses since
-/// v0.9.10): line = event(id, timestamp, actor, action, command, name, scope,
+/// Spec Phase 6) against a synthetic audit-ledger.jsonl built through the
+/// canonical writer contract (the same one <c>audit migrate-audit</c> uses):
+/// line = event(id, timestamp, actor, action, command, name, scope,
 /// prevHash) + hash + ledgerSchemaVersion, serialized with the engine JsonOpts;
 /// hash = SHA256(prevHash || canonical_json(event)). Genesis prevHash = 64 zeros.
 ///
-/// Scenarios (issue 43 acceptance): normal chain, tamper injection, missing line -
+/// Scenarios: normal chain, tamper injection, missing line -
 /// plus the report-vs-strict exit-code contract, missing/absent ledger, torn line,
 /// and the fail-closed unsupportedEntry shape for service-writer snake_case lines.
 ///

@@ -1,7 +1,7 @@
 using EnvManager.Secrets.Core;
 using EnvManager.Secrets.Providers;
-// SecretProviderManager.cs - secret provider architecture (ticket 09, architecture-recovery)
-// One-symbol-per-file split of the retired single-file secret provider module (issue 09); behavior unchanged.
+// SecretProviderManager.cs - secret provider architecture
+// One-symbol-per-file split of the retired single-file secret provider module; behavior unchanged.
 // License: Apache-2.0
 
 using System;
@@ -13,17 +13,17 @@ using System.Text.Json.Serialization;
 namespace EnvManager.Secrets.Manager;
 
 // --- Phase 1: SecretProviderManager (routes to active provider) ---
-// ticket 39: now also the ISecretStore implementation - the domain facade above the
+// Now also the ISecretStore implementation - the domain facade above the
 // ISecretProvider transport adapters (spec Phase 6 story 19). Call sites consume the
 // five domain verbs (Mount/Reveal/Rotate/Export/Import) via ISecretStore; provider
 // routing (GetActiveProvider/Delete/ListProviders/SetActiveProvider) stays here.
 
 internal sealed class SecretProviderManager : ISecretStore
 {
-    // Process-wide store instance (ticket 39 two-layer port).
+    // Process-wide store instance.
     internal static readonly SecretProviderManager Instance = new SecretProviderManager();
 
-    // --- ISecretStore domain facade (ticket 39): thin delegates over the routing core ---
+    // --- ISecretStore domain facade: thin delegates over the routing core ---
     string ISecretStore.Mount(string plaintext, string? context) => Encrypt(plaintext, context);
     string ISecretStore.Reveal(string envelope, string? context) => Decrypt(envelope, context);
     (int total, int rotated, int failed) ISecretStore.Rotate(List<ProfileData> profiles) => RotateAll(profiles);
@@ -140,7 +140,7 @@ internal sealed class SecretProviderManager : ISecretStore
         }
     }
 
-    // List providers with REAL availability (ticket 41): the provider's cheap
+    // List providers with REAL availability: the provider's cheap
     // declared Available gate first (env config / binary presence, no I/O), then
     // an end-to-end sentinel probe (same Encrypt/Decrypt/Delete round-trip
     // SetActiveProvider has used since v0.7.5) for network providers only.
@@ -165,7 +165,7 @@ internal sealed class SecretProviderManager : ISecretStore
         return (provider.RefreshCapable, provider.CertAuthRequired, provider.RequiresNetwork);
     }
 
-    // Availability computation (ticket 41): declared Available gate, then the
+    // Availability computation: declared Available gate, then the
     // sentinel round-trip for network providers. Internal so capability tests
     // can pin the composition with fake providers (no network, no cloud).
     internal static bool IsProviderAvailable(ISecretProvider provider)
@@ -198,7 +198,7 @@ internal sealed class SecretProviderManager : ISecretStore
         if (!_providers.TryGetValue(name, out var provider))
             throw new InvalidOperationException($"Unknown secret provider: {name}");
 
-        // v0.7.5: probe the provider with a sentinel Encrypt/Decrypt round-trip
+        // probe the provider with a sentinel Encrypt/Decrypt round-trip
         // before committing it as the active provider. A provider that cannot
         // complete the round-trip (pwsh missing module, Vault no VAULT_ADDR,
         // cloud credentials missing) is REJECTED here so the user gets an
@@ -236,7 +236,7 @@ internal sealed class SecretProviderManager : ISecretStore
 
     // Phase 3: Key Rotation - re-encrypt all secrets in all profiles with the active provider
     // Returns (totalSecrets, rotatedCount, failedCount).
-    // ticket 40: failures are also classified by the typed SecretProviderException family
+    // Failures are also classified by the typed SecretProviderException family
     // (failureCounts: authFailed/notFound/permissionDenied/unavailable/timeout/invalidEnvelope/
     // unknown). The (total, rotated, failed) signature and the failed++ skip-and-count
     // semantics are pinned by the frontend source gate (secret-regression.test.ts) and
@@ -269,7 +269,7 @@ internal sealed class SecretProviderManager : ISecretStore
                 catch (Exception ex)
                 {
                     // Decryption failed (wrong provider, deleted CredMan entry, etc.):
-                    // skip + count, never delete. ticket 40: classify by error type.
+                    // skip + count, never delete. classify by error type.
                     failed++;
                     if (failureCounts != null)
                     {

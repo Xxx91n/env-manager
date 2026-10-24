@@ -15,7 +15,7 @@ export interface NotesData {
   notes: Record<string, VarNote>
 }
 
-// v0.9.25 — Svelte 4 reactive store: $notes auto-subscription guarantees
+// Svelte 4 reactive store: $notes auto-subscription guarantees
 // immediate UI reflection after async upsert (Svelte 4 svelte/store official).
 // Prior getNoteSync + notesTick writable bump did not track the function return
 // as a reactive dependency (Svelte 4 docs: function bodies not tracked).

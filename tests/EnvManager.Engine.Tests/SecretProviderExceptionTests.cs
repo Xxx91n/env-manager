@@ -1,8 +1,8 @@
-// SecretProviderExceptionTests.cs - typed provider error family tests (ticket 40, architecture-recovery)
+// SecretProviderExceptionTests.cs - typed provider error family tests
 // Pure-logic coverage: family surface, scrubber integration (512-char truncation +
 // Authorization-header masking per ADR 0005), classification mapping, and the classified
 // RotateAll counting. The AWS echo-mock test drives the REAL adapter path through the
-// AWS_ENDPOINT_URL_SECRETS_MANAGER seam (issue 15) against a loopback TCP stub that
+// AWS_ENDPOINT_URL_SECRETS_MANAGER seam against a loopback TCP stub that
 // echoes the SigV4 Authorization header back in the response body - the aws-sdk-java
 // #2702 leak shape. Asserts the adapter classification-only contract: the echo never
 // reaches the exception message. License: Apache-2.0
@@ -354,7 +354,7 @@ Assert.True(ex.Message.Length <= 514, "message must stay at the 512-char cap (+2
         }
     }
 
-    // ticket 42 aggregate-root: ProfileData setters are private; build via domain methods.
+    // Aggregate-root: ProfileData setters are private; build via domain methods.
     private static ProfileData MkT40Rotate(string awsEnvelope)
     {
         var p = new ProfileData();

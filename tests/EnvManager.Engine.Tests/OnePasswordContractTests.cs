@@ -1,4 +1,4 @@
-// OnePasswordContractTests.cs - OnePasswordProvider contract mount (ticket 10; L1 via issue 15)
+// OnePasswordContractTests.cs - OnePasswordProvider contract mount
 // License: Apache-2.0
 
 using System.Runtime.InteropServices;
@@ -15,7 +15,7 @@ namespace EnvManager.Engine.Tests;
 /// Contract mount for <see cref="OnePasswordProvider"/>. Backend-independent
 /// assertions always run.
 ///
-/// L1 coverage (issue 15): the REAL op CLI (2.39.0, pinned; downloaded to the OS
+/// L1 coverage: the REAL op CLI (2.39.0, pinned; downloaded to the OS
 /// temp session dir when absent) runs the provider's Decrypt path against an
 /// in-process 1Password Connect REST stub on localhost - the community-documented
 /// Connect-mock pattern, since no offline 1Password backend exists. The full

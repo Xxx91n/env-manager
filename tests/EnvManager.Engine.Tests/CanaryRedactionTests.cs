@@ -5,7 +5,7 @@ using Xunit;
 namespace EnvManager.Engine.Tests;
 
 /// <summary>
-/// Domain: canary redaction regression (ticket 07, launch-injection verification).
+/// Domain: canary redaction regression.
 /// Contract: a uniquely-tagged fake secret ("canary") fed through the engine's
 /// scrub layer must never survive into output; masking placeholders
 /// (<redacted>) must appear in its place. These unit tests pin the pure

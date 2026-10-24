@@ -1,4 +1,4 @@
-// v1.0.0 Phase E: Unified audit ledger.
+// Unified audit ledger.
 // audit-ledger.jsonl: append-only, hash-chained (sha256(prev||cur)),
 // GUID eventId (concurrent writes safe), 100MB rotation via atomic rename.
 // Tamper detection on parse.
@@ -198,7 +198,7 @@ pub fn export_survival_kit(mount_id: Option<&str>) -> Result<PathBuf, String> {
         return Err("no events found for the given mount".to_string());
     }
 
-    // v1.0.0: Build the survival kit JSON archive, then encrypt it via the
+    // Build the survival kit JSON archive, then encrypt it via the
     // CLI's DPAPI-CurrentUser infrastructure (same proven path as profile
     // export-secrets). The kit is machine+user-bound: only the same Windows
     // user on the same machine can decrypt it. A10 replacement for wrap-key escrow.

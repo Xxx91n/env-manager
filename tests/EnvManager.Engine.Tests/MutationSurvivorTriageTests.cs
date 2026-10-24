@@ -6,7 +6,7 @@ using Xunit;
 namespace EnvManager.Engine.Tests;
 
 /// <summary>
-/// Ticket 18 (mutation survivor triage) kill tests: one test per missing assertion on
+/// Mutation survivor triage kill tests: one test per missing assertion on
 /// the Stryker baseline survivors (see docs/history/architecture-recovery-2026-09/reports/18-survivor-registry.json).
 /// Every test asserts externally observable behavior only - seam state, exit codes, stdout -
 /// and runs hermetically: profiles.json and the AppDataDirectory protection stores are

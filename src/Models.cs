@@ -29,11 +29,11 @@ class ProfileVariable
     [JsonPropertyName("value")] public string Value { get; set; } = "";
     // Optional scope: "user" (default) or "system". Only meaningful for global profiles.
     [JsonPropertyName("scope")] public string Scope { get; set; } = "user";
-    // v0.9.16: Which profile contributed this variable (set by ResolveProfileVariablesWithSource).
+    // Which profile contributed this variable (set by ResolveProfileVariablesWithSource).
     [JsonPropertyName("sourceProfile")] public string? SourceProfile { get; set; }
 }
 
-// v0.9.16: Resolved path entry with scope + source profile for profile show output.
+// Resolved path entry with scope + source profile for profile show output.
 class ResolvedPathEntry
 {
     [JsonPropertyName("path")] public string Path { get; set; } = "";
@@ -41,7 +41,7 @@ class ResolvedPathEntry
     [JsonPropertyName("sourceProfile")] public string? SourceProfile { get; set; }
 }
 
-// v0.11.0 aggregate-root encapsulation (architecture-recovery ticket 42).
+// Aggregate-root encapsulation (architecture-recovery).
 // All setters are private; external code mutates a profile ONLY through the
 // domain methods below. [JsonInclude] keeps each property serializable AND
 // deserializable through its private setter (System.Text.Json honours the
@@ -64,19 +64,19 @@ class ProfileData
     [JsonPropertyName("variables")] [JsonInclude] public List<ProfileVariable> Variables { get; private set; } = new();
 
     // Launch profile type: "global" (default, applies to user registry) or "launch" (launcher template, never writes registry).
-    // v0.7.0 introduces per-app launch profiles and DPAPI-encrypted secrets to avoid polluting the global user environment.
+    // Introduces per-app launch profiles and DPAPI-encrypted secrets to avoid polluting the global user environment.
     [JsonPropertyName("profileType")] [JsonInclude] public string ProfileType { get; private set; } = "global";
     [JsonPropertyName("targetExecutable")] [JsonInclude] public string? TargetExecutable { get; private set; }
     [JsonPropertyName("launchArguments")] [JsonInclude] public string? LaunchArguments { get; private set; }
     [JsonPropertyName("workingDirectory")] [JsonInclude] public string? WorkingDirectory { get; private set; }
     // Secret variable names in a launch profile are DPAPI-encrypted on disk; plaintext lives only in process memory.
     [JsonPropertyName("secretVariables")] [JsonInclude] public List<string> SecretVariables { get; private set; } = new();
-    // v0.9.16: Resolved PATH entries (including inherited) with scope + sourceProfile.
+    // Resolved PATH entries (including inherited) with scope + sourceProfile.
     [JsonPropertyName("resolvedPaths")] [JsonInclude] public List<ResolvedPathEntry>? ResolvedPaths { get; private set; }
-    // v0.9.9: Schema version for migration framework. 0 = pre-v0.9.9 (inferred on load).
+    // Schema version for migration framework. 0 = pre-v0.9.9 (inferred on load).
     [JsonPropertyName("schemaVersion")] [JsonInclude] public int SchemaVersion { get; private set; } = 0;
 
-    // --- Aggregate-root domain methods (ticket 42) -------------------------------
+    // --- Aggregate-root domain methods -------------------------------
     // External code must change profile state only via these; the raw setters are
     // private so invariants (normalized PATH entries, secret-name bookkeeping,
     // parallel PathScopes array) are always enforced.

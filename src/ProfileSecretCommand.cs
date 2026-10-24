@@ -5,14 +5,14 @@ using EnvManager.Secrets.Manager;
 namespace EnvManager;
 
 /// <summary>
-/// Profile secret sub-domain (architecture-recovery issue 26, ticket 26 split).
+/// Profile secret sub-domain (architecture-recovery, split).
 /// Extracted from ProfileCommand.cs: ProfileAddSecret / ProfileEditSecret / ProfileRemoveSecret /
 /// ProfileRevealSecret / RunSecretProviderCommand / ProfileExportSecrets / ProfileImportSecrets
 /// (TryDecryptSafe itself moved to CliRuntime.cs - shared reveal-path infrastructure). Behaviour is verbatim from the original 1605-line monolith; the
-/// splitting rationale is per Q5 ticket 26 ("launch/secret-provider first, then CRUD") and
-/// Q2 ticket 26 ("type-level split is ticket 27, file-level split here").
+/// splitting rationale is per Q5 "launch/secret-provider first, then CRUD" and
+/// Q2 "type-level split is , file-level split here".
 ///
-/// Behaviour is frozen by ProfileCommandCharacterizationTests (ticket 32 .verified.txt
+/// Behaviour is frozen by ProfileCommandCharacterizationTests (.verified.txt
 /// snapshots). Any drift in the secret verbs must turn those snapshots red -- do not
 /// reword error messages or reorder audit lines without updating the snapshots in the
 /// same PR.
@@ -51,7 +51,7 @@ partial class Program
         var profiles = LoadProfiles();
         var profile = FindProfile(profiles, profileName);
         if (profile == null) { Console.Error.WriteLine($"Error: Profile '{profileName}' not found"); return 1; }
-        // v0.7.5: secrets are meaningful only on Launch (local) profiles. A
+        // secrets are meaningful only on Launch (local) profiles. A
         // Global profile cannot be applied (IsProfileApplicable rejects any
         // profile containing SecretVariables) and a decrypted plaintext can
         // never reach a process env block via the Global write path (Global
@@ -59,7 +59,7 @@ partial class Program
         // a secret on a Global profile and discover later that it is inert.
         if (!profile.ProfileType.Equals("launch", StringComparison.OrdinalIgnoreCase))
             return ArgError("Error: Secrets can only be added to Launch (local) profiles. Use \"profile set-launch <name> --target <exe>\" to convert a Global profile to Launch first.");
-        // v0.7.5: same invariant as AddSecret - reject non-launch profiles.
+        // same invariant as AddSecret - reject non-launch profiles.
         if (!profile.ProfileType.Equals("launch", StringComparison.OrdinalIgnoreCase))
             return ArgError("Error: Secrets can only be edited on Launch (local) profiles. Use \"profile set-launch <name> --target <exe>\" to convert first.");
         if (profile.IsEnabled) return ArgError("Error: Unapply the profile before changing its variables");
@@ -151,7 +151,7 @@ partial class Program
         }
         try
         {
-            // v0.8.0: resolve mount reference if the value is a "mount:" prefixed ID.
+            // resolve mount reference if the value is a "mount:" prefixed ID.
             var envelope = ResolveSecretMount(v.Value) ?? v.Value;
             using var secret = new SecretString(SecretStore.Reveal(envelope, profileName + "\\" + varName));
             // Audit BEFORE printing plaintext so the audit trail records the
@@ -191,7 +191,7 @@ partial class Program
                 foreach (var (name, available) in providers)
                 {
                     string marker = name.Equals(active, StringComparison.OrdinalIgnoreCase) ? " (active)" : "";
-                    // Ticket 41: machine-readable capability descriptors ride the same line; the
+                    // Machine-readable capability descriptors ride the same line; the
                     // GUI parser stays generic (no hardcoded provider id list).
                     var caps = SecretProviderManager.GetCapabilities(name);
                     Console.WriteLine(
@@ -211,7 +211,7 @@ partial class Program
                 try
                 {
                     SecretProviderManager.SetActiveProvider(args[3]);
-                    // v0.7.12: audit the active-provider switch. Even though
+                    // audit the active-provider switch. Even though
                     // this is a config-only change (no secret data is mutated),
                     // recording it lets users see this atomic security-significant
                     // transaction in the history view (per item 7 mandate) and

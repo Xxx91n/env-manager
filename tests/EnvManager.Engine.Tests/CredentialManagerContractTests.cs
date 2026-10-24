@@ -1,4 +1,4 @@
-// CredentialManagerContractTests.cs - CredentialManagerProvider contract mount (ticket 10; L1 via issue 15)
+// CredentialManagerContractTests.cs - CredentialManagerProvider contract mount
 // License: Apache-2.0
 
 using System.Runtime.InteropServices;

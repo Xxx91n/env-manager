@@ -1,9 +1,9 @@
 using EnvManager.Secrets.Core;
-// PowerShellSecretManagementProvider.cs - secret provider architecture (ticket 09, architecture-recovery)
-// One-symbol-per-file split of the retired single-file secret provider module (issue 09); behavior unchanged.
+// PowerShellSecretManagementProvider.cs - secret provider architecture
+// One-symbol-per-file split of the retired single-file secret provider module; behavior unchanged.
 // License: Apache-2.0
 
-// ticket 40: adapter-boundary typed error family. pwsh probe/process failures map
+// Adapter-boundary typed error family. pwsh probe/process failures map
 // onto the family at the throw sites (messages already CLIXML-stripped, then
 // scrubbed once by the family base constructor).
 
@@ -20,7 +20,7 @@ internal sealed class PowerShellSecretManagementProvider : ISecretProvider
 {
     public string Name => "powershell-secretmanagement";
 
-    // Capability descriptors (ticket 41, spec Phase 6): declared per provider,
+    // Capability descriptors: declared per provider,
     // consumed by SecretProviderManager.ListProviders and surfaced through
     // `profile secret-provider list` so the GUI gates on data, not name lists.
     public bool RefreshCapable => false;
@@ -113,7 +113,7 @@ internal sealed class PowerShellSecretManagementProvider : ISecretProvider
         }
     }
 
-    // v0.7.5: probe that the PowerShell SecretManagement module is installed.
+    // probe that the PowerShell SecretManagement module is installed.
     // This is called BEFORE a real Set-Secret so we do not surface the raw
     // CLIXML "Set-Secret is not recognized" catastrophe to the user. Instead
     // we get a clear actionable error pointing at Install-Module.
@@ -121,7 +121,7 @@ internal sealed class PowerShellSecretManagementProvider : ISecretProvider
     {
         string probe =
             "$ErrorActionPreference='Stop'; " +
-            // v0.7.10: use a wildcard pattern so we match BOTH the historical
+            // use a wildcard pattern so we match BOTH the historical
             // short name 'Microsoft.SecretManagement' and the canonical package
             // name 'Microsoft.PowerShell.SecretManagement' published on the
             // PowerShell Gallery. The prior literal probe returned zero even
@@ -138,7 +138,7 @@ internal sealed class PowerShellSecretManagementProvider : ISecretProvider
                 "then retry. (Vault: " + VaultName + ")");
     }
 
-    // v0.7.5: auto-register the EnvManager vault if it is not already registered.
+    // auto-register the EnvManager vault if it is not already registered.
     // Idempotent: Register-SecretVault errors if already registered, so we
     // probe with Get-SecretVault first and only register when absent.
     private static void EnsureVaultRegistered()
@@ -152,7 +152,7 @@ internal sealed class PowerShellSecretManagementProvider : ISecretProvider
         {
             string register =
                 "$ErrorActionPreference='Stop'; " +
-                // v0.7.11: use the canonical PowerShell Gallery module name
+                // use the canonical PowerShell Gallery module name
                 // Microsoft.PowerShell.SecretStore. The prior short form
                 // 'Microsoft.SecretStore' fails with "Could not load and
                 // retrieve module information ... The specified module
@@ -169,7 +169,7 @@ internal sealed class PowerShellSecretManagementProvider : ISecretProvider
         }
     }
 
-    // v0.7.4: RunPowerShell no longer uses `pwsh -Command "<escaped script>"`.
+    // RunPowerShell no longer uses `pwsh -Command "<escaped script>"`.
     // The previous approach caused a nested-quoting catastrophe:
     // EscapeForPowerShell doubled every single quote, then the outer double
     // quotes wrapped the script, and pwsh re-parsed the inner ''Stop'' as a
@@ -181,7 +181,7 @@ internal sealed class PowerShellSecretManagementProvider : ISecretProvider
     // arbitrary content. No shell quoting, no escape doubling, no tokenization
     // ambiguity. CREATE_NO_WINDOW stays so no terminal flashes.
     //
-    // v0.7.5: stderr is parsed through `StripClixml` before being thrown so
+    // stderr is parsed through `StripClixml` before being thrown so
     // callers see a clean human-readable message instead of the raw CLIXML
     // serialization wrapper (the `#< CLIXML <Objs ...>` blob that pwsh emits
     // when stderr is redirected by a non-interactive host).
@@ -228,7 +228,7 @@ internal sealed class PowerShellSecretManagementProvider : ISecretProvider
         return stdout;
     }
 
-    // v0.7.5: strips CLIXML serialization wrapper that pwsh emits when stderr
+    // strips CLIXML serialization wrapper that pwsh emits when stderr
     // is redirected by a non-interactive host. The wrapper looks like:
     //   #< CLIXML <Objs Version="1.1.0.1" ...><S S="Error">...escaped text...</S>...</Objs>
     // We extract the inner text of every <S S="Error"> element, restore the

@@ -39,7 +39,7 @@ partial class Program
     {
         try
         {
-            // v0.7.7 hard boundary: a Global profile MUST NOT inherit from a Launch
+            // Hard boundary: a Global profile MUST NOT inherit from a Launch
             // profile. A Launch profile may carry DPAPI secrets that, once pulled
             // through ResolveProfileVariables into the Global chain, would be
             // written to the user registry as DPAPI ciphertext garbage. The prior
@@ -77,7 +77,7 @@ partial class Program
     }
 
     /// <summary>
-    /// Ticket 04 seam extraction: profile apply/launch pre-flight validation core.
+    /// Seam extraction: profile apply/launch pre-flight validation core.
     /// Runs every entry-point invariant that gates ProfileApply and ProfileLaunch against
     /// an explicitly supplied profile list (hermetic: no LoadProfiles side effects), so
     /// xUnit tests drive it without the registry or the real profiles.json.
@@ -123,7 +123,7 @@ partial class Program
     /// <summary>Production adapter: pre-flight against the live profiles.json store.</summary>
 
     /// <summary>
-    /// Ticket 19: two-tier pre-flight validation result. Errors = data-destroying/
+    /// Two-tier pre-flight validation result. Errors = data-destroying/
     /// half-write conditions (keep hard-blocking); warnings = suspicious-but-safe
     /// conditions (downgraded per spec Phase 4 / MongoDB validationAction pattern).
     /// The structured warning list is the telemetry basis for future tightening:
@@ -139,7 +139,7 @@ partial class Program
     }
 
     /// <summary>
-    /// Ticket 19: warn-tier checks. Suspicious but safe to execute:
+    /// Warn-tier checks. Suspicious but safe to execute:
     /// (1) variable values containing undefined %VAR% references (registry EXPAND
     /// semantics simply leave them literal at read time - no data loss),
     /// (2) PATH entries whose expanded target does not exist today (stale entry),
@@ -156,7 +156,7 @@ partial class Program
             {
                 string refName = m.Groups[1].Value;
                 if (refName.Length == 0) continue;
-                // Ticket 19 fix2: the expansion-resolvability surface includes the CLI
+                // Fix2: the expansion-resolvability surface includes the CLI
                 // process environment (it merges system+user at spawn time), not just the
                 // two registry hives - %SystemRoot% is kernel-provided and absent from both
                 // hives, so the registry-only check misreported defined vars as undefined
@@ -186,7 +186,7 @@ partial class Program
     }
 
     /// <summary>
-    /// Ticket 19: the full two-tier pre-flight core. Runs the same error-tier invariants
+    /// The full two-tier pre-flight core. Runs the same error-tier invariants
     /// as <see cref="RunProfilePreflight"/> (identical order, identical messages) and then
     /// the warn tier. Never throws for warn-tier findings; InvalidDataException from the
     /// resolution walk still lands in Errors (cycle / missing parent = data-integrity).
@@ -239,7 +239,7 @@ partial class Program
     }
 
     /// <summary>
-    /// Ticket 19: emit the machine-parseable warn report. One JSON object on stdout
+    /// Emit the machine-parseable warn report. One JSON object on stdout
     /// (parseable), the human line on stderr. Kept shape-stable: consumers key on
     /// "preflight" / "warnings" / "strict" field names, not on prose.
     /// </summary>
@@ -260,7 +260,7 @@ partial class Program
     internal static bool RunProfilePreflight(ProfileData profile) => RunProfilePreflight(profile, LoadProfiles());
 
     /// <summary>
-    /// Ticket 04 seam extraction: CollectInheritedSecrets over an explicit profile list.
+    /// Seam extraction: CollectInheritedSecrets over an explicit profile list.
     /// Walks the ENTIRE inheritance chain (visited-set keyed by profile Name, so a
     /// poisoned profiles.json with an undetected cycle cannot infinite-loop) and unions
     /// every SecretVariables entry - the authoritative inherited-secret membership source
@@ -287,7 +287,7 @@ partial class Program
         => CollectInheritedSecretsFrom(profile, LoadProfiles(), visited);
 
     /// <summary>
-    /// Ticket 04 seam extraction: the apply write path. Every registry touch goes
+    /// Seam extraction: the apply write path. Every registry touch goes
     /// through IEnvironmentScope: backup preservation via WriteValuePreservingKind,
     /// the value write via WriteValuePreservingKind, teardown via DeleteValueWithoutNotify,
     /// and exactly ONE BroadcastSettingChange per apply/unapply. The protection guard
@@ -317,7 +317,7 @@ partial class Program
     static void ApplyProfile(ProfileData profile) => ApplyProfile(profile, Engine);
 
     /// <summary>
-    /// Ticket 04 seam extraction: the unapply write path. Deletes through the seam's
+    /// Seam extraction: the unapply write path. Deletes through the seam's
     /// DeleteValueWithoutNotify (no per-delete broadcast), restores the backup value,
     /// removes the backup, and broadcasts exactly once at the end.
     /// </summary>

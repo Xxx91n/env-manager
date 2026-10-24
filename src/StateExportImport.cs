@@ -4,7 +4,7 @@ using System.Text.Json.Serialization;
 
 namespace EnvManager;
 
-// v0.9.9: Full-state export/import for disaster recovery.
+// Full-state export/import for disaster recovery.
 // Exports ALL Env Manager internal config files into a single DPAPI-encrypted
 // archive. The archive is portable within the same user account (DPAPI CurrentUser).
 // Import verifies each file before atomically replacing the live state.
@@ -74,7 +74,7 @@ partial class Program
             files = state,
         }, JsonOptsIndented);
 
-        string encrypted = ExportStateEncrypt(jsonState); // v0.9.13 Phase 3C: double-layer AES-GCM + DPAPI + HMAC
+        string encrypted = ExportStateEncrypt(jsonState); // Double-layer AES-GCM + DPAPI + HMAC
 
         // Atomic write: temp + fsync + rename.
         WriteAtomicUtf8(outputFile, encrypted);
@@ -116,7 +116,7 @@ partial class Program
         string jsonState;
         try
         {
-            jsonState = ExportStateDecrypt(encrypted); // v0.9.13 Phase 3C: auto-detects v1/v2
+            jsonState = ExportStateDecrypt(encrypted); // Auto-detects v1/v2
         }
         catch (Exception ex)
         {

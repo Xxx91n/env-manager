@@ -1,4 +1,4 @@
-// v0.9.0 Phase B+C: Named Pipe IPC + protocol.
+// Named Pipe IPC + protocol.
 // Server: listens on \\.\pipe\EnvManager.Service (service) or \\.\pipe\EnvManager.Background (background).
 // Client: one-shot CLI gateway connects to pipe, sends request, prints response.
 // DACL: only EnvManagerService SID and current user can connect.
@@ -14,7 +14,7 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::windows::named_pipe::NamedPipeServer;
 use tokio_util::sync::CancellationToken;
 
-// Ticket 08 (architecture-recovery): these two structs are THE authoritative IPC
+// Architecture-recovery: these two structs are THE authoritative IPC
 // schema (single source of truth). JSON Schemas and sample payloads are exported
 // from them by the golden test in `tests::export_contract_golden` into docs/schemas/
 // for the C# and TS contract tests to consume. Field renames must regenerate the
@@ -188,7 +188,7 @@ async fn handle_connection(mut server: NamedPipeServer, _shutdown: Arc<Cancellat
 async fn process_request(req: &IpcRequest, shutdown: &Arc<CancellationToken>) -> IpcResponse {
     tracing::info!("IPC request: method={} request_id={}", req.method, req.request_id.as_deref().unwrap_or("-"));
     match req.method.as_str() {
-        // v0.9.6: enriched ping with heartbeat data (uptime, reconcile status, mount health)
+        // enriched ping with heartbeat data (uptime, reconcile status, mount health)
         "ping" => {
             let uptime = crate::get_process_uptime();
             IpcResponse::ok(serde_json::json!({

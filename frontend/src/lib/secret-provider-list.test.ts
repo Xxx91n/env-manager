@@ -3,7 +3,7 @@ import { parseSecretProviderList } from './secret-provider-list'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 
-// Ticket 41: the GUI must derive providers + capability flags from CLI output
+// The GUI must derive providers + capability flags from CLI output
 // only (hard boundary v0.7.3) — these pins hold the parser to that contract.
 
 describe('parseSecretProviderList', () => {
@@ -78,7 +78,7 @@ describe('parseSecretProviderList', () => {
   })
 })
 
-describe('i18n provider-name-list gate (ticket 41 AC4)', () => {
+describe('i18n provider-name-list gate', () => {
   it('no translation string enumerates multiple provider ids', () => {
     const en = JSON.parse(readFileSync(join(process.cwd(), 'src/lib/translations/en.json'), 'utf8')) as Record<string, unknown>
     const ids = ['dpapi-current-user', 'credential-manager', 'powershell-secretmanagement', 'vault-kv2', 'sops', 'azure-keyvault', '1password', 'aws-secretsmanager']

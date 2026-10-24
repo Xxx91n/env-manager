@@ -1,4 +1,4 @@
-// L1ContainerCollection.cs - serialize container-backed test classes (issue 15)
+// L1ContainerCollection.cs - serialize container-backed test classes
 // License: Apache-2.0
 //
 // Vault/LocalStack/Lowkey images pull and start in parallel when xUnit runs the mounts

@@ -13,7 +13,7 @@
 
   // i18n helper: map audit command string to localized operation name
   function getOperationLabel(command: string, tFn: (key: string) => string): string {
-    // v0.7.5: try the full command first (e.g. 'path add', 'history undo')
+    // try the full command first (e.g. 'path add', 'history undo')
     // and fall back to the leading word if the full key is missing.
     // Previous code sliced entry.command split(' ')[0] upstream and lost the
     // subcommand; this restores 'path add'/'path remove'/'history undo' as

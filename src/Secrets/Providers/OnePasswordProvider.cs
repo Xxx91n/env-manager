@@ -1,9 +1,9 @@
 using EnvManager.Secrets.Core;
-// OnePasswordProvider.cs - secret provider architecture (ticket 09, architecture-recovery)
-// One-symbol-per-file split of the retired single-file secret provider module (issue 09); behavior unchanged.
+// OnePasswordProvider.cs - secret provider architecture
+// One-symbol-per-file split of the retired single-file secret provider module; behavior unchanged.
 // License: Apache-2.0
 
-// ticket 40: adapter-boundary typed error family. Process spawn/exit failures map
+// Adapter-boundary typed error family. Process spawn/exit failures map
 // onto the family at the throw sites; best-effort cleanup reports through the
 // scrubbed family channel (SecretProviderErrors.SwallowBestEffort).
 
@@ -23,7 +23,7 @@ internal sealed class OnePasswordProvider : ISecretProvider
 {
     public string Name => "1password";
 
-    // Capability descriptors (ticket 41, spec Phase 6): declared per provider,
+    // Capability descriptors: declared per provider,
     // consumed by SecretProviderManager.ListProviders and surfaced through
     // `profile secret-provider list` so the GUI gates on data, not name lists.
     public bool RefreshCapable => true;
@@ -110,7 +110,7 @@ internal sealed class OnePasswordProvider : ISecretProvider
                 throw new SecretProviderUnavailableException("1password", "probe",
                     "op --version exited " + proc.ExitCode + ": " + stderrBuf.ToString().Trim());
 
-            // v0.9.13 Phase 4F: record provider binary hash for tamper detection
+            // record provider binary hash for tamper detection
             try { Program.RecordProviderHash("op", OP_BINARY); } catch (Exception ex) { SecretProviderErrors.SwallowBestEffort("1password", "provider-hash", ex); }
         }
         catch (System.ComponentModel.Win32Exception ex)

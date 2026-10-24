@@ -1,9 +1,9 @@
 using EnvManager.Secrets.Core;
-// SopsProvider.cs - secret provider architecture (ticket 09, architecture-recovery)
-// One-symbol-per-file split of the retired single-file secret provider module (issue 09); behavior unchanged.
+// SopsProvider.cs - secret provider architecture
+// One-symbol-per-file split of the retired single-file secret provider module; behavior unchanged.
 // License: Apache-2.0
 
-// ticket 40: adapter-boundary typed error family. sops process failures map onto
+// Adapter-boundary typed error family. sops process failures map onto
 // the family at the throw sites; temp-file cleanup keeps best-effort semantics but
 // reports through the scrubbed family channel.
 
@@ -22,7 +22,7 @@ internal sealed class SopsProvider : ISecretProvider
 {
     public string Name => "sops";
 
-    // Capability descriptors (ticket 41, spec Phase 6): declared per provider,
+    // Capability descriptors: declared per provider,
     // consumed by SecretProviderManager.ListProviders and surfaced through
     // `profile secret-provider list` so the GUI gates on data, not name lists.
     public bool RefreshCapable => false;
@@ -122,7 +122,7 @@ internal sealed class SopsProvider : ISecretProvider
                 throw new SecretProviderUnavailableException("sops", "probe",
                     "sops --version exited " + proc.ExitCode + ": " + stderrBuf.ToString().Trim());
 
-            // v0.9.13 Phase 4F: record provider binary hash for tamper detection
+            // record provider binary hash for tamper detection
             try { Program.RecordProviderHash("sops", SOPS_BINARY); } catch (Exception ex) { SecretProviderErrors.SwallowBestEffort("sops", "provider-hash", ex); }
         }
         catch (System.ComponentModel.Win32Exception ex)
@@ -146,7 +146,7 @@ internal sealed class SopsProvider : ISecretProvider
         try
         {
             // Write JSON: { "value": "<plaintext>" }
-            // v0.7.11: write UTF-8 WITHOUT BOM. Encoding.UTF8 emits a BOM (0xEF 0xBB 0xBF)
+            // write UTF-8 WITHOUT BOM. Encoding.UTF8 emits a BOM (0xEF 0xBB 0xBF)
             // and sops >= 3.x rejects BOM-prefixed JSON with "invalid character 'ï'
             // looking for beginning of value" when unmarshalling, failing activation.
             string jsonContent = "{\"value\":\"" + JsonEscape(plaintext ?? "") + "\"}";
@@ -166,7 +166,7 @@ internal sealed class SopsProvider : ISecretProvider
             };
 
             // Pass through sops env vars for encryption key providers
-            // v0.7.11: env var names verified against official SOPS age docs
+            // env var names verified against official SOPS age docs
             // (https://getsops.io/docs/usage/identities/age/). The recipient list env
             // var is SOPS_AGE_RECIPIENTS (plural; 'S' required) - the prior singular
             // 'SOPS_AGE_RECIPIENT' is NOT recognized by sops and activation failed with
@@ -237,7 +237,7 @@ internal sealed class SopsProvider : ISecretProvider
 
         try
         {
-            // v0.7.11: no BOM (sops >= 3.x rejects BOM-prefixed JSON).
+            // no BOM (sops >= 3.x rejects BOM-prefixed JSON).
             File.WriteAllText(encFile, parsed.Ciphertext, new UTF8Encoding(false));
 
             // Run: sops -d --output <plain> <enc>
@@ -253,7 +253,7 @@ internal sealed class SopsProvider : ISecretProvider
                 StandardErrorEncoding = Encoding.UTF8
             };
 
-            // v0.7.11: decrypt env var names verified against official SOPS age
+            // decrypt env var names verified against official SOPS age
             // docs. SOPS_AGE_SECRET_KEY is NOT an official env var (official: KEY_FILE,
             // KEY, KEY_CMD); add SOPS_AGE_KEY as a convenient alternative.
             string[] sopsEnvVars = { "SOPS_AGE_KEY_FILE", "SOPS_AGE_KEY",

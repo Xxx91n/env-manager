@@ -1,4 +1,4 @@
-// ISecretStore.cs - two-layer secret port (ticket 39, architecture-recovery)
+// ISecretStore.cs - two-layer secret port
 // Domain facade above the ISecretProvider transport adapters (spec Phase 6 story 19):
 // CLI call sites depend on this port's five domain verbs; external SDK types never
 // leak past the adapter boundary. License: Apache-2.0

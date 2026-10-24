@@ -215,7 +215,7 @@ export async function checkForUpdates(currentVersion: string): Promise<UpdateInf
 }
 
 /**
- * Ticket 37: Checks for updates through the tauri-plugin-updater transport
+ * Checks for updates through the tauri-plugin-updater transport
  * (latest.json + minisign signature verification). Same UpdateInfo shape as
  * checkForUpdates; the plugin compares versions internally (ADR 0003 source)
  * and reports isUpdateAvailable only when the endpoint announces a newer one.
@@ -234,7 +234,7 @@ export async function checkUpdatePlugin(): Promise<UpdateInfo> {
 }
 
 /**
- * Ticket 37: Downloads and installs the pending update through
+ * Downloads and installs the pending update through
  * tauri-plugin-updater (signature-verified MSI). Resolves when the installer
  * has been launched (the app exits itself on Windows); rejects with the
  * backend error message otherwise.
@@ -312,7 +312,7 @@ let profilesReadInFlight: Promise<ProfileData[]> | null = null
  * secondary pages see fresh data on their next read.
  */
 export function invalidateApiCache(): void {
-  // v0.9.19: SWR — mark caches as stale (set time to 0) but DON'T clear data.
+  // SWR — mark caches as stale (set time to 0) but DON'T clear data.
   // Next read returns stale data immediately + kicks off background refresh.
   dataGeneration += 1
   variablesRequestEpoch += 1
@@ -1503,7 +1503,7 @@ export async function serviceShutdown(): Promise<{ ok: boolean; data?: any; mess
 export async function serviceStart(): Promise<boolean> {
   const ok = await invoke('start_service')
   if (ok) {
-    // v0.9.6: start watchdog thread (auto-restart on 2 consecutive ping failures)
+    // start watchdog thread (auto-restart on 2 consecutive ping failures)
     try { await invoke('start_service_watchdog') } catch { /* watchdog is best-effort */ }
   }
   return ok
@@ -1544,7 +1544,7 @@ export async function auditRecoverFromLedger(): Promise<any> {
   return await runWrite('audit', ['list', '--json'])
 }
 
-// v0.9.9: Full-state export/import for disaster recovery
+// Full-state export/import for disaster recovery
 export async function exportState(outputFile: string): Promise<{ exported: number; file: string; sizeBytes: number }> {
   const output = await runRead('export-state', ['--output', outputFile])
   return JSON.parse(output)
@@ -1558,7 +1558,7 @@ export async function importState(inputFile: string, dryRun: boolean = false): P
 }
 
 /**
- * v0.9.19: Preload adjacent page data in background.
+ * Preload adjacent page data in background.
  * Called on idle/tab switch to warm caches before user navigates.
  * Silent: catches all errors, never throws.
  */

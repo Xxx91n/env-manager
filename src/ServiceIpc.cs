@@ -3,7 +3,7 @@ using System.Text.Json.Serialization;
 
 namespace EnvManager;
 
-// Ticket 08 (architecture-recovery): typed model of the env-manager-service IPC
+// Architecture-recovery: typed model of the env-manager-service IPC
 // protocol. The authoritative schema lives in service/src/ipc.rs (Rust IpcRequest/
 // IpcResponse); docs/schemas/env-manager-service-ipc.schema.json and ipc-samples.json
 // are golden files exported from it. These C# mirrors and the xUnit contract tests
