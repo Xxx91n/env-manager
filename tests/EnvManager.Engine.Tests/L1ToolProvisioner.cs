@@ -1,4 +1,4 @@
-// L1ToolProvisioner.cs - CLI tool discovery/provisioning for local L1 backends (issue 15)
+// L1ToolProvisioner.cs - CLI tool discovery/provisioning for local L1 backends
 // License: Apache-2.0
 //
 // Some L1 backends need a local CLI binary rather than a container:

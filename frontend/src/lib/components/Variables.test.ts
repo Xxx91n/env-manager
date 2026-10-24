@@ -12,7 +12,7 @@ describe('Variables protection controls', () => {
     isWriteInProgress.set(false)
     render(Variables)
     expect((screen.getByRole('switch') as HTMLButtonElement).disabled).toBe(true)
-    // v0.7.7.1: setup.ts mock resolves $t('buttons.edit') to the real English
+    // Setup.ts mock resolves $t('buttons.edit') to the real English
     // label 'Edit' rather than the raw key, so the harness must query by the
     // resolved label. This is the regression worthy assertion.
     expect((screen.getByLabelText('Edit') as HTMLButtonElement).disabled).toBe(true)

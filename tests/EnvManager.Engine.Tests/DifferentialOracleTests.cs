@@ -1,4 +1,4 @@
-// DifferentialOracleTests.cs - differential oracle fixture (architecture-recovery issue 11)
+// DifferentialOracleTests.cs - differential oracle fixture (architecture-recovery)
 // License: Apache-2.0
 
 using EnvManager;

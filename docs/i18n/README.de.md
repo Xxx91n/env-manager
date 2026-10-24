@@ -1,3 +1,6 @@
+<!-- canonical: ../../README.md -->
+<!-- sync: 6f0a201001cb -->
+
 <div align="center">
 
 <picture>
@@ -38,7 +41,24 @@ Ein moderner, schlanker Manager für Windows-Umgebungsvariablen — Dualmodus mi
   <img src="../../docs/assets/demo.gif" alt="Env Manager CLI demo" width="100%">
 </p>
 
-Die Demo zeigt schreibgeschützte CLI-Befehle in Aktion: agents --summary, path health, get PATH und agents --json. Mit vhs docs/assets/demo.tape regenerierbar.
+Die Demo zeigt schreibgeschützte CLI-Befehle in Aktion: agents --summary, path health, get PATH und agents --json. Mit `node scripts/demo/capture.mjs` regenerierbar.
+
+*Die Terminal-Ausgabe oben verwendet simulierte Daten.*
+
+### Video-Durchlauf
+
+Vollständiger Feature-Durchlauf von ~51 s (zweisprachig ZH/EN, mit Ton): **[Auf YouTube ansehen](https://youtu.be/REPLACE_ME)** — auch im Repo enthalten: `docs/assets/demo/env-manager-demo.zh.mp4` / `docs/assets/demo/env-manager-demo.en.mp4`.
+
+### Galerie
+
+| | | |
+|:-:|:-:|:-:|
+| ![Variablenansicht](../../docs/assets/gallery/01-variables.png)<br>**Variablen** — Suche, Geltungsbereich, Aktionen pro Zeile | ![System-Geltungsbereich](../../docs/assets/gallery/02-variables-system.png)<br>**System-Geltungsbereich** — geschützte Einträge gesperrt | ![Path-Editor](../../docs/assets/gallery/03-path-editor.png)<br>**Path-Editor** — Erkennung toter & doppelter Einträge |
+| ![Profile](../../docs/assets/gallery/04-profiles.png)<br>**Profile** — anwenden / starten / vererben | ![Verlauf & Import](../../docs/assets/gallery/05-history.png)<br>**Verlauf & Import** — rückgängig machbare Änderungen | ![Schutz](../../docs/assets/gallery/06-protection.png)<br>**Schutz** — benutzerdefinierte Sperren |
+| ![Audit-Ledger](../../docs/assets/gallery/07-audit.png)<br>**Audit-Ledger** — hash-verkettet, verifizierbar | ![Dienst-Manager](../../docs/assets/gallery/08-service.png)<br>**Dienst-Manager** — Secret-Mounts | ![Einstellungen](../../docs/assets/gallery/09-settings-i18n.png)<br>**Einstellungen** — i18n in 10 Sprachen |
+| ![Bearbeitungsdialog](../../docs/assets/gallery/10-edit-dialog.png)<br>**Bearbeitungsdialog** — Vorschau des erweiterten Werts | ![Helles Design](../../docs/assets/gallery/11-variables-light.png)<br>**Helles Design** — Variante | ![CLI](../../docs/assets/gallery/12-cli-terminal.png)<br>**CLI** — JSON-first, agent-native |
+
+
 ## Features
 - Agenten-native CLI — 18+ Befehle mit einem erstklassigen Maschinenvertrag: env-manager-cli agents --json gibt eine strukturierte Befehlspezifikation aus, und jede Funktion ist in einem agentenorientierten Handbuch (AGENTS.cli.md) dokumentiert, das mit der Binärdatei ausgeliefert wird.
 - Profile & Konfiguration — Globale Profile werden auf die Registrierung angewendet; Launch-Profile injizieren einen isolierten env-Block in einen einzelnen Prozess (sie berühren niemals die Registrierung und senden niemals WM_SETTINGCHANGE). Vererbung, Konfliktvorschau und sicheres Rollback in umgekehrter Reihenfolge sind enthalten.

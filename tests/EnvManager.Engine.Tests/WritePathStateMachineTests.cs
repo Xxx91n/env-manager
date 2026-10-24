@@ -6,7 +6,7 @@ using Xunit;
 namespace EnvManager.Engine.Tests;
 
 /// <summary>
-/// State-machine model testing over the write-path command cores (architecture-recovery issue 12,
+/// State-machine model testing over the write-path command cores (architecture-recovery,
 /// spec Phase 3). The engine side (InMemoryScope behind the IEnvironmentScope seam, driven through
 /// the Run* command cores with synthetic protection predicates) and a dictionary + broadcast-count
 /// model advance in lockstep under randomly generated operation sequences, via CsCheck's stateful

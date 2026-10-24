@@ -1,6 +1,8 @@
-// v0.9.0 Phase B+C: env-manager-service.exe
+// env-manager-service.exe
 // Windows system service for secret mount lifecycle management.
-// See docs/adr/0001-secret-architecture-revision.md decisions A5-A8, A11.
+// Design: reconcile is a real Windows service, not an in-GUI task and not a second agent binary,
+// because provider leases must refresh while the GUI is closed. 5 of 8 providers work under the
+// NT SERVICE identity; the 3 user-bound ones stay fetch-on-launch (CreatedOnce).
 
 use std::env;
 use std::path::PathBuf;
@@ -51,7 +53,7 @@ impl RuntimeMode {
     }
 }
 
-/// v0.9.6: Process uptime in seconds for heartbeat enrichment.
+/// Process uptime in seconds for heartbeat enrichment.
 /// Used by IPC ping/status to help the GUI watchdog distinguish "busy" vs "deadlocked".
 pub fn get_process_uptime() -> u64 {
     static START: std::sync::OnceLock<std::time::Instant> = std::sync::OnceLock::new();
@@ -64,7 +66,7 @@ fn main() {
     let args: Vec<String> = env::args().collect();
     let mode = RuntimeMode::resolve(&args);
 
-    // v0.9.1: Write service logs to a file so Session 0 service output is
+    // Write service logs to a file so Session 0 service output is
     // not lost (stderr goes nowhere in Session 0). In Background mode, write
     // to %LOCALAPPDATA% alongside env-manager.log; in Service mode, write to
     // %ProgramData% alongside secretMount.json/audit-ledger.jsonl.
@@ -81,7 +83,7 @@ fn main() {
     let _ = std::fs::create_dir_all(&log_dir);
     let log_file = log_dir.join("env-manager-service.log");
     // ponytail: best-effort file open; if it fails, fall back to stderr only.
-// v0.9.8: tracing + tracing-appender unified logging backend.
+// tracing + tracing-appender unified logging backend.
 // Daily rotation + per-module EnvFilter via RUST_LOG.
 let file_appender = tracing_appender::rolling::daily(&log_dir, "env-manager-service.log");
 let (non_blocking_file, guard) = tracing_appender::non_blocking(file_appender);
@@ -98,7 +100,7 @@ tracing_subscriber::fmt()
 std::mem::forget(guard);
     tracing::info!("env-manager-service starting in {:?} mode", mode);
 
-    // v0.9.13 Phase 2D/2B/2C/2E/4B: process hardening (WER, hash, debugger, modules, lock)
+    // Process hardening (WER, hash, debugger, modules, lock)
     process_guard::init();
 
     // Entry guard (A7): refuse direct double-click launch with no --mode.

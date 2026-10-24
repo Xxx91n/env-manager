@@ -1,4 +1,4 @@
-// ISecretProviderHarness.cs - secret provider contract test harness seam (ticket 10, architecture-recovery)
+// ISecretProviderHarness.cs - secret provider contract test harness seam
 // License: Apache-2.0
 
 using EnvManager;

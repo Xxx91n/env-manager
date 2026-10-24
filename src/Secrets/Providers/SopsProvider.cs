@@ -1,9 +1,9 @@
 using EnvManager.Secrets.Core;
-// SopsProvider.cs - secret provider architecture (ticket 09, architecture-recovery)
-// One-symbol-per-file split of the retired single-file secret provider module (issue 09); behavior unchanged.
+// SopsProvider.cs - secret provider architecture
+// One-symbol-per-file split of the retired single-file secret provider module; behavior unchanged.
 // License: Apache-2.0
 
-// ticket 40: adapter-boundary typed error family. sops process failures map onto
+// Adapter-boundary typed error family. sops process failures map onto
 // the family at the throw sites; temp-file cleanup keeps best-effort semantics but
 // reports through the scrubbed family channel.
 
@@ -22,7 +22,7 @@ internal sealed class SopsProvider : ISecretProvider
 {
     public string Name => "sops";
 
-    // Capability descriptors (ticket 41, spec Phase 6): declared per provider,
+    // Capability descriptors: declared per provider,
     // consumed by SecretProviderManager.ListProviders and surfaced through
     // `profile secret-provider list` so the GUI gates on data, not name lists.
     public bool RefreshCapable => false;
@@ -39,6 +39,13 @@ internal sealed class SopsProvider : ISecretProvider
     // sops decrypts the JSON at launch time, extracting the "value" key.
 
     private static readonly string SOPS_BINARY = FindSopsBinary();
+
+    // Budget for the `sops --version` availability probe. Measured on a warm Windows
+    // host: 2.1-2.9s wall clock per start (antivirus scans the resolved binary), and it
+    // overshoots 5s under concurrent load. The probe MUST NOT be stricter than the
+    // encrypt/decrypt calls it guards (30s) - a 5s probe turns a slow host into a false
+    // "sops binary not functional" and fails the whole provider for the session.
+    private const int ProbeTimeoutMs = 30000;
 
     private static string FindSopsBinary()
     {
@@ -81,17 +88,41 @@ internal sealed class SopsProvider : ISecretProvider
             UseShellExecute = false,
             RedirectStandardOutput = true,
             RedirectStandardError = true,
-            CreateNoWindow = true
+            CreateNoWindow = true,
+            StandardOutputEncoding = Encoding.UTF8,
+            StandardErrorEncoding = Encoding.UTF8
         };
 
         try
         {
             using var proc = System.Diagnostics.Process.Start(psi);
             if (proc == null) throw new SecretProviderNotFoundException("sops", "probe", "sops binary not found");
-            proc.WaitForExit(5000);
-            if (!proc.HasExited || proc.ExitCode != 0)
-                throw new SecretProviderUnavailableException("sops", "probe", "sops binary not functional");
-            // v0.9.13 Phase 4F: record provider binary hash for tamper detection
+
+            // Drain both pipes async-first, then wait: a child that fills a redirected
+            // pipe blocks before it can exit, and WaitForExit(int) cannot see that.
+            var stdoutBuf = new StringBuilder();
+            var stderrBuf = new StringBuilder();
+            proc.OutputDataReceived += (_, e) => { if (e.Data != null) stdoutBuf.AppendLine(e.Data); };
+            proc.ErrorDataReceived += (_, e) => { if (e.Data != null) stderrBuf.AppendLine(e.Data); };
+            proc.BeginOutputReadLine();
+            proc.BeginErrorReadLine();
+
+            if (!proc.WaitForExit(ProbeTimeoutMs))
+            {
+                // Kill first: a timed-out probe that is left running keeps a handle on
+                // the binary and piles up orphan processes across retries.
+                try { proc.Kill(entireProcessTree: true); } catch (Exception killEx) { SecretProviderErrors.SwallowBestEffort("sops", "probe", killEx); }
+                throw new SecretProviderTimeoutException("sops", "probe",
+                    "sops --version did not answer within " + (ProbeTimeoutMs / 1000) + "s; the binary is stalled (antivirus scan or slow disk), not missing");
+            }
+            // WaitForExit(int) may return while the async readers are still flushing.
+            proc.WaitForExit();
+
+            if (proc.ExitCode != 0)
+                throw new SecretProviderUnavailableException("sops", "probe",
+                    "sops --version exited " + proc.ExitCode + ": " + stderrBuf.ToString().Trim());
+
+            // record provider binary hash for tamper detection
             try { Program.RecordProviderHash("sops", SOPS_BINARY); } catch (Exception ex) { SecretProviderErrors.SwallowBestEffort("sops", "provider-hash", ex); }
         }
         catch (System.ComponentModel.Win32Exception ex)
@@ -115,7 +146,7 @@ internal sealed class SopsProvider : ISecretProvider
         try
         {
             // Write JSON: { "value": "<plaintext>" }
-            // v0.7.11: write UTF-8 WITHOUT BOM. Encoding.UTF8 emits a BOM (0xEF 0xBB 0xBF)
+            // write UTF-8 WITHOUT BOM. Encoding.UTF8 emits a BOM (0xEF 0xBB 0xBF)
             // and sops >= 3.x rejects BOM-prefixed JSON with "invalid character 'ï'
             // looking for beginning of value" when unmarshalling, failing activation.
             string jsonContent = "{\"value\":\"" + JsonEscape(plaintext ?? "") + "\"}";
@@ -135,7 +166,7 @@ internal sealed class SopsProvider : ISecretProvider
             };
 
             // Pass through sops env vars for encryption key providers
-            // v0.7.11: env var names verified against official SOPS age docs
+            // env var names verified against official SOPS age docs
             // (https://getsops.io/docs/usage/identities/age/). The recipient list env
             // var is SOPS_AGE_RECIPIENTS (plural; 'S' required) - the prior singular
             // 'SOPS_AGE_RECIPIENT' is NOT recognized by sops and activation failed with
@@ -206,7 +237,7 @@ internal sealed class SopsProvider : ISecretProvider
 
         try
         {
-            // v0.7.11: no BOM (sops >= 3.x rejects BOM-prefixed JSON).
+            // no BOM (sops >= 3.x rejects BOM-prefixed JSON).
             File.WriteAllText(encFile, parsed.Ciphertext, new UTF8Encoding(false));
 
             // Run: sops -d --output <plain> <enc>
@@ -222,7 +253,7 @@ internal sealed class SopsProvider : ISecretProvider
                 StandardErrorEncoding = Encoding.UTF8
             };
 
-            // v0.7.11: decrypt env var names verified against official SOPS age
+            // decrypt env var names verified against official SOPS age
             // docs. SOPS_AGE_SECRET_KEY is NOT an official env var (official: KEY_FILE,
             // KEY, KEY_CMD); add SOPS_AGE_KEY as a convenient alternative.
             string[] sopsEnvVars = { "SOPS_AGE_KEY_FILE", "SOPS_AGE_KEY",

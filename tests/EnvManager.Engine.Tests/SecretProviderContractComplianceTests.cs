@@ -1,4 +1,4 @@
-// SecretProviderContractComplianceTests.cs - contract compliance gate (ticket 10, architecture-recovery)
+// SecretProviderContractComplianceTests.cs - contract compliance gate
 // License: Apache-2.0
 
 using System.Reflection;

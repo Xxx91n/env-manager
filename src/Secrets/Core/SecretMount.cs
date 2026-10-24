@@ -1,4 +1,4 @@
-// NOTE (ticket 38): this file lives inside the src/Secrets/ bounded context and the
+// NOTE: this file lives inside the src/Secrets/ bounded context and the
 // SecretMount data class is EnvManager.Secrets.Core. The trailing partial class Program
 // members stay in namespace EnvManager because a partial class cannot span namespaces.
 using System.Text.Json;
@@ -8,11 +8,13 @@ using EnvManager.Secrets.Core;
 namespace EnvManager.Secrets.Core
 {
 
-// v0.8.0 Phase A: SecretMount schema v2.
+// SecretMount schema v2.
 // A SecretMount decouples the secret envelope (provider + ciphertext/targetName)
 // from the profile's variable list. The profile stores only the mount ID and
 // variable name; the actual envelope lives in secretMount.json.
-// See docs/adr/0001-secret-architecture-revision.md decision A3.
+// Design: secretMount.json and profiles.json are separate files, each written atomically
+// (temp + fsync + rename); write order is mount first, profile second, delete in reverse.
+// That indirection is why a profile never holds secret material - only the mount id.
 class SecretMount
 {
     [JsonPropertyName("id")] public string Id { get; set; } = Guid.NewGuid().ToString("N");
@@ -20,7 +22,7 @@ class SecretMount
     [JsonPropertyName("name")] public string Name { get; set; } = "";
     [JsonPropertyName("targetName")] public string? TargetName { get; set; }
     [JsonPropertyName("scope")] public string Scope { get; set; } = "user";
-    // v0.8.0: defaults CreatedOnce + null. Activated in v0.9.0 by the service.
+    // defaults CreatedOnce + null. Activated in v0.9.0 by the service.
     [JsonPropertyName("refreshPolicy")] public string RefreshPolicy { get; set; } = "CreatedOnly";
     [JsonPropertyName("refreshIntervalSeconds")] public int? RefreshIntervalSeconds { get; set; }
     [JsonPropertyName("lastRotatedAt")] public string? LastRotatedAt { get; set; }
@@ -67,7 +69,7 @@ partial class Program
         }
     }
 
-    // v0.8.0 A3: write order is mount-first, profile-second (forward reference safety).
+    // write order is mount-first, profile-second (forward reference safety).
     // Atomic write with fsync (aligned with Rust write_atomic).
     static void SaveSecretMounts(List<SecretMount> mounts)
     {
@@ -82,7 +84,7 @@ partial class Program
         File.Move(temp, SecretMountFilePath, true);
     }
 
-    // v0.8.0 A2: one-shot migration. For each profile, extract secret variable
+    // one-shot migration. For each profile, extract secret variable
     // envelopes from ProfileData.Variables into SecretMount objects in
     // secretMount.json. The profile's SecretVariables list stays as variable
     // names (unchanged); the ProfileVariable.Value envelope is replaced with

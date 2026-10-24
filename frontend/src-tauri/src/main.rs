@@ -211,7 +211,7 @@ fn is_read_only(command: &str, args: &[String]) -> bool {
 /// This prevents write-write and read-write races while allowing read-read concurrency.
 static CLI_RWLOCK: RwLock<()> = RwLock::new(());
 
-/// v0.9.2: Track the detached background service PID so we can send it
+/// Track the detached background service PID so we can send it
 /// an IPC shutdown when the GUI exits. Without this, std::mem::forget(child)
 /// orphans the service process (process leak). The PID is read at GUI quit
 /// time and a `{"method":"shutdown"}` IPC message is sent via named pipe.
@@ -382,7 +382,7 @@ fn scrub_stderr(s: &str) -> String {
         "Bearer ", "token=", "Token=", "password=", "Password=",
         "setx ", "OP_SERVICE_ACCOUNT_TOKEN=", "VAULT_TOKEN=",
         "AWS_SECRET_ACCESS_KEY=", "AWS_SESSION_TOKEN=",
-        // v0.9.12: expanded redaction patterns (22 total)
+        // expanded redaction patterns (22 total)
         "client_secret=", "connection_string=", "subscription_key=",
         "api_key=", "apikey=", "client_id=", "tenant_id=",
         "access_token=", "refresh_token=", "Authorization:",
@@ -399,7 +399,7 @@ fn scrub_stderr(s: &str) -> String {
     out
 }
 
-    // v0.9.8 A4: generate request_id for cross-process log tracing.
+    // generate request_id for cross-process log tracing.
     let request_id: String = format!("{:06x}", std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap_or_default()
@@ -444,11 +444,11 @@ fn scrub_stderr(s: &str) -> String {
     let read_only = is_read_only(&command, &args);
 
     let mut cmd = build_cli_command(&exe_path, &command, &args);
-    // v0.9.8 A4: propagate request_id to C# CLI via env var for cross-process log tracing.
+    // propagate request_id to C# CLI via env var for cross-process log tracing.
     cmd.env("ENVMANAGER_REQUEST_ID", &request_id);
     let start = std::time::Instant::now();
 
-    // v0.9.1: Run CLI via spawn_blocking so the tokio async executor is not
+    // Run CLI via spawn_blocking so the tokio async executor is not
     // blocked during long-running CLI operations (pwsh probe 30s, network
     // calls). The lock is acquired inside the blocking task to serialize
     // writes. A 60s timeout kills runaway processes (normal <2s, probe <30s).
@@ -496,7 +496,7 @@ fn scrub_stderr(s: &str) -> String {
                 warn!("[run_cli] non-zero exit stderr_hint: {}", scrub_stderr(&stderr));
             }
 
-            // Ticket 19: exit code 2 = success with preflight warnings (profile apply only; launch never emits 2).
+            // Exit code 2 = success with preflight warnings (profile apply only; launch never emits 2).
             // The write DID happen, so the GUI must not surface it as a failure; the JSON
             // warn report on stdout rides in the data field, and the stderr warning stays in the log.
             if output.status.success() || output.status.code() == Some(2) {
@@ -715,7 +715,7 @@ fn resolve_service_path(app: &tauri::AppHandle) -> Option<PathBuf> {
 /// The service listens on \\.\pipe\EnvManager.Background for IPC.
 /// Returns true if the process was spawned and survived its first 2 seconds.
 #[tauri::command]
-/// v0.9.2: Send IPC shutdown to the detached background service before GUI exit.
+/// Send IPC shutdown to the detached background service before GUI exit.
 /// Prevents process leak: std::mem::forget(child) orphans the service process.
 /// Connects to \\\\.\\pipe\\EnvManager.Background, sends {"method":"shutdown"}, then reads response.
 /// Best-effort: if the pipe is gone or the service already exited, this is a no-op.
@@ -755,7 +755,7 @@ fn shutdown_background_service() {
             info!("[shutdown_service] pipe not found (service likely already exited): {}", e);
         }
     }
-    // v0.9.2: Industrial-grade graceful shutdown per pwm research.
+    // Industrial-grade graceful shutdown per pwm research.
     // Phase 1: IPC shutdown signal was sent above (best-effort).
     // Phase 2: Wait 500ms for graceful exit, then force-kill if still alive.
     // Phase 3: Reap the process to prevent zombie/leaked process.
@@ -835,7 +835,7 @@ fn start_service(app: tauri::AppHandle) -> Result<bool, String> {
                 Ok(None) => {
                     // Child survived 2s — healthy, detach it
                     info!("[start_service] service pid={} survived 2s, detaching", child.id());
-                    // v0.9.2: Track PID for GUI-exit cleanup (prevent process leak)
+                    // Track PID for GUI-exit cleanup (prevent process leak)
                     if let Ok(mut guard) = SERVICE_PID.write() {
                         *guard = Some(child.id());
                     }
@@ -878,7 +878,7 @@ fn start_service(app: tauri::AppHandle) -> Result<bool, String> {
 
 
 
-/// v0.9.6: Service watchdog — pings the service every 30s, auto-restarts after 2 consecutive failures.
+/// Service watchdog — pings the service every 30s, auto-restarts after 2 consecutive failures.
 /// Spawned as a background thread on GUI startup. Thread dies when GUI process exits.
 /// Defense-in-depth on top of SCM recovery (Service mode) and manual restart (Background mode).
 fn spawn_service_watchdog(app: tauri::AppHandle) {
@@ -935,14 +935,14 @@ fn spawn_service_watchdog(app: tauri::AppHandle) {
     });
 }
 
-/// v0.9.6: Start the watchdog thread (called from frontend after service start confirmation).
+/// Start the watchdog thread (called from frontend after service start confirmation).
 #[tauri::command]
 fn start_service_watchdog(app: tauri::AppHandle) -> Result<bool, String> {
     spawn_service_watchdog(app);
     Ok(true)
 }
 
-/// v0.9.3: Stop the background service (user-initiated).
+/// Stop the background service (user-initiated).
 /// This is the ONLY path that kills the service process.
 /// GUI exit does NOT call this — the service persists across GUI restarts.
 #[tauri::command]
@@ -1191,7 +1191,7 @@ fn version_is_newer(remote: &str, local: &str) -> bool {
         }
     }
     false
-}/// Ticket 37: Checks for updates through the tauri-plugin-updater transport
+}/// Checks for updates through the tauri-plugin-updater transport
 /// (latest.json endpoint + minisign signature verification) instead of the
 /// PowerShell GitHub-API probe. Returns the same JSON shape as
 /// `check_for_updates` so the frontend UpdateInfo contract is unchanged; the
@@ -1237,7 +1237,7 @@ async fn check_update_plugin(app: tauri::AppHandle) -> serde_json::Value {
     }
 }
 
-/// Ticket 37: Downloads and installs the pending update through
+/// Downloads and installs the pending update through
 /// tauri-plugin-updater (signature-verified MSI). Re-checks so the command
 /// stays stateless (no pending-update State plumbing). On Windows the plugin
 /// exits the app after launching the installer successfully.
@@ -1279,7 +1279,7 @@ async fn download_and_install(app: tauri::AppHandle) -> Result<(), String> {
 
 
 fn main() {
-// v0.9.30 (ADR-0012 D2): GUI logs now go to %LOCALAPPDATA%\\EnvManager\\logs (NOT
+// GUI logs go to %LOCALAPPDATA%\\EnvManager\\logs (NOT
 // INSTALLDIR\\logs). Per-machine log placement was wix#1114 anti-pattern + Program Files
 // is read-only for standard users; industry default (PowerToys, 1Password 8, Chrome,
 // tauri-plugin-log v2) is LocalAppData. Service side unchanged: %ProgramData%\\EnvManager.
@@ -1288,7 +1288,7 @@ let log_dir = std::env::var("LOCALAPPDATA")
     .unwrap_or_else(|_| std::path::PathBuf::from("logs"));
 let _ = std::fs::create_dir_all(&log_dir);
 
-// v0.9.30 (ADR-0012 D4): 14-day log retention sweep. Aligns with 1Password 8 (14 days).
+// 14-day log retention sweep. Aligns with 1Password 8 (14 days).
 // Ponytail: tracing-appender daily rotation already bounds a single run to ~24h per file;
 // sweep deletes stale ones at startup. Fire-and-forget on a helper thread.
 {
@@ -1406,7 +1406,7 @@ std::mem::forget(_guard);
                         }
                         "quit" => {
                             info!("[tray] quit requested — service stays alive (user-managed lifecycle)");
-                            // v0.9.3: GUI exit does NOT kill the background service.
+                            // GUI exit does NOT kill the background service.
                             // The service is a persistent daemon for secret mount refresh.
                             // Only clear our PID tracking; the process survives.
                             if let Ok(mut guard) = SERVICE_PID.write() {
@@ -1513,7 +1513,7 @@ std::mem::forget(_guard);
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
         .run(|_app_handle, event| {
-            // v0.9.3: GUI exit does NOT kill the background service.
+            // GUI exit does NOT kill the background service.
             // The service persists for secret mount refresh even when GUI is closed.
             // Only clear PID tracking to avoid stale references.
             if let tauri::RunEvent::ExitRequested { .. } = event {
@@ -1629,7 +1629,7 @@ fn set_lightweight_config(enabled: bool, timeout_minutes: u32) -> bool {
     true
 }
 
-// Ticket 08 (architecture-recovery): IPC payload contract tests. The service's
+// Architecture-recovery: IPC payload contract tests. The service's
 // authoritative schema lives in service/src/ipc.rs; these assertions pin the
 // hand-rolled pipe payloads the GUI sends (watchdog ping, shutdown) to that
 // contract so a rename on either side fails cargo test in the Tauri crate.

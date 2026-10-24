@@ -1,4 +1,4 @@
-/// v0.9.12: Service-side tracing redaction layer.
+/// Service-side tracing redaction layer.
 /// Scrubs secret-bearing patterns from log messages before they reach the
 /// tracing subscriber. Mirrors the C# ScrubExceptionMessage and Rust
 /// scrub_stderr patterns so all three tiers (CLI, GUI, service) use the

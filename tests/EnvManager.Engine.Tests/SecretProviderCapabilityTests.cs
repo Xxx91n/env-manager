@@ -6,7 +6,7 @@ using EnvManager.Secrets.Providers;
 namespace EnvManager.Engine.Tests;
 
 /// <summary>
-/// Ticket 41 capability-descriptor pins (spec Phase 6: capability metadata +
+/// Capability-descriptor pins (spec Phase 6: capability metadata +
 /// real Available). Declared capability values are static per-provider facts,
 /// so they are pinned directly; availability composition is pinned through
 /// fake providers (no machine environment dependence, no network, no cloud).

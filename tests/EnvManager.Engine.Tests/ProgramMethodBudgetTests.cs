@@ -7,7 +7,7 @@ using Xunit;
 namespace EnvManager.Engine.Tests;
 
 /// <summary>
-/// Domain: structural-fitness guard (architecture-recovery ticket 27, spec Phase 5,
+/// Domain: structural-fitness guard (architecture-recovery , spec Phase 5,
 /// mental-model M1 modular-monolith boundary convergence).
 ///
 /// Program used to be the catch-all partial class hosting every command domain as
@@ -27,7 +27,7 @@ namespace EnvManager.Engine.Tests;
 /// so the first run of dotnet test failed (proving the assertion has teeth). The
 /// baseline was then set to the actual post-migration count and a second run
 /// confirmed green; the red-first evidence lives in
-/// .scratch/architecture-recovery/reports/27-program-partial-convergence.md.
+/// git history at tag cleanup-baseline (originally .scratch/architecture-recovery/reports/27-program-partial-convergence.md).
 /// </summary>
 public class ProgramMethodBudgetTests
 {
@@ -46,7 +46,7 @@ public class ProgramMethodBudgetTests
     // and wait for ramp-2+. The real post-ramp-1 baseline is therefore 200 human-authored
     // methods, not the 6 that an over-eager first draft assumed. The budget shrinks as
     // ramp-2+ migrates more domains.
-    // Ticket 43 (spec Phase 6) adds ResolveAuditLedgerPathForCommand to Program (the audit
+    // Spec Phase 6 adds ResolveAuditLedgerPathForCommand to Program (the audit
     // ledger-path seam used by the new AuditVerify.Run default routing): 200 -> 201. The
     // budget shrinks again when a ramp-2+ ramp migrates the audit domain off Program.
     private const int MethodsAfterRamp1 = 201;

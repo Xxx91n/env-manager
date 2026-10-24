@@ -13,7 +13,7 @@ The six external providers below require host-side setup. Each section lists the
 
 ---
 
-### Capability matrix (ticket 41)
+### Capability matrix
 
 Every provider declares its capability descriptors on `ISecretProvider`, and `profile secret-provider list` reports them per line as `[refresh=yes|no certauth=yes|no network=yes|no]` plus real availability (`(unavailable)` when the cheap environment gate fails):
 

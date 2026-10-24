@@ -1,4 +1,4 @@
-// AwsSecretsManagerContractTests.cs - AwsSecretsManagerProvider contract mount (ticket 10; L1 via issue 15)
+// AwsSecretsManagerContractTests.cs - AwsSecretsManagerProvider contract mount
 // License: Apache-2.0
 
 using EnvManager;

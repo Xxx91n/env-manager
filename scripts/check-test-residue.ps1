@@ -1,7 +1,7 @@
 # Env Manager - integration-test residue self-check (read-only).
 #
 # Lists integration-test residue left behind by the harness (architecture-recovery
-# issue 22):
+#):
 #   - registry values whose names start with the harness prefix (default EM_TEST_)
 #     under HKCU\Environment and, when readable, the HKLM system environment key
 #   - profiles with harness-prefix names in the Env Manager profiles store

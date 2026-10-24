@@ -1,9 +1,9 @@
 using EnvManager.Secrets.Core;
-// VaultKV2Provider.cs - secret provider architecture (ticket 09, architecture-recovery)
-// One-symbol-per-file split of the retired single-file secret provider module (issue 09); behavior unchanged.
+// VaultKV2Provider.cs - secret provider architecture
+// One-symbol-per-file split of the retired single-file secret provider module; behavior unchanged.
 // License: Apache-2.0
 
-// ticket 40: adapter-boundary typed error family. HTTP failures map through
+// Adapter-boundary typed error family. HTTP failures map through
 // SecretProviderErrors (family message scrubbed once by the base constructor);
 // best-effort cleanup keeps its bare-catch semantics but reports through the
 // scrubbed family channel.
@@ -22,7 +22,7 @@ internal sealed class VaultKV2Provider : ISecretProvider
 {
     public string Name => "vault-kv2";
 
-    // Capability descriptors (ticket 41, spec Phase 6): declared per provider,
+    // Capability descriptors: declared per provider,
     // consumed by SecretProviderManager.ListProviders and surfaced through
     // `profile secret-provider list` so the GUI gates on data, not name lists.
     public bool RefreshCapable => true;

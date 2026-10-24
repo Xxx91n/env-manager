@@ -1,8 +1,8 @@
 // scripts/gen-latest-json.test.mjs - unit tests for the Tauri updater latest.json
-// generator (ticket 44, architecture-recovery). Run with: node --test
+// generator (architecture-recovery). Run with: node --test
 // scripts/gen-latest-json.test.mjs
 //
-// Schema-pinning tests per issue 44 AC: 'scripts/gen-latest-json.mjs exists and
+// Schema-pinning tests per AC: 'scripts/gen-latest-json.mjs exists and
 // schema is correct (pinned by unit tests)'. Tests are pure-filesystem, no
 // network, no real signing key (uses throwaway fixture bytes), and isolated per
 // test via mkdtemp under os.tmpdir().

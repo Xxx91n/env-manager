@@ -33,7 +33,7 @@
   async function refresh() {
     loading = true
     try {
-      // v0.9.19: All 4 IPC calls launched concurrently (SWR makes listProtection instant on cache hit)
+      // All 4 IPC calls launched concurrently (SWR makes listProtection instant on cache hit)
       const withTimeout = (p, ms) => Promise.race([
         p,
         new Promise((_, reject) => setTimeout(() => reject(new Error("timeout")), ms)),

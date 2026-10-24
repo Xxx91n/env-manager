@@ -2,7 +2,7 @@
 # Referenced by .codex-tmp/grill-plan-ci-test-automation.md (3.2)
 # CI must build env-manager-cli.exe BEFORE this test runs (build.yml verify job order).
 #
-# Ticket 07 (architecture-recovery) upgrade: this file now implements the
+# (architecture-recovery) upgrade: this file now implements the
 # four-layer launch-verification pattern from spec.md:
 #   1. golden env diff — the injected set must exactly match the profile's
 #      resolved variables (no more, no less), against an allowlist of variables

@@ -304,7 +304,7 @@ function Backup-Registry {
   Write-Host "[test-with-restore] Capturing exact HKCU\Environment snapshot ..." -ForegroundColor Cyan
   $hkcuSnapshot = Get-RegistrySnapshot ([Microsoft.Win32.RegistryHive]::CurrentUser) $UserEnvSubKey
   Save-Snapshot $hkcuSnapshot $UserJsonBackup
-  # Ticket 22: informational only - pre-existing values under the harness prefix are
+  # informational only - pre-existing values under the harness prefix are
   # noted, never touched (they predate this run; see scripts/check-test-residue.ps1).
   $preExisting = @($hkcuSnapshot.Values.Keys | Where-Object { $_ -like "$TestPrefix*" } | Sort-Object)
   if ($preExisting.Count -gt 0) {
@@ -550,7 +550,7 @@ try {
   Run-Test "trailing-backslash + quote recovery" { Test-RawTrailingBackslashInvocation }
 
   Run-Test "differential oracle parity (InMemoryScope vs RegistryScope)" {
-    # Ticket 11: the differential suite drives the real registry as the oracle, so it is
+    # the differential suite drives the real registry as the oracle, so it is
     # gated behind EM_DIFFERENTIAL_ORACLE and must only ever run inside THIS fixture's
     # snapshot/restore window (hard-boundary real-registry isolation red line).
     $testProject = Join-Path $ProjectRoot "tests\EnvManager.Engine.Tests\EnvManager.Engine.Tests.csproj"
@@ -582,7 +582,7 @@ try {
   $systemVerify = if ($SystemSnapshotAvailable) { Compare-RegistrySnapshot ([Microsoft.Win32.RegistryHive]::LocalMachine) $SystemEnvSubKey $SystemJsonBackup } else { @{ Match = $true; Diff = "not tested (no accessible snapshot)" } }
   $allPass = ($failures.Count -eq 0) -and $internalVerify.Match -and $userVerify.Match -and $systemVerify.Match
 
-  # Ticket 22 (residue-zero, pre-restore classification): the pre/post snapshot diff
+  # (residue-zero, pre-restore classification): the pre/post snapshot diff
   # may only reference harness-registered value names (the $TestPrefix* set this harness
   # itself writes). Names outside the registered set are foreign drift, reported
   # separately and failed even when the test bodies themselves passed.
@@ -611,7 +611,7 @@ try {
     $internalRestored = Compare-InternalConfigSnapshot
     $userRestored = Compare-RegistrySnapshot ([Microsoft.Win32.RegistryHive]::CurrentUser) $UserEnvSubKey $UserJsonBackup
     $systemRestored = if ($SystemSnapshotAvailable) { Compare-RegistrySnapshot ([Microsoft.Win32.RegistryHive]::LocalMachine) $SystemEnvSubKey $SystemJsonBackup } else { @{ Match = $true; Diff = "not tested (no accessible snapshot)" } }
-    # Ticket 22 (residue-zero, post-restore assertion): after compensatory
+    # (residue-zero, post-restore assertion): after compensatory
     # reconciliation the diff against the pre-test snapshot must be empty; any
     # surviving name is residue that failed to roll back and is listed by name.
     $residueLeft = @()

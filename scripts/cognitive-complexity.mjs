@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Cognitive complexity guard (ticket 29, architecture-recovery) - Sonar-style
+// Cognitive complexity guard (architecture-recovery) - Sonar-style
 // method-level cognitive complexity scanner for the C# CLI engine (src/*.cs).
 //
 // Modes:

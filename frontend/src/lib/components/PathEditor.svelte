@@ -25,7 +25,7 @@
   import type { PathHealthEntry } from '../api'
 
  let entries: PathEntry[] = []
-  // v0.9.17: reverse index from ProfilePage — normalized path -> profile names
+  // reverse index from ProfilePage — normalized path -> profile names
   let pathIdx: Map<string, string[]> = new Map()
   $: if (pathProfileIndex) { pathIdx = $pathProfileIndex }
  let scope: 'user' | 'system' = 'user'
@@ -33,7 +33,7 @@
  let actionLoading = false
  let newEntry = ''
 
-  // v0.7.12 staged-move state: matches the Windows PowerToys env-var editor
+  // Staged-move state: matches the Windows PowerToys env-var editor
   // pattern where pressing up/down only reorders locally and an Apply button
   // commits all moves at once. This lets the user click up/down many times
   // rapidly without serial IPC per click (which was slow and felt laggy).
@@ -49,13 +49,13 @@
   // operate on the visual position `pos` (NOT entry.index, which is the
   // original registry index used as the stable key).
   $: displayEntries = stagedActive ? stagedEntries : entries
-  $: liveDeadCount = displayEntries.filter((e: any) => !e.exists && !e.isProtected).length  // v0.9.25 — WCAG 4.1.2: disabled reflects real data
+  $: liveDeadCount = displayEntries.filter((e: any) => !e.exists && !e.isProtected).length  // WCAG 4.1.2: disabled reflects real data
   
   // Notes (sticky-note) — shared notesStore, key prefixed with path:
   let notesLoaded = false
   let notesTick = writable(0)  // store: async-safe re-render trigger (Svelte 4 await limitation)
   let hoveredNotePath: string | null = null
-  let lastMovedKey: number | null = null  // v0.9.25 — moved entry highlight (W3C APG listbox-rearrangeable)
+  let lastMovedKey: number | null = null  // Moved entry highlight (W3C APG listbox-rearrangeable)
 
   async function ensureNotesLoaded() {
     if (!notesLoaded) {
@@ -215,7 +215,7 @@
 
   function handleRemoveDeadConfirm() {
     if (actionLoading || healthLoading) return
-    const deadCount = liveDeadCount  // v0.9.26 — same source as button disabled (WCAG 4.1.2)
+    const deadCount = liveDeadCount  // Same source as button disabled (WCAG 4.1.2)
     if (deadCount === 0) {
       showToast($t('messages.pathNoDead'), 'info')
       return
@@ -290,7 +290,7 @@
     })
   }
 
-  // v0.7.12 staged-move handlers. Local-only swap on `stagedEntries`; no IPC
+  // Staged-move handlers. Local-only swap on `stagedEntries`; no IPC
   // per click. The Apply button runs `applyStagedMoves()` to commit the whole
   // ordered sequence to the registry in one guided pass. `pos` is the visual
   // position in displayEntries (0-based), not the registry index.
@@ -311,7 +311,7 @@
     const tmp = arr[pos - 1]
     arr[pos - 1] = arr[pos]
     arr[pos] = tmp
-    stagedEntries = [...arr]  // v0.9.25 — new array ref for Svelte 4 keyed each reactivity
+    stagedEntries = [...arr]  // New array ref for Svelte 4 keyed each reactivity
     lastMovedKey = movedKey
     // W3C APG listbox-rearrangeable: focus follows the moved option so consecutive moves don't require re-finding the row
     queueMicrotask(() => {
@@ -330,7 +330,7 @@
     const tmp = arr[pos + 1]
     arr[pos + 1] = arr[pos]
     arr[pos] = tmp
-    stagedEntries = [...arr]  // v0.9.25 — new array ref for Svelte 4 keyed each reactivity
+    stagedEntries = [...arr]  // New array ref for Svelte 4 keyed each reactivity
     lastMovedKey = movedKey
     queueMicrotask(() => {
       const btn = document.querySelector('[data-move-down-key="' + movedKey + '"]') as HTMLButtonElement | null

@@ -8,7 +8,8 @@
                   DowngradeErrorMessage="A newer version of Env Manager is already installed." />
     <MediaTemplate EmbedCab="yes" />
 
-    <!-- v0.9.29 (ADR-0011): WixUI_InstallDir (browse dir + desktop-shortcut property) -->
+    <!-- WixUI_InstallDir supplies a 4-dialog UI (Welcome, InstallDir, VerifyReady,
+         Finish) and INSTALLDESKTOPSHORTCUT (default 1) gates the desktop-shortcut component. -->
     <Property Id="WIXUI_INSTALLDIR" Value="INSTALLDIR" />
     <UIRef Id="WixUI_InstallDir" />
     <UIRef Id="WixUI_ErrorProgressText" />
@@ -30,7 +31,7 @@
           </Directory>
         </Directory>
       <?endif ?>
-      <!-- v0.9.0 Phase B+C: ProgramData directory for machine-level secret mount files -->
+      <!-- ProgramData directory for machine-level secret mount files -->
       <Directory Id="ProgramDataFolder">
         <Directory Id="EnvManagerDataDir" Name="EnvManager" />
       </Directory>
@@ -41,7 +42,7 @@
     </Directory>
 
     <DirectoryRef Id="INSTALLDIR">
-      <!-- v0.9.30 (ADR-0012 D1): Uninstall shortcut in INSTALLDIR, next to the exe.
+      <!-- Uninstall shortcut in INSTALLDIR, next to the exe.
            Per user request (cc-swich / ZCode parity). FireGiant How-To pattern:
            non-advertised shortcut to [System64Folder]msiexec.exe /x [ProductCode],
            paired with RegistryValue KeyPath for ICE compliance. -->
@@ -81,7 +82,7 @@
         <File Id="AgentGuideFile" Source="$(var.SourceDir)\AGENTS.cli.md" KeyPath="yes" />
         <RemoveFile Id="RemoveResidue_AgentGuide" Name="*.*" On="uninstall" />
       </Component>
-      <!-- v0.9.0 Phase B+C: env-manager-service.exe — Windows service binary for secret mount lifecycle -->
+      <!-- env-manager-service.exe — Windows service binary for secret mount lifecycle -->
       <Component Id="ServiceExecutable" Guid="e61585c6-4c5b-437c-be39-082f8b64bade" Win64="$(var.Win64)">
         <File Id="ServiceFile" Source="$(var.SourceDir)\env-manager-service.exe" KeyPath="yes" />
         <RemoveFile Id="RemoveResidue_ServiceExecutable" Name="*.*" On="uninstall" />
@@ -97,13 +98,13 @@
         </ServiceInstall>
         <!-- Wait=no: service does DPAPI+named-pipe boot and can exceed the 30s SCM handshake ceiling;
              blocking the install on it re-creates the v0.9.26 hang. Service still starts asynchronously. -->
-        <!-- v0.9.27: do not block silent install on service boot (slow DPAPI+pipe init).
+        <!-- Do not block silent install on service boot (slow DPAPI+pipe init).
              ServiceInstall Start="auto" lets SCM bring it up at next boot; GUI exposes manual start. -->
         <ServiceControl Id="EnvManagerServiceControl" Name="EnvManagerService"
                         Stop="both" Remove="uninstall" Wait="no" />
       </Component>
 
-      <!-- v0.9.27: stop the OLD EnvManagerService during MajorUpgrade (afterInstallExecute runs after RemoveExistingProducts) -->
+      <!-- Stop the OLD EnvManagerService during MajorUpgrade (afterInstallExecute runs after RemoveExistingProducts) -->
       <Component Id="StopOldServiceOnUpgrade" Guid="*" Win64="$(var.Win64)">
         <Condition>WIX_UPGRADE_DETECTED</Condition>
         <CreateFolder />
@@ -141,7 +142,7 @@
       </Component>
     </DirectoryRef>
 
-    <!-- v0.9.30 (ADR-0012 D3): backstop cleanup for legacy INSTALLDIR\logs residue.
+    <!-- Backstop cleanup for legacy INSTALLDIR\logs residue.
          Prior versions wrote GUI logs under [INSTALLDIR]\logs. Wildcard RemoveFile only
          matches the specific logs subdirectory (not the whole INSTALLDIR — wixsharp
          #1114 anti-pattern avoided). RemoveFolder removes the empty dir afterwards. -->

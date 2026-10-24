@@ -7,7 +7,7 @@ using System.Text.Json.Serialization;
 namespace EnvManager;
 
 /// <summary>
-/// bulk import/export command domain (architecture-recovery issue 06): members moved
+/// bulk import/export command domain (architecture-recovery): members moved
 /// verbatim from EnvFeatures.cs. Behavior unchanged.
 /// </summary>
 class BulkVariable

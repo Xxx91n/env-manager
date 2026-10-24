@@ -1,4 +1,4 @@
-// OpConnectMock.cs - minimal 1Password Connect REST stub for the L1 matrix (issue 15)
+// OpConnectMock.cs - minimal 1Password Connect REST stub for the L1 matrix
 // License: Apache-2.0
 //
 // OnePasswordProvider shells out to the real op CLI. There is no offline 1Password

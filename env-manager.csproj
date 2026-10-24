@@ -25,7 +25,7 @@
   </ItemGroup>
   <ItemGroup>
     <InternalsVisibleTo Include="EnvManager.Engine.Tests" />
-    <!-- issue 25: the SharpFuzz harness exercises the internal LenientArgs parser. -->
+    <!-- The SharpFuzz harness exercises the internal LenientArgs parser, so it needs internals visible. -->
     <InternalsVisibleTo Include="EnvManager.Fuzz" />
   </ItemGroup>
   <ItemGroup>

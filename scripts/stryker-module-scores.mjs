@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Ticket 18 per-module mutation score (模块分算).
+ * per module mutation score (模块分算).
  * Usage: node scripts/stryker-module-scores.mjs [mutation-report.html or mutation-report.json]
  * Accepts either the Stryker HTML report (extracts the embedded app.report JSON, the
  * format used by StrykerOutput reports) or a raw mutation-report.json.

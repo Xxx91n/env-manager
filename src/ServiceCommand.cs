@@ -5,7 +5,7 @@ using System.Text.Json;
 namespace EnvManager;
 
 /// <summary>
-/// Service command domain (architecture-recovery issue 05): the `service` subcommand IPC gateway and its JSON escaping helper, moved verbatim from Program.cs. Behavior unchanged.
+/// Service command domain (architecture-recovery): the `service` subcommand IPC gateway and its JSON escaping helper, moved verbatim from Program.cs. Behavior unchanged.
 /// </summary>
 partial class Program
 {
@@ -18,7 +18,7 @@ partial class Program
         }
 
         string subcommand = args[1].ToLowerInvariant();
-        // v0.9.8 A4: request_id propagated from Rust run_cli via env var, or generated here.
+        // request_id propagated from Rust run_cli via env var, or generated here.
         string reqId = Environment.GetEnvironmentVariable("ENVMANAGER_REQUEST_ID") ?? "";
         if (string.IsNullOrEmpty(reqId)) reqId = DateTime.Now.ToString("HHmmss") + (new System.Random().Next(0, 9999)).ToString("D4");
         string pipeName = @"\\.\pipe\EnvManager.Background";
@@ -45,7 +45,7 @@ partial class Program
         try
         {
             string pipePath = pipeName.Replace(@"\\.\pipe\", "");
-                        // v0.9.7: fast-probe vs reliable-write connect strategy
+                        // fast-probe vs reliable-write connect strategy
             // Read probes (status/ping/health): 1 attempt, 2s timeout — fail fast, don't block GUI
             // Write ops (refresh/rotate/reload/shutdown): 3x retry, 5s timeout — reliable delivery
             bool isProbe = subcommand is "status" or "ping" or "health";
@@ -66,7 +66,7 @@ partial class Program
             }
             if (!connected)
             {
-                // v0.9.8 A3: structured service state enum - not_running vs unresponsive.
+                // structured service state enum - not_running vs unresponsive.
                 // Check if the named pipe exists at all (pipe server not started = not_running).
                 // If pipe path exists but connect timed out = unresponsive (service stuck).
                 bool pipeExists = System.IO.File.Exists($@"\\.\pipe\{pipePath}");

@@ -106,7 +106,7 @@ describe('review-finder regressions', () => {
     const path = await import('node:path/win32')
     const here = path.dirname(import.meta.url.replace('file:///', ''))
     const src = fs.readFileSync(path.join(here, '..', '..', '..', 'src', 'PathCommand.cs'), 'utf-8')
-    // ticket 34 DEF-1: the seen-set now stores NormalizePathEntry(entry) so dedupe
+    // The seen-set now stores NormalizePathEntry(entry) so dedupe
     // agrees with list/health; the isolation contract (protected entries never enter
     // the bag) is unchanged - pin the normalized form.
     const match = src.match(/if \(!isProtected\) seen\.Add\(NormalizePathEntry\(entry\)\)/)
@@ -129,7 +129,7 @@ describe('review-finder regressions', () => {
     const fs = await import('node:fs')
     const path = await import('node:path/win32')
     const here = path.dirname(import.meta.url.replace('file:///', ''))
-    // issue 03 seam migration: the transactional PATH write lives in SetPathEntriesCore,
+    // seam migration: the transactional PATH write lives in SetPathEntriesCore,
     // which delegates to WriteVariableCore (write-verify, rollback + restore-on-failure).
     const src = fs.readFileSync(path.join(here, '..', '..', '..', 'src', 'VariableWrite.cs'), 'utf-8')
     expect(src).toContain('static bool SetPathEntriesCore')
@@ -143,7 +143,7 @@ describe('review-finder regressions', () => {
     const here = path.dirname(import.meta.url.replace('file:///', ''))
     const tokenizer = fs.readFileSync(path.join(here, '..', '..', '..', 'src', 'ArgTokenizer.cs'), 'utf-8')
     const program = fs.readFileSync(path.join(here, '..', '..', '..', 'src', 'Program.cs'), 'utf-8')
-    // Ticket 26 split ProfileCommand into three files; the launch separator
+    // Split ProfileCommand into three files; the launch separator
     // contract (int dashIndex = Array.IndexOf(args, "--")) moved into
     // ProfileLaunchCommand.cs with the rest of the launch subdomain, so read
     // that file in addition to the legacy ProfileCommand.cs surface.
@@ -151,7 +151,7 @@ describe('review-finder regressions', () => {
     const profileLaunch = fs.readFileSync(path.join(here, '..', '..', '..', 'src', 'ProfileLaunchCommand.cs'), 'utf-8')
     expect(tokenizer).toContain('s.Contains(" --", StringComparison.Ordinal)')
     expect(program).toContain('args = recovered;')
-    // issue 26: launch separator handling lives in ProfileLaunchCommand.cs
+    // launch separator handling lives in ProfileLaunchCommand.cs
     expect(profileLaunch).toContain('int dashIndex = Array.IndexOf(args, "--");')
   })
 
@@ -185,7 +185,7 @@ describe('review-finder regressions', () => {
     expect(updateBlock![0]).toContain('command.creation_flags(CREATE_NO_WINDOW)')
   })
 
-  it('ticket 36: SettingsDialog reads the runtime version via app_version and never hardcodes a version literal', async () => {
+ it('SettingsDialog reads the runtime version via app_version and never hardcodes a version literal', async () => {
     const fs = await import('node:fs')
     const path = await import('node:path/win32')
     const here = path.dirname(import.meta.url.replace('file:///', ''))

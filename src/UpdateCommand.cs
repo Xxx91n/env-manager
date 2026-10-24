@@ -5,7 +5,7 @@ using System.Text.Json;
 namespace EnvManager;
 
 /// <summary>
-/// Update command domain (architecture-recovery issue 05 + ticket 27): `update check` and version comparison, extracted from partial class Program to its own internal class so Program stops growing. VersionIsNewer stays nested in this class (no other domain reads it) - the closure of the helper on Run is the boundary the compiler enforces. Program.JsonOpts / Program.ArgError / Program.ScrubExceptionMessage still live on partial Program via CliRuntime; this class reaches them via the existing Program.JsonOpts call shape.
+/// Update command domain (architecture-recovery): `update check` and version comparison, extracted from partial class Program to its own internal class so Program stops growing. VersionIsNewer stays nested in this class (no other domain reads it) - the closure of the helper on Run is the boundary the compiler enforces. Program.JsonOpts / Program.ArgError / Program.ScrubExceptionMessage still live on partial Program via CliRuntime; this class reaches them via the existing Program.JsonOpts call shape.
 /// </summary>
 internal static class UpdateCommand
 {

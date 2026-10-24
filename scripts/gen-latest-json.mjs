@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// scripts/gen-latest-json.mjs - Tauri v2 updater manifest generator (ticket 44, architecture-recovery)
+// scripts/gen-latest-json.mjs - Tauri v2 updater manifest generator (architecture-recovery)
 //
 // Reads release/ artifact directory and emits a `latest.json` manifest matching
 // the schema expected by @tauri-apps/plugin-updater (v2) / tauri-plugin-updater.

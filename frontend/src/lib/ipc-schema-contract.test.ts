@@ -1,5 +1,5 @@
 /**
- * IPC schema contract tests (architecture-recovery issue 08).
+ * IPC schema contract tests (architecture-recovery).
  *
  * The authoritative protocol schema lives in the Rust service
  * (service/src/ipc.rs). docs/schemas/ipc-samples.json is a golden file

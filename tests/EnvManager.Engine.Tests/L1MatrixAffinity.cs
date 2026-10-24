@@ -1,8 +1,8 @@
-// L1MatrixAffinity.cs - L1 backend-affinity skip logic (issue 15, architecture-recovery)
+// L1MatrixAffinity.cs - L1 backend-affinity skip logic
 // License: Apache-2.0
 //
 // The ticket-10 contract suite pins the backend-independent assertions (fail-closed
-// decrypt, malformed-format error) on every ISecretProvider mount. Issue 15 turns the
+// decrypt, malformed-format error) on every ISecretProvider mount. turns the
 // backend-dependent assertions (round-trip / plaintext-never) from static Skips into
 // real runs against L1 backends:
 //

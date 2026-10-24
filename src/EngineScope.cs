@@ -4,7 +4,7 @@ namespace EnvManager;
 
 /// <summary>
 /// A single environment value as persisted: the raw (never-expanded) string plus its registry kind.
-/// Introduced with the IEnvironmentScope engine seam (architecture-recovery issue 01, expand phase).
+/// Introduced with the IEnvironmentScope engine seam (architecture-recovery, expand phase).
 /// </summary>
 internal sealed record EnvValueSnapshot(string Value, RegistryValueKind Kind);
 
@@ -56,7 +56,7 @@ internal sealed record ToggleResult(bool Success, bool IsDisabled, string? Error
 /// - ListVariables may propagate UnauthorizedAccessException on the system scope; the command layer
 ///   keeps that catch (mirrors ListEnvironment).
 /// - The profile batch delete mechanics (DeleteVariableWithoutNotify: raw delete without backup
-///   cleanup or broadcast) are on the seam as DeleteValueWithoutNotify (issue 03); profile call-site rewiring is issue 04.
+///   cleanup or broadcast) are on the seam as DeleteValueWithoutNotify; profile call-site rewiring is.
 /// </summary>
 internal interface IEnvironmentScope
 {

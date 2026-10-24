@@ -1,13 +1,13 @@
 name: Dependabot auto-merge (patch-only, gated)
 
-# Dependabot 成熟治理（architecture-recovery ticket 31）
+# Dependabot 成熟治理（architecture-recovery）
 # 目的：仅对 patch 组 dependabot PR 自动合并；前提：
 #   1) 仅 patch update-type（minor/major 永远单 PR 人工评审）
 #   2) required CI（build.yml verify）结论为 success
 #   3) required dependency-review（dependency-review.yml）结论为 success
 #   4) 非 draft
 #   5) PR 作者是 dependabot[bot]
-#   6) required checks 有界轮询等待（45 min）——修复与 CI 并行触发的竞态（ticket 48）
+# 6) required checks 有界轮询等待（45 min）——修复与 CI 并行触发的竞态
 # 安全：
 #   - 事件：pull_request（明确禁用 pull_request_target——Boost Security Labs 实证
 #     github.actor 混淆 + @dependabot recreate 武器化攻击；详见
@@ -103,18 +103,7 @@ jobs:
           echo "waiting for required checks on head ${PR_HEAD_SHA} (bounded: 45 min)"
           while :; do
             json="$(gh api "repos/${PR_REPO}/commits/${PR_HEAD_SHA}/check-runs" --paginate)"
-            verdict="$(printf '%s' "$json" | python3 -c '
-import json, sys
-data = json.load(sys.stdin)
-want = ("CI/CD Build and Release / verify", "Dependency Review / dependency-review")
-found = {}
-for cr in data.get("check_runs", []):
-    name = cr.get("name")
-    if name in want:
-        found[name] = cr.get("conclusion") or "pending"
-for w in want:
-    print(w + "=" + str(found.get(w, "pending")))
-')"
+            verdict="$(printf '%s' "$json" | python3 scripts/required-check-verdict.py)"
             echo "--- required-check poll at $(date -u +%H:%M:%S) ---"
             printf '%s\n' "$verdict"
             if grep -Eq '=(failure|cancelled|timed_out|startup_failure|action_required|stale|skipped)$' <<<"$verdict"; then
@@ -162,7 +151,7 @@ for w in want:
           } >> "$GITHUB_STEP_SUMMARY"
 
       # 6) 分类依据明示（always：无论放行/跳过/拒绝都在 step summary 留下判定依据；
-      #    对应 issue 48 / D-008② 「在 gate 输出明示分类依据」）
+      # 对应「在 gate 输出明示分类依据」的要求）
       - name: Summarize classification (always)
         if: always()
         env:

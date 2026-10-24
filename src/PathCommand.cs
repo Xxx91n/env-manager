@@ -5,7 +5,7 @@ using System.Text.Json;
 namespace EnvManager;
 
 /// <summary>
-/// Path command domain (architecture-recovery issue 05): semicolon-separated list variable
+/// Path command domain (architecture-recovery): semicolon-separated list variable
 /// handling and the path list/add/remove/move/rename/dedupe/health subcommands, moved
 /// verbatim from Program.cs. Behavior unchanged.
 /// </summary>
@@ -167,7 +167,7 @@ partial class Program
         return PathDedupeCore(Engine, IsProtectedVariable, IsProtectedPathEntry, scope, args.Contains("--dry-run"));
     }
 
-    // Seam-parameterized dedupe core (architecture-recovery issue 34). Duplicate detection
+    // Seam-parameterized dedupe core (architecture-recovery). Duplicate detection
     // normalizes BOTH sides with NormalizePathEntry (expand %VAR%, trim, strip trailing
     // separators) so dedupe agrees with `path list` / `path health` and the documented
     // case-insensitive matching contract (docs/cli-commands.md); the set stays
@@ -390,7 +390,7 @@ partial class Program
         return PathAddCore(Engine, IsProtectedVariable, IsProtectedPathEntry, dir, scope, insertIndex);
     }
 
-    // Seam-parameterized add core (architecture-recovery issue 34): the historical inline
+    // Seam-parameterized add core (architecture-recovery): the historical inline
     // body verbatim, runnable against InMemoryScope for the metamorphic test pilot.
     internal static int PathAddCore(IEnvironmentScope env, Func<string, string, bool> isProtectedVariable, Func<string, bool> isProtectedPathEntry, string dir, string scope, int? insertIndex)
     {
@@ -443,7 +443,7 @@ partial class Program
         return PathRemoveCore(Engine, IsProtectedVariable, IsProtectedPathEntry, dir, scope);
     }
 
-    // Seam-parameterized remove core (architecture-recovery issue 34): the historical inline
+    // Seam-parameterized remove core (architecture-recovery): the historical inline
     // body verbatim, runnable against InMemoryScope for the metamorphic test pilot.
     internal static int PathRemoveCore(IEnvironmentScope env, Func<string, string, bool> isProtectedVariable, Func<string, bool> isProtectedPathEntry, string dir, string scope)
     {
@@ -507,7 +507,7 @@ partial class Program
         return 0;
     }
 
-    // --- PathCommand members (architecture-recovery issue 06, moved verbatim from EnvFeatures.cs) ---
+    // --- PathCommand members (architecture-recovery, moved verbatim from EnvFeatures.cs) ---
 
     internal static string NormalizePathEntry(string path) => Environment.ExpandEnvironmentVariables(path).Trim().TrimEnd('\\', '/');
 

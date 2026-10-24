@@ -61,7 +61,7 @@
     { id: 'service', labelKey: 'nav.service' },
     { id: 'audit', labelKey: 'nav.audit' },
   ]
-  // v0.9.24: CSS-only tab indicator — no JS measurement, no offsetWidth.
+  // CSS-only tab indicator — no JS measurement, no offsetWidth.
   // Each tab button has its own border-b that shows when active.
   // This eliminates the MUI #7187 class bug where offsetWidth includes
   // button padding (px-3 = 12px each side), making indicator wider than text.
@@ -178,7 +178,7 @@
 
     try {
       await listVariables()
-      // v0.9.19: Preload adjacent page data in background for instant tab switch
+      // Preload adjacent page data in background for instant tab switch
       void preloadAdjacentPages()
       // Phase 1: preload adjacent lazy components in background for instant tab switch
       preloadComponent('profiles', lazyImporters.profiles)
@@ -200,7 +200,7 @@
   function applyDarkMode(isDark: boolean, skipTransition = false) {
     darkMode = isDark
     if (typeof document !== 'undefined') {
-      // v0.9.24: withoutTransition pattern (reemus.dev "ultimate solution"):
+      // withoutTransition pattern (reemus.dev "ultimate solution"):
       // disable → action → getComputedStyle(force reflow) → enable SYNCHRONOUSLY.
       // The prior code removed the style in requestAnimationFrame (async), leaving
       // a 1-frame gap where transitions re-enabled → white flash on locked elements.
@@ -479,7 +479,7 @@
     font-size: 13px;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
-    /* v0.7.5: DPI-aware glyph rendering. These four together fix the
+    /* DPI-aware glyph rendering. These four together fix the
        "fuzzy on zoom, blurry on 4K Windows scaling" complaint. */
     text-rendering: optimizeLegibility;
     font-feature-settings: "kern" 1, "liga" 1, "calt" 1;
@@ -524,7 +524,7 @@
   :global([data-theme="dark"] *:active)::-webkit-scrollbar-thumb {
     background-color: rgba(255, 255, 255, 0.45);
   }
-  /* v0.9.18: Disable WebView2 native context menu globally. */
+  /* Disable WebView2 native context menu globally. */
   /* Allow text selection only in input/textarea/contenteditable. */
   :global(body) {
     -webkit-user-select: none;

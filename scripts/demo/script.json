@@ -1,0 +1,117 @@
+{
+  "description": "Simulated terminal screenplay for docs/assets/demo.gif. All paths, versions, and command outputs are fictional demo data (no real machine or registry data). Regenerate: node scripts/demo/capture.mjs",
+  "binary": "env-manager-cli",
+  "prompt": "$",
+  "title": "Terminal - env-manager-cli",
+  "typing": {
+    "charDelayMs": 32,
+    "preOutputMs": 620,
+    "postOutputMs": 1800,
+    "lineStepMs": 20,
+    "chunkSize": 1,
+    "finalDwellMs": 1900
+  },
+  "capture": { "width": 1280, "height": 720, "fps": 15, "maxBytes": 5242880 },
+  "commands": [
+    {
+      "cmd": "agents --summary",
+      "postOutputMs": 1600,
+      "output": [
+        "env-manager-cli v0.12.0 | Commands: list,get,set,delete,toggle,backup,restore,diff,merge,validate,profile,path,agents,help | Scopes: user,system | Safe: no-credentials,injection-protected,write-serialized | Agents: env-manager-cli agents --json for full spec"
+      ]
+    },
+    {
+      "cmd": "path health",
+      "postOutputMs": 1700,
+      "output": [
+        "{\"scope\":\"user\",\"dryRun\":true,\"totalEntries\":7,\"healthyCount\":5,\"duplicateCount\":1,\"deadCount\":1,\"wouldFix\":false,\"results\":[{\"entry\":\"C:\\\\demo\\\\nodejs\",\"status\":\"healthy\",\"isProtected\":false,\"isDead\":false,\"isDuplicate\":false,\"fullPath\":\"C:\\\\demo\\\\nodejs\"},{\"entry\":\"C:\\\\demo\\\\python311\\\\Scripts\",\"status\":\"healthy\",\"isProtected\":false,\"isDead\":false,\"isDuplicate\":false,\"fullPath\":\"C:\\\\demo\\\\python311\\\\Scripts\"},{\"entry\":\"C:\\\\demo\\\\nodejs\\\\\",\"status\":\"duplicate\",\"isProtected\":false,\"isDead\":false,\"isDuplicate\":true,\"fullPath\":\"C:\\\\demo\\\\nodejs\\\\\"},{\"entry\":\"C:\\\\demo\\\\old-tool\\\\bin\",\"status\":\"dead\",\"isProtected\":false,\"isDead\":true,\"isDuplicate\":false,\"fullPath\":\"C:\\\\demo\\\\old-tool\\\\bin\"},{\"entry\":\"C:\\\\demo\\\\go\\\\bin\",\"status\":\"healthy\",\"isProtected\":false,\"isDead\":false,\"isDuplicate\":false,\"fullPath\":\"C:\\\\demo\\\\go\\\\bin\"},{\"entry\":\"C:\\\\demo\\\\cargo\\\\bin\",\"status\":\"healthy\",\"isProtected\":false,\"isDead\":false,\"isDuplicate\":false,\"fullPath\":\"C:\\\\demo\\\\cargo\\\\bin\"},{\"entry\":\"C:\\\\demo\\\\git\\\\cmd\",\"status\":\"healthy\",\"isProtected\":false,\"isDead\":false,\"isDuplicate\":false,\"fullPath\":\"C:\\\\demo\\\\git\\\\cmd\"}]}"
+      ]
+    },
+    {
+      "cmd": "get PATH",
+      "postOutputMs": 1500,
+      "output": [
+        "{\"name\":\"PATH\",\"value\":\"C:\\\\demo\\\\nodejs;C:\\\\demo\\\\python311\\\\Scripts;C:\\\\demo\\\\nodejs\\\\;C:\\\\demo\\\\old-tool\\\\bin;C:\\\\demo\\\\go\\\\bin;C:\\\\demo\\\\cargo\\\\bin;C:\\\\demo\\\\git\\\\cmd\",\"scope\":\"user\",\"isDisabled\":false}"
+      ]
+    },
+    {
+      "cmd": "agents --json",
+      "lineStepMs": 20,
+      "chunkSize": 5,
+      "postOutputMs": 2100,
+      "output": [
+        "{",
+        "  \"name\": \"env-manager-cli\",",
+        "  \"version\": \"0.12.0\",",
+        "  \"description\": \"Windows environment variable manager CLI\",",
+        "  \"commands\": [",
+        "    {",
+        "      \"cmd\": \"list\",",
+        "      \"desc\": \"List all variables (JSON)\",",
+        "      \"args\": \"\",",
+        "      \"scope\": false,",
+        "      \"async\": true",
+        "    },",
+        "    {",
+        "      \"cmd\": \"get\",",
+        "      \"desc\": \"Get variable (JSON)\",",
+        "      \"args\": \"<name>\",",
+        "      \"scope\": false,",
+        "      \"async\": true",
+        "    },",
+        "    {",
+        "      \"cmd\": \"set\",",
+        "      \"desc\": \"Set variable\",",
+        "      \"args\": \"<name> <value>\",",
+        "      \"scope\": true,",
+        "      \"async\": false",
+        "    },",
+        "    {",
+        "      \"cmd\": \"profile\",",
+        "      \"desc\": \"Manage profiles\",",
+        "      \"args\": \"list|create|delete|apply|unapply|show|add-var|remove-var|edit-var|status\",",
+        "      \"scope\": true,",
+        "      \"async\": false",
+        "    },",
+        "    {",
+        "      \"cmd\": \"path\",",
+        "      \"desc\": \"Edit PATH as list\",",
+        "      \"args\": \"list|add|remove|move-up|move-down|rename\",",
+        "      \"scope\": true,",
+        "      \"async\": false",
+        "    },",
+        "    {",
+        "      \"cmd\": \"protection\",",
+        "      \"desc\": \"List/add/remove protected vars and PATH entries\",",
+        "      \"args\": \"list|add-var|remove-var|add-path|remove-path\",",
+        "      \"scope\": false,",
+        "      \"async\": true",
+        "    },",
+        "    {",
+        "      \"cmd\": \"agents\",",
+        "      \"desc\": \"Output AGENTS.md spec\",",
+        "      \"args\": \"[--path|--json|--summary]\",",
+        "      \"scope\": false,",
+        "      \"async\": true",
+        "    }",
+        "  ],",
+        "  \"scopes\": [\"user\", \"system\"],",
+        "  \"output\": \"stdout: JSON or text, stderr: errors/debug, exit 0=success 1=failure\",",
+        "  \"safety\": {",
+        "    \"noCredentials\": true,",
+        "    \"injectionProtected\": true,",
+        "    \"writeSerialized\": true,",
+        "    \"maxArgLen\": 32767,",
+        "    \"maxArgs\": 64,",
+        "    \"nullByteRejected\": true,",
+        "    \"controlCharRejected\": true",
+        "  },",
+        "  \"integration\": {",
+        "    \"pattern\": \"Call agents first to discover the contract, then use commands. Read operations are safe to batch. Write operations are serialized.\",",
+        "    \"tip\": \"Use --debug for verbose stderr logging. Pin to --scope user for non-interactive agent workflows (no elevation needed).\"",
+        "  }",
+        "}"
+      ]
+    }
+  ]
+}

@@ -58,7 +58,7 @@ import { parseSecretProviderList } from '../secret-provider-list'
   // v0.8 secret provider state
   let activeProvider = 'dpapi-current-user'
   let availableProviders: string[] = []
-  // Ticket 41: providers the CLI reports as (unavailable) + declared capability flags.
+  // Providers the CLI reports as (unavailable) + declared capability flags.
   let unavailableProviders: string[] = []
   let providerCapabilities: Record<string, { refresh: boolean; certauth: boolean; network: boolean }> = {}
 
@@ -100,7 +100,7 @@ import { parseSecretProviderList } from '../secret-provider-list'
   async function loadProviderInfo() {
     try {
       const result = await secretProviderList()
-      // Ticket 41: capability-aware generic parse — no hardcoded provider id list
+      // Capability-aware generic parse — no hardcoded provider id list
       // (hard boundary v0.7.3). Availability and capability flags come from the CLI
       // line data; pre-capability CLI output parses with all flags false.
       const parsed = parseSecretProviderList(result)
@@ -176,7 +176,7 @@ import { parseSecretProviderList } from '../secret-provider-list'
     showToast(msg, type === 'success' ? 'success' : type === 'error' ? 'error' : 'info')
   }
   // Map CLI hardcoded error messages to i18n keys for localization
-  // v0.7.6: alias for the existing providerDisplayName() so localizeError
+  // alias for the existing providerDisplayName() so localizeError
   // can render the provider-name placeholder in i18n templates. We reuse the
   // already-defined function instead of duplicating the provider mapping.
   function providerDisplayNameFn(name: string): string {
@@ -203,7 +203,7 @@ import { parseSecretProviderList } from '../secret-provider-list'
     }
     if (/System32 are rejected/i.test(errMsg)) return $t('errors.launchTargetSystem32')
     // -------------------------------------------------------------------
-    // v0.7.6: activation errors from SecretProviderManager.SetActiveProvider.
+    // activation errors from SecretProviderManager.SetActiveProvider.
     // The CLI throws: "Cannot activate provider '<name>': <upstream>.
     //   Fix the provider environment first (e.g. install pwsh modules,
     //   set VAULT_ADDR, or configure cloud credentials)."
@@ -272,7 +272,7 @@ import { parseSecretProviderList } from '../secret-provider-list'
       const reason = $t(reasonKey, { values: reasonValues });
       return $t('errors.activateProvider', { values: { name: providerDisplayName, reason } });
     }
-    // v0.7.7: inheritance boundary errors from ProfileSetInherits.
+    // inheritance boundary errors from ProfileSetInherits.
     if (/A Global profile cannot inherit from a Launch profile/i.test(errMsg)) {
       return $t('errors.globalInheritsLaunch')
     }
@@ -339,7 +339,7 @@ import { parseSecretProviderList } from '../secret-provider-list'
       actionLoading = false
     }
   }
-  // v0.7.4: switching the active secret provider used to silently succeed and
+  // switching the active secret provider used to silently succeed and
   // leave all pre-existing secrets still encrypted with the OLD provider. The user
   // got no warning and could not recover the olds if the old provider was removed
   // (the DPAPI fallback can't decrypt CredMan/SOPS/etc). Now we show a confirm
@@ -369,7 +369,7 @@ import { parseSecretProviderList } from '../secret-provider-list'
       providerErrorMessage = null
       showMessage($t('secrets.providerChanged'), 'success')
     } catch (err) { void frontendLog('error', '[ProfilePage] ' + (err instanceof Error ? err.message : String(err))).catch(() => {});
-      // v0.7.10: show provider activation errors as an inline amber banner
+      // show provider activation errors as an inline amber banner
       // directly under the selector (providerErrorMessage) instead of a
       // transient toast, so the user can read the full actionable fix without
       // copy-pasting from a fading toast.
@@ -394,7 +394,7 @@ import { parseSecretProviderList } from '../secret-provider-list'
       await refreshProfiles()
       showMessage($t('messages.secretAdded'), 'success')
     } catch (err) { void frontendLog('error', '[ProfilePage] ' + (err instanceof Error ? err.message : String(err))).catch(() => {});
-      // v0.7.10: surface secret-add errors (provider activation failures,
+      // surface secret-add errors (provider activation failures,
       // CLIXML probes, upstream provider issues) as an inline banner under
       // the selector so the actionable fix is visible without a fading toast.
       providerErrorMessage = localizeError(err instanceof Error ? err.message : String(err))

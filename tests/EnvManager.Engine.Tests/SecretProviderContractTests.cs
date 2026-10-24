@@ -1,4 +1,4 @@
-// SecretProviderContractTests.cs - shared ISecretProvider contract test base (ticket 10, architecture-recovery)
+// SecretProviderContractTests.cs - shared ISecretProvider contract test base
 // License: Apache-2.0
 
 using EnvManager;
@@ -18,7 +18,7 @@ namespace EnvManager.Engine.Tests;
 /// The four core assertions are fail-closed decryption, round-trip, stable error on
 /// malformed format, and plaintext-never-in-the-envelope. The first two are backend
 /// independent and inherited/run by every subclass; the last two need a real backend and
-/// are wired per subclass (DPAPI runs them on its real local backend; issue 15 L1 mounts
+/// are wired per subclass (DPAPI runs them on its real local backend; L1 mounts
 /// run them against real backends - emulator containers, localhost Connect mock, or local
 /// CLI tooling - with affinity-based skips when the host lacks the backend).
 /// </summary>
@@ -45,7 +45,7 @@ public abstract class SecretProviderContractTests
         var ex = Assert.Throws<SecretProviderInvalidEnvelopeException>(() => provider.Decrypt(foreign, "em-contract-context"));
 
         Assert.Contains("Provider mismatch", ex.Message);
-        // ticket 40: every adapter maps envelope-format rejections onto the typed family
+        // Every adapter maps envelope-format rejections onto the typed family
         // (subclass of InvalidOperationException, message text unchanged).
         Assert.IsAssignableFrom<SecretProviderInvalidEnvelopeException>(ex);
     }
@@ -60,7 +60,7 @@ public abstract class SecretProviderContractTests
         var ex = Assert.Throws<SecretProviderInvalidEnvelopeException>(() => provider.Decrypt("not-a-valid-envelope!!", "em-contract-context"));
 
         Assert.Contains("Invalid secret envelope", ex.Message);
-        // ticket 40: same typed-family mapping guarantee on the malformed-format path.
+        // Same typed-family mapping guarantee on the malformed-format path.
         Assert.IsAssignableFrom<SecretProviderInvalidEnvelopeException>(ex);
     }
 
@@ -69,7 +69,7 @@ public abstract class SecretProviderContractTests
     protected void AssertRoundTrip_EncryptThenDecrypt_ReturnsPlaintext() =>
         AssertRoundTrip_EncryptThenDecrypt_ReturnsPlaintext(_harness);
 
-    // Issue 15: L1 mounts run the same assertions against a real backend harness while
+    // L1 mounts run the same assertions against a real backend harness while
     // the base class keeps the ticket-10 backend-independent Fact set unchanged.
     internal void AssertRoundTrip_EncryptThenDecrypt_ReturnsPlaintext(ISecretProviderHarness l1Harness)
     {
@@ -95,7 +95,7 @@ public abstract class SecretProviderContractTests
     protected void AssertPlaintextNotEmbedded_EncryptOmitsPlaintext() =>
         AssertPlaintextNotEmbedded_EncryptOmitsPlaintext(_harness);
 
-    // Issue 15: L1 overload - same canary against a real backend harness.
+    // L1 overload - same canary against a real backend harness.
     internal void AssertPlaintextNotEmbedded_EncryptOmitsPlaintext(ISecretProviderHarness l1Harness)
     {
         const string plain = "em-contract-canary-42";

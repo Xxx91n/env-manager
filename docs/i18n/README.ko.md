@@ -1,3 +1,6 @@
+<!-- canonical: ../../README.md -->
+<!-- sync: 6f0a201001cb -->
+
 <div align="center">
 
 <picture>
@@ -38,7 +41,24 @@
   <img src="../../docs/assets/demo.gif" alt="Env Manager CLI demo" width="100%">
 </p>
 
-데모는 읽기 전용 CLI 명령을 보여줍니다: agents --summary, path health, get PATH, agents --json. vhs docs/assets/demo.tape로 다시 생성할 수 있습니다.
+데모는 읽기 전용 CLI 명령을 보여줍니다: agents --summary, path health, get PATH, agents --json. `node scripts/demo/capture.mjs`로 다시 생성할 수 있습니다.
+
+*위 데모 터미널 출력은 시뮬레이션 데이터를 사용합니다.*
+
+### 영상 워크스루
+
+약 51초 분량의 전체 기능 워크스루(중/영 이중언어 내레이션): **[YouTube에서 보기](https://youtu.be/REPLACE_ME)** — 저장소에도 `docs/assets/demo/env-manager-demo.zh.mp4` / `docs/assets/demo/env-manager-demo.en.mp4`로 포함되어 있습니다.
+
+### 갤러리
+
+| | | |
+|:-:|:-:|:-:|
+| ![변수 보기](../../docs/assets/gallery/01-variables.png)<br>**변수** — 검색, 범위, 행별 작업 | ![system 범위](../../docs/assets/gallery/02-variables-system.png)<br>**system 범위** — 보호된 항목 잠김 | ![PATH 편집기](../../docs/assets/gallery/03-path-editor.png)<br>**PATH 편집기** — 끊어진/중복 항목 감지 |
+| ![프로필](../../docs/assets/gallery/04-profiles.png)<br>**프로필** — 적용 / 실행 / 상속 | ![기록 및 가져오기](../../docs/assets/gallery/05-history.png)<br>**기록 및 가져오기** — 되돌릴 수 있는 변경 | ![보호](../../docs/assets/gallery/06-protection.png)<br>**보호** — 사용자 지정 잠금 |
+| ![감사 원장](../../docs/assets/gallery/07-audit.png)<br>**감사 원장** — 해시 체인, 검증 가능 | ![서비스 관리자](../../docs/assets/gallery/08-service.png)<br>**서비스 관리자** — 시크릿 마운트 | ![설정](../../docs/assets/gallery/09-settings-i18n.png)<br>**설정** — 10개 언어 i18n |
+| ![편집 대화상자](../../docs/assets/gallery/10-edit-dialog.png)<br>**편집 대화상자** — 확장된 값 미리보기 | ![라이트 테마](../../docs/assets/gallery/11-variables-light.png)<br>**라이트 테마** — 변형 | ![CLI](../../docs/assets/gallery/12-cli-terminal.png)<br>**CLI** — JSON 우선, 에이전트 네이티브 |
+
+
 ## Features
 - 에이전트 네이티브 CLI — 일급 머신 계약을 갖춘 18개 이상의 명령: env-manager-cli agents --json은 구조화된 명령 사양을 출력하며, 모든 기능은 바이너리와 함께 배포되는 에이전트용 매뉴얼(AGENTS.cli.md)에 문서화되어 있습니다.
 - 프로필 및 구성 — 글로벌 프로필은 레지스트리에 적용됩니다. Launch 프로필은 단일 프로세스에 격리된 env 블록을 주입합니다(레지스트리를 건드리지 않으며 WM_SETTINGCHANGE도 브로드캐스트하지 않음). 상속, 충돌 미리보기, 안전한 역순 롤백이 포함됩니다.

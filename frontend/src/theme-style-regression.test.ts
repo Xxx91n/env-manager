@@ -6,7 +6,7 @@ import { fileURLToPath } from 'url'
 const __dirname2 = typeof __dirname !== 'undefined' ? __dirname : dirname(fileURLToPath(import.meta.url))
 
 describe('v0.9.24 Tab indicator CSS-only invariant (supersedes v0.9.20)', () => {
-  // v0.9.24: The indicator is now CSS-only (border-b-2 on active tab).
+  // The indicator is now CSS-only (border-b-2 on active tab).
   // The prior test only checked the initial string value of indicatorStyle,
   // which was always 'width: 0px' — a static string assertion that never
   // caught the real bug: el.offsetWidth includes button padding (px-3 = 12px

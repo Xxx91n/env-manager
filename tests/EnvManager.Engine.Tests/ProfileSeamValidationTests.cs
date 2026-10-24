@@ -7,8 +7,8 @@ using EnvManager.Secrets.Manager;
 namespace EnvManager.Engine.Tests;
 
 /// <summary>
-/// Ticket 04 regression net: profile apply/launch pre-flight validation and the
-/// v0.7.7 inheritance-chain secret propagation boundary, exercised through the
+/// Regression net: profile apply/launch pre-flight validation and the
+/// Inheritance-chain secret propagation boundary, exercised through the
 /// IEnvironmentScope seam (InMemoryScope) - no real registry, no machine state.
 ///
 /// The red-first acceptance gate for this ticket: the inherited-secret rejection
@@ -121,7 +121,7 @@ public class ProfileSeamValidationTests : IDisposable
     /// that carries secrets. The Global-inherits-Launch topology guard does not fire for
     /// launch targets, so this rejection can ONLY come from CollectInheritedSecretsFrom.
     /// Replacing the union walk with own-SecretVariables-only makes exactly this test red
-    /// (demonstrated during ticket 04 red-first acceptance).
+    /// (demonstrated during red-first acceptance).
     /// </summary>
     [Fact]
     public void Preflight_LaunchInheritingSecretLaunch_PoisonedJson_Rejected()
@@ -172,7 +172,7 @@ public class ProfileSeamValidationTests : IDisposable
         Assert.False(Program.RunProfilePreflight(child));
     }
 
-    // ---- ticket 19: two-tier preflight (warn tier + strict + structured report) ----
+    // ---- two-tier preflight (warn tier + strict + structured report) ----
 
     /// <summary>The error tier keeps rejecting: protected variable name lands in Errors, not Warnings.</summary>
     [Fact]

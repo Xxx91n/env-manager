@@ -1,9 +1,9 @@
 using EnvManager.Secrets.Core;
-// OnePasswordProvider.cs - secret provider architecture (ticket 09, architecture-recovery)
-// One-symbol-per-file split of the retired single-file secret provider module (issue 09); behavior unchanged.
+// OnePasswordProvider.cs - secret provider architecture
+// One-symbol-per-file split of the retired single-file secret provider module; behavior unchanged.
 // License: Apache-2.0
 
-// ticket 40: adapter-boundary typed error family. Process spawn/exit failures map
+// Adapter-boundary typed error family. Process spawn/exit failures map
 // onto the family at the throw sites; best-effort cleanup reports through the
 // scrubbed family channel (SecretProviderErrors.SwallowBestEffort).
 
@@ -23,7 +23,7 @@ internal sealed class OnePasswordProvider : ISecretProvider
 {
     public string Name => "1password";
 
-    // Capability descriptors (ticket 41, spec Phase 6): declared per provider,
+    // Capability descriptors: declared per provider,
     // consumed by SecretProviderManager.ListProviders and surfaced through
     // `profile secret-provider list` so the GUI gates on data, not name lists.
     public bool RefreshCapable => true;
@@ -66,6 +66,11 @@ internal sealed class OnePasswordProvider : ISecretProvider
         return "op";
     }
 
+    // Budget for the `op --version` availability probe. Same reasoning as the sops
+    // probe: CLI cold start on a warm Windows host is seconds (antivirus scan), and a
+    // budget stricter than the real calls (30s) reports slowness as a broken binary.
+    private const int ProbeTimeoutMs = 30000;
+
     private static void EnsureOpAvailable()
     {
         var psi = new System.Diagnostics.ProcessStartInfo
@@ -75,16 +80,37 @@ internal sealed class OnePasswordProvider : ISecretProvider
             UseShellExecute = false,
             RedirectStandardOutput = true,
             RedirectStandardError = true,
-            CreateNoWindow = true
+            CreateNoWindow = true,
+            StandardOutputEncoding = Encoding.UTF8,
+            StandardErrorEncoding = Encoding.UTF8
         };
         try
         {
             using var proc = System.Diagnostics.Process.Start(psi);
             if (proc == null) throw new SecretProviderNotFoundException("1password", "probe", "1Password CLI (op) binary not found");
-            proc.WaitForExit(5000);
-            if (!proc.HasExited || proc.ExitCode != 0)
-                throw new SecretProviderUnavailableException("1password", "probe", "1Password CLI (op) binary not functional");
-            // v0.9.13 Phase 4F: record provider binary hash for tamper detection
+
+            // Drain both pipes async-first so a child blocked on pipe backpressure
+            // still reaches exit instead of deadlocking the probe.
+            var stdoutBuf = new StringBuilder();
+            var stderrBuf = new StringBuilder();
+            proc.OutputDataReceived += (_, e) => { if (e.Data != null) stdoutBuf.AppendLine(e.Data); };
+            proc.ErrorDataReceived += (_, e) => { if (e.Data != null) stderrBuf.AppendLine(e.Data); };
+            proc.BeginOutputReadLine();
+            proc.BeginErrorReadLine();
+
+            if (!proc.WaitForExit(ProbeTimeoutMs))
+            {
+                try { proc.Kill(entireProcessTree: true); } catch (Exception killEx) { SecretProviderErrors.SwallowBestEffort("1password", "probe", killEx); }
+                throw new SecretProviderTimeoutException("1password", "probe",
+                    "op --version did not answer within " + (ProbeTimeoutMs / 1000) + "s; the binary is stalled (antivirus scan or slow disk), not missing");
+            }
+            proc.WaitForExit();
+
+            if (proc.ExitCode != 0)
+                throw new SecretProviderUnavailableException("1password", "probe",
+                    "op --version exited " + proc.ExitCode + ": " + stderrBuf.ToString().Trim());
+
+            // record provider binary hash for tamper detection
             try { Program.RecordProviderHash("op", OP_BINARY); } catch (Exception ex) { SecretProviderErrors.SwallowBestEffort("1password", "provider-hash", ex); }
         }
         catch (System.ComponentModel.Win32Exception ex)

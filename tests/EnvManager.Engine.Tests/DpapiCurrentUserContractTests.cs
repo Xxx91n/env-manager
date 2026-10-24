@@ -1,4 +1,4 @@
-// DpapiCurrentUserContractTests.cs - DPAPI provider contract mount (ticket 10, architecture-recovery)
+// DpapiCurrentUserContractTests.cs - DPAPI provider contract mount
 // License: Apache-2.0
 
 using EnvManager;

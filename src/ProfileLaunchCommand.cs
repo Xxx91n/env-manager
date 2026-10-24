@@ -6,10 +6,10 @@ using EnvManager.Secrets.Manager;
 namespace EnvManager;
 
 /// <summary>
-/// Profile launch sub-domain (architecture-recovery issue 26, ticket 26 split).
+/// Profile launch sub-domain (architecture-recovery, split).
 /// Extracted from ProfileCommand.cs: ProfileSetLaunch / ProfileLaunch / ValidateLaunchPreflight /
 /// ValidateLaunchTarget. Behaviour is verbatim from the original 1605-line monolith; the
-/// splitting rationale is per Q5 ticket 26 ("launch/secret-provider first, then CRUD").
+/// splitting rationale is per Q5 "launch/secret-provider first, then CRUD".
 ///
 /// Critical safety properties preserved verbatim:
 /// - `profile launch` spawns the child with env_clear + env(k,v) injection; never writes
@@ -34,7 +34,7 @@ partial class Program
         };
     }
 
-    // v0.6.0: Launch profile support --------------------------------------------------
+    // Launch profile support --------------------------------------------------
     // Configure (or reset) a Launch profile's target executable / args / cwd without
     // writing anything to the registry. The profile's variables remain the trusted source;
     // when `profile launch` runs we spawn the target with env_clear + inject.
@@ -136,11 +136,11 @@ partial class Program
     /// - Logs only command names and arg counts (existing hard boundary: no env values in logs).
     /// </summary>
     /// <summary>
-    /// Ticket 04 seam extraction: profile launch entry-point validation, returned as an
+    /// Seam extraction: profile launch entry-point validation, returned as an
     /// error string (null = valid) so xUnit tests cover it without the registry or any
     /// process spawn. Message text reproduces the pre-seam stderr branches verbatim.
     /// Kept internal static so ProfileSeamValidationTests can exercise it via
-    /// Program.ValidateLaunchPreflight (ticket 32 zero-drift invariant).
+    /// Program.ValidateLaunchPreflight.
     /// </summary>
     internal static string? ValidateLaunchPreflight(ProfileData profile)
     {
@@ -159,14 +159,14 @@ partial class Program
         int dashIndex = Array.IndexOf(args, "--");
         if (dashIndex >= 0) extraArgs = args.Skip(dashIndex + 1).ToList();
 
-        // Ticket 19: --strict promotes pre-flight warnings to hard failures (exit 1).
+        // --strict promotes pre-flight warnings to hard failures (exit 1).
         bool strict = args.Any(a => a.Equals("--strict", StringComparison.OrdinalIgnoreCase));
         var profiles = LoadProfiles();
         var profile = FindProfile(profiles, name);
         if (profile == null) { Console.Error.WriteLine($"Error: Profile '{name}' not found"); return 1; }
         string? launchError = ValidateLaunchPreflight(profile);
         if (launchError != null) { Console.Error.WriteLine("Error: " + launchError); return 1; }
-        // Ticket 19 warn tier: a dangling launch target is suspicious-but-safe locally
+        // Warn tier: a dangling launch target is suspicious-but-safe locally
         // (the spawn itself fails loudly with exit 1); --strict refuses it up front.
         if (strict && !string.IsNullOrWhiteSpace(profile.TargetExecutable))
         {
@@ -184,7 +184,7 @@ partial class Program
 
        string exe = profile.TargetExecutable!;
        string cwd = profile.WorkingDirectory ?? Path.GetDirectoryName(exe)!;
-        // v0.9.3: If the stored working directory no longer exists (e.g. portable
+        // If the stored working directory no longer exists (e.g. portable
         // app moved to a new version-named folder), fall back to the exe's directory
         // rather than crashing with "system cannot find the file specified".
         if (!string.IsNullOrEmpty(profile.WorkingDirectory) && !Directory.Exists(profile.WorkingDirectory))
@@ -227,7 +227,7 @@ partial class Program
            {
                try
                {
-                    // v0.8.0: resolve mount reference if the value is a "mount:" prefixed ID.
+                    // resolve mount reference if the value is a "mount:" prefixed ID.
                     valueToInject = ResolveSecretMount(valueToInject) ?? valueToInject;
                    valueToInject = SecretStore.Reveal(valueToInject, profile.Name + "\\" + v.Name);
                }

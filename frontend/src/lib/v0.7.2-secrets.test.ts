@@ -3,7 +3,7 @@ import { resolve, join } from 'path'
 import { readSecretProviderSources } from './secret-provider-source'
 import { readFileSync } from 'fs'
 
-describe('v0.7.2 Phase 6-7 secret provider implementations', () => {
+describe('secret provider implementations', () => {
   it('Secret provider sources contain SopsProvider class', () => {
     const src = readSecretProviderSources()
     expect(src).toContain('class SopsProvider : ISecretProvider')

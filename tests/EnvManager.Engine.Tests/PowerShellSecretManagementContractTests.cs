@@ -1,4 +1,4 @@
-// PowerShellSecretManagementContractTests.cs - PowerShellSecretManagementProvider contract mount (ticket 10; L1 via issue 15)
+// PowerShellSecretManagementContractTests.cs - PowerShellSecretManagementProvider contract mount
 // License: Apache-2.0
 
 using EnvManager;

@@ -2,11 +2,11 @@ using System.Text;
 using EnvManager;
 using SharpFuzz;
 
-// Architecture-recovery issue 25: libFuzzer harness over the CLI's untrusted
+// Architecture-recovery: libFuzzer harness over the CLI's untrusted
 // argument-parsing surface. The driver (libfuzzer-dotnet-windows.exe) feeds
 // fuzz input into the span; we treat each input as the raw command line.
 //
-// Exception bisection discipline (spec Phase 4, ticket 25):
+// Exception bisection discipline (spec Phase 4, ):
 //   swallowed (expected, argument-shaped): FormatException, ArgumentException
 //     (incl. ArgumentNullException/ArgumentOutOfRangeException), OverflowException
 //   crash (real bug classes): NullReferenceException, IndexOutOfRangeException,

@@ -13,6 +13,20 @@ Issues and specs for this repo live as GitHub issues. Use the `gh` CLI for all o
 
 Infer the repo from `git remote -v` — `gh` does this automatically when run inside a clone.
 
+## Triage labels
+
+The skills speak in terms of five canonical triage roles. This repo uses the role name as the label string, so the mapping is identity.
+
+| Role | Label in this repo | Meaning |
+| --- | --- | --- |
+| `needs-triage` | `needs-triage` | Maintainer needs to evaluate this issue |
+| `needs-info` | `needs-info` | Waiting on reporter for more information |
+| `ready-for-agent` | `ready-for-agent` | Fully specified, ready for an AFK agent |
+| `ready-for-human` | `ready-for-human` | Requires human implementation |
+| `wontfix` | `wontfix` | Will not be actioned |
+
+When a skill mentions a role, apply the matching label string from this table.
+
 ## Pull requests as a triage surface
 
 PRs are not just for code review — they're where design decisions surface before they're baked in. When a `/prototype` or `/research` skill returns material, it should be filed as a PR (not an issue) if it includes code or a design artifact worth preserving in history. Use `gh pr create --draft` for exploratory PRs that aren't ready for review.

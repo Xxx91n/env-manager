@@ -9,14 +9,14 @@ namespace EnvManager.Engine.Tests;
 
 /// <summary>
 /// Domain: ProfileCommand behavioral characterization baseline (architecture-recovery
-/// issue 32, spec Phase 5). Feathers-style safety net ahead of the ticket 26 split of
+/// spec Phase 5). Feathers-style safety net ahead of the split of
 /// the 1605-line ProfileCommand partial into profile-CRUD / launch / secret domain
 /// classes: Verify snapshots pin the exact user-facing output of every profile verb
 /// that had zero prior coverage - the launch-injection JSON projections and the
 /// per-verb error surfaces - so any drift during the extraction shows up as a
 /// reviewable snapshot diff.
 ///
-/// Overlap contract with CliOutputSnapshotTests (issue 14, 17 .verified.txt): the three
+/// Overlap contract with CliOutputSnapshotTests: the three
 /// profile scenarios already pinned there (show-masked-secret, show-unknown-profile,
 /// reveal-secret decrypt failure) are NOT repeated here. Every snapshot below targets a
 /// distinct verb or error branch.
@@ -434,7 +434,7 @@ public class ProfileCommandCharacterizationTests : VerifyBase
     public async Task SetLaunch_Success_StdoutIsStable()
     {
         using var tmp = new TempProfileDir();
-        // Ticket 32-fix v2: --target must point to an existing file outside System32
+        // Fix v2: --target must point to an existing file outside System32
         // (src/ProfileCommand.cs L1320 ValidateLaunchTarget: existence + non-System32 guard).
         // Create a real .cmd target in the hermetic temp dir - mirrors ProfileSeamValidationTests
         // (TempTargetPath = em-test-target.cmd). Using cmd.exe in System32 is rejected by the
@@ -485,7 +485,7 @@ public class ProfileCommandCharacterizationTests : VerifyBase
         finally { Console.SetOut(new StringWriter()); Console.SetError(new StringWriter()); }
     }
 
-    /// <summary>Ticket 19 warn-tier: --strict refuses a dangling launch target up front.
+    /// <summary>warn-tier: --strict refuses a dangling launch target up front.
     /// The machine-parseable warn report (preflight/command/profile/strict/warnings) is
     /// the JSON half of the launch injection contract; the human line goes to stderr.
     /// Target is a unique relative name, so File.Exists is false on any runner and no

@@ -30,7 +30,7 @@ dotnet test tests/EnvManager.Engine.Tests/EnvManager.Engine.Tests.csproj
 - CI: the `build.yml` `verify` job runs this suite after `Build CLI` and gates pull requests.
 - Isolation: `env-manager.csproj` excludes `tests/**` from its compile glob (`Compile Remove`) and grants `InternalsVisibleTo` only to `EnvManager.Engine.Tests`; the release artifact list is unchanged.
 
-## Mutation testing (local gate, architecture-recovery issue 13)
+## Mutation testing (local gate, architecture-recovery)
 
 Stryker.NET runs a mutation-analysis gate over the four red-line files (rename / change-scope / profile apply-unapply / protection). It is a **local/PR-assist gate, not a CI hard gate**: the v5/dotnet10 CI pipeline friction is unresolved upstream, and the MS-official guidance is not to chase a 100% mutation score.
 
@@ -46,9 +46,9 @@ Config contract (stryker-config.json): `mutate` is pinned to src/VariableRename.
 
 Baseline (2026-09-03): 94 mutants tested, 76 killed / 18 survived; raw Stryker score 37.07% (NoCoverage mutants count as failures) vs 80.85% over tested mutants only. The survived-mutant classification (2 equivalent, 16 missing-assertion) lives in docs/history/architecture-recovery-2026-09/reports/13-mutation-testing-gate.md.
 
-CI short run (issue 18): the build.yml `stryker` job runs on `workflow_dispatch` and publishes the HTML report plus per-module scores from `scripts/stryker-module-scores.mjs` (accepts the HTML report or a raw mutation-report.json). First-triage baseline (2026-09-05, issue 18): 96 tested, 14 survivors - 13 weak-assertion (kill tests in MutationSurvivorTriageTests/MutationSurvivorTriageStdoutTests) + 1 registered equivalent; registry at docs/history/architecture-recovery-2026-09/reports/18-survivor-registry.json.
+CI short run: the build.yml `stryker` job runs on `workflow_dispatch` and publishes the HTML report plus per-module scores from `scripts/stryker-module-scores.mjs` (accepts the HTML report or a raw mutation-report.json). First-triage baseline (2026-09-05): 96 tested, 14 survivors - 13 weak-assertion (kill tests in MutationSurvivorTriageTests/MutationSurvivorTriageStdoutTests) + 1 registered equivalent; registry at docs/history/architecture-recovery-2026-09/reports/18-survivor-registry.json.
 
-Current status (round-8 ticket 50, honesty pass): `break: 60` is the aspirational target line and is currently NOT met - dispatched runs score 46.83% (run 33966698434, main, 2026-09-05: 131 tested / 118 killed / 13 survived) to 49.80% (run 34767318054, 2026-09-13: 142 tested / 126 killed / 16 survived), so the Stryker step exits 2 by design and the dispatched run concludes failure; that red is the report, not a regression. The gate stays local/PR-assist and is deliberately NOT a CI hard gate (issue-13 ruling above). The second survivor triage (kill via seam assertion or LLM-detection reserve, per survivor) is registered in the round-8 ticket-50 report (`50-survivor-registry.md`, process workspace - untracked); score convergence is survivor-driven, and this ticket does not promise a target score.
+Current status (round-8 honesty pass): `break: 60` is the aspirational target line and is currently NOT met - dispatched runs score 46.83% (run 33966698434, main, 2026-09-05: 131 tested / 118 killed / 13 survived) to 49.80% (run 34767318054, 2026-09-13: 142 tested / 126 killed / 16 survived), so the Stryker step exits 2 by design and the dispatched run concludes failure; that red is the report, not a regression. The gate stays local/PR-assist and is deliberately NOT a CI hard gate (ruling above). The second survivor triage (kill via seam assertion or LLM-detection reserve, per survivor) is registered in the round-8 report (`50-survivor-registry.md`, process workspace - untracked); score convergence is survivor-driven, and this ticket does not promise a target score.
 
 ## Build GUI (development with hot reload)
 
@@ -176,7 +176,7 @@ The harness uses an exact transaction: it snapshots all HKCU values plus accessi
 
 ### Test residue hygiene (self-check and user self-clean)
 
-The harness registers every registry value it writes under the `EM_TEST_` prefix and enforces a **residue-zero assertion** in its reconciliation block (architecture-recovery issue 22):
+The harness registers every registry value it writes under the `EM_TEST_` prefix and enforces a **residue-zero assertion** in its reconciliation block (architecture-recovery):
 
 - The pre/post snapshot diff of a run may reference only harness-registered `EM_TEST_*` value names. Any name outside the registered set is foreign drift: it is reported separately as `registry-foreign-drift`, reconciled, and fails the run.
 - After compensatory reconciliation the diff must be empty; surviving names are listed in a `RESIDUE-ZERO assertion failed` warning and the run exits non-zero.
@@ -204,7 +204,7 @@ Remove-ItemProperty -Path 'HKCU:\Environment' -Name 'EM_TEST_DST'
 # or: reg delete "HKCU\Environment" /v EM_TEST_DST /f
 ```
 
-## MSI Silent-Install Validation Runbook (v0.9.27+, ADR-0009)
+## MSI Silent-Install Validation Runbook (v0.9.27+)
 
 Any change to `frontend/scripts/installer.wxs` MUST pass this local 4-step silent msiexec proof before commit. Runs on the build machine; takes under 2 minutes total when green.
 
@@ -232,7 +232,7 @@ $LASTEXITCODE -eq 0
 Get-Service EnvManagerService -ErrorAction SilentlyContinue  # must be $null (SCM entry removed)
 ```
 
-Failure triage: hang at `InstallFinalize` -> `StartServices` with lowest `ActionStart` op = service-start blocking regression (check `ServiceControl/@Start` is absent and `Wait="no"` in installer.wxs). See ADR-0009 for the validated root cause.
+Failure triage: hang at `InstallFinalize` -> `StartServices` with lowest `ActionStart` op = service-start blocking regression (check `ServiceControl/@Start` is absent and `Wait="no"` in installer.wxs). Root cause is documented in the `ServiceInstall` comment in `installer.wxs`.
 
 ## How to Release
 
@@ -241,8 +241,8 @@ Failure triage: hang at `InstallFinalize` -> `StartServices` with lowest `Action
 3. Update `AGENTS.md` if structure or commands changed
 4. Run `node scripts/build.mjs --arch x64` (or per-arch: `--arch x86`, `--arch arm64`)
    - Brand assets (logo, variants, favicons, social preview) live in `docs/assets/`; the brand guide is `docs/assets/brand/index.md`.
-   - **Brand Iconset** (CONTEXT.md Brand & Asset Terms): every file in `docs/assets/brand/` is the canonical source. README hero is `hero.svg` (mini hero, obsidian + Environment Color Token gradient). Do not change cosmetic colors ad hoc — palette decisions go through ADR.
-   - **Install Icon** (CONTEXT.md Brand & Asset Terms): the Windows-side icon family (desktop shortcut + exe resource + MSI installer + system tray) is driven by a **single source file** `frontend/src-tauri/icons/icon.ico` (multi-resolution 16/32/48/256). The `.png` siblings (`icon.png`, `128x128.png`, `128x128@2x.png`, `32x32.png`) are Tauri-derivation utilities — keep them in sync with the ICO. Install Icon is always the emerald logo; environment-specific icons are **not** bound to Dev/Staging/Prod (the Environment Color Token belongs only to the Brand Iconset layer).
+   - **Brand Iconset**: every file in `docs/assets/brand/` is the canonical source. README hero is `hero.svg` (mini hero, obsidian + Environment Color Token gradient). Do not change cosmetic colors ad hoc — the palette is fixed in `docs/assets/brand/index.md`.
+   - **Install Icon**: the Windows-side icon family (desktop shortcut + exe resource + MSI installer + system tray) is driven by a **single source file** `frontend/src-tauri/icons/icon.ico` (multi-resolution 16/32/48/256). The `.png` siblings (`icon.png`, `128x128.png`, `128x128@2x.png`, `32x32.png`) are Tauri-derivation utilities — keep them in sync with the ICO. Install Icon is always the emerald logo; environment-specific icons are **not** bound to Dev/Staging/Prod (the Environment Color Token belongs only to the Brand Iconset layer).
 5. Verify `release/portable/env-manager.exe` launches and shows variables
 6. Verify MSI installs and the app works
 7. Commit: `chore: release vX.Y.Z`
@@ -300,24 +300,24 @@ Runs on push to main and pull requests. Verifies code quality (tests, lint, buil
 
 The verify job stages the five `tauri.conf.json` `bundle.resources` (`env-manager-cli.exe`/`.dll`/`.runtimeconfig.json`/`.deps.json` plus `AGENTS.cli.md`) from the CLI build output (`bin/Release/net10.0-windows/`) and the repo root into `frontend/src-tauri/bin/` immediately after the "Build CLI" step and before any cargo compile (service crate tests, Tauri crate tests, cargo check). The step is fail-closed: any of the five missing fails the job. This mirrors the local staging done by `frontend/scripts/prebuild.mjs` during `npm run build`/`tauri build`; `scripts/build.mjs` responsibilities are unchanged.
 
-### release-please.yml (release automation takeover, ticket 45)
+### release-please.yml (release automation takeover)
 Runs on every push to main. `googleapis/release-please-action` (pinned v5.0.0 SHA) maintains a release PR from conventional commits; merging it bumps versions, creates the `vX.Y.Z` tag, and publishes the GitHub Release with release notes.
 
 - `include-component-in-tag: false` — tags are plain `vX.Y.Z` (repo convention, matches the `build.yml` `tags: ['v*']` trigger), not `env-manager-vX.Y.Z`.
-- `.release-please-manifest.json` pins the released version (`0.12.0` at first establishment, ticket 45).
+- `.release-please-manifest.json` pins the released version (`0.12.0` at first establishment).
 - `extra-files` syncs the three version carriers the `build.yml` release job's version gate checks (`env-manager.csproj` `<Version>`, `frontend/src-tauri/tauri.conf.json` and `frontend/package.json` root `version`). Cargo crate versions and lockfiles are NOT release-please-managed (cargo --locked consistency); they move only in manual version-bump commits.
 
-Tag releases are built by the `build.yml` release job (ticket 44): x64 MSI + portable/CLI-only zips, signed updater triple, fail-closed `latest.json`, SLSA L2 provenance, draft release. The legacy manual `release.yml` (`workflow_dispatch`; built x86/arm64 MSIs but could not produce updater artifacts) was retired with ticket 45 — release assets are x64-only via the single tag pipeline.
+Tag releases are built by the `build.yml` release job: x64 MSI + portable/CLI-only zips, signed updater triple, fail-closed `latest.json`, SLSA L2 provenance, draft release. The legacy manual `release.yml` (`workflow_dispatch`; built x86/arm64 MSIs but could not produce updater artifacts) was retired with release assets are x64-only via the single tag pipeline.
 
-### CI user-state isolation and env-block snapshot semantics (architecture-recovery issue 24)
+### CI user-state isolation and env-block snapshot semantics (architecture-recovery)
 
-Integration tests in CI run with an **isolated user-state root**: the `Run Pester integration tests` step in `build.yml` sets `ENVMANAGER_LOCALAPPDATA` to a job-private directory under `runner.temp`, and every CLI user-state file (profiles.json, audit.json/audit.key, secretMount.json, secret-providers.json, provider-hash.json, protection JSON stores) resolves through that root instead of the runner's real `%LOCALAPPDATA%`. A follow-up step, `Assert user-state isolation (issue 24)`, verifies after the run (even on failure, `if: always()`) that the real `%LOCALAPPDATA%\EnvManager` directory was not created by the job and prints the redirected directory contents as redirect proof.
+Integration tests in CI run with an **isolated user-state root**: the `Run Pester integration tests` step in `build.yml` sets `ENVMANAGER_LOCALAPPDATA` to a job-private directory under `runner.temp`, and every CLI user-state file (profiles.json, audit.json/audit.key, secretMount.json, secret-providers.json, provider-hash.json, protection JSON stores) resolves through that root instead of the runner's real `%LOCALAPPDATA%`. A follow-up step, `Assert user-state isolation`, verifies after the run (even on failure, `if: always()`) that the real `%LOCALAPPDATA%\EnvManager` directory was not created by the job and prints the redirected directory contents as redirect proof.
 
-Why an explicit seam variable instead of setting `LOCALAPPDATA`: `Environment.GetFolderPath(SpecialFolder.LocalApplicationData)` does **not** honor a process-level `LOCALAPPDATA` override — the .NET shell-folder API expands the `Local AppData` value from the registry (`HKCU\...\Explorer\User Shell Folders`), not the process environment. `src/CliRuntime.cs` therefore exposes `LocalAppDataRoot`, which returns `ENVMANAGER_LOCALAPPDATA` when set to a non-empty value and falls back to `GetFolderPath` otherwise. The seam is cross-process (the Pester harness passes the variable to every CLI subprocess env block) and requires no in-process test redirect. When the variable is unset — every user and non-test CI path — behavior is byte-identical to the pre-issue-24 resolution. Unit-pinned by `LocalAppDataRedirectTests` (xUnit).
+Why an explicit seam variable instead of setting `LOCALAPPDATA`: `Environment.GetFolderPath(SpecialFolder.LocalApplicationData)` does **not** honor a process-level `LOCALAPPDATA` override — the .NET shell-folder API expands the `Local AppData` value from the registry (`HKCU\...\Explorer\User Shell Folders`), not the process environment. `src/CliRuntime.cs` therefore exposes `LocalAppDataRoot`, which returns `ENVMANAGER_LOCALAPPDATA` when set to a non-empty value and falls back to `GetFolderPath` otherwise. The seam is cross-process (the Pester harness passes the variable to every CLI subprocess env block) and requires no in-process test redirect. When the variable is unset — every user and non-test CI path — behavior is byte-identical to the pre-resolution. Unit-pinned by `LocalAppDataRedirectTests` (xUnit).
 
 **Two-level isolation discipline** (research/round4-closeout-patterns.md section A):
 
-1. **Machine-state writes** (registry `HKCU\Environment` / `HKLM\...\Session Manager\Environment`, `%ProgramData%`): tolerated on GitHub-hosted runners because every job starts on a fresh VM — machine state dies with the job. The registry side is additionally bounded by the `test-with-restore.ps1` snapshot/reconcile transaction and the issue-22 residue-zero assertion, so nothing survives the run anyway.
+1. **Machine-state writes** (registry `HKCU\Environment` / `HKLM\...\Session Manager\Environment`, `%ProgramData%`): tolerated on GitHub-hosted runners because every job starts on a fresh VM — machine state dies with the job. The registry side is additionally bounded by the `test-with-restore.ps1` snapshot/reconcile transaction and the residue-zero assertion, so nothing survives the run anyway.
 2. **User-state writes** (`%LOCALAPPDATA%` tree): NOT tolerated inside a job, because a job's later steps share the same user profile — an unredirected integration run could read a stale profiles.json written by an earlier step or leak test profiles into packaging steps. The `ENVMANAGER_LOCALAPPDATA` redirect removes the shared surface entirely.
 
 **env-block snapshot semantics** (tests and CI steps MUST NOT assume cross-process real-time environment refresh): a Windows environment block is a snapshot copied at process creation; a child process inherits the env of its creator at spawn time, and a registry environment write plus `WM_SETTINGCHANGE` broadcast notifies only registered listeners (shell/Explorer), not arbitrary already-running processes. Consequences the test discipline encodes:
@@ -389,11 +389,11 @@ The live CLI smoke test harness `scripts/test-with-restore.ps1` snapshots every 
 2. Flip via GH CLI: `gh repo edit Xxx91n/env-manager --visibility public`.
 3. Add GitHub Actions variables `GITLAB_USER` and `CODEBERG_USER`, plus secrets `GITLAB_TOKEN` and `CODEBERG_TOKEN` (write scope, minimal expiry).
 4. `.github/workflows/mirror.yml` runs on every push to `main` and keeps GitLab / Codeberg in sync; do not push to mirrors manually.
-5. release-please (`release-please.yml`) drives CHANGELOG / version PRs from conventional commits. Established with the v0.12.0 release (ticket 45, HARD GATE authorized): plain `vX.Y.Z` tags, `.release-please-manifest.json`, and `extra-files` keeping csproj / tauri.conf.json / package.json in lockstep with the version gate. Tag pushes trigger the `build.yml` release job (updater triple + `latest.json` + SLSA L2 provenance, draft release).
-6. Provenance attestation (`actions/attest-build-provenance`) runs in the `build.yml` release job so every tagged release carries SLSA L2 provenance automatically. Pinned to v4.2.2 (`4d101475d8...`) per ticket 44 - the prior v4.1.0 SHA (`97770d5af...`) disappeared upstream, the same force-push event recorded in WORKFLOW.md §6 ticket-30 lesson log (`unable to find version` on the first release rehearsal). Before re-pinning any release-chain action, verify the SHA with `gh api repos/<owner>/<repo>/commits/<sha>`.
-7. Tauri updater: `tauri signer generate` executed once; public key committed in `frontend/src-tauri/tauri.conf.json` under `plugins.updater.pubkey`; private key kept only in GitHub Secrets (`TAURI_SIGNING_PRIVATE_KEY`, `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`). Reference: ADR 0008. End-to-end updater chain (ticket 44): the package job zips the MSI to `Env Manager_<version>_<arch>.msi.zip`, signs the zip via `@tauri-apps/cli` (`npx --no-install tauri signer sign`) producing `<basename>.msi.zip.sig`, and uploads the `.msi` + `.msi.zip` + `.msi.zip.sig` triple through the `env-manager-msi` artifact. The release job then runs `scripts/gen-latest-json.mjs` against the downloaded artifacts to assemble `latest.json` (the manifest schema `@tauri-apps/plugin-updater` polls from the `plugins.updater.endpoints` URL declared in `tauri.conf.json`); the file is uploaded alongside the artifacts. The generator refuses to invent a signature, so an unsigned package job run (for example a fork without the secrets) fails the release step rather than publishing a manifest that points at unsigned bytes.
+5. release-please (`release-please.yml`) drives CHANGELOG / version PRs from conventional commits. Established with the v0.12.0 release (HARD GATE authorized): plain `vX.Y.Z` tags, `.release-please-manifest.json`, and `extra-files` keeping csproj / tauri.conf.json / package.json in lockstep with the version gate. Tag pushes trigger the `build.yml` release job (updater triple + `latest.json` + SLSA L2 provenance, draft release).
+6. Provenance attestation (`actions/attest-build-provenance`) runs in the `build.yml` release job so every tagged release carries SLSA L2 provenance automatically. Pinned to v4.2.2 (`4d101475d8...`) per the prior v4.1.0 SHA (`97770d5af...`) disappeared upstream, the same force-push event recorded in WORKFLOW.md §6 lesson log (`unable to find version` on the first release rehearsal). Before re-pinning any release-chain action, verify the SHA with `gh api repos/<owner>/<repo>/commits/<sha>`.
+7. Tauri updater: `tauri signer generate` executed once; public key committed in `frontend/src-tauri/tauri.conf.json` under `plugins.updater.pubkey`; private key kept only in GitHub Secrets (`TAURI_SIGNING_PRIVATE_KEY`, `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`). Reference: ADR 0008. End-to-end updater chain: the package job zips the MSI to `Env Manager_<version>_<arch>.msi.zip`, signs the zip via `@tauri-apps/cli` (`npx --no-install tauri signer sign`) producing `<basename>.msi.zip.sig`, and uploads the `.msi` + `.msi.zip` + `.msi.zip.sig` triple through the `env-manager-msi` artifact. The release job then runs `scripts/gen-latest-json.mjs` against the downloaded artifacts to assemble `latest.json` (the manifest schema `@tauri-apps/plugin-updater` polls from the `plugins.updater.endpoints` URL declared in `tauri.conf.json`); the file is uploaded alongside the artifacts. The generator refuses to invent a signature, so an unsigned package job run (for example a fork without the secrets) fails the release step rather than publishing a manifest that points at unsigned bytes.
 
-## Structural Fitness: Cognitive Complexity Guard (ticket 29)
+## Structural Fitness: Cognitive Complexity Guard
 
 `scripts/cognitive-complexity.mjs` (zero-dependency Node ESM) computes Sonar-style method-level cognitive complexity (SonarSource 2021 spec, C# subset) over `src/*.cs`. Threshold: 15 (SonarWay S3776 default).
 
@@ -407,4 +407,4 @@ Modes:
 | `node scripts/cognitive-complexity.mjs --selftest` | 21 golden snippets; run after any rule change |
 | `node scripts/cognitive-complexity.mjs --demo-gate` | Gate semantics demonstration (red -> grandfathered-green -> regression-red) |
 
-CI (build.yml verify job): report step (non-blocking) -> `cognitive-complexity-report` artifact -> hard-gate step. The baseline JSON pins all `src/*.cs` methods; 32 legacy over-threshold methods are tiered T1/T2/T3 with a remediation schedule in the ticket-29 report (architecture-recovery process archive). Renaming an over-threshold method reads as a NEW violation until `--update-baseline` runs in the same PR with reviewer-approved rationale.
+CI (build.yml verify job): report step (non-blocking) -> `cognitive-complexity-report` artifact -> hard-gate step. The baseline JSON pins all `src/*.cs` methods; 32 legacy over-threshold methods are tiered T1/T2/T3 with a remediation schedule in the report (architecture-recovery process archive). Renaming an over-threshold method reads as a NEW violation until `--update-baseline` runs in the same PR with reviewer-approved rationale.

@@ -1,3 +1,6 @@
+<!-- canonical: ../../README.md -->
+<!-- sync: 6f0a201001cb -->
+
 <div align="center">
 
 <picture>
@@ -39,7 +42,24 @@ Um gerenciador moderno e leve de variáveis de ambiente do Windows, com modo dup
 </p>
 
 
-A demo mostra comandos CLI somente leitura em ação: agents --summary, path health, get PATH e agents --json. Regenerar com vhs docs/assets/demo.tape.
+A demo mostra comandos CLI somente leitura em ação: agents --summary, path health, get PATH e agents --json. Regenerar com `node scripts/demo/capture.mjs`.
+
+*A saída do terminal na demonstração acima usa dados simulados.*
+
+
+### Demonstração em vídeo
+
+Passo a passo completo dos recursos em ~51 s (bilíngue ZH/EN, com narração): **[Assistir no YouTube](https://youtu.be/REPLACE_ME)** — também incluído no repositório: `docs/assets/demo/env-manager-demo.zh.mp4` / `docs/assets/demo/env-manager-demo.en.mp4`.
+
+### Galeria
+
+| | | |
+|:-:|:-:|:-:|
+| ![Vista de variáveis](../../docs/assets/gallery/01-variables.png)<br>**Variáveis** — pesquisa, âmbito, ações por linha | ![Âmbito do sistema](../../docs/assets/gallery/02-variables-system.png)<br>**Âmbito do sistema** — entradas protegidas bloqueadas | ![Editor de PATH](../../docs/assets/gallery/03-path-editor.png)<br>**Editor de PATH** — detecção de entradas mortas e duplicadas |
+| ![Perfis](../../docs/assets/gallery/04-profiles.png)<br>**Perfis** — aplicar / iniciar / herdar | ![Histórico e importação](../../docs/assets/gallery/05-history.png)<br>**Histórico e importação** — alterações reversíveis | ![Proteção](../../docs/assets/gallery/06-protection.png)<br>**Proteção** — bloqueios personalizados |
+| ![Livro de auditoria](../../docs/assets/gallery/07-audit.png)<br>**Livro de auditoria** — encadeado por hash, verificável | ![Gestor de serviços](../../docs/assets/gallery/08-service.png)<br>**Gestor de serviços** — montagens de segredos | ![Configurações](../../docs/assets/gallery/09-settings-i18n.png)<br>**Configurações** — i18n em 10 idiomas |
+| ![Diálogo de edição](../../docs/assets/gallery/10-edit-dialog.png)<br>**Diálogo de edição** — pré-visualização do valor expandido | ![Tema claro](../../docs/assets/gallery/11-variables-light.png)<br>**Tema claro** — Variante | ![CLI](../../docs/assets/gallery/12-cli-terminal.png)<br>**CLI** — JSON em primeiro lugar, nativo para agentes |
+
 
 ## Recursos
 

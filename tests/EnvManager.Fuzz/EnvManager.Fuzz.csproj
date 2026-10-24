@@ -8,7 +8,7 @@
     <IsPackable>false</IsPackable>
     <!-- SharpFuzz rewrites IL at runtime through the CLR profiler; ReadyToRun
          (R2R) precompiled code bypasses IL instrumentation, so coverage feedback
-         would be lost (issue 25 checkpoint B conclusion). Never publish the fuzz
+         would be lost (checkpoint B conclusion). Never publish the fuzz
          harness with PublishReadyToRun or PublishSingleFile. -->
     <PublishReadyToRun>false</PublishReadyToRun>
     <PublishSingleFile>false</PublishSingleFile>

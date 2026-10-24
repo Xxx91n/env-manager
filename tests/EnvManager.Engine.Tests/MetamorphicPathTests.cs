@@ -1,5 +1,5 @@
 // MetamorphicPathTests.cs - oracle-free metamorphic relations over PATH normalization and
-// case-folding semantics (ticket 34, architecture-recovery Phase 5 pilot).
+// case-folding semantics.
 // License: Apache-2.0
 
 using EnvManager;

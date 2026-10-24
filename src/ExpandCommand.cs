@@ -4,7 +4,7 @@ using System.Text.RegularExpressions;
 namespace EnvManager;
 
 /// <summary>
-/// expand command domain (architecture-recovery issue 06): members moved verbatim
+/// expand command domain (architecture-recovery): members moved verbatim
 /// from EnvFeatures.cs. Behavior unchanged.
 /// </summary>
 internal static class ExpandCommand

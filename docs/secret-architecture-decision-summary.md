@@ -1,6 +1,6 @@
 # Secret Architecture Decision Summary (v0.8.0 → v1.0.0)
 
-This is the single-page distillation of the design review session (2026-08-02). Full rationale lives in `CONTEXT.md` (Decisions A1-A11 + Risk Matrix). Authoritative ADR: `docs/adr/0001-secret-architecture-revision.md`. This file replaces the phase descriptions in `docs/secret-architecture-blueprint.md` (blueprint retains context and rejected-alternative notes).
+This is the single-page distillation of the design review session (2026-08-02). This file replaces the phase descriptions in `docs/secret-architecture-blueprint.md` (blueprint retains context and rejected-alternative notes).
 
 ## Four-version cadence
 
@@ -27,7 +27,7 @@ This is the single-page distillation of the design review session (2026-08-02). 
 
 ## Release-gate risk matrix (11 domains)
 
-Detailed failure modes + regression tests live in `CONTEXT.md` Risk Matrix. Summary:
+Detailed failure modes + regression tests for each domain are tracked as release-gate items. Summary:
 
 1. Windows service lifecycle (SCM timeout, boot ordering, stop-during-reconcile)
 2. Named pipe IPC security (DACL, impersonation, squatting, stale connection)

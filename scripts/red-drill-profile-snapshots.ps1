@@ -1,4 +1,4 @@
-# Ticket 32 (architecture-recovery): red-first drill for the ProfileCommand
+# red-first drill for the ProfileCommand
 # characterization snapshot net. Injects one user-facing wording drift into
 # src/ProfileCommand.cs, runs the affected Verify snapshot test expecting RED,
 # reverts byte-exactly, and re-runs expecting GREEN. Proves the net actually

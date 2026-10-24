@@ -6,7 +6,7 @@ using System.Text.Json.Serialization;
 namespace EnvManager;
 
 /// <summary>
-/// Backup command domain (architecture-recovery issue 05): backup/restore/diff/merge/validate
+/// Backup command domain (architecture-recovery): backup/restore/diff/merge/validate
 /// implementation and the backup file path validator, moved verbatim from Program.cs. Behavior unchanged.
 /// </summary>
 partial class Program
