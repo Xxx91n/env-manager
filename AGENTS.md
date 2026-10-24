@@ -1,21 +1,21 @@
 # Env Manager — Agent Instructions
 
-Windows 环境变量管理器：C# .NET 10 CLI 直读写注册表 + Tauri/Rust shell + Svelte 4 GUI + 可选 Rust service（密钥挂载生命周期）。Apache-2.0，仓库 `Xxx91n/env-manager`。
+Windows environment-variable manager: a C# .NET 10 CLI that reads and writes the registry directly, a Tauri/Rust shell, a Svelte 4 GUI, and an optional Rust service that manages secret-mount lifecycles. Apache-2.0, repository `Xxx91n/env-manager`.
 
-## 跑起来
-- 全量构建：`node scripts/build.mjs --arch x64`（`--skip-gui/--skip-msi/--skip-cli` 分段），产物在 gitignored `release/`。
-- 测试：`cd frontend && npx vitest run`；`dotnet test tests/EnvManager.Engine.Tests/EnvManager.Engine.Tests.csproj`（不碰真实注册表）。
-- 注册表写操作冒烟只能走 `scripts/test-with-restore.ps1`，裸跑写命令是红线。
+## Run it
+- Full build: `node scripts/build.mjs --arch x64` (`--skip-gui` / `--skip-msi` / `--skip-cli` to segment); artifacts land in the gitignored `release/`.
+- Tests: `scripts/test-all.ps1` — runs both suites, keeps the full log, prints exit codes only.
+- Registry-mutating smoke tests go through `scripts/test-with-restore.ps1`. Running a write command raw is a red line.
 
-## 别碰
-- `src/Audit/`、`src/Secrets/` 是 bounded context，跨上下文只消费 `Secrets.Core` 与 `Secrets.Manager`；`release/`、`bin/`、`obj/` 是产物，不手改。
-- 三条顶格红线（改码前读 `docs/agents/hard-boundaries.md`）：受保护变量/PATH 不可写删改；写操作三层锁（mutex + CLI_RWLOCK + writeChain）不可绕；rename/scope-change 必须 write+verify 后删源，禁 TxR/TxF。
+## Don't touch
+- `src/Audit/` and `src/Secrets/` are bounded contexts: cross-context code consumes only `Secrets.Core` and `Secrets.Manager`. `release/`, `bin/`, `obj/` are artifacts.
+- Three top rules (read `docs/agents/hard-boundaries.md` before changing code): protected variables and PATH entries are never written or deleted; every write takes all three locks (mutex + `CLI_RWLOCK` + `writeChain`); rename/scope-change writes and verifies the target before deleting the source, and TxR/TxF is banned.
 
-## 看不出来的坑
-- 版本号只有 `env-manager.csproj` 一个源，`build.mjs` 同步到 `frontend/package.json`。
-- 改 `installer.wxs` 必须同时过字符串门禁测试和 `docs/build-and-release.md` 的四步静默 msiexec 验证。
-- 词汇以 `GLOSSARY.md` 为准；README 改一处，9 语 i18n 同节镜像。
-- 版本控制一律 `but`（GitButler）；未经明示不 push、不 merge、不动 tag/release/secret。
+## Non-obvious traps
+- `env-manager.csproj` holds the only version; `build.mjs` syncs it to `frontend/package.json`.
+- Changing `installer.wxs` must pass the string-gate suites and the four-step silent msiexec runbook in `docs/build-and-release.md`.
+- `GLOSSARY.md` owns vocabulary; a README change is mirrored into the 9 locale files in the same section.
+- Version control is `but` (GitButler). No push, merge, tag, release or secret change without an explicit instruction.
 
 ## Agent skills
 
