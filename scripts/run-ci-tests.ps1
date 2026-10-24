@@ -4,7 +4,7 @@
 #
 # Four integration suites:
 #   1. tests/launch-env-injection.Tests.ps1   (Pester; self-contained fixture)
-#   2. tests/canary-redaction.Tests.ps1       (Pester; ticket 07 canary zero-leak + mask assertions)
+# 2. tests/canary-redaction.Tests.ps1 (Pester; canary zero-leak + mask assertions)
 #   3. scripts/test-inheritance-protection.ps1 (raw ps1; AGENTS.md hard boundary)
 #   4. scripts/test-with-restore.ps1             (raw ps1 with registry rollback)
 # Suites 3 and 4 are invoked as subprocesses to preserve their already-correct
@@ -59,7 +59,7 @@ if (Test-Path $pesterPath) {
     Write-Warning "launch-env-injection.Tests.ps1 not found; skipping"
 }
 
-# --- Suite 2: CanaryRedaction (Pester; ticket 07 zero-leak across sinks) ---
+# --- Suite 2: CanaryRedaction (Pester; zero-leak across sinks) --
 $canaryPath = Join-Path $projectRoot 'tests\canary-redaction.Tests.ps1'
 if (Test-Path $canaryPath) {
     $xml = Join-Path $projectRoot "$ResultsDir\canary-redaction.junit.xml"

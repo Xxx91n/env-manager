@@ -1,5 +1,5 @@
 # scripts/migrate-audit-to-ledger.ps1
-# v1.0.0 Phase E: One-shot migration from audit.json to audit-ledger.jsonl.
+# One-shot migration from audit.json to audit-ledger.jsonl.
 # Reads existing audit.json entries, converts them to ledger events with hash-chain,
 # writes to audit-ledger.jsonl. After migration, audit.json is renamed to audit.json.bak.
 # See ADR 0001 A10/A11.

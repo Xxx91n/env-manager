@@ -1,6 +1,6 @@
 version: 2
 
-# Dependabot 成熟治理（architecture-recovery ticket 31）
+# Dependabot 成熟治理（architecture-recovery）
 # - 4 个生态系统：C# / Rust service / Rust Tauri shell / npm / GitHub Actions
 # - 噪音治理：weekly → monthly；open-pull-requests-limit 2-3
 # - 安全更新独立组（不等 minor/patch 批），critical advisory 不被日常 bump 队列阻塞
@@ -138,7 +138,7 @@ updates:
         versions: [">= 26.0.0"]
         # （deferred major：等待 DOM 模拟语义审计 + vitest jsdom env 回归通过）
       # vitest 5.x 三件套（vitest / @vitest/ui / @vitest/coverage-v8）：5.x 生态尚未稳定，
-      # 等 5.x 生态稳定后下轮评估（Round 8 ticket 48 / D-004 裁定：major 三连 PR close + ignore）。
+      # 等 5.x 生态稳定后下轮评估（Round 8 / D-004 裁定：major 三连 PR close + ignore）。
       - dependency-name: "vitest"
         versions: ["5.x"]
       - dependency-name: "@vitest/ui"

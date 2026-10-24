@@ -1,5 +1,5 @@
 # scripts/test-service-kill9-resilience.ps1
-# architecture-recovery ticket 33 evidence backfill (round-8 ticket 49).
+# architecture-recovery evidence backfill (round-8).
 # kill -9 fault-injection E2E for env-manager-service on a disposable CI runner.
 #
 # Flow (steady-state -> inject -> detect -> recover -> steady-state):
@@ -13,7 +13,7 @@
 #
 # Isolation: every user-state write lands in the job-private runner profile
 # (%LOCALAPPDATA%\EnvManager) and the VM is destroyed after the job - the
-# ticket-33 user-state isolation constraint is satisfied by the per-job
+# user-state isolation constraint is satisfied by the per job
 # disposable-runner model itself. No secrets required.
 #
 # Exit 0 = all assertions passed; exit 1 = first failed assertion (fail-fast).

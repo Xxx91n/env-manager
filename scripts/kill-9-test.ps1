@@ -1,10 +1,10 @@
-# v0.9.20 architecture-recovery ticket 33: Manual kill -9 test script
+# Manual kill -9 test script
 # Scenario: Kill service process → watchdog detects death → SCM recovers on restart
 # Usage: powershell -Command "& { & 'scripts/kill-9-test.ps1' }"
 # Prerequisites: Administrator privileges, env-manager-service.exe built and available
 
 $ErrorActionPreference = "Stop"
-$Host.UI.RawUI.WindowTitle = "Ticket 33: Kill -9 Resilience Test (Manual)"
+$Host.UI.RawUI.WindowTitle = "Kill -9 Resilience Test (Manual)"
 
 # Configuration
 $SERVICE_EXE = Join-Path $PSScriptRoot "..\service\bin\x64\release\env-manager-service.exe"
@@ -81,7 +81,7 @@ try {
         Start-Sleep -Seconds 2
     }
     
-    Log-Step "=== Ticket 33: Kill -9 Resilience Test ==="
+    Log-Step "=== Kill -9 Resilience Test ==="
     Log-Step "Service EXE: $SERVICE_EXE"
     Log-Step "CLI EXE: $CLI_EXE"
     

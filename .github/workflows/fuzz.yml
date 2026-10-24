@@ -1,4 +1,4 @@
-# SharpFuzz nightly fuzzing over the CLI argument-parse surface (issue 25).
+# SharpFuzz nightly fuzzing over the CLI argument-parse surface.
 #
 # Modes:
 # - pull_request: short run (5 min budget). continue-on-error keeps the PR green

@@ -1,5 +1,5 @@
 # scripts/test-inheritance-protection.ps1
-# v0.7.7 inheritance-protection live CLI integration test.
+# Inheritance-protection live CLI integration test.
 #
 # Validates three CLI-side hard boundaries that cannot be exercised from
 # vitest (which only mocks the IPC bridge, not the C# backend):
@@ -51,7 +51,7 @@ function Invoke-Cli {
 }
 
 
-# Ticket 04: create a System32-free launch target so ValidateLaunchTarget passes without
+# create a System32-free launch target so ValidateLaunchTarget passes without
 # accepting System32 binaries (hard boundary).
 $targetCmd = Join-Path $env:TEMP 'em-inherit-test-target.cmd'
 if (-not (Test-Path $targetCmd)) { Set-Content -Path $targetCmd -Value '@echo ok' -Encoding Ascii }

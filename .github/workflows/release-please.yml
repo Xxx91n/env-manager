@@ -18,7 +18,7 @@ jobs:
         with:
           release-type: simple
           package-name: env-manager
-          # Ticket 45 (v0.12.0 release establishment): tags follow the repo
+          # (v0.12.0 release establishment): tags follow the repo
           # convention vX.Y.Z (matches build.yml tags: ['v*'] and the v0.12.0
           # tag), so disable the default env-manager-v component prefix. The
           # manifest pins the released version; extra-files keep the version

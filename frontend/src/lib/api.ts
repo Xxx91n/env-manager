@@ -1386,7 +1386,7 @@ export async function secretProviderRotate(): Promise<string> {
   return await runWrite('profile', ['secret-provider', 'rotate'])
 }
 
-// ---- v0.9.0 Phase B+C: Service control via CLI gateway ----
+// ---- Service control via CLI gateway ----
 // All functions call the CLI 'service' subcommand which is a thin IPC gateway
 // to env-manager-service.exe named pipe.
 
@@ -1520,7 +1520,7 @@ export async function serviceStop(): Promise<boolean> {
 
 
 
-// ---- v1.0.0 Phase E: Audit ledger recovery ----
+// ---- Audit ledger recovery ----
 
 /**
  * List audit entries (from audit.json legacy or ledger).
