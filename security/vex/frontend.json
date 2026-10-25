@@ -1,0 +1,129 @@
+{
+  "@context": "https://openvex.dev/ns/v0.2.0",
+  "@id": "https://github.com/Xxx91n/env-manager/blob/main/security/vex/frontend.json",
+  "author": "Env Manager maintainers",
+  "role": "Document Creator",
+  "timestamp": "2026-10-25T00:00:00.000Z",
+  "version": 1,
+  "statements": [
+    {
+      "vulnerability": { "name": "GHSA-68fv-2mgg-jv7q" },
+      "timestamp": "2026-10-25T00:00:00.000Z",
+      "products": [{ "@id": "pkg:npm/source-map-js@1.2.1", "subcomponents": [] }],
+      "status": "not_affected",
+      "justification": "vulnerable_code_not_in_execute_path",
+      "impact_statement": "source-map-js parses source maps only inside the frontend build toolchain (vite/postcss) at build time. The shipped artifact is a client-side WebView2 SPA that never consumes a source map at runtime, so no attacker-controlled map input can reach the vulnerable code. This statement must be dropped once the lockfile carries source-map-js >= 1.2.2 (fix available; flows via dependabot/auto-merge).",
+      "provenance": {
+        "policy": "SECURITY.md#known-dependency-advisories--disposition",
+        "advisory": "https://github.com/advisories/GHSA-68fv-2mgg-jv7q",
+        "triaged": "2026-10-25",
+        "triaged_by": "issue #105"
+      }
+    },
+    {
+      "vulnerability": { "name": "GHSA-rj75-hqrm-r3gf" },
+      "timestamp": "2026-10-25T00:00:00.000Z",
+      "products": [{ "@id": "pkg:npm/postcss-selector-parser@6.1.4", "subcomponents": [] }],
+      "status": "not_affected",
+      "justification": "vulnerable_code_not_in_execute_path",
+      "impact_statement": "postcss-selector-parser is exercised only while tailwindcss compiles first-party .svelte/.css sources at build time; shipped artifacts contain compiled CSS, never a selector-parsing step fed by adversary-controlled input. No fix exists on the 6.x line (upstream patch is 7.1.6, reached with the Tailwind 4 toolchain).",
+      "provenance": {
+        "policy": "SECURITY.md#known-dependency-advisories--disposition",
+        "advisory": "https://github.com/advisories/GHSA-rj75-hqrm-r3gf",
+        "tracking": "https://github.com/Xxx91n/env-manager/issues/99",
+        "triaged": "2026-10-25",
+        "triaged_by": "issue #105"
+      }
+    },
+    {
+      "vulnerability": { "name": "GHSA-crpf-4hrx-3jrp" },
+      "timestamp": "2026-10-25T00:00:00.000Z",
+      "products": [{ "@id": "pkg:npm/svelte@4.2.20", "subcomponents": [] }],
+      "status": "not_affected",
+      "justification": "vulnerable_code_not_in_execute_path",
+      "impact_statement": "Svelte SSR-only advisory: the GUI is a purely client-side Svelte SPA inside WebView2 with no server-side rendering path, so the vulnerable SSR code never executes. Fixes exist only on the Svelte 5 line; resolved by the Svelte 5 migration.",
+      "provenance": {
+        "policy": "SECURITY.md#known-dependency-advisories--disposition",
+        "advisory": "https://github.com/advisories/GHSA-crpf-4hrx-3jrp",
+        "tracking": "https://github.com/Xxx91n/env-manager/issues/28",
+        "triaged": "2026-10-25",
+        "triaged_by": "issue #105"
+      }
+    },
+    {
+      "vulnerability": { "name": "GHSA-m56q-vw4c-c2cp" },
+      "timestamp": "2026-10-25T00:00:00.000Z",
+      "products": [{ "@id": "pkg:npm/svelte@4.2.20", "subcomponents": [] }],
+      "status": "not_affected",
+      "justification": "vulnerable_code_not_in_execute_path",
+      "impact_statement": "Svelte SSR-only advisory: the GUI is a purely client-side Svelte SPA inside WebView2 with no server-side rendering path, so the vulnerable SSR code never executes. Fixes exist only on the Svelte 5 line; resolved by the Svelte 5 migration.",
+      "provenance": {
+        "policy": "SECURITY.md#known-dependency-advisories--disposition",
+        "advisory": "https://github.com/advisories/GHSA-m56q-vw4c-c2cp",
+        "tracking": "https://github.com/Xxx91n/env-manager/issues/28",
+        "triaged": "2026-10-25",
+        "triaged_by": "issue #105"
+      }
+    },
+    {
+      "vulnerability": { "name": "GHSA-f7gr-6p89-r883" },
+      "timestamp": "2026-10-25T00:00:00.000Z",
+      "products": [{ "@id": "pkg:npm/svelte@4.2.20", "subcomponents": [] }],
+      "status": "not_affected",
+      "justification": "vulnerable_code_not_in_execute_path",
+      "impact_statement": "Svelte SSR-only advisory: the GUI is a purely client-side Svelte SPA inside WebView2 with no server-side rendering path, so the vulnerable SSR code never executes. Fixes exist only on the Svelte 5 line; resolved by the Svelte 5 migration.",
+      "provenance": {
+        "policy": "SECURITY.md#known-dependency-advisories--disposition",
+        "advisory": "https://github.com/advisories/GHSA-f7gr-6p89-r883",
+        "tracking": "https://github.com/Xxx91n/env-manager/issues/28",
+        "triaged": "2026-10-25",
+        "triaged_by": "issue #105"
+      }
+    },
+    {
+      "vulnerability": { "name": "GHSA-phwv-c562-gvmh" },
+      "timestamp": "2026-10-25T00:00:00.000Z",
+      "products": [{ "@id": "pkg:npm/svelte@4.2.20", "subcomponents": [] }],
+      "status": "not_affected",
+      "justification": "vulnerable_code_not_in_execute_path",
+      "impact_statement": "Svelte SSR-only advisory: the GUI is a purely client-side Svelte SPA inside WebView2 with no server-side rendering path, so the vulnerable SSR code never executes. Fixes exist only on the Svelte 5 line; resolved by the Svelte 5 migration.",
+      "provenance": {
+        "policy": "SECURITY.md#known-dependency-advisories--disposition",
+        "advisory": "https://github.com/advisories/GHSA-phwv-c562-gvmh",
+        "tracking": "https://github.com/Xxx91n/env-manager/issues/28",
+        "triaged": "2026-10-25",
+        "triaged_by": "issue #105"
+      }
+    },
+    {
+      "vulnerability": { "name": "GHSA-rcqx-6q8c-2c42" },
+      "timestamp": "2026-10-25T00:00:00.000Z",
+      "products": [{ "@id": "pkg:npm/svelte@4.2.20", "subcomponents": [] }],
+      "status": "not_affected",
+      "justification": "vulnerable_code_not_in_execute_path",
+      "impact_statement": "Svelte SSR-only advisory: the GUI is a purely client-side Svelte SPA inside WebView2 with no server-side rendering path, so the vulnerable SSR code never executes. Fixes exist only on the Svelte 5 line; resolved by the Svelte 5 migration.",
+      "provenance": {
+        "policy": "SECURITY.md#known-dependency-advisories--disposition",
+        "advisory": "https://github.com/advisories/GHSA-rcqx-6q8c-2c42",
+        "tracking": "https://github.com/Xxx91n/env-manager/issues/28",
+        "triaged": "2026-10-25",
+        "triaged_by": "issue #105"
+      }
+    },
+    {
+      "vulnerability": { "name": "GHSA-pr6f-5x2q-rwfp" },
+      "timestamp": "2026-10-25T00:00:00.000Z",
+      "products": [{ "@id": "pkg:npm/svelte@4.2.20", "subcomponents": [] }],
+      "status": "not_affected",
+      "justification": "vulnerable_code_not_in_execute_path",
+      "impact_statement": "Svelte SSR-only advisory: the GUI is a purely client-side Svelte SPA inside WebView2 with no server-side rendering path, so the vulnerable SSR code never executes. Fixes exist only on the Svelte 5 line; resolved by the Svelte 5 migration.",
+      "provenance": {
+        "policy": "SECURITY.md#known-dependency-advisories--disposition",
+        "advisory": "https://github.com/advisories/GHSA-pr6f-5x2q-rwfp",
+        "tracking": "https://github.com/Xxx91n/env-manager/issues/28",
+        "triaged": "2026-10-25",
+        "triaged_by": "issue #105"
+      }
+    }
+  ]
+}

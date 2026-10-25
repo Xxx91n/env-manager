@@ -284,9 +284,14 @@ jobs:
         working-directory: frontend/src-tauri
         run: cargo check --locked
 
-      - name: Audit production npm dependencies
+      # VEX-aware gate: npm audit --omit=dev --json, with documented
+      # not_affected exemptions from security/vex/*.json (each carrying its
+      # own provenance). Any high/critical advisory without a covering
+      # statement still fails the job; the VEX documents themselves are
+      # fail-closed validated by the script.
+      - name: Audit production npm dependencies (VEX-aware)
         working-directory: frontend
-        run: npm audit --omit=dev --audit-level=high --registry=https://registry.npmjs.org
+        run: node ../scripts/npm-audit-vex.mjs --audit-level=high --registry=https://registry.npmjs.org
 
   # L1 emulator matrix for the secret-provider contract
   # suite. Runs the container-backed + CLI-tool backends (Vault dev server, LocalStack,
