@@ -44,3 +44,15 @@ As of 2026-08-29, all 11 open Dependabot advisories were triaged using a reachab
 | 1 (medium) | Rust `glib 0.18.5` (Tauri transitive) | gtk-rs stack is not compiled on Windows builds. Same disposition as tauri-apps/tauri#12048 (`status: upstream`). | — |
 
 Production application code carries no runtime vulnerability among these. If the architecture changes (e.g., SSR or network-exposed dev server is introduced), these dispositions must be re-evaluated.
+
+### Machine-readable VEX documents (npm audit gate)
+
+The `verify` job's npm audit step consumes `security/vex/*.json` (OpenVEX) through `scripts/npm-audit-vex.mjs`: any advisory at or above `--audit-level=high` without a covering `not_affected` statement fails the build, and each exemption prints the provenance recorded on its statement. Keep those files in sync with the disposition tables below; a statement whose package no longer matches the audit report fails the gate. The `provenance` key on each statement is a repo-local OpenVEX extension (unknown keys are ignored by conformant processors) and is what makes every exemption audit-visible.
+
+Triage of 2026-10-25 (audit-gate alert set at `--omit=dev --audit-level=high`, from issue #105):
+
+| Alerts | Package (installed) | Reason | Tracking |
+|--------|--------------------|--------|----------|
+| 1 (high) | `source-map-js 1.2.1` | Source maps are parsed only by the build-time toolchain (vite/postcss); the shipped WebView2 SPA never consumes a source map at runtime. Fix exists (>= 1.2.2) and flows via dependabot/auto-merge; drop the VEX statement then. | — |
+| 1 (moderate) | `postcss-selector-parser 6.1.4` | Exercised only while tailwindcss compiles first-party CSS at build time; no adversary-controlled selector input in shipped artifacts. No fix on the 6.x line (patch is 7.1.6, reached with the Tailwind 4 toolchain). | Tailwind 4 migration: issue #99 |
+| 6 (moderate) | `svelte 4.2.20` (via `bits-ui` → `@melt-ui/svelte`) | SSR-only XSS family; env-manager is a purely client-side SPA inside WebView2 (no SSR rendering path). Fixes exist only on Svelte 5.x. | Svelte 5 migration: issue #28 |
