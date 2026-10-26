@@ -27,6 +27,10 @@
 //   release/msi/Env Manager_<version>_<arch>.msi.zip
 //   release/msi/Env Manager_<version>_<arch>.msi.zip.sig
 //
+// GitHub rewrites spaces in uploaded release asset names to dots, so the
+// manifest URL targets the rewritten name (`Env.Manager_...msi.zip`) with the
+// path segment percent-encoded, not the local filename.
+//
 // Exit codes: 0 = manifest written; 1 = schema or input validation failure;
 // 2 = usage error. Hard boundaries: never fabricates a `signature` value, never
 // overwrites the .sig file, and emits no plaintext private key material. The
@@ -70,6 +74,17 @@ function validateSemver(v) {
 function validateRfc3339(s) {
   if (typeof s !== 'string') return false;
   return /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/.test(s);
+}
+
+function toReleaseAssetName(localName) {
+  // GitHub stores release assets with spaces rewritten to dots; pointing the
+  // updater at the local filename reproduces the 404 this normalization fixes.
+  return localName.replace(/ /g, '.');
+}
+
+function releaseAssetUrl(base, localName) {
+  // Encode only the filename segment: `base` may already be percent-encoded.
+  return base.replace(/\/?$/, '/') + encodeURIComponent(toReleaseAssetName(localName));
 }
 
 function readSigFile(sigPath) {
@@ -124,7 +139,7 @@ function buildManifest(opts) {
   } else {
     notes = `Env Manager ${version}`;
   }
-  const url = base.replace(/\/?$/, '/') + zipName;
+  const url = releaseAssetUrl(base, zipName);
   return {
     version,
     notes,

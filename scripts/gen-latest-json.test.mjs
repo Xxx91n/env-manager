@@ -84,7 +84,7 @@ test('buildManifest: emits the full schema (version/notes/pub_date/platforms.win
     const p = m.platforms['windows-x86_64'];
     assert.equal(typeof p, 'object');
     assert.deepEqual(Object.keys(p).sort(), ['signature', 'url']);
-    assert.equal(p.url, 'https://example.test/dl/Env Manager_0.12.0_x64.msi.zip');
+    assert.equal(p.url, 'https://example.test/dl/Env.Manager_0.12.0_x64.msi.zip');
     assert.equal(p.signature, SIG);
   });
 });
@@ -94,7 +94,7 @@ test('buildManifest: default url base is the GitHub releases/download path', () 
     const assets = path.join(root, 'msi');
     seedAssets(assets, '0.12.0', 'x64', SIG);
     const m = buildManifest({ version: '0.12.0', arch: 'x64', 'assets-dir': assets, 'pub-date': DATE });
-    assert.equal(m.platforms['windows-x86_64'].url, 'https://github.com/Xxx91n/env-manager/releases/download/v0.12.0/Env Manager_0.12.0_x64.msi.zip');
+    assert.equal(m.platforms['windows-x86_64'].url, 'https://github.com/Xxx91n/env-manager/releases/download/v0.12.0/Env.Manager_0.12.0_x64.msi.zip');
   });
 });
 
@@ -103,7 +103,7 @@ test('buildManifest: url-base without trailing slash normalizes to single slash'
     const assets = path.join(root, 'msi');
     seedAssets(assets, '0.12.0', 'x64', SIG);
     const m = buildManifest({ version: '0.12.0', arch: 'x64', 'assets-dir': assets, 'pub-date': DATE, 'url-base': 'https://cdn.test/no-slash' });
-    assert.equal(m.platforms['windows-x86_64'].url, 'https://cdn.test/no-slash/Env Manager_0.12.0_x64.msi.zip');
+    assert.equal(m.platforms['windows-x86_64'].url, 'https://cdn.test/no-slash/Env.Manager_0.12.0_x64.msi.zip');
   });
 });
 
@@ -113,8 +113,43 @@ test('buildManifest: arch mapping x86/arm64 -> windows-i686/windows-aarch64', ()
       const assets = path.join(root, `msi-${arch}`);
       seedAssets(assets, '0.12.0', arch, SIG);
       const m = buildManifest({ version: '0.12.0', arch, 'assets-dir': assets, 'pub-date': DATE });
-      assert.equal(m.platforms[triple].url.endsWith(`Env Manager_0.12.0_${arch}.msi.zip`), true);
+      assert.equal(m.platforms[triple].url.endsWith(`Env.Manager_0.12.0_${arch}.msi.zip`), true);
     }
+  });
+});
+
+test('buildManifest: spaces in the asset name become dots in the URL (GitHub release asset naming)', () => {
+  withFixture((root) => {
+    const assets = path.join(root, 'msi');
+    seedAssets(assets, '0.12.2', 'x64', SIG);
+    const m = buildManifest({
+      version: '0.12.2',
+      arch: 'x64',
+      'assets-dir': assets,
+      'pub-date': DATE,
+      'url-base': 'https://github.com/Xxx91n/env-manager/releases/download/v0.12.2/',
+    });
+    const url = m.platforms['windows-x86_64'].url;
+    // GitHub rewrites uploaded `Env Manager_...` asset names to `Env.Manager_...`;
+    // the manifest must address the rewritten name, not the local filename.
+    assert.equal(url, 'https://github.com/Xxx91n/env-manager/releases/download/v0.12.2/Env.Manager_0.12.2_x64.msi.zip');
+    assert.equal(url.includes(' '), false);
+    assert.equal(url.includes('%20'), false);
+  });
+});
+
+test('buildManifest: asset name path segment is percent-encoded (semver build metadata)', () => {
+  withFixture((root) => {
+    const assets = path.join(root, 'msi');
+    seedAssets(assets, '1.2.3+build.7', 'x64', SIG);
+    const m = buildManifest({
+      version: '1.2.3+build.7',
+      arch: 'x64',
+      'assets-dir': assets,
+      'pub-date': DATE,
+      'url-base': 'https://example.test/dl/',
+    });
+    assert.equal(m.platforms['windows-x86_64'].url, 'https://example.test/dl/Env.Manager_1.2.3%2Bbuild.7_x64.msi.zip');
   });
 });
 
