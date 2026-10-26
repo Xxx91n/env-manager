@@ -93,7 +93,7 @@ describe('v0.9.26 PathEditor move-down guard order fix (first-click no-op)', () 
   })
 })
 
-describe('v0.9.26 PathEditor dead-entries confirm handler uses liveDeadCount (ADR 0007)', () => {
+describe('v0.9.26 PathEditor dead-entries confirm handler uses liveDeadCount', () => {
   it('handleRemoveDeadConfirm reads liveDeadCount (not healthSummary)', () => {
     const fn = findFn('handleRemoveDeadConfirm')
     expect(fn.length).toBeGreaterThan(0)

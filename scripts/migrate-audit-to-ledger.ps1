@@ -2,7 +2,7 @@
 # One-shot migration from audit.json to audit-ledger.jsonl.
 # Reads existing audit.json entries, converts them to ledger events with hash-chain,
 # writes to audit-ledger.jsonl. After migration, audit.json is renamed to audit.json.bak.
-# See ADR 0001 A10/A11.
+# Design: the audit-ledger replaces audit.json (see docs/secret-architecture-decision-summary.md).
 #
 # Usage: powershell -NoProfile -ExecutionPolicy Bypass -File scripts/migrate-audit-to-ledger.ps1
 

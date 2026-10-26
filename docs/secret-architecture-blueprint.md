@@ -179,10 +179,10 @@ The original Phase A-E roadmap below assumed an `secrets-agent.exe` reconcile pr
 
 ### Key reversals from the original blueprint
 
-- **Phase C**: the original `secrets-agent.exe` standalone process is rejected. It is now a Windows system service (`env-manager-service.exe` with `--mode=service`) under `NT SERVICE\EnvManagerService` virtual service account. In-process tokio task inside the GUI is also rejected (GUI close = reconcile stops). See ADR 0001 A5/A6/A7/A8.
-- **Phase D**: the original passkey/Windows Hello identity layer is rejected. Session 0 service cannot show biometric UI. It is replaced by certificate-based bootstrap at `Cert:\LocalMachine\My` with non-exportable private key ACL'd to per-service SID. See ADR 0001 A9.
-- **Phase E**: the original wrap-key escrow is rejected. The escrow solved a recovery problem that A5/A6/A8 proved empty (for cloud providers the backend IS the recovery source; for user-bound providers loss is by-design). It is replaced by unified audit-ledger + Mount survival kit export + GUI recover-from-ledger UX. See ADR 0001 A10.
-- **Phase B and Phase C merged into a single v0.9.0 release** (user chose Option 2). See ADR 0001 A11.
+- **Phase C**: the original `secrets-agent.exe` standalone process is rejected. It is now a Windows system service (`env-manager-service.exe` with `--mode=service`) under `NT SERVICE\EnvManagerService` virtual service account. In-process tokio task inside the GUI is also rejected (GUI close = reconcile stops). See the Design notes at the top of `service/src/main.rs` and `service/src/ipc.rs`.
+- **Phase D**: the original passkey/Windows Hello identity layer is rejected. Session 0 service cannot show biometric UI. It is replaced by certificate-based bootstrap at `Cert:\LocalMachine\My` with non-exportable private key ACL'd to per-service SID. See the Design note at the top of `service/src/cert_bootstrap.rs`.
+- **Phase E**: the original wrap-key escrow is rejected. The escrow solved a recovery problem that A5/A6/A8 proved empty (for cloud providers the backend IS the recovery source; for user-bound providers loss is by-design). It is replaced by unified audit-ledger + Mount survival kit export + GUI recover-from-ledger UX. See the Design note at the top of `service/src/audit_ledger.rs` and the [Decision Summary](secret-architecture-decision-summary.md).
+- **Phase B and Phase C merged into a single v0.9.0 release** (user chose Option 2). See the four-version cadence in the [Decision Summary](secret-architecture-decision-summary.md).
 
 ### Release-gate risk matrix (11 domains)
 
@@ -204,10 +204,10 @@ Detailed failure modes + regression tests for each domain live in the release-ga
 
 ### Original phase descriptions (historical, for reference only)
 
-The text below this paragraph preserved the original Phase A-E descriptions for historical reference. They are NOT the current plan. Do not implement against them. Follow ADR 0001 instead.
+The text below this paragraph preserved the original Phase A-E descriptions for historical reference. They are NOT the current plan. Do not implement against them. Follow the [Decision Summary](secret-architecture-decision-summary.md) instead.
 
 <details>
-<summary>Original Phase A-E (collapsed — superseded by ADR 0001)</summary>
+<summary>Original Phase A-E (collapsed — superseded by the Decision Summary)</summary>
 
 ## Phased roadmap
 

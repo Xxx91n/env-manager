@@ -1,7 +1,7 @@
 // SecretProviderException.cs - typed provider error family
 // spec Phase 6 story 20: every ISecretProvider adapter boundary catches raw backend/transport
 // exceptions, maps them onto this family, and every family message passes
-// Program.ScrubExceptionMessage (ADR 0005) inside the base constructor - a secret-bearing
+// Program.ScrubExceptionMessage inside the base constructor - a secret-bearing
 // fragment can never survive inside a family exception message. Defense against
 // aws-sdk-java #2702 (Authorization header echoed into SDK exception messages) and
 // azure-sdk-for-net #39594 (RequestFailedException message inconsistency).

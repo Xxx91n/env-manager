@@ -99,7 +99,7 @@ $resp.auth.client_token"#,
 /// Uses PowerShell Invoke-RestMethod with -Certificate thumbprint to present
 /// the client cert from Cert:\LocalMachine\My. Same subprocess pattern as
 /// Azure SP cert auth — no reqwest/rustls dependency needed.
-/// See ADR 0001 A9: cert stored non-exportable, ACL'd to per-service SID.
+/// The cert is stored non-exportable and ACL'd to the per-service SID.
 fn vault_cert_login(vault_addr: &str, thumbprint: &str) -> Result<Zeroizing<String>, String> {
     // token wrapped in Zeroizing<String> for deterministic memory zeroing on drop.
     // Script loads the cert by thumbprint and uses it for TLS client auth.
@@ -225,9 +225,9 @@ $resp.access_token"#,
 /// AWS IAM Roles Anywhere bootstrap.
 /// The service presents its cert to get short-lived AWS credentials.
 /// No static AWS_ACCESS_KEY_ID file.
-/// Deferred to post-v1.0.0 per ADR 0001 A9.
+/// Deferred to post-v1.0.0; AWS Roles Anywhere is documented but not implemented.
 pub fn aws_roles_anywhere_bootstrap() -> Result<String, String> {
-    Err("aws_roles_anywhere_bootstrap: deferred per ADR 0001 A9".into())
+    Err("aws_roles_anywhere_bootstrap: deferred to post-v1.0.0".into())
 }
 
 /// Resolve the service config path.

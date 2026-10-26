@@ -203,7 +203,7 @@ describe('v0.9.25 dark destructive red-400 alignment (shadcn v4 / WCAG AA)', () 
   })
 })
 
-describe('v0.9.26 z-index layering (ADR 0006: titlebar z-50, modal/toast z-100)', () => {
+describe('v0.9.26 z-index layering (titlebar z-50, modal/toast z-100)', () => {
   it('app.css titlebar z-index is 50 (navbar level)', () => {
     const css = readFileSync(join(__dirname2, 'app.css'), 'utf8')
     expect(css).toMatch(/\.titlebar\s*\{[^}]*z-index:\s*50/s)
@@ -228,7 +228,7 @@ describe('v0.9.26 z-index layering (ADR 0006: titlebar z-50, modal/toast z-100)'
   })
 })
 
-describe('v0.9.26 form control color-scheme override (ADR 0007)', () => {
+describe('v0.9.26 form control color-scheme override', () => {
   it('app.css has accent-color on radio/checkbox bound to --primary', () => {
     const css = readFileSync(join(__dirname2, 'app.css'), 'utf8')
     expect(css).toMatch(/input\[type=.radio.\]\s*,\s*input\[type=.checkbox.\]\s*\{[^}]*accent-color:\s*hsl\(var\(--primary\)\)/s)

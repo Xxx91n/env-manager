@@ -1107,7 +1107,7 @@ fn restore_window(app: &tauri::AppHandle) {
 
 /// Returns the running GUI version. Sources the Cargo package version,
 /// which release tooling keeps in sync with the csproj <Version> single
-/// source of truth (ADR 0003). SettingsDialog consumes this instead of a
+/// source of truth. SettingsDialog consumes this instead of a
 /// hardcoded literal so update verdicts compare against the real version.
 #[tauri::command]
 fn app_version() -> String {
@@ -1195,8 +1195,8 @@ fn version_is_newer(remote: &str, local: &str) -> bool {
 /// (latest.json endpoint + minisign signature verification) instead of the
 /// PowerShell GitHub-API probe. Returns the same JSON shape as
 /// `check_for_updates` so the frontend UpdateInfo contract is unchanged; the
-/// plugin compares against the packaged version from tauri.conf.json (ADR 0003
-/// single version source) internally and only returns Some(update) when newer.
+/// plugin compares against the packaged version from tauri.conf.json (single
+/// version source) internally and only returns Some(update) when newer.
 #[tauri::command]
 async fn check_update_plugin(app: tauri::AppHandle) -> serde_json::Value {
     match app.updater() {
