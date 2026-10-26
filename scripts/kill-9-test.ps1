@@ -1,4 +1,4 @@
-# Manual kill -9 test script
+﻿# Manual kill -9 test script
 # Scenario: Kill service process → watchdog detects death → SCM recovers on restart
 # Usage: powershell -Command "& { & 'scripts/kill-9-test.ps1' }"
 # Prerequisites: Administrator privileges, env-manager-service.exe built and available

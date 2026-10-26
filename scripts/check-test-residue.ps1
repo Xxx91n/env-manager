@@ -59,8 +59,8 @@ $profilesPath = Join-Path $env:LOCALAPPDATA "EnvManager\profiles.json"
 if (Test-Path $profilesPath) {
   try {
     $store = Get-Content -LiteralPath $profilesPath -Raw | ConvertFrom-Json
-    foreach ($profile in @($store)) {
-      $name = [string]$profile.name
+    foreach ($profileEntry in @($store)) {
+      $name = [string]$profileEntry.name
       if ($name -and ($name -like "$Prefix*")) {
         $found += [pscustomobject]@{
           Area = "profile"

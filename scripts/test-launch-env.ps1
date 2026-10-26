@@ -1,4 +1,4 @@
-# scripts/test-launch-env.ps1
+﻿# scripts/test-launch-env.ps1
 # Test tool: verify that a launch profile injects the correct variables and
 # secrets into a child process environment. Uses a probe executable that
 # dumps its own environment variables to stdout, then compares against
@@ -91,10 +91,10 @@ if ($secretNames.Count -gt 0) {
         $masked = if ($plaintext.Length -gt 8) { $plaintext.Substring(0,4) + "****" + $plaintext.Substring($plaintext.Length-4) } else { "****" }
         Write-Host "  [OK] $secretName = $masked" -ForegroundColor Green
       } else {
-        Write-Host "  [FAIL] $secretName: $plaintext" -ForegroundColor Red
+        Write-Host "  [FAIL] ${secretName}: $plaintext" -ForegroundColor Red
       }
     } catch {
-      Write-Host "  [FAIL] $secretName: $_" -ForegroundColor Red
+      Write-Host "  [FAIL] ${secretName}: $_" -ForegroundColor Red
     }
   }
 } else {
