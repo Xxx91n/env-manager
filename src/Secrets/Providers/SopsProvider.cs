@@ -145,6 +145,9 @@ internal sealed class SopsProvider : ISecretProvider
 
         try
         {
+            // Design: sops is file-in/file-out, so plaintext must reach disk as its input.
+            // This file and secret.dec.json in Decrypt are the documented on-disk plaintext
+            // exception (docs/architecture.md "Plaintext lifecycle"); delete is best-effort.
             // Write JSON: { "value": "<plaintext>" }
             // write UTF-8 WITHOUT BOM. Encoding.UTF8 emits a BOM (0xEF 0xBB 0xBF)
             // and sops >= 3.x rejects BOM-prefixed JSON with "invalid character 'ï'

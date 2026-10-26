@@ -9,7 +9,8 @@
 #   S2 profile preview         — resolved-variable view (stdout; stores ciphertext)
 #   S3 profile list            — profile summaries (stdout)
 #   S4 audit trail             — `history list` output (audit.json is AES-GCM
-#                                encrypted at rest; records NAME + <redacted>/<encrypted> markers only)
+#                                encrypted at rest; secret-verb records use
+#                                <redacted>/<encrypted>/<revealed> markers and contain no secret values)
 #   S5 launch stdout           — profile launch console output
 #   S6 launch child-probe dump — everything the launched child persisted
 #                                (deliberately contains the secret: it is the
@@ -18,9 +19,10 @@
 #                                false-green if decryption broke)
 #   S7 stderr on failure       — forced-error stderr (scrubbed by ScrubExceptionMessage)
 #
-# `profile reveal-secret` is the ONLY designed plaintext-stdout path (AGENTS.md
-# hard boundary) and is intentionally not scanned as a sink; the S6 assertion
-# proves the canary flows end-to-end without it.
+# `profile reveal-secret` and `profile show --reveal` are the designed
+# plaintext-stdout paths (docs/architecture.md "Plaintext lifecycle") and are
+# intentionally not scanned as sinks; the S6 assertion proves the canary flows
+# end-to-end without them.
 
 [CmdLetBinding()]
 param(
