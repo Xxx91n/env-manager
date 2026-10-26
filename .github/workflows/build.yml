@@ -74,7 +74,7 @@ jobs:
           dotnet-version: '10.0.x'
 
       - name: Setup Node
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
         with:
           node-version: '20'
           cache: npm
@@ -82,7 +82,7 @@ jobs:
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4
-      - uses: Swatinem/rust-cache@f13886b937689c021905a6b90929199931d60db1 # v2.8.1
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
           workspaces: |
             frontend/src-tauri -> target
@@ -154,7 +154,7 @@ jobs:
         run: cargo test --locked
 
       - name: Install cargo-audit
-        uses: taiki-e/install-action@fcf5432d9f50d67e37ee6e29bdb7a224ff67b4a7 # v2.86.8
+        uses: taiki-e/install-action@1e29709c0ec63babbe8f266397a465f29a825f91 # v2.87.31
         with:
           tool: cargo-audit
 
@@ -173,7 +173,7 @@ jobs:
         run: node scripts/cognitive-complexity.mjs
 
       - name: Upload cognitive complexity report
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           name: cognitive-complexity-report
           path: scripts/cognitive-complexity-baseline.json
@@ -275,7 +275,7 @@ jobs:
 
       - name: Upload Pester JUnit results
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           name: pester-junit-results
           path: test-results/*.junit.xml
@@ -366,14 +366,14 @@ jobs:
         with:
           dotnet-version: '10.0.x'
 
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
         with:
           node-version: '20'
           cache: npm
           cache-dependency-path: frontend/package-lock.json
 
       - uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4
-      - uses: Swatinem/rust-cache@f13886b937689c021905a6b90929199931d60db1 # v2.8.1
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
           workspaces: |
             frontend/src-tauri -> target
@@ -510,7 +510,7 @@ jobs:
           if ($uninstall.ExitCode -ne 0) { throw "MSI uninstall failed (exit $($uninstall.ExitCode))" }
           if (Test-Path (Join-Path $installDir 'env-manager.exe')) { throw 'Uninstall left env-manager.exe behind' }
 
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           name: env-manager-portable
           # Review finding (v0.12.0): the previous "release/portable/*" glob pulled
@@ -521,14 +521,14 @@ jobs:
             release/portable/Env-Manager_portable_*_x64.zip
           if-no-files-found: error
 
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           name: env-manager-cli-only
           path: |
             release/cli-only/Env-Manager_cli-only_*_x64.zip
           if-no-files-found: error
 
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           name: env-manager-msi
           # include the updater bundle (.msi.zip) + signature (.sig)
@@ -597,7 +597,7 @@ jobs:
           }
           "Version gate OK: $tag"
 
-      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
         with:
           pattern: env-manager-*
           merge-multiple: true
@@ -690,7 +690,7 @@ jobs:
 
       - name: Upload mutation report
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           name: stryker-mutation-report
           path: |
@@ -723,7 +723,7 @@ jobs:
           dotnet-version: '10.0.x'
 
       - uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4
-      - uses: Swatinem/rust-cache@f13886b937689c021905a6b90929199931d60db1 # v2.8.1
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
           workspaces: |
             service -> target
@@ -747,7 +747,7 @@ jobs:
 
       - name: Upload kill-9 evidence log
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           name: kill9-resilience-evidence
           path: test-results/
