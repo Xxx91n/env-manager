@@ -1,5 +1,5 @@
 <!-- canonical: ../../README.md -->
-<!-- sync: 6f0a201001cb -->
+<!-- sync: ef2a485dfffb -->
 
 <div align="center">
 
@@ -44,10 +44,6 @@
 デモでは読み取り専用の CLI コマンドの動作を紹介しています: agents --summary、path health、get PATH、agents --json。`node scripts/demo/capture.mjs` で再生成できます。
 
 *上記のデモ端末出力はシミュレーションデータを使用しています。*
-
-### 動画ウォークスルー
-
-約51秒の全機能ウォークスルー（中国語・英語の二言語ナレーション）：**[YouTube で見る](https://youtu.be/REPLACE_ME)** — リポジトリー内にも `docs/assets/demo/env-manager-demo.zh.mp4` / `docs/assets/demo/env-manager-demo.en.mp4` として同梱しています。
 
 ### ギャラリー
 

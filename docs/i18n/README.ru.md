@@ -1,5 +1,5 @@
 <!-- canonical: ../../README.md -->
-<!-- sync: 6f0a201001cb -->
+<!-- sync: ef2a485dfffb -->
 
 <div align="center">
 
@@ -46,10 +46,6 @@
 
 *Вывод терминала в демо выше использует смоделированные данные.*
 
-
-### Видеопрезентация
-
-Полный обзор возможностей за ~51 с (двуязычный ZH/EN, с озвучкой): **[Смотреть на YouTube](https://youtu.be/REPLACE_ME)** — также прилагается в репозитории: `docs/assets/demo/env-manager-demo.zh.mp4` / `docs/assets/demo/env-manager-demo.en.mp4`.
 
 ### Галерея
 

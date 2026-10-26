@@ -1,5 +1,5 @@
 <!-- canonical: ../../README.md -->
-<!-- sync: 6f0a201001cb -->
+<!-- sync: ef2a485dfffb -->
 
 <div align="center">
 
@@ -44,10 +44,6 @@ Ein moderner, schlanker Manager für Windows-Umgebungsvariablen — Dualmodus mi
 Die Demo zeigt schreibgeschützte CLI-Befehle in Aktion: agents --summary, path health, get PATH und agents --json. Mit `node scripts/demo/capture.mjs` regenerierbar.
 
 *Die Terminal-Ausgabe oben verwendet simulierte Daten.*
-
-### Video-Durchlauf
-
-Vollständiger Feature-Durchlauf von ~51 s (zweisprachig ZH/EN, mit Ton): **[Auf YouTube ansehen](https://youtu.be/REPLACE_ME)** — auch im Repo enthalten: `docs/assets/demo/env-manager-demo.zh.mp4` / `docs/assets/demo/env-manager-demo.en.mp4`.
 
 ### Galerie
 
