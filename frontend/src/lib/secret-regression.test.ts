@@ -57,8 +57,10 @@ describe('Secret provider regression safety', () => {
       // Slice the class body to its closing brace at column 0 so unrelated
       // comments above the envelope cannot push the assertion out of view.
       const start = src.indexOf(`class ${p}`)
+      if (start === -1) throw new Error(`Missing provider class: ${p}`)
       const end = src.indexOf('\n}', start)
-      const classSection = end === -1 ? src.slice(start) : src.slice(start, end)
+      if (end === -1) throw new Error(`Missing provider class boundary: ${p}`)
+      const classSection = src.slice(start, end)
       expect(classSection).toContain('Provider = Name')
     }
   })

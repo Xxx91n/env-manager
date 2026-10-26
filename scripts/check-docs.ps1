@@ -49,10 +49,19 @@ try {
     & (Join-Path $PSScriptRoot 'check-bare-ids.ps1') | Out-Host
     if ($LASTEXITCODE -ne 0) { Add-Failure 'check-bare-ids.ps1 reported findings' }
 
-    # 2. whitespace
-    $diffOutput = @(& git diff --check 2>&1)
-    if ($LASTEXITCODE -ne 0) {
-        foreach ($line in $diffOutput) { Add-Failure ('git diff --check: ' + $line) }
+    # 2. whitespace: the working-tree and staged diffs catch local edits; the
+    # per-line check below covers the clean checkout CI runs on, where
+    # `git diff --check` has nothing to compare.
+    foreach ($diffArgs in @('', '--cached')) {
+        if ($diffArgs -eq '') {
+            $diffOutput = @(& git diff --check 2>&1)
+        }
+        else {
+            $diffOutput = @(& git diff --check $diffArgs 2>&1)
+        }
+        if ($LASTEXITCODE -ne 0) {
+            foreach ($line in $diffOutput) { Add-Failure ('git diff --check: ' + $line) }
+        }
     }
 
     # target files
@@ -75,10 +84,19 @@ try {
     $roots = @('src/', 'docs/', 'service/', 'scripts/', 'tests/', 'frontend/', '.github/')
 
     foreach ($file in $files) {
-        $lines = Get-DocLines $file
+        if (-not (Test-Path -LiteralPath $file)) {
+            Add-Failure ("{0}: requested document does not exist" -f $file)
+            continue
+        }
+        $lines = @(Get-DocLines $file)
         for ($i = 0; $i -lt $lines.Count; $i++) {
             $line = $lines[$i]
             $lineNo = $i + 1
+
+            # trailing whitespace (works on a clean CI checkout too)
+            if ($line -match '[ \t]+$') {
+                Add-Failure ("{0}:{1}: trailing whitespace" -f $file, $lineNo)
+            }
 
             # 3. cited file paths
             foreach ($m in [regex]::Matches($line, $pathPattern)) {
