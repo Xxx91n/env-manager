@@ -1,12 +1,13 @@
 version: 2
 
 # Dependabot 成熟治理（architecture-recovery）
-# - 4 个生态系统：C# / Rust service / Rust Tauri shell / npm / GitHub Actions
+# - 5 个生态系统：C# / Rust service / Rust Tauri shell / npm / GitHub Actions
 # - 噪音治理：weekly → monthly；open-pull-requests-limit 2-3
 # - 安全更新独立组（不等 minor/patch 批），critical advisory 不被日常 bump 队列阻塞
+# - 每个 group 至少声明 patterns / update-types / dependency-type / exclude-patterns /
+#   group-by 之一：只有 applies-to 的组会被 Dependabot 校验器拒绝
 # - patch 组 auto-merge（仅 patch，CI + dependency-review 双绿门）
 # - ignore 仅用于「钉死不升」的 major（理由见下方注释）
-# 详见 git 历史 tag cleanup-baseline（原始治理报告已随 .scratch 删除，全文在 tag 内）
 
 updates:
   # ===== nuget — C# 引擎 + Tests + Fuzz =====
@@ -34,6 +35,8 @@ updates:
         # group 默认会带 "dependencies" label；附加 ecosystem+分组标签便于过滤
       nuget-security-updates:
         applies-to: security-updates
+        patterns:
+          - "*"
         # security 组与 minor-patch 组不混批——critical advisory 不被日常 bump 队列阻塞
     # 钉死不升的 major：依赖本次窗口不升；理由见注释
     ignore:
@@ -64,6 +67,8 @@ updates:
           - patch
       service-cargo-security-updates:
         applies-to: security-updates
+        patterns:
+          - "*"
 
   # ===== cargo — Tauri shell =====
   - package-ecosystem: cargo
@@ -86,6 +91,8 @@ updates:
           - patch
       tauri-cargo-security-updates:
         applies-to: security-updates
+        patterns:
+          - "*"
 
   # ===== npm — Svelte frontend =====
   - package-ecosystem: npm
@@ -108,6 +115,8 @@ updates:
           - patch
       npm-security-updates:
         applies-to: security-updates
+        patterns:
+          - "*"
     # 钉死不升的 major：依赖本次窗口不升；理由见注释
     ignore:
       # svelte 5：项目深度依赖 svelte-i18n 4.x + svelte-preprocess 6.x 生态（与 Svelte 4 兼容
@@ -166,3 +175,5 @@ updates:
           - patch
       actions-security-updates:
         applies-to: security-updates
+        patterns:
+          - "*"
