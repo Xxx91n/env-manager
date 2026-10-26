@@ -612,12 +612,13 @@ jobs:
 
   # on-demand Stryker mutation short run.
   # Config gate stays in stryker-config.json (mutate four red-line files, thresholds 85/70/60,
-  # ignore string/logical - locked, do not tune). Honesty note: break 60 is the
-  # aspirational target line, not a met gate - current score 46.83% (run 33966698434, main
-  # 2026-09-05) to 49.80% (run 34767318054, 2026-09-13) sits below it, so the Stryker step
-  # exits 2 BY DESIGN on every dispatch; the red job IS the report, not a regression. The
-  # scores step runs if:always() so the threshold crash cannot skip evidence collection
-  # (before this fix, no dispatch ever produced the stryker-mutation-report artifact).
+  # ignore string/logical - locked, do not tune). Score note: the survivor-triage kill tests
+  # lifted the score past break 60 (60.47% on run 34878101369, 2026-09-14), so a dispatch on
+  # main runs green; if future code drops the score below break again, the Stryker step exits
+  # 2 and the red job IS the report, not a regression. The scores step runs if:always() so the
+  # threshold crash cannot skip evidence collection either way - it locates the HTML report
+  # under StrykerOutput/, copies it to the repo root for the artifact upload (before that fix,
+  # no dispatch ever produced the stryker-mutation-report artifact).
   stryker:
     if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
