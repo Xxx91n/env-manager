@@ -19,7 +19,7 @@ Invariants a change must not violate; where a test pins one, that check is the a
 
 ## Secrets
 
-- Secret values never reach the registry, `profiles.json`, notes, logs or audit records — neither plaintext nor ciphertext. Audit records the name plus a marker.
+- Secret **plaintext** never reaches the registry, `profiles.json`, notes, logs or audit records. The stored form is a provider envelope or a `mount:<id>` reference; audit records the name plus a marker. The generic `add-var`/`edit-var`/`remove-var` verbs do not consult the secret marker - see the Plaintext lifecycle section of `docs/architecture.md`.
 - Secrets belong to Launch profiles only. A profile carrying a secret is never applied to the registry, including via inheritance.
 - Unknown or failed providers are fail-closed: no silent fallback, no ciphertext injected as a value.
 - The GUI derives the provider list from `secret-provider list`; it never hardcodes providers.
