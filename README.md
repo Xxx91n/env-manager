@@ -95,7 +95,7 @@ Protected variables and PATH entries are disabled before deletion, with exact re
 
 | Sink | Plaintext lands? | Lifetime | Cleanup | Basis |
 |---|---|---|---|---|
-| `profiles.json` / `secretMount.json` | No — envelope `{provider, version, createdAt, ciphertext, targetName}` only | Until the secret is removed | `profile remove-secret` deletes the envelope and provider-side state | ADR 0001; `plaintext-never-in-envelope` contract assertion |
+| `profiles.json` / `secretMount.json` | No for the secret verbs — envelope `{provider, version, createdAt, ciphertext, targetName}` or a `mount:<id>` reference only; the generic `add-var`/`edit-var` verbs bypass the marker (see [Plaintext lifecycle](docs/architecture.md#v070-dpapi-secrets-runtime)) | Until the secret is removed | `profile remove-secret` deletes the envelope and provider-side state | ADR 0001; `plaintext-never-in-envelope` contract assertion |
 | dpapi-current-user | No — DPAPI `CryptProtectData`, CurrentUser scope | Inside the envelope | With the envelope | hard boundary (v0.7.0) |
 | credential-manager | No — the CredMan blob is itself DPAPI-encrypted before persist | Until provider `Delete` | `Delete` on remove-secret | [providers guide](docs/secret-providers-guide.md) |
 | powershell-secretmanagement | SecretStore vault file stays encrypted — but plaintext transits the `pwsh -EncodedCommand` argument (base64 script) on each call | pwsh process lifetime; vault entry until removed | Argument dies with the process; vault entry deleted on remove-secret | hard boundary (v0.7.4) |
@@ -103,13 +103,15 @@ Protected variables and PATH entries are disabled before deletion, with exact re
 | sops | Envelope ciphertext only — **plus** plaintext `secret.json` / `secret.dec.json` under `%TEMP%\env-manager-sops-*` during encrypt/decrypt | Seconds per call | Best-effort `Directory.Delete` of the temp dir — a crash can orphan it | hard boundary (v0.7.11); `SopsProvider` |
 | Launcher process memory (`env-manager-cli`) | Yes — decrypted bytes are transient in the launching process | Milliseconds, until inject/reveal completes | `SecretString` zeroes its `char[]` on Dispose — **best-effort**: GC copies and string intermediates can outlive it | ADR 0005 |
 | Launched child env block | Yes — injected env vars are plaintext inside the child process | Child process lifetime | None possible — env blocks are same-user-readable by OS design | Launch profile design |
-| `profile reveal-secret` stdout | Yes — **by design**; the only plaintext output path | Until terminal scrollback is cleared | None — user-invoked | hard boundary; the canary net deliberately skips this sink |
+| `profile reveal-secret` stdout | Yes — **by design**; one of the two plaintext output paths (`profile reveal-secret`, `profile show --reveal`) | Until terminal scrollback is cleared | None — user-invoked | hard boundary; the canary net deliberately skips these sinks |
 | Survival-kit temp files (`envmanager-kit-*.json`, `mount-survival-kit.tmp.json`) | Yes — a brief plaintext temp file during kit assembly | Seconds | Best-effort delete after encryption | `AuditLedgerMigration`; `service/src/audit_ledger.rs` |
 | `audit-ledger.jsonl` | No — variable names + `<redacted>`/`<encrypted>` markers only; CLI-side entries are additionally AES-256-GCM at rest (DEK DPAPI-wrapped) | Append-only, 100MB rotation | Rotation | ADR 0005; hard boundary (v0.9.13) |
 | `export-state` file | No — double layer: AES-256-GCM payload + DPAPI-wrapped DEK + HMAC-SHA256 | Until you delete the file | User-managed | `AuditCrypto` (v0.9.13) |
 | `logs/env-manager.log` / stderr | No by design — exception text is scrubbed of 22 secret-bearing patterns first; **best-effort** allow-list: an unrecognized secret format could still leak, capped by 512-char truncation | Log retention | — | ADR 0005; `CanaryRedactionTests` + 7-sink canary net |
 | GUI (WebView2) / Rust service | No — the GUI renders `<encrypted>` placeholders and has no reveal display; the service does not persist values | — | — | architecture secret boundary |
-| Windows registry | No — `IsProfileApplicable` refuses secrets on Global profiles; Launch profiles cannot write the registry | — | — | hard boundary; `launch-env-injection.Tests.ps1` invariant |
+| Windows registry | No for the secret verbs — Launch profiles cannot write the registry and apply refuses them; the generic-verb rename gap can reach it (see [Plaintext lifecycle](docs/architecture.md#v070-dpapi-secrets-runtime)) | — | — | hard boundary; `launch-env-injection.Tests.ps1` invariant |
+
+This table is the user-facing summary; the Plaintext lifecycle section of `docs/architecture.md` is the authoritative per-surface allowlist, including the generic-verb gap.
 
 Memory zeroing and log scrubbing are best-effort hygiene, not guarantees (ADR 0005) — the same caveat Microsoft documents for `SecureString` (immutable strings, GC relocation, interop copies). Where the claim can be tested it is: `tests/canary-redaction.Tests.ps1` scans 7 output sinks for a planted canary, and the shared contract suite asserts `plaintext-never-in-envelope` on all 8 providers.
 
