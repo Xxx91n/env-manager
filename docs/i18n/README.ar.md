@@ -1,5 +1,5 @@
 <!-- canonical: ../../README.md -->
-<!-- sync: 6f0a201001cb -->
+<!-- sync: ef2a485dfffb -->
 
 <div align="center">
 
@@ -48,10 +48,6 @@
 
 
 <div dir="rtl">
-
-### عرض توضيحي بالفيديو
-
-جولة كاملة للميزات بمدة ~51 ثانية (ثنائية اللغة ZH/EN، مع تعليق صوتي): **[شاهد على YouTube](https://youtu.be/REPLACE_ME)** — متوفرة أيضًا مرفقة في المستودع: `docs/assets/demo/env-manager-demo.zh.mp4` / `docs/assets/demo/env-manager-demo.en.mp4`.
 
 ### معرض الصور
 

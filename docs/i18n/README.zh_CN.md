@@ -1,5 +1,5 @@
 <!-- canonical: ../../README.md -->
-<!-- sync: 6f0a201001cb -->
+<!-- sync: ef2a485dfffb -->
 
 <div align="center">
 
@@ -42,10 +42,6 @@
 演示展示了只读 CLI 命令的实际效果：`agents --summary`、`path health`、`get PATH` 和 `agents --json`。使用 `node scripts/demo/capture.mjs` 重新生成。
 
 *上述演示终端输出为模拟数据。*
-
-### 视频演示
-
-约 51 秒完整功能演示（中英双语解说）：**[在 YouTube 观看](https://youtu.be/REPLACE_ME)** —— 仓库内同步附带 `docs/assets/demo/env-manager-demo.zh.mp4` / `docs/assets/demo/env-manager-demo.en.mp4`。
 
 ### 截图图集
 

@@ -44,10 +44,6 @@ The demo shows read-only CLI commands in action: `agents --summary`, `path healt
 
 *Demo terminal output above uses simulated data.*
 
-### Video walkthrough
-
-Full ~51 s feature walkthrough (bilingual ZH/EN, narrated): **[Watch on YouTube](https://youtu.be/REPLACE_ME)** — bundled in-repo: `docs/assets/demo/env-manager-demo.zh.mp4` / `docs/assets/demo/env-manager-demo.en.mp4`.
-
 ### Gallery
 
 | | | |

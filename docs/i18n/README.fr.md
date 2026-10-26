@@ -1,5 +1,5 @@
 <!-- canonical: ../../README.md -->
-<!-- sync: 6f0a201001cb -->
+<!-- sync: ef2a485dfffb -->
 
 <div align="center">
 
@@ -44,10 +44,6 @@ Un gestionnaire de variables d'environnement Windows moderne et léger — doubl
 La démo montre des commandes CLI en lecture seule en action : agents --summary, path health, get PATH et agents --json. Régénérez avec `node scripts/demo/capture.mjs`.
 
 *La sortie du terminal ci-dessus utilise des données simulées.*
-
-### Présentation vidéo
-
-Présentation complète des fonctionnalités (~51 s, bilingue ZH/EN, avec narration) : **[Regarder sur YouTube](https://youtu.be/REPLACE_ME)** — également fournie dans le dépôt : `docs/assets/demo/env-manager-demo.zh.mp4` / `docs/assets/demo/env-manager-demo.en.mp4`.
 
 ### Galerie
 

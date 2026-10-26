@@ -1,5 +1,5 @@
 <!-- canonical: ../../README.md -->
-<!-- sync: 6f0a201001cb -->
+<!-- sync: ef2a485dfffb -->
 
 <div align="center">
 
@@ -46,10 +46,6 @@ La demo muestra comandos CLI de solo lectura en acción: agents --summary, path 
 
 *La salida del terminal mostrada arriba usa datos simulados.*
 
-
-### Recorrido en video
-
-Recorrido completo de funciones de ~51 s (bilingüe ZH/EN, narrado): **[Ver en YouTube](https://youtu.be/REPLACE_ME)** — también incluido en el repositorio: `docs/assets/demo/env-manager-demo.zh.mp4` / `docs/assets/demo/env-manager-demo.en.mp4`.
 
 ### Galería
 
