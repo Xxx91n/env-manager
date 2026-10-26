@@ -10,5 +10,14 @@ BAD Issue 38 - capitalized bare issue number in a comment.
 BAD v0.8 Phase 3 - two-segment version label that the old pattern missed.
 BAD v0.9.14 Phase - three-segment version label before the phase word.
 BAD Tickets 33/49 - plural noun carrying slash-joined numbers, the form a singular-only pattern misses.
+BAD ADR 0001 - space-separated ADR number pointing at the retired ADR tree.
+BAD ADR-0002 - hyphen-separated ADR number; a whitespace-only pattern would miss this dialect.
+BAD ADR_0003 - underscore-separated ADR number; the separator class must stay visible to the gate.
+BAD ADR0004 - ADR number with no separator; the optional-separator branch must stay covered.
+BAD ADR  0005 - double-space ADR number; a single-whitespace branch would miss the reflowed form.
+BAD ADRs 0006 - plural acronym plus number; a singular-only branch would miss it.
+BAD ADR 101 - three-digit ADR number; the lower bound of the digit-width branch must stay covered.
 SELFTESTOK a real GitHub issue link: https://github.com/env-manager/env-manager/issues/38
 SELFTESTOK versions mentioned in prose, not as a leading label: the exporter landed before v0.8 shipped and the split into phases was decided later.
+SELFTESTOK the ADR tree is retired; live docs point at the code or section that owns the decision.
+SELFTESTOK the ADRs were folded into code comments; the plural acronym without a number is harmless.

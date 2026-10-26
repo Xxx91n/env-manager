@@ -20,6 +20,15 @@
 # the pattern and the self-test says so. This header deliberately spells no
 # literal violation, so the scanner can police its own source.
 #
+# The ADR alternative catches the singular and plural acronym followed by any
+# number of space, hyphen or underscore separators (including none) and a 3-4
+# digit number - the forms left behind when the ADR tree was folded into the
+# code and docs. It deliberately avoids a single-separator dialect: repeated
+# whitespace from a reflow and the plural acronym were the same class of miss
+# as the earlier separator blind spots. The fixture plants one bad form for
+# each branch (space, hyphen, underscore, none, double space, plural) so a
+# future narrowing fails the self-test instead of passing silently.
+#
 # Self-test polarity (-SelfTest): this switch answers "did the scanner fire
 # when it should have?", not "is the repo clean?". It exits 0 when every bad
 # form planted in the tracked fixture scripts/bare-ids-selftest-fixture.md is
@@ -31,7 +40,7 @@ param([switch]$SelfTest)
 
 $ErrorActionPreference = 'Continue'
 $root = Split-Path -Parent $PSScriptRoot
-$pattern = '\b(?:[Tt]ickets?|[Ii]ssues?)\s+\d+(?:\s*/\s*\d+)*\b|\bv[01]\.[0-9]+(\.[0-9]+)?[^0-9]{0,12}Phase'
+$pattern = '\b(?:[Tt]ickets?|[Ii]ssues?)\s+\d+(?:\s*/\s*\d+)*\b|\bv[01]\.[0-9]+(\.[0-9]+)?[^0-9]{0,12}Phase|\b[Aa][Dd][Rr][Ss]?[-_\s]*\d{3,4}\b'
 $fixture = 'scripts/bare-ids-selftest-fixture.md'
 $negativeMarker = 'SELFTESTOK'
 
@@ -81,7 +90,7 @@ if ($SelfTest) {
         $negHits | ForEach-Object { Write-Host ("  false positive: " + $_) }
     }
     else {
-        Write-Host ("  negative controls stayed unmatched (marker {0}): real GitHub issue URL, prose version mention" -f $negativeMarker)
+        Write-Host ("  negative controls stayed unmatched (marker {0}): real GitHub issue URL, prose version mention, retired-ADR prose" -f $negativeMarker)
     }
     $unexpected = @(
         $lines | Where-Object {
@@ -114,7 +123,7 @@ finally {
 }
 
 if ($code -eq 1) {
-    Write-Host 'PASS: no bare ticket/issue ids or version labels outside the archive'
+    Write-Host 'PASS: no bare ticket/issue ids, retired ADR numbers, or version labels outside the archive'
     exit 0
 }
 if ($code -ne 0) {
@@ -123,6 +132,6 @@ if ($code -ne 0) {
 }
 
 @($hits) | ForEach-Object { Write-Host ("  " + $_) }
-Write-Host ("FAIL: {0} line(s) carry a bare id or version label" -f @($hits).Count)
+Write-Host ("FAIL: {0} line(s) carry a bare id, retired ADR number, or version label" -f @($hits).Count)
 Write-Host 'Replace the number with a self-contained sentence, or link a real GitHub issue by URL.'
 exit 1
