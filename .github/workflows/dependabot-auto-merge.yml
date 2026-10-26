@@ -1,13 +1,14 @@
-name: Dependabot auto-merge (patch-only, gated)
+name: Dependabot auto-merge (minor/patch, gated)
 
 # Dependabot 成熟治理（architecture-recovery）
-# 目的：仅对 patch 组 dependabot PR 自动合并；前提：
-#   1) 仅 patch update-type（minor/major 永远单 PR 人工评审）
-#   2) required CI（build.yml verify）结论为 success
-#   3) required dependency-review（dependency-review.yml）结论为 success
-#   4) 非 draft
-#   5) PR 作者是 dependabot[bot]
-# 6) required checks 有界轮询等待（45 min）——修复与 CI 并行触发的竞态
+# 目的：仅对 minor/patch 组 dependabot PR 自动合并；前提：
+#   1) 仅 minor/patch update-type（major 永远单 PR 人工评审）
+#   2) required CI（build.yml verify + package）结论为 success
+#   3) required actionlint（actionlint.yml）结论为 success
+#   4) required dependency-review（dependency-review.yml）结论为 success
+#   5) 非 draft
+#   6) PR 作者是 dependabot[bot]
+#   7) required checks 有界轮询等待（45 min）——修复与 CI 并行触发的竞态
 # 安全：
 #   - 事件：pull_request（明确禁用 pull_request_target——Boost Security Labs 实证
 #     github.actor 混淆 + @dependabot recreate 武器化攻击；详见
@@ -32,51 +33,38 @@ concurrency:
 
 jobs:
   auto-merge:
-    name: Auto-merge patch Dependabot PRs
+    name: Auto-merge minor/patch Dependabot PRs
     runs-on: ubuntu-latest
     # 60 min：gate-checks 对 required checks 做有界轮询（45 min 上限），见下方步骤 3
     timeout-minutes: 60
     # 双重闸门：PR 作者必须是 dependabot；PR 不能是 draft
     if: |
-      github.event.pull_request.user.login == 'dependabot[bot]' &&
+      (github.event.pull_request.user.login == 'dependabot[bot]' ||
+       github.event.pull_request.user.login == 'app/dependabot') &&
       github.event.pull_request.draft == false
     permissions:
       contents: write
       pull-requests: write
 
     steps:
-      # 0) 门卫：非 Dependabot 作者的 PR（release-please 等机器 PR / 人工 PR）第一步立即
-      #    成功退出，不进入元数据与闸门链路（修复 release-please PR 上 run 34435772242
-      #    的挂起失败模式；作者名单兼容 dependabot[bot] 与 app/dependabot 两种 actor 形态）
-      - name: Skip non-Dependabot PRs (early success exit)
-        if: github.event.pull_request.user.login != 'dependabot[bot]' && github.event.pull_request.user.login != 'app/dependabot'
-        env:
-          PR_AUTHOR: "${{ github.event.pull_request.user.login }}"
-        run: |
-          echo "PR author '${PR_AUTHOR}' is not dependabot[bot]; skipping auto-merge pipeline"
-          {
-            echo "### dependabot auto-merge skipped (non-Dependabot author)"
-            echo "- author: ${PR_AUTHOR}"
-            echo "- reason: only Dependabot-authored PRs enter the auto-merge gate"
-          } >> "$GITHUB_STEP_SUMMARY"
-
-      # 0.5) checkout 仅用于在 workflow 上下文里运行 gh CLI 时引用 head SHA；
+      # 0) checkout 仅用于在 workflow 上下文里运行 gh CLI 时引用 head SHA；
       # 不做真实构建，actions/checkout 固定 SHA 由仓库既有 commit-pinning 纪律保证
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       # 1) 拉 Dependabot PR 元数据；权威 action：dependabot/fetch-metadata v2.3.0（SHA pin）
-      #    仅 Dependabot 作者执行——fetch-metadata 对非 dependabot PR 会直接报错
+      #    作者闸门已在 job 级限定（dependabot[bot] / app/dependabot），此处不再重复
       - name: Fetch Dependabot metadata
         id: metadata
-        if: github.event.pull_request.user.login == 'dependabot[bot]' || github.event.pull_request.user.login == 'app/dependabot'
         uses: dependabot/fetch-metadata@d7267f607e9d3fb96fc2fbe83e0af444713e90b7 # v2.3.0
         with:
           github-token: "${{ secrets.GITHUB_TOKEN }}"
 
-      # 2) 闸门 1：仅 patch update-type
-      - name: Gate on patch-only update-type
-        id: gate-patch
-        if: steps.metadata.outputs.update-type == 'version-update:semver-patch'
+      # 2) 闸门 1：仅 minor/patch update-type；major 保持人工评审
+      - name: Gate on minor/patch update-type
+        id: gate-eligible
+        if: |
+          steps.metadata.outputs.update-type == 'version-update:semver-patch' ||
+          steps.metadata.outputs.update-type == 'version-update:semver-minor'
         run: |
           {
             echo "update-type=${{ steps.metadata.outputs.update-type }}"
@@ -84,15 +72,16 @@ jobs:
             echo "dependency-type=${{ steps.metadata.outputs.dependency-type }}"
           } >> "$GITHUB_OUTPUT"
 
-      # 3) 闸门 2：required CI + dependency-review 必须绿（有界轮询等待）
+      # 3) 闸门 2：required checks 必须绿（有界轮询等待）
       # 本 workflow 与 build.yml 由同一 PR 事件并行触发——历史实现在启动后 ~6 秒一次性快照
       # check-runs，required check（verify 全量构建约 11-15 分钟）不可能已绿，构成竞态
       # （#55 run 34430050727 FAILURE 模式）。改为轮询：每个 required check 出现结论即判定
       # （success 放行；failure/cancelled 等立即拒绝），45 分钟上限内未齐则明确超时拒绝。
-      # 说明：两个目标均为 Actions check-runs，不再合并查询旧式 status contexts API。
-      - name: Gate on CI + dependency-review green (bounded wait)
+      # 目标名字必须是 check-runs API 返回的 job 名（verify / package / actionlint /
+      # dependency-review）；带 workflow 前缀的 "Workflow / job" 形式永远不会匹配。
+      - name: Gate on required checks green (bounded wait)
         id: gate-checks
-        if: steps.gate-patch.outputs.update-type == 'version-update:semver-patch'
+        if: steps.gate-eligible.conclusion == 'success'
         env:
           GH_TOKEN: "${{ secrets.GITHUB_TOKEN }}"
           PR_HEAD_SHA: "${{ github.event.pull_request.head.sha }}"
@@ -102,15 +91,25 @@ jobs:
           deadline=$(( $(date +%s) + 2700 ))
           echo "waiting for required checks on head ${PR_HEAD_SHA} (bounded: 45 min)"
           while :; do
-            json="$(gh api "repos/${PR_REPO}/commits/${PR_HEAD_SHA}/check-runs" --paginate)"
+            json="$(gh api "repos/${PR_REPO}/commits/${PR_HEAD_SHA}/check-runs?per_page=100" --paginate)"
             verdict="$(printf '%s' "$json" | python3 scripts/required-check-verdict.py)"
+            if [ -z "$verdict" ]; then
+              echo "::error::required-check verdict was empty on head ${PR_HEAD_SHA}; auto-merge refused"
+              exit 1
+            fi
             echo "--- required-check poll at $(date -u +%H:%M:%S) ---"
             printf '%s\n' "$verdict"
-            if grep -Eq '=(failure|cancelled|timed_out|startup_failure|action_required|stale|skipped)$' <<<"$verdict"; then
+            # Fail fast on a known unsuccessful conclusion while other checks are
+            # still pending; the positive assertion below is the final gate.
+            if grep -Eq '=(failure|neutral|cancelled|skipped|timed_out|action_required|stale|startup_failure)$' <<<"$verdict"; then
               echo "::error::a required check concluded unsuccessfully on head ${PR_HEAD_SHA}; auto-merge refused"
               exit 1
             fi
             if ! grep -q '=pending$' <<<"$verdict"; then
+              if grep -Evq '=success$' <<<"$verdict"; then
+                echo "::error::a required check was not success on head ${PR_HEAD_SHA}; auto-merge refused"
+                exit 1
+              fi
               break
             fi
             if [ "$(date +%s)" -ge "$deadline" ]; then
@@ -121,33 +120,42 @@ jobs:
           done
           echo "all required checks green on head ${PR_HEAD_SHA}"
 
-      # 4) auto-merge：用 gh pr merge --auto (squash)，保留单 commit 触发 release-please 走 chore(deps) 路径
-      - name: Enable auto-merge (squash)
+      # 4) 合并：轮询已证明 required checks 全绿，直接 squash 合并（不依赖仓库级
+      #    auto-merge 开关）。分支保护要求 1 个批准，仓库允许 Actions 批准 PR，
+      #    因此先由本工作流批准；--match-head-commit 锁定刚验证过的 head，
+      #    防止轮询后新提交混入。squash 保留单 commit，触发 release-please 走
+      #    chore(deps) 路径（不 bump 版本）。
+      - name: Approve and merge (squash)
         if: |
-          steps.gate-patch.outputs.update-type == 'version-update:semver-patch' &&
+          steps.gate-eligible.conclusion == 'success' &&
           steps.gate-checks.conclusion == 'success'
         env:
           GH_TOKEN: "${{ secrets.GITHUB_TOKEN }}"
           PR_URL: "${{ github.event.pull_request.html_url }}"
+          PR_HEAD_SHA: "${{ github.event.pull_request.head.sha }}"
         run: |
-          gh pr merge --auto --squash "$PR_URL"
-          echo "auto-merge enabled for $PR_URL"
+          gh pr review --approve "$PR_URL" --body "Automated approval: Dependabot minor/patch update with all required checks green."
+          gh pr merge --squash --match-head-commit "$PR_HEAD_SHA" "$PR_URL"
+          echo "merged $PR_URL at $PR_HEAD_SHA"
           {
             echo "merged-by=dependabot-auto-merge@v1"
             echo "update-type=${{ steps.metadata.outputs.update-type }}"
             echo "dependency-names=${{ steps.metadata.outputs.dependency-names }}"
           } >> "$GITHUB_STEP_SUMMARY"
 
-      # 5) 失败时清楚标注（不静默跳过）
+      # 5) 不可自动合并时明确标注（不静默跳过）
       - name: Annotate skipped auto-merge (non-blocking)
-        if: failure() && steps.gate-patch.outputs.update-type != 'version-update:semver-patch'
+        if: |
+          always() &&
+          steps.metadata.outcome == 'success' &&
+          steps.gate-eligible.conclusion != 'success'
         run: |
           {
             echo "### dependabot auto-merge skipped"
             echo "- update-type: \`${{ steps.metadata.outputs.update-type }}\`"
-            echo "- reason: only patch (semver-patch) update-types are eligible"
+            echo "- reason: only minor and patch update-types are eligible"
             echo "- dependency-names: \`${{ steps.metadata.outputs.dependency-names }}\`"
-            echo "- expected: minor/major Dependabot PRs require manual review"
+            echo "- expected: major Dependabot PRs require manual review"
           } >> "$GITHUB_STEP_SUMMARY"
 
       # 6) 分类依据明示（always：无论放行/跳过/拒绝都在 step summary 留下判定依据；
@@ -164,5 +172,5 @@ jobs:
             echo "- author: ${PR_AUTHOR}"
             echo "- update-type: ${UPDATE_TYPE}"
             echo "- dependency-names: ${DEP_NAMES}"
-            echo "- eligibility: author=dependabot AND update-type=semver-patch AND required checks green"
+            echo "- eligibility: author=dependabot AND update-type in {semver-minor, semver-patch} AND required checks green"
           } >> "$GITHUB_STEP_SUMMARY"

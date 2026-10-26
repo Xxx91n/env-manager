@@ -6,7 +6,7 @@ version: 2
 # - 安全更新独立组（不等 minor/patch 批），critical advisory 不被日常 bump 队列阻塞
 # - 每个 group 至少声明 patterns / update-types / dependency-type / exclude-patterns /
 #   group-by 之一：只有 applies-to 的组会被 Dependabot 校验器拒绝
-# - patch 组 auto-merge（仅 patch，CI + dependency-review 双绿门）
+# - minor/patch 组 auto-merge（跨 major 不在范围，required checks 全绿门）
 # - ignore 仅用于「钉死不升」的 major（理由见下方注释）
 
 updates:
