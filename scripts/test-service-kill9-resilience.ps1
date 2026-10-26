@@ -161,8 +161,8 @@ catch {
 finally {
     foreach ($p in @($service2, $service)) {
         if ($p -and -not $p.HasExited) {
-            try { & $CliExe service shutdown 2>$null | Out-Null; $p.WaitForExit(5000) | Out-Null } catch {}
-            if (-not $p.HasExited) { try { Stop-Process -Id $p.Id -Force } catch {} }
+            try { & $CliExe service shutdown 2>$null | Out-Null; $p.WaitForExit(5000) | Out-Null } catch { Write-Verbose "service shutdown ignored: $_" }
+            if (-not $p.HasExited) { try { Stop-Process -Id $p.Id -Force } catch { Write-Verbose "force stop ignored: $_" } }
         }
     }
     if ($backupFile -and (Test-Path $backupFile)) {

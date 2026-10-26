@@ -1,4 +1,4 @@
-# CI Tier 3 Pester 5 test: Redaction regression — verifies scrub_stderr/ScrubExceptionMessage
+﻿# CI Tier 3 Pester 5 test: Redaction regression — verifies scrub_stderr/ScrubExceptionMessage
 # masks 22 secret-bearing patterns across CLI stderr output.
 
 [CmdLetBinding()]

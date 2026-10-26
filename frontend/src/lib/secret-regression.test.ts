@@ -54,10 +54,14 @@ describe('Secret provider regression safety', () => {
       'PowerShellSecretManagementProvider', 'VaultKV2Provider', 'SopsProvider',
       'AzureKeyVaultProvider', 'OnePasswordProvider', 'AwsSecretsManagerProvider']
     for (const p of providers) {
-      const section = src.slice(src.indexOf(`class ${p}`), src.indexOf('}', src.indexOf(`class ${p}`) + 100))
-      // The class must set Provider = Name
-      const classSection = src.slice(src.indexOf(`class ${p}`))
-      expect(classSection.slice(0, 10000)).toContain('Provider = Name')
+      // Slice the class body to its closing brace at column 0 so unrelated
+      // comments above the envelope cannot push the assertion out of view.
+      const start = src.indexOf(`class ${p}`)
+      if (start === -1) throw new Error(`Missing provider class: ${p}`)
+      const end = src.indexOf('\n}', start)
+      if (end === -1) throw new Error(`Missing provider class boundary: ${p}`)
+      const classSection = src.slice(start, end)
+      expect(classSection).toContain('Provider = Name')
     }
   })
 

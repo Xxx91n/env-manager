@@ -1,4 +1,4 @@
-# CI Tier 3 Pester 5 test: Canary redaction negative assertions.
+﻿# CI Tier 3 Pester 5 test: Canary redaction negative assertions.
 # Injects a uniquely-tagged fake secret (canary) into a throwaway launch
 # profile, then scans EVERY output sink of the secret lifecycle for the canary
 # plaintext: zero occurrence = pass, one occurrence = red. Also asserts the

@@ -1,4 +1,4 @@
-# test-all.ps1 - run both test suites, keep the full log on disk, print exit codes only.
+﻿# test-all.ps1 - run both test suites, keep the full log on disk, print exit codes only.
 #
 # Why this exists: reading a test run through `tail` silently discards the failing
 # test's name (it happened twice). The log file is the evidence; the console is a

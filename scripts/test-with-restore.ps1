@@ -403,9 +403,9 @@ function Test-RawTrailingBackslashInvocation {
   $listJson = & $CliPath path list --scope user 2>&1 | Out-String
   if ($LASTEXITCODE -ne 0) { throw "path list failed (exit $LASTEXITCODE)" }
   $entries = $listJson | ConvertFrom-Json
-  $matches = @($entries | Where-Object { $_.path -ceq $value })
+  $pathMatches = @($entries | Where-Object { $_.path -ceq $value })
   $expectedMatchCount = [Math]::Max(1, $beforeMatchCount)
-  if ($matches.Count -ne $expectedMatchCount) { throw "unexpected raw trailing-backslash PATH entry count" }
+  if ($pathMatches.Count -ne $expectedMatchCount) { throw "unexpected raw trailing-backslash PATH entry count" }
   if (@($entries | Where-Object { $_.path -match '--scope' }).Count -ne 0) {
     throw "PATH contains a swallowed --scope token"
   }

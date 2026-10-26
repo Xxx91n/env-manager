@@ -60,7 +60,7 @@ Profile JSON gains these optional fields (see `ProfileData` in `src/Models.cs`):
 - `targetExecutable` (launch only): absolute or relative path to an executable. `ValidateLaunchTarget` rejects non-existent, non-executable, or System32 paths.
 - `launchArguments` (launch only): optional static args appended to the spawned command.
 - `workingDirectory` (launch only): optional cwd override.
-- `secretVariables`: list of variable names whose values are DPAPI-encrypted on disk (CurrentUser scope). v0.7.0 implements full DPAPI runtime: `profile add-secret`/`edit-secret` store base64(`CryptProtectData`) ciphertext in `variables[].Value`; `profile launch` decrypts in the launcher process; `profile reveal-secret` is the only plaintext-to-stdout path. Plaintext is never persisted to disk or logs.
+- `secretVariables`: list of variable names whose values are DPAPI-encrypted on disk (CurrentUser scope). v0.7.0 implements full DPAPI runtime: `profile add-secret`/`edit-secret` store the active provider's versioned envelope in `variables[].Value` (for DPAPI, the envelope wraps the base64 `CryptProtectData` ciphertext); `profile launch` decrypts in the launcher process; `profile reveal-secret` and `profile show --reveal` are the plaintext-to-stdout paths. The DPAPI path persists no plaintext; sops materializes it briefly in temp files and the generic `add-var`/`edit-var` verbs can bypass the secret marker - see the Plaintext lifecycle section of `docs/architecture.md`.
 
 **Safety invariants specific to Launch profiles**:
 

@@ -1,4 +1,4 @@
-# CI Tier 3 Pester 5 test: Launch profile env injection (registry-clean fixture)
+﻿# CI Tier 3 Pester 5 test: Launch profile env injection (registry-clean fixture)
 # Referenced by .codex-tmp/grill-plan-ci-test-automation.md (3.2)
 # CI must build env-manager-cli.exe BEFORE this test runs (build.yml verify job order).
 #

@@ -192,6 +192,40 @@ jobs:
       - name: Unit tests for scripts/gen-latest-json.mjs
         run: node --test scripts/gen-latest-json.test.mjs
 
+      # Prose guardrails: bare ticket ids, whitespace, cited file/Class.Member
+      # resolution and banned stale claims. Cheap enough to run on every PR.
+      - name: Docs guardrails
+        shell: pwsh
+        run: ./scripts/check-docs.ps1
+
+      # Curated PSScriptAnalyzer rule set: mechanical findings only (encoding,
+      # automatic-variable clobbering, empty catches, drive-qualified variable
+      # references that silently drop the value). The full rule set carries
+      # intentional test-output findings (Write-Host), so it is not enabled here.
+      - name: Lint PowerShell scripts
+        shell: pwsh
+        run: |
+          if (-not (Get-Module -ListAvailable PSScriptAnalyzer)) {
+            Install-Module PSScriptAnalyzer -MinimumVersion 1.25.0 -Scope CurrentUser -Force -SkipPublisherCheck
+          }
+          $rules = @(
+            'PSUseBOMForUnicodeEncodedFile',
+            'PSAvoidAssignmentToAutomaticVariable',
+            'PSAvoidUsingEmptyCatchBlock',
+            'InvalidVariableReferenceWithDrive'
+          )
+          $findings = @()
+          foreach ($path in 'tests', 'scripts') {
+            $findings += Invoke-ScriptAnalyzer -Path $path -Recurse -IncludeRule $rules
+          }
+          if ($findings.Count -gt 0) {
+            $findings | ForEach-Object {
+              Write-Host ("::error file={0},line={1}::{2}: {3}" -f $_.ScriptPath, $_.Line, $_.RuleName, $_.Message)
+            }
+            throw "PSScriptAnalyzer: $($findings.Count) finding(s) in the curated rule set"
+          }
+          Write-Host 'PSScriptAnalyzer: 0 findings'
+
       - name: Run Pester integration tests
         shell: pwsh
         env:
