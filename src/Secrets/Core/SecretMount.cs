@@ -22,7 +22,14 @@ class SecretMount
     [JsonPropertyName("name")] public string Name { get; set; } = "";
     [JsonPropertyName("targetName")] public string? TargetName { get; set; }
     [JsonPropertyName("scope")] public string Scope { get; set; } = "user";
-    // defaults CreatedOnce + null. Activated in v0.9.0 by the service.
+    // Design: fetch-on-launch (glossary: CreatedOnce) is the fixed default for new mounts.
+    // The user-bound providers - dpapi-current-user, credential-manager,
+    // powershell-secretmanagement - and sops declare RefreshCapable => false: the NT SERVICE
+    // identity cannot open the interactive user's DPAPI master key, CredMan vault or pwsh
+    // SecretStore, and sops has no service-side refresh surface at all, so those mounts can
+    // only ever be fetch-on-launch. Migrating user-bound stores to a service identity is
+    // deliberately not planned. Changing this default (the shipped literal is "CreatedOnly")
+    // or adding a service-side migration is a design change; record it in docs/architecture.md first.
     [JsonPropertyName("refreshPolicy")] public string RefreshPolicy { get; set; } = "CreatedOnly";
     [JsonPropertyName("refreshIntervalSeconds")] public int? RefreshIntervalSeconds { get; set; }
     [JsonPropertyName("lastRotatedAt")] public string? LastRotatedAt { get; set; }
