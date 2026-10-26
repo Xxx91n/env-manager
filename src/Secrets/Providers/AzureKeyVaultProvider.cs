@@ -5,7 +5,7 @@ using EnvManager.Secrets.Core;
 
 // Adapter-boundary typed error family. HTTP failures map through
 // SecretProviderErrors; stderr diagnostics from the identity-token path are
-// scrubbed (ADR 0005); best-effort cleanup reports through the scrubbed channel.
+// scrubbed by ScrubExceptionMessage; best-effort cleanup reports through the scrubbed channel.
 
 using System;
 using System.Collections.Generic;

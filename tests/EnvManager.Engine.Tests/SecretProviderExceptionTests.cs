@@ -1,6 +1,6 @@
 // SecretProviderExceptionTests.cs - typed provider error family tests
 // Pure-logic coverage: family surface, scrubber integration (512-char truncation +
-// Authorization-header masking per ADR 0005), classification mapping, and the classified
+// Authorization-header masking), classification mapping, and the classified
 // RotateAll counting. The AWS echo-mock test drives the REAL adapter path through the
 // AWS_ENDPOINT_URL_SECRETS_MANAGER seam against a loopback TCP stub that
 // echoes the SigV4 Authorization header back in the response body - the aws-sdk-java
@@ -72,7 +72,7 @@ public class SecretProviderExceptionTests
     public void ScrubExceptionMessage_AuthorizationHeaderEcho_MaskedAndTruncated()
     {
         // aws-sdk-java #2702 shape: a raw exception whose message echoes the request's
-        // Authorization header. ADR 0005 contract: pattern-masked + 512-char cap.
+        // Authorization header. Scrub contract: pattern-masked + 512-char cap.
         var padded = AuthHeaderEcho + new string('x', 600);
         var ex = new SecretProviderAuthFailedException("aws-secretsmanager", "decrypt", "AWS create failed: Authorization: " + padded);
 

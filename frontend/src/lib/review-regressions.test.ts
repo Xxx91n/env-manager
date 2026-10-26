@@ -192,7 +192,7 @@ describe('review-finder regressions', () => {
     const dialog = fs.readFileSync(path.join(here, 'components', 'SettingsDialog.svelte'), 'utf-8')
     const api = fs.readFileSync(path.join(here, 'api.ts'), 'utf-8')
     const mainRs = fs.readFileSync(path.join(here, '..', '..', 'src-tauri', 'src', 'main.rs'), 'utf-8')
-    // ADR 0003: csproj <Version> is the single version source. The update
+    // csproj <Version> is the single version source. The update
     // verdict must compare against the runtime-reported version, never a
     // hardcoded literal assignment like `const version = '0.5.0'`.
     expect(dialog).not.toMatch(/const version = ['"]\d+\.\d+\.\d+['"]/)

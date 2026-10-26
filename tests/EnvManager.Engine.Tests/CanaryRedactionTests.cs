@@ -51,7 +51,7 @@ public class CanaryRedactionTests
     [Fact]
     public void Boundary_CanaryWithoutKnownPatternIsNotMasked()
     {
-        // The scrub layer is a best-effort pattern allow-list (ADR 0005): a
+        // The scrub layer is a best-effort pattern allow-list: a
         // canary that does not match any known secret-bearing pattern passes
         // through. The integration canary suite therefore shapes its fake
         // secret as password=... so a leaking sink trips a scrub pattern too.

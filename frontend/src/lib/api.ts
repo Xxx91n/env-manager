@@ -188,7 +188,7 @@ export interface UpdateInfo {
 
 /**
  * Returns the running GUI version from the Tauri backend
- * (Cargo package version, kept in sync with the csproj <Version> single source, ADR 0003).
+ * (Cargo package version, kept in sync with the csproj <Version> single source).
  */
 export async function appVersion(): Promise<string> {
   try {
@@ -217,7 +217,7 @@ export async function checkForUpdates(currentVersion: string): Promise<UpdateInf
 /**
  * Checks for updates through the tauri-plugin-updater transport
  * (latest.json + minisign signature verification). Same UpdateInfo shape as
- * checkForUpdates; the plugin compares versions internally (ADR 0003 source)
+ * checkForUpdates; the plugin compares versions internally (single version source)
  * and reports isUpdateAvailable only when the endpoint announces a newer one.
  */
 export async function checkUpdatePlugin(): Promise<UpdateInfo> {
