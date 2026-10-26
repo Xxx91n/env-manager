@@ -85,7 +85,7 @@ The auto-update transport seam: tauri-plugin-updater over the `latest.json` endp
 _Avoid_: version literal in the GUI, pending-update State plumbing
 
 **Updater Manifest (latest.json)**:
-The Tauri v2 document the GUI polls: `{ version, notes, pub_date, platforms.windows-x86_64.{url, signature} }`, where `signature` is the verbatim single-line minisign base64 from the `.sig` file. `url` addresses the asset name GitHub actually stores (uploaded spaces become dots) with the filename segment percent-encoded, so the updater fetches the released bytes rather than the local filename. A missing `.sig` is fail-closed.
+The Tauri v2 document the GUI polls to discover and verify an available update; the endpoint and schema contract live in `docs/architecture.md` and `docs/build-and-release.md`.
 _Avoid_: appcast, sparkle xml, inline version probe
 
 ## GUI
