@@ -15,5 +15,11 @@ jobs:
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      # CLI-seam tests for the auto-merge gate's check-run parser: single page,
+      # concatenated --paginate pages, bare array, re-runs, and fail-closed parsing.
+      # Lives here because the script is CI-workflow tooling; python3 matches the
+      # runtime used by dependabot-auto-merge.yml.
+      - name: Unit tests for scripts/required-check-verdict.py
+        run: python3 scripts/test_required_check_verdict.py
       - uses: rhysd/actionlint@914e7df21a07ef503a81201c76d2b11c789d3fca # v1.7.12
 
