@@ -192,6 +192,12 @@ jobs:
       - name: Unit tests for scripts/gen-latest-json.mjs
         run: node --test scripts/gen-latest-json.test.mjs
 
+      # Prose guardrails: bare ticket ids, whitespace, cited file/Class.Member
+      # resolution and banned stale claims. Cheap enough to run on every PR.
+      - name: Docs guardrails
+        shell: pwsh
+        run: ./scripts/check-docs.ps1
+
       # Curated PSScriptAnalyzer rule set: mechanical findings only (encoding,
       # automatic-variable clobbering, empty catches, drive-qualified variable
       # references that silently drop the value). The full rule set carries
