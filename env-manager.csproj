@@ -9,27 +9,27 @@
     <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
     <PackageProjectUrl>https://github.com/Xxx91n/env-manager</PackageProjectUrl>
     <Copyright>Copyright (c) 2026 Env Manager Contributors</Copyright>
-    <Version>0.12.1</Version>
+    <Version>0.13.0</Version>
     <Product>Env Manager</Product>
     <AssemblyTitle>Env Manager CLI</AssemblyTitle>
     <Description>Modern Windows environment variable manager with CLI + GUI</Description>
   </PropertyGroup>
 
   <ItemGroup>
-    <EmbeddedResource Include="protection.defaults.json" LogicalName="EnvManager.protection.defaults.json" />
+    <EmbeddedResource Include="protection.defaults.json" LogicalName="EnvManager.protection.defaults.json"/>
   </ItemGroup>
 
 
   <ItemGroup>
-    <PackageReference Include="Microsoft.Extensions.Compliance.Redaction" Version="9.10.0" />
+    <PackageReference Include="Microsoft.Extensions.Compliance.Redaction" Version="9.10.0"/>
   </ItemGroup>
   <ItemGroup>
-    <InternalsVisibleTo Include="EnvManager.Engine.Tests" />
+    <InternalsVisibleTo Include="EnvManager.Engine.Tests"/>
     <!-- The SharpFuzz harness exercises the internal LenientArgs parser, so it needs internals visible. -->
-    <InternalsVisibleTo Include="EnvManager.Fuzz" />
+    <InternalsVisibleTo Include="EnvManager.Fuzz"/>
   </ItemGroup>
   <ItemGroup>
-    <Compile Remove="tests\**\*.cs" />
+    <Compile Remove="tests\**\*.cs"/>
   </ItemGroup>
 
 </Project>
