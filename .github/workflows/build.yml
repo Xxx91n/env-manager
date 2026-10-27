@@ -196,6 +196,13 @@ jobs:
       - name: Unit tests for scripts/gen-latest-json.mjs
         run: node --test scripts/gen-latest-json.test.mjs
 
+      # Fail-closed regression tests for the VEX-aware audit gate. Replays the
+      # #112 advisory set against a matching VEX fixture and pins the exit-1
+      # paths (unexempted high, missing provenance, package mismatch,
+      # unidentifiable GHSA), then validates the checked-in OpenVEX products.
+      - name: Unit tests for scripts/npm-audit-vex.mjs
+        run: node --test scripts/npm-audit-vex.test.mjs
+
       # Prose guardrails: bare ticket ids, whitespace, cited file/Class.Member
       # resolution and banned stale claims. Cheap enough to run on every PR.
       - name: Docs guardrails
