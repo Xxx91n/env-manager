@@ -5,6 +5,34 @@ All notable changes to Env Manager will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.13.0](https://github.com/Xxx91n/env-manager/compare/v0.12.1...v0.13.0) (2026-10-27)
+
+
+### Features
+
+* **installer:** add a desktop shortcut check box to the MSI wizard ([#136](https://github.com/Xxx91n/env-manager/issues/136)) ([59fad51](https://github.com/Xxx91n/env-manager/commit/59fad519fb52f51bc6f539a36cbcabb2ff6a7644))
+
+
+### Bug Fixes
+
+* **build:** 补回删裸号时留下的孤儿冒号 ([c9c2ee8](https://github.com/Xxx91n/env-manager/commit/c9c2ee824d55fa488ed9de1f9e8182b95759cc14))
+* **ci:** dependabot 安全更新组补 patterns 以过线上 schema 校验 ([#115](https://github.com/Xxx91n/env-manager/issues/115)) ([64df60a](https://github.com/Xxx91n/env-manager/commit/64df60a7605585d8a5f94cb3619236ee8feed49c))
+* **ci:** npm audit 门禁按 OpenVEX 豁免口径放行 ([ef64d7f](https://github.com/Xxx91n/env-manager/commit/ef64d7f8081900d21a4e73bd16e8cab901f1fa1d))
+* **ci:** npm audit 门禁按 VEX 口径放行（[#105](https://github.com/Xxx91n/env-manager/issues/105)） ([61c7465](https://github.com/Xxx91n/env-manager/commit/61c7465af9e37032205cdd23794cab99fc8b6d33))
+* **ci:** release-please 的 tag 自动触发资产构建 ([deba936](https://github.com/Xxx91n/env-manager/commit/deba93653bfa3b6531149a72240387fdff7f65c0))
+* **ci:** release-please 的 tag 自动触发资产构建 ([63c8f83](https://github.com/Xxx91n/env-manager/commit/63c8f83ac5ebc73efd2aacc226afb36925706e50))
+* **ci:** 修好从来无法解析的 dependabot 自动合并工作流 ([1de9c58](https://github.com/Xxx91n/env-manager/commit/1de9c584763468b4eb755342a79438df7cfdd12c))
+* **ci:** 修正 build.yml stryker job 过时的'必红'注释（[#102](https://github.com/Xxx91n/env-manager/issues/102)） ([f1bbb78](https://github.com/Xxx91n/env-manager/commit/f1bbb78b28940df129f09c39cbc360b813fa2d4e))
+* **ci:** 修正 build.yml stryker job 过时的'必红'注释（[#102](https://github.com/Xxx91n/env-manager/issues/102)） ([a9eb697](https://github.com/Xxx91n/env-manager/commit/a9eb6972ad0c344f1c4b0990fff6ec1de88f9ac2))
+* **ci:** 裸号扫描兼容两段版本号，并加可失败的自检门禁 ([9e39ef5](https://github.com/Xxx91n/env-manager/commit/9e39ef569dbf5dd9d3541a4ca6325d7bd6d8813a))
+* **ci:** 裸号门禁认得复数形态，并清掉它一直看不见的四处残留 ([9530e59](https://github.com/Xxx91n/env-manager/commit/9530e596164c03ccc20ef6c2945dc9b5e392c7cc))
+* **ci:** 让 dependabot 自动合并门真正轮询并合入 minor/patch ([e70f3b0](https://github.com/Xxx91n/env-manager/commit/e70f3b0c58eec3de309e63a7896e43498e70f60d))
+* **release:** latest.json URL 指向 GitHub 归一后的资产名 ([4857c8f](https://github.com/Xxx91n/env-manager/commit/4857c8f55a04e99d3ea5e2fcbb7fb2f0820e300e))
+* **release:** latest.json URL 指向 GitHub 归一后的资产名 ([aaf6507](https://github.com/Xxx91n/env-manager/commit/aaf6507d102ff1bdab200e0349f54d768390210d))
+* **release:** 用 config 文件同步三个版本载体 ([2387748](https://github.com/Xxx91n/env-manager/commit/238774830405f079f4919239794afdba6dcabce7))
+* **review:** 落实 CodeRabbit 的五条修正 ([9b88c01](https://github.com/Xxx91n/env-manager/commit/9b88c0100cd15f5c8b62b26b6c3cdb4e5e1c4dcb))
+* **secrets:** 探测预算与真实调用对齐，超时不再冒充“二进制不可用” ([cc9eeba](https://github.com/Xxx91n/env-manager/commit/cc9eebae0e219493d376d3514d3d2aa419958591))
+
 ## [0.12.1](https://github.com/Xxx91n/env-manager/compare/v0.12.0...v0.12.1) (2026-09-14)
 
 
