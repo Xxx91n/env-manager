@@ -1,0 +1,25 @@
+{
+  "release-type": "simple",
+  "include-component-in-tag": false,
+  "packages": {
+    ".": {
+      "extra-files": [
+        {
+          "type": "xml",
+          "path": "env-manager.csproj",
+          "xpath": "//Project/PropertyGroup/Version"
+        },
+        {
+          "type": "json",
+          "path": "frontend/src-tauri/tauri.conf.json",
+          "jsonpath": "$.version"
+        },
+        {
+          "type": "json",
+          "path": "frontend/package.json",
+          "jsonpath": "$.version"
+        }
+      ]
+    }
+  }
+}
