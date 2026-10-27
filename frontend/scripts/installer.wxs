@@ -150,6 +150,13 @@
       <Component Id="LegacyLogsCleanup" Guid="*" Win64="$(var.Win64)">
         <CreateFolder />
         <RemoveFile Id="RemoveLegacyLogsFiles" Name="*.log*" On="uninstall" />
+        <!-- Guid="*" resolves to the same component id across builds, so a major
+             upgrade treats the new product as another client and skips the old
+             product's component removal (observed in the MSI upgrade matrix:
+             "Disallowing uninstallation ... since another client exists").
+             Removing on install as well lets the NEW product clear legacy logs
+             while it upgrades; uninstall keeps the original cleanup. -->
+        <RemoveFile Id="RemoveLegacyLogsFilesOnInstall" Name="*.log*" On="install" />
         <RemoveFolder Id="RemoveLegacyLogsDir" On="uninstall" />
         <RegistryValue Root="HKCU" Key="Software\EnvManager" Name="LegacyLogsCleanup"
                        Type="integer" Value="1" KeyPath="yes" />
