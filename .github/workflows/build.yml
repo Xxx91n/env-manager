@@ -359,7 +359,10 @@ jobs:
         env:
           EM_L1_MATRIX: "1"
 
-  package:
+  # Builds and uploads the release artifacts. Kept separate from the required
+  # "package" gate below so the upgrade matrix can consume the MSI artifact
+  # and a red matrix can still fail the required check.
+  build-package:
     runs-on: windows-latest
     timeout-minutes: 45
     needs: verify
@@ -496,23 +499,27 @@ jobs:
           if ($msi.Count -ne 1) { throw 'Expected exactly one MSI' }
           if ($msi.Name -match '_[a-zA-Z]{2}-[a-zA-Z]{2,3}\.msi') { throw 'Localized MSI suffix is forbidden' }
 
-      - name: MSI install/uninstall smoke test
+      # Default-path clean install cell of the matrix. It runs here, before the
+      # artifacts upload, through the same script as the matrix legs so there is
+      # one installation implementation and one exact-version assertion.
+      - name: MSI clean install/uninstall smoke test
         shell: pwsh
+        env:
+          # Keep the installed CLI probe out of the runner's real profile.
+          ENVMANAGER_LOCALAPPDATA: ${{ runner.temp }}\msi-smoke-user-state
         run: |
+          $version = ([xml](Get-Content env-manager.csproj)).Project.PropertyGroup.Version
           $msi = (Get-ChildItem 'release/msi/*.msi')[0].FullName
-          $log = Join-Path $env:TEMP 'env-manager-msi-smoke.log'
-          $install = Start-Process msiexec.exe -ArgumentList '/i', "`"$msi`"", '/qn', '/norestart', '/log', "`"$log`"" -Wait -PassThru
-          if ($install.ExitCode -ne 0) { Get-Content $log -Tail 40; throw "MSI install failed (exit $($install.ExitCode))" }
-          $installDir = 'C:\Program Files\Env Manager'
-          foreach ($f in @('env-manager.exe', 'env-manager-cli.exe')) {
-            if (-not (Test-Path (Join-Path $installDir $f))) { throw "Installed file missing: $f" }
-          }
-          $probe = & (Join-Path $installDir 'env-manager-cli.exe') 2>&1
-          if ($LASTEXITCODE -ne 0) { throw "Installed CLI probe failed: $probe" }
-          if (-not ("$probe" -match 'v\d+\.\d+\.\d+')) { throw "Installed CLI probe missing version banner: $probe" }
-          $uninstall = Start-Process msiexec.exe -ArgumentList '/x', "`"$msi`"", '/qn', '/norestart', '/log', "`"$log.uninstall.log`"" -Wait -PassThru
-          if ($uninstall.ExitCode -ne 0) { throw "MSI uninstall failed (exit $($uninstall.ExitCode))" }
-          if (Test-Path (Join-Path $installDir 'env-manager.exe')) { throw 'Uninstall left env-manager.exe behind' }
+          ./scripts/test-msi-upgrade-matrix.ps1 -CurrentMsi $msi -CurrentVersion $version -LogDir 'test-results/msi-upgrade'
+          exit $LASTEXITCODE
+
+      - name: Upload MSI smoke logs on failure
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: msi-clean-install-smoke-failure
+          path: test-results/msi-upgrade/
+          if-no-files-found: ignore
 
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
@@ -543,6 +550,135 @@ jobs:
             release/msi/*.msi.zip
             release/msi/*.msi.zip.sig
           if-no-files-found: error
+
+  # Silent MSI install/upgrade matrix. build-package covers the default-path
+  # clean install with the same script; this job covers the remaining cells:
+  # custom-path clean install, and default/custom-path upgrades from the
+  # newest published release strictly older than the current version. Each leg
+  # runs on a fresh runner, so the MSI's machine-state writes die with the VM;
+  # user-state writes are redirected.
+  msi-upgrade-matrix:
+    needs: build-package
+    runs-on: windows-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Step 1 + Step 3: current MSI on an empty machine, custom path.
+          - scenario: clean-custom-path
+            mode: clean
+            install_dir: 'C:\env-manager-upgrade-test'
+          # Step 1 + Step 2 + Step 3: published release -> current.
+          - scenario: upgrade-default
+            mode: upgrade
+            install_dir: ''
+          # Same upgrade with INSTALLDIR pointing outside Program Files.
+          - scenario: upgrade-custom-path
+            mode: upgrade
+            install_dir: 'C:\env-manager-upgrade-test'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Resolve the current version
+        shell: pwsh
+        run: |
+          $version = ([xml](Get-Content env-manager.csproj)).Project.PropertyGroup.Version
+          "CURRENT_VERSION=$version" | Add-Content $env:GITHUB_ENV
+
+      - name: Download the current MSI artifact
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
+        with:
+          name: env-manager-msi
+          path: artifacts/current
+
+      - name: Download the previous published release MSI
+        if: matrix.mode == 'upgrade'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Take the HIGHEST semver strictly older than the current version.
+          # Creation order alone would pick a late-published backport, and a
+          # same-version reinstall is not an upgrade.
+          $releaseJson = gh release list --exclude-drafts --exclude-pre-releases --limit 50 --json tagName
+          if ($LASTEXITCODE -ne 0) { throw "gh release list failed (exit $LASTEXITCODE)" }
+          $releases = @($releaseJson | ConvertFrom-Json)
+          $currentVersion = [version]$env:CURRENT_VERSION
+          $candidates = @(
+            foreach ($release in $releases) {
+              $match = [regex]::Match([string]$release.tagName, '^v(\d+\.\d+\.\d+)$')
+              if (-not $match.Success) { continue }
+              $version = [version]$match.Groups[1].Value
+              if ($version -lt $currentVersion) {
+                [pscustomobject]@{ Tag = [string]$release.tagName; Version = $version }
+              }
+            }
+          )
+          $previous = $candidates | Sort-Object -Property Version -Descending | Select-Object -First 1
+          if (-not $previous) { throw "no published release older than v$env:CURRENT_VERSION; cannot cover the upgrade path" }
+          "PREVIOUS_TAG=$($previous.Tag)" | Add-Content $env:GITHUB_ENV
+          New-Item -ItemType Directory -Force -Path artifacts/previous | Out-Null
+          gh release download $previous.Tag --pattern '*x64.msi' --dir artifacts/previous --clobber
+          if ($LASTEXITCODE -ne 0) { throw "release asset download failed for $($previous.Tag)" }
+
+      - name: Self-test the failure-action parser
+        shell: pwsh
+        run: ./scripts/test-msi-upgrade-matrix.ps1 -SelfTest
+
+      - name: Run silent install/upgrade/uninstall scenario
+        shell: pwsh
+        env:
+          # Redirect user-state writes from the installed CLI probe; machine
+          # state from the MSI dies with this disposable runner.
+          ENVMANAGER_LOCALAPPDATA: ${{ runner.temp }}\msi-upgrade-user-state
+        run: |
+          $currentMsis = @(Get-ChildItem artifacts/current -Recurse -Filter '*x64.msi')
+          if ($currentMsis.Count -ne 1) { throw "expected one x64 MSI in artifacts/current, found $($currentMsis.Count)" }
+          $scriptArgs = @{
+            Scenario = '${{ matrix.scenario }}'
+            CurrentMsi = $currentMsis[0].FullName
+            CurrentVersion = $env:CURRENT_VERSION
+            LogDir = 'test-results/msi-upgrade'
+          }
+          if ('${{ matrix.install_dir }}') { $scriptArgs.InstallDir = '${{ matrix.install_dir }}' }
+          if ('${{ matrix.mode }}' -eq 'upgrade') {
+            $previousMsis = @(Get-ChildItem artifacts/previous -Recurse -Filter '*x64.msi')
+            if ($previousMsis.Count -ne 1) { throw "expected one x64 MSI in artifacts/previous, found $($previousMsis.Count)" }
+            $scriptArgs.PreviousMsi = $previousMsis[0].FullName
+            $scriptArgs.PreviousVersion = $env:PREVIOUS_TAG -replace '^v', ''
+          }
+          ./scripts/test-msi-upgrade-matrix.ps1 @scriptArgs
+          exit $LASTEXITCODE
+
+      - name: Upload msiexec logs
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: msi-upgrade-${{ matrix.scenario }}
+          path: test-results/msi-upgrade/
+          if-no-files-found: ignore
+
+  # Required branch-protection check. A failed build or matrix must FAIL this
+  # job rather than skip it: branch protection treats a skipped required check
+  # as satisfied. `if: !cancelled()` lets the gate run after a failed
+  # dependency so it can fail on purpose; the gate step names the red job.
+  package:
+    if: ${{ !cancelled() }}
+    needs: [build-package, msi-upgrade-matrix]
+    runs-on: windows-latest
+    timeout-minutes: 5
+    steps:
+      - name: Require build and upgrade-matrix success
+        if: ${{ needs['build-package'].result != 'success' || needs['msi-upgrade-matrix'].result != 'success' }}
+        shell: pwsh
+        run: |
+          throw "package gate: build-package=${{ needs['build-package'].result }} msi-upgrade-matrix=${{ needs['msi-upgrade-matrix'].result }}"
+
+      - name: Gate passed
+        shell: pwsh
+        run: |
+          Write-Host 'package gate: build-package and msi-upgrade-matrix both succeeded'
 
   verify-arch:
     runs-on: windows-latest
