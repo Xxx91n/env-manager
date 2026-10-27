@@ -33,6 +33,14 @@ function Read-MsiLog {
     return @(Get-Content -LiteralPath $LogPath -ErrorAction SilentlyContinue)
 }
 
+function Test-VersionBanner {
+    param([string]$Banner, [string]$ExpectedVersion)
+    # Match the complete version token: a \b would also accept v0.12.1.1 for
+    # expected 0.12.1.
+    $match = [regex]::Match($Banner, 'Env Manager v([0-9]+(?:\.[0-9]+)+)')
+    return ($match.Success -and $match.Groups[1].Value -eq $ExpectedVersion)
+}
+
 function Get-MsiDiagnosis {
     param([string[]]$Lines = @(), [string]$LogPath = '')
     $logLines = @($Lines)
@@ -41,7 +49,9 @@ function Get-MsiDiagnosis {
     }
     $failures = @($logLines | Where-Object { $_ -match 'Return value 3\.' })
     if ($failures.Count -gt 0) {
-        $match = [regex]::Match([string]$failures[-1], 'Action ended [0-9:.]+: ([^.]+)\. Return value 3')
+        # The last Return value 3 is commonly the INSTALL wrapper; the first
+        # failure names the action that actually failed.
+        $match = [regex]::Match([string]$failures[0], 'Action ended [0-9:.]+: ([^.]+)\. Return value 3')
         if ($match.Success) { return $match.Groups[1].Value }
         return ([string]$failures[-1]).Trim()
     }
@@ -69,9 +79,18 @@ if ($SelfTest) {
         'Action ended 9:00:01: InstallValidate. Return value 1.',
         'Action start 9:00:02: StartServices.'
     )
+    $multiFailureLog = @(
+        'Action start 9:00:02: StartServices.',
+        'Action ended 9:00:05: StartServices. Return value 3.',
+        'Action start 9:00:05: INSTALL.',
+        'Action ended 9:00:06: INSTALL. Return value 3.'
+    )
     $emptyLog = @()
     $checks = @(
         @{ Name = 'Return value 3 names the action'; Actual = (Get-MsiDiagnosis -Lines $failedLog); Expected = 'StartServices' },
+        @{ Name = 'first failure wins over the INSTALL wrapper'; Actual = (Get-MsiDiagnosis -Lines $multiFailureLog); Expected = 'StartServices' },
+        @{ Name = 'exact banner version matches'; Actual = (Test-VersionBanner -Banner 'Env Manager v0.12.1' -ExpectedVersion '0.12.1'); Expected = $true },
+        @{ Name = 'longer banner version does not match'; Actual = (Test-VersionBanner -Banner 'Env Manager v0.12.1.1' -ExpectedVersion '0.12.1'); Expected = $false },
         @{ Name = 'clean log reports no failure'; Actual = (Get-MsiDiagnosis -Lines $cleanLog); Expected = 'no action information in the msiexec log' },
         @{ Name = 'killed log names the last action that started'; Actual = (Get-MsiDiagnosis -Lines $killedLog); Expected = 'last action started before the failure: Action start 9:00:02: StartServices.' },
         @{ Name = 'empty log reports no failure'; Actual = (Get-MsiDiagnosis -Lines $emptyLog); Expected = 'no action information in the msiexec log' }
@@ -208,8 +227,7 @@ function Assert-InstalledPayload {
     $cli = Join-Path $targetDir 'env-manager-cli.exe'
     $banner = & $cli 2>&1 | Out-String
     if ($LASTEXITCODE -ne 0) { throw "${Stage}: installed CLI exited $LASTEXITCODE" }
-    $pattern = 'Env Manager v' + [regex]::Escape($ExpectedVersion) + '\b'
-    if ($banner -notmatch $pattern) {
+    if (-not (Test-VersionBanner -Banner $banner -ExpectedVersion $ExpectedVersion)) {
         throw "${Stage}: installed CLI version does not match v$ExpectedVersion. Banner: $($banner.Trim())"
     }
     Write-Host "${Stage}: installed payload reports v$ExpectedVersion"
@@ -229,9 +247,10 @@ try {
         Invoke-SilentInstall -Stage 'Step 1: silent install (previous release)' -MsiPath $PreviousMsi -LogPath (Join-Path $LogDir 'step1-previous-install.log')
         Assert-ServicePresent -Stage 'Step 1'
         Assert-InstalledPayload -Stage 'Step 1' -ExpectedVersion $PreviousVersion
-        # Seed the legacy log path the old installer wrote to; the major
-        # upgrade removes the old product, whose LegacyLogsCleanup component
-        # must delete it.
+        # Seed the legacy log path the old installer wrote to. The cleanup
+        # component is shared across versions, so the old product's uninstall
+        # action is skipped; the current product's install-time RemoveFile must
+        # delete it during the upgrade.
         $legacyProbe = Join-Path (Join-Path $targetDir 'logs') 'upgrade-probe.log'
         New-Item -ItemType Directory -Force -Path (Split-Path -Parent $legacyProbe) | Out-Null
         Set-Content -LiteralPath $legacyProbe -Value 'legacy log probe' -Encoding utf8
