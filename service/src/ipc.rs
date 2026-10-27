@@ -387,7 +387,7 @@ mod tests {
                 { "name": "ok_ping", "payload": { "ok": true, "data": { "pong": true, "uptime_seconds": 3600 } } },
                 { "name": "ok_health", "payload": { "ok": true, "data": { "mounts": [
                     { "id": "vault-team", "provider": "vault-kv2", "name": "TEAM_TOKEN", "refreshPolicy": "Renew", "healthy": true, "lastFetchedAt": "2026-08-31T10:00:00+00:00", "lastRotatedAt": null, "message": null },
-                    { "id": "cred-app", "provider": "credential-manager", "name": "APP_KEY", "refreshPolicy": "CreatedOnce", "healthy": false, "message": "expired" }
+                    { "id": "cred-app", "provider": "credential-manager", "name": "APP_KEY", "refreshPolicy": "CreatedOnly", "healthy": false, "message": "expired" }
                 ] } } },
                 { "name": "ok_refresh", "payload": { "ok": true, "data": { "mountId": "vault-team", "refreshed": true, "lastFetchedAt": "2026-08-31T10:00:00+00:00" } } },
                 { "name": "ok_reload", "payload": { "ok": true, "data": { "reloaded": true } } },

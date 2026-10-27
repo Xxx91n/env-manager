@@ -13,7 +13,7 @@ The schema v2 unit in `secretMount.json`, referenced by id from `profiles.secret
 _Avoid_: mount point, secret reference, secret link
 
 **Mount Refresh Policy**:
-Field on a `SecretMount`. `Periodic` = the service refreshes on `refreshIntervalSeconds`; `CreatedOnce` = the service ignores it and the value is fetched on launch only. Default `CreatedOnce`.
+Field on a `SecretMount`. `Periodic` = the service refreshes on `refreshIntervalSeconds`; the fetch-on-launch policy is serialized as `CreatedOnly` (term: `CreatedOnce`) and the service ignores it, fetching the value on launch only. Default `CreatedOnly`.
 _Avoid_: refresh mode, lease mode
 
 **Provider**:
