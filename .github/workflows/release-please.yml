@@ -18,20 +18,13 @@ jobs:
       - uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7  # v5.0.0
         id: release
         with:
-          release-type: simple
-          package-name: env-manager
-          # (v0.12.0 release establishment): tags follow the repo
-          # convention vX.Y.Z (matches build.yml tags: ['v*'] and the v0.12.0
-          # tag), so disable the default env-manager-v component prefix. The
-          # manifest pins the released version; extra-files keep the version
-          # carriers the build.yml release job's version gate checks in
-          # lockstep with the manifest.
-          include-component-in-tag: false
+          # release-please reads release-please-config.json: release-type,
+          # plain vX.Y.Z tags (include-component-in-tag: false), and the
+          # extra-files that keep the three version carriers in lockstep with
+          # the manifest. Do not pass release-type inline: the action then
+          # builds an inline manifest and ignores the config file.
+          config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
-          extra-files: |
-            env-manager.csproj
-            frontend/src-tauri/tauri.conf.json
-            frontend/package.json
 
       # GITHUB_TOKEN-created tags emit no push event that can start another
       # workflow (GitHub's recursion guard), so build.yml's tag trigger never
