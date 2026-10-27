@@ -208,7 +208,9 @@ Remove-ItemProperty -Path 'HKCU:\Environment' -Name 'EM_TEST_DST'
 
 Any change to `frontend/scripts/installer.wxs` MUST pass this local 4-step silent msiexec proof before commit. Runs on the build machine; takes under 2 minutes total when green.
 
-CI covers the same sequence on every pull request, main push, and tag build: `build-package` runs the default-path clean install through `scripts/test-msi-upgrade-matrix.ps1`, and the `msi-upgrade-matrix` job in `.github/workflows/build.yml` runs the custom-path clean install plus both upgrade cells. The local steps remain the manual fallback for inspecting one specific MSI. CI replaces the one-time Step 0 red baseline with a 60-second bounded install timeout: a silent install that exceeds the runbook's hang threshold fails the scenario instead of waiting for the job timeout.
+The interactive wizard includes an **Optional Settings** page with a **Create a desktop shortcut** check box. It edits the same public `INSTALLDESKTOPSHORTCUT` property that silent installs pass on the command line: `1` is the default and `0` suppresses the shortcut. Step 1 below installs with the default and asserts the shortcut exists; the shortcut property check after Step 3 re-installs with `0` and asserts it is absent. Silent installs never render the page, so those two checks are what cover the property wiring on this runbook.
+
+CI covers the same install/upgrade/uninstall sequence on every pull request, main push, and tag build: `build-package` runs the default-path clean install through `scripts/test-msi-upgrade-matrix.ps1`, and the `msi-upgrade-matrix` job in `.github/workflows/build.yml` runs the custom-path clean install plus both upgrade cells. That sequence does not assert the desktop-shortcut property; the local checks above cover it. The local steps remain the manual fallback for inspecting one specific MSI. CI replaces the one-time Step 0 red baseline with a 60-second bounded install timeout: a silent install that exceeds the runbook's hang threshold fails the scenario instead of waiting for the job timeout.
 
 Prereqs: elevated shell; no env-manager process running (`Get-Process -Name 'env-manager*' | Stop-Process -Force`); WiX logs land in `%TEMP%`.
 
@@ -217,14 +219,18 @@ Prereqs: elevated shell; no env-manager process running (`Get-Process -Name 'env
 # Build the previous-tag MSI (e.g. v0.9.26 with the old installer.wxs) and run:
 $elapsed = Measure-Command { msiexec /i "<prev>.msi" /quiet /norestart /L*v "$env:TEMP\msi-prev-install.log" }
 if ($elapsed.TotalMilliseconds -gt 60000) { "BASELINE REPRODUCED (hang)" }   # expected for v0.9.26
+msiexec /x "<prev>.msi" /quiet /norestart  # leave a clean machine so Step 1's shortcut assertion is meaningful
+$LASTEXITCODE -eq 0
+Test-Path "$env:PUBLIC\Desktop\Env Manager.lnk"  # must be $false after the baseline uninstall
 
 # Step 1: silent install of the fixed MSI
 $msi = "release/msi/Env Manager_0.9.27_x64.msi"
 $elapsed = Measure-Command { msiexec /i $msi /quiet /norestart /L*v "$env:TEMP\msi-install.log" }
 $elapsed.TotalMilliseconds -lt 10000  # expect ~1.1s; must be green
 (Get-Service EnvManagerService).Status  # 'Stopped' is CORRECT (Start=auto -> next boot); 'Running' also acceptable
+Test-Path "$env:PUBLIC\Desktop\Env Manager.lnk"  # must be $true (default INSTALLDESKTOPSHORTCUT=1)
 
-# Step 2: silent upgrade over the previous version
+# Step 2: silent maintenance pass over the installed version (real upgrades are covered by CI)
 msiexec /i $msi /quiet /norestart /L*v "$env:TEMP\msi-upgrade.log"
 $LASTEXITCODE -eq 0
 
@@ -232,6 +238,13 @@ $LASTEXITCODE -eq 0
 msiexec /x $msi /quiet /norestart /L*v "$env:TEMP\msi-uninstall.log"
 $LASTEXITCODE -eq 0
 Get-Service EnvManagerService -ErrorAction SilentlyContinue  # must be $null (SCM entry removed)
+
+# Shortcut property check: a silent install honours INSTALLDESKTOPSHORTCUT=0
+msiexec /i $msi /quiet /norestart INSTALLDESKTOPSHORTCUT=0 /L*v "$env:TEMP\msi-no-shortcut.log"
+$LASTEXITCODE -eq 0
+Test-Path "$env:PUBLIC\Desktop\Env Manager.lnk"  # must be $false
+msiexec /x $msi /quiet /norestart /L*v "$env:TEMP\msi-no-shortcut-uninstall.log"
+$LASTEXITCODE -eq 0
 ```
 
 Failure triage: hang at `InstallFinalize` -> `StartServices` with lowest `ActionStart` op = service-start blocking regression (check `ServiceControl/@Start` is absent and `Wait="no"` in installer.wxs). Root cause is documented in the `ServiceInstall` comment in `installer.wxs`.

@@ -8,10 +8,14 @@
                   DowngradeErrorMessage="A newer version of Env Manager is already installed." />
     <MediaTemplate EmbedCab="yes" />
 
-    <!-- WixUI_InstallDir supplies a 4-dialog UI (Welcome, InstallDir, VerifyReady,
-         Finish) and INSTALLDESKTOPSHORTCUT (default 1) gates the desktop-shortcut component. -->
+    <!-- WixUI_InstallDir supplies the Welcome, License, InstallDir, VerifyReady and
+         Finish dialogs (License has an empty body because no RTF is configured).
+         The EnvManagerShortcutUI fragment adds the Optional Settings page that
+         exposes INSTALLDESKTOPSHORTCUT (default 1) as a check box; the public
+         property keeps working from the command line. -->
     <Property Id="WIXUI_INSTALLDIR" Value="INSTALLDIR" />
     <UIRef Id="WixUI_InstallDir" />
+    <UIRef Id="EnvManagerShortcutUI" />
     <UIRef Id="WixUI_ErrorProgressText" />
     <Icon Id="ProductIcon" SourceFile="$(var.IconPath)" />
     <Property Id="ARPPRODUCTICON" Value="ProductIcon" />
@@ -191,4 +195,46 @@
     </Feature>
 
   </Product>
+
+  <!-- WixUI extension dialogs cannot be redefined in the .wxs (light rejects the
+       duplicate Dialog symbol), so the shortcut option gets its own page instead of
+       a control on InstallDirDlg. Tying both layout and navigation to the shipped
+       WixUI_InstallDir set keeps the rest of the wizard intact. -->
+  <Fragment>
+    <UI Id="EnvManagerShortcutUI">
+      <Dialog Id="DesktopShortcutDlg" Width="370" Height="270" Title="!(loc.DesktopShortcutDlg_Title)">
+        <Control Id="Next" Type="PushButton" X="236" Y="243" Width="56" Height="17" Default="yes" Text="!(loc.WixUINext)" />
+        <Control Id="Back" Type="PushButton" X="180" Y="243" Width="56" Height="17" Text="!(loc.WixUIBack)" />
+        <Control Id="Cancel" Type="PushButton" X="304" Y="243" Width="56" Height="17" Cancel="yes" Text="!(loc.WixUICancel)">
+          <Publish Event="SpawnDialog" Value="CancelDlg">1</Publish>
+        </Control>
+        <Control Id="Description" Type="Text" X="25" Y="23" Width="280" Height="15" Transparent="yes" NoPrefix="yes" Text="!(loc.DesktopShortcutDlgDescription)" />
+        <Control Id="Title" Type="Text" X="15" Y="6" Width="200" Height="15" Transparent="yes" NoPrefix="yes" Text="!(loc.DesktopShortcutDlgTitle)" />
+        <Control Id="BannerBitmap" Type="Bitmap" X="0" Y="0" Width="370" Height="44" TabSkip="no" Text="!(loc.InstallDirDlgBannerBitmap)" />
+        <Control Id="BannerLine" Type="Line" X="0" Y="44" Width="370" Height="0" />
+        <Control Id="BottomLine" Type="Line" X="0" Y="234" Width="370" Height="0" />
+        <Control Id="OptionsText" Type="Text" X="20" Y="55" Width="320" Height="30" NoPrefix="yes" Text="!(loc.DesktopShortcutDlgOptionsText)" />
+        <Control Id="DesktopShortcutCheckBox" Type="CheckBox" X="20" Y="95" Width="320" Height="17"
+                 Property="INSTALLDESKTOPSHORTCUT" CheckBoxValue="1"
+                 Text="!(loc.DesktopShortcutDlgCheckBox)" />
+      </Dialog>
+
+      <!-- InstallDirDlg's built-in Next publishes verify the path and open
+           VerifyReadyDlg at Order 4 in WiX 3.14. Publish ordering is ascending and
+           the last NewDialog wins, so this page has to run after that transition. -->
+      <Publish Dialog="InstallDirDlg" Control="Next" Event="NewDialog" Value="DesktopShortcutDlg" Order="6">WIXUI_DONTVALIDATEPATH OR WIXUI_INSTALLDIR_VALID="1"</Publish>
+      <!-- MSI draws a check box as checked whenever its property is non-empty, so a
+           command-line INSTALLDESKTOPSHORTCUT=0 would otherwise show a checked box
+           while the component condition suppresses the shortcut. Clear the property
+           before the dialog is created; [WIXUI_EMPTY] is intentionally undefined. -->
+      <Publish Dialog="InstallDirDlg" Control="Next" Property="INSTALLDESKTOPSHORTCUT" Value="[WIXUI_EMPTY]" Order="5">INSTALLDESKTOPSHORTCUT = "0"</Publish>
+      <Publish Dialog="DesktopShortcutDlg" Control="Back" Event="NewDialog" Value="InstallDirDlg" Order="1">1</Publish>
+      <Publish Dialog="DesktopShortcutDlg" Control="Next" Event="NewDialog" Value="VerifyReadyDlg" Order="1">1</Publish>
+      <!-- VerifyReadyDlg's stock Back goes straight to InstallDirDlg on first
+           install; route it through this page so Back and Next walk the same
+           sequence. Published after the stock transition at Order 1. -->
+      <Publish Dialog="VerifyReadyDlg" Control="Back" Event="NewDialog" Value="DesktopShortcutDlg" Order="3">NOT Installed</Publish>
+    </UI>
+  </Fragment>
+
 </Wix>
