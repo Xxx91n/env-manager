@@ -7,6 +7,8 @@ on:
 permissions:
   contents: write
   pull-requests: write
+  # The tag → build.yml bridge below uses workflow_dispatch, which needs this.
+  actions: write
 
 jobs:
   release-please:
@@ -30,3 +32,18 @@ jobs:
             env-manager.csproj
             frontend/src-tauri/tauri.conf.json
             frontend/package.json
+
+      # GITHUB_TOKEN-created tags emit no push event that can start another
+      # workflow (GitHub's recursion guard), so build.yml's tag trigger never
+      # sees a release-please tag. workflow_dispatch is the documented
+      # exception. The dispatched run still sees github.ref=refs/tags/vX.Y.Z,
+      # so build.yml's version gate and release job apply.
+      - name: Dispatch build.yml for the new tag
+        if: ${{ !cancelled() && steps.release.outputs.release_created == 'true' }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ steps.release.outputs.tag_name }}
+        run: |
+          echo "release-please created $TAG; dispatching build.yml at the tag ref"
+          gh workflow run build.yml --ref "$TAG"
