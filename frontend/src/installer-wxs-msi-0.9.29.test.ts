@@ -30,8 +30,13 @@ describe('installer.wxs MSI UI (v0.9.29)', () => {
   it('includes DesktopShortcut in MainFeature', () => {
     expect(wxs).toContain('<ComponentRef Id="DesktopShortcut" />')
   })
-  it('does not fork the WixUI dialog set (uses built-in WixUI_InstallDir only)', () => {
-    expect(wxs).not.toMatch(/<UI Id=/)
+  it('keeps the built-in WixUI dialog set instead of redefining its dialogs', () => {
+    expect(wxs).toContain('<UIRef Id="WixUI_InstallDir" />')
+    expect(wxs).toContain('<UIRef Id="EnvManagerShortcutUI" />')
     expect(wxs).not.toContain('WixUILicenseRtf')
+    // A local Dialog with a stock id is a hard light.exe error (duplicate symbol).
+    expect(wxs).not.toMatch(/<Dialog Id="InstallDirDlg"/)
+    expect(wxs).not.toMatch(/<Dialog Id="VerifyReadyDlg"/)
+    expect(wxs).not.toMatch(/<Dialog Id="LicenseAgreementDlg"/)
   })
 })

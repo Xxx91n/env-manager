@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Project-owned strings for installer.wxs. The vendored WixUI_en-US.wxl supplies
+     the stock WixUI dialog text; keep project additions here. The MSI is built as
+     en-US only, so these do not participate in the GUI translation set. -->
+<WixLocalization Culture="en-US" Codepage="1252" xmlns="http://schemas.microsoft.com/wix/2006/localization">
+  <String Id="DesktopShortcutDlg_Title" Overridable="yes">[ProductName] Setup</String>
+  <String Id="DesktopShortcutDlgTitle" Overridable="yes">{\WixUI_Font_Title}Optional Settings</String>
+  <String Id="DesktopShortcutDlgDescription" Overridable="yes">Choose whether [ProductName] creates a desktop shortcut.</String>
+  <String Id="DesktopShortcutDlgOptionsText" Overridable="yes">The desktop shortcut is created by default. Clear the option below to install without one.</String>
+  <String Id="DesktopShortcutDlgCheckBox" Overridable="yes">Create a &amp;desktop shortcut</String>
+</WixLocalization>
