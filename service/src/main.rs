@@ -6,8 +6,14 @@
 
 use std::env;
 use std::path::PathBuf;
-use tokio_util::sync::CancellationToken;
 use std::sync::Arc;
+use std::time::Duration;
+use tokio_util::sync::CancellationToken;
+
+/// Budget for draining the task that is still running after one of them stops.
+/// Bounded together with `scm::RUNTIME_DRAIN` by `scm::STOP_WAIT_HINT_MS`, which is
+/// asserted at compile time.
+pub(crate) const SHUTDOWN_DRAIN: Duration = Duration::from_secs(2);
 
 mod reconcile;
 mod ipc;
@@ -16,6 +22,7 @@ mod audit_ledger;
 mod redaction;
 mod pipe_dacl;
 mod process_guard;
+mod scm;
 #[cfg(test)]
 mod resilience_tests;
 
@@ -100,9 +107,6 @@ tracing_subscriber::fmt()
 std::mem::forget(guard);
     tracing::info!("env-manager-service starting in {:?} mode", mode);
 
-    // Process hardening (WER, hash, debugger, modules, lock)
-    process_guard::init();
-
     // Entry guard (A7): refuse direct double-click launch with no --mode.
     // If interactive session and no --mode flag, print guidance and exit.
     if matches!(mode, RuntimeMode::Background) && !args.iter().any(|a| a.starts_with("--mode=")) {
@@ -113,6 +117,20 @@ std::mem::forget(guard);
         // Allow it but log a warning — background mode is user-launchable.
         tracing::info!("Background mode started by user (no --mode flag). This is acceptable for foreground GUI testing.");
     }
+
+    // Service mode joins the SCM control protocol on this (the process's initial)
+    // thread: StartServiceCtrlDispatcherW blocks there for the service's whole life and
+    // the SCM calls service_main -- which builds the tokio runtime -- on another thread
+    // (#149). The runtime below is only built for a launch the SCM did not initiate,
+    // i.e. a console `--mode=service` run used for debugging.
+    if matches!(mode, RuntimeMode::Service) && scm::dispatch() {
+        return;
+    }
+
+    // Process hardening (WER, hash, debugger, modules, lock). Service mode runs this
+    // inside service_main, after SERVICE_START_PENDING, and only reaches this line when
+    // the SCM did not launch the process.
+    process_guard::init();
 
     let rt = match tokio::runtime::Builder::new_multi_thread()
         .enable_all()
@@ -128,28 +146,19 @@ std::mem::forget(guard);
     rt.block_on(async {
         match mode {
             RuntimeMode::Service | RuntimeMode::Background => {
-                let pipe = mode.pipe_endpoint();
-                tracing::info!("IPC pipe: {}", pipe);
-
-                // CancellationToken for graceful shutdown — shared between IPC server
-                // and reconcile loop. When IPC receives "shutdown", it cancels the token,
-                // which signals both tasks to exit cleanly.
-                let shutdown_token = Arc::new(CancellationToken::new());
-                let ipc_token = shutdown_token.clone();
-                let reconcile_token = shutdown_token.clone();
-
-                let reconcile_handle = tokio::spawn(reconcile::reconcile_loop(reconcile_token));
-                // Service mode uses PIPE_FIRST_PIPE_INSTANCE (anti-squatting, SCM guarantees single instance).
-                // Background mode skips it: previous instance pipe handle may linger in OS kernel after shutdown,
-                // causing os error 5 "拒绝访问" on restart. v0.9.2 fix.
-                let use_fpi = matches!(mode, RuntimeMode::Service);
-                let ipc_handle = tokio::spawn(ipc::start_ipc_server(pipe, ipc_token, use_fpi));
-
-                tokio::select! {
-                    _ = reconcile_handle => tracing::warn!("reconcile loop exited"),
-                    _ = ipc_handle => tracing::warn!("IPC server exited"),
+                let shutdown = Arc::new(CancellationToken::new());
+                let exit = match mode {
+                    RuntimeMode::Service => {
+                        run_server(mode.pipe_endpoint(), shutdown, || true).await
+                    }
+                    _ => run_background_server(mode.pipe_endpoint(), shutdown).await,
+                };
+                match exit {
+                    ServerExit::Requested => {
+                        tracing::info!("service shutting down (all tasks exited)")
+                    }
+                    other => tracing::error!("server exited without a stop request: {:?}", other),
                 }
-                tracing::info!("service shutting down (all tasks exited)");
             }
             RuntimeMode::Cli => {
                 let pipe = mode.pipe_endpoint();
@@ -160,6 +169,110 @@ std::mem::forget(guard);
             }
         }
     });
+}
+
+/// Why the server body returned. Service mode maps this to a clean `SERVICE_STOPPED`
+/// or to a service error, so an unexpected exit is not reported as a healthy stop.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ServerExit {
+    /// The shutdown token was cancelled: an SCM STOP/SHUTDOWN, an IPC `shutdown`, or a test.
+    Requested,
+    /// The named-pipe listener could not be created, so nothing was served.
+    ListenFailed,
+    /// The IPC accept loop returned without a stop request.
+    IpcExited,
+    /// The reconcile loop returned without a stop request.
+    ReconcileExited,
+}
+
+/// Run the server body used by Service mode: listener, `SERVICE_RUNNING`, reconcile.
+///
+/// Ordering is a hard constraint (#149): the named-pipe listener is created first,
+/// `on_listening` fires the moment it exists, and only then does the reconcile loop
+/// start. Service mode reports `SERVICE_RUNNING` from `on_listening`, so any slow work
+/// moved ahead of that point brings back the boot-time 1053 failure. `on_listening`
+/// returns whether the listener was announced; a `false` means a stop is already
+/// pending and the body must not start working.
+pub async fn run_server(
+    pipe_name: &'static str,
+    shutdown: Arc<CancellationToken>,
+    on_listening: impl FnOnce() -> bool + Send,
+) -> ServerExit {
+    tracing::info!("IPC pipe: {}", pipe_name);
+
+    let first = match ipc::listen(pipe_name, true, &shutdown).await {
+        Ok(server) => server,
+        Err(e) => {
+            if shutdown.is_cancelled() {
+                return ServerExit::Requested;
+            }
+            tracing::error!("cannot create the IPC listener on {}: {}", pipe_name, e);
+            return ServerExit::ListenFailed;
+        }
+    };
+
+    // Listen -> report -> reconcile, in that order. Reporting RUNNING is skipped when a
+    // stop landed while the listener was being created: the SCM already has
+    // STOP_PENDING, and moving its state forward again would be wrong.
+    if !on_listening() {
+        return ServerExit::Requested;
+    }
+
+    let reconcile = tokio::spawn(reconcile::reconcile_loop(shutdown.clone()));
+    let ipc = tokio::spawn(ipc::serve(pipe_name, first, shutdown.clone()));
+    run_until_exit(reconcile, ipc, &shutdown).await
+}
+
+/// Run the server body used by Background mode. Keeps its historical order - reconcile
+/// starts immediately and the IPC server creates the pipe on its own, retrying a
+/// failure every 5s instead of ending the process - because the GUI owns the lifecycle
+/// there and a missing listener must not starve the reconcile loop.
+pub async fn run_background_server(
+    pipe_name: &'static str,
+    shutdown: Arc<CancellationToken>,
+) -> ServerExit {
+    tracing::info!("IPC pipe: {}", pipe_name);
+    let reconcile = tokio::spawn(reconcile::reconcile_loop(shutdown.clone()));
+    let ipc = tokio::spawn(ipc::start_ipc_server(pipe_name, shutdown.clone(), false));
+    run_until_exit(reconcile, ipc, &shutdown).await
+}
+
+/// Wait for either task to finish, then drain the other one under a bounded timeout,
+/// so the caller can report a stopped service knowing the pipe handle is closed.
+async fn run_until_exit(
+    mut reconcile: tokio::task::JoinHandle<()>,
+    mut ipc: tokio::task::JoinHandle<()>,
+    shutdown: &CancellationToken,
+) -> ServerExit {
+    let finished = tokio::select! {
+        _ = &mut reconcile => ServerExit::ReconcileExited,
+        _ = &mut ipc => ServerExit::IpcExited,
+    };
+
+    // Both loops only return on cancellation in normal operation, so a cancelled
+    // token means a stop request (SCM STOP/SHUTDOWN, IPC `shutdown`) rather than a
+    // failure of whichever task happened to be observed first.
+    let exit = if shutdown.is_cancelled() {
+        ServerExit::Requested
+    } else {
+        finished
+    };
+    match exit {
+        ServerExit::Requested => tracing::info!("shutdown requested, draining tasks"),
+        other => tracing::warn!("a server task exited on its own: {:?}", other),
+    }
+
+    // Drain the task that is still running. Which one finished first is a race, and
+    // re-polling a completed JoinHandle panics, so this keys off `finished`, not `exit`.
+    shutdown.cancel();
+    let pending = match finished {
+        ServerExit::ReconcileExited => &mut ipc,
+        _ => &mut reconcile,
+    };
+    if tokio::time::timeout(SHUTDOWN_DRAIN, pending).await.is_err() {
+        tracing::warn!("shutdown drain timed out after {:?}", SHUTDOWN_DRAIN);
+    }
+    exit
 }
 
 /// Resolve the secretMount.json path.
@@ -186,5 +299,100 @@ pub fn secret_mount_path() -> PathBuf {
             std::fs::create_dir_all(&dir).ok();
             dir.join("secretMount.json")
         }
+    }
+}
+
+#[cfg(test)]
+mod startup_contract_tests {
+    //! Startup ordering contract for the SCM control protocol (issue #149).
+    //!
+    //! The SCM RUNNING report hangs off `run_server`'s `on_listening` callback, so
+    //! two properties have to hold at that exact point: the named-pipe listener is
+    //! already connectable (otherwise the service reports Running while the GUI and
+    //! CLI still cannot reach it), and the reconcile loop has not started yet
+    //! (otherwise a slow first tick pushes the report past `ServicesPipeTimeout` and
+    //! start fails with 1053 again). Only the first property is observable from
+    //! outside; the second follows from the report firing before the spawns.
+    use super::*;
+    use std::sync::atomic::{AtomicBool, AtomicU8, Ordering};
+    use std::time::Duration;
+
+    /// Test-only pipe names so a run never collides with a real service instance.
+    const ORDER_PIPE: &str = r"\\.\pipe\EnvManager.TestScmOrdering";
+    const RELEASE_PIPE: &str = r"\\.\pipe\EnvManager.TestScmRelease";
+    const ERROR_FILE_NOT_FOUND: i32 = 2;
+
+    fn open(pipe: &str) -> std::io::Result<tokio::net::windows::named_pipe::NamedPipeClient> {
+        tokio::net::windows::named_pipe::ClientOptions::new().open(pipe)
+    }
+
+    /// Scenario: the RUNNING report point is reached only once the listener exists.
+    #[tokio::test]
+    async fn listener_is_connectable_when_the_running_report_fires() {
+        // 0 = callback not reached yet, 1 = reached but the pipe refused a client,
+        // 2 = reached and a client connected.
+        let observed = Arc::new(AtomicU8::new(0));
+        let writer = observed.clone();
+        let shutdown = Arc::new(CancellationToken::new());
+        let server = tokio::spawn(run_server(ORDER_PIPE, shutdown.clone(), move || {
+            let reachable = open(ORDER_PIPE).is_ok();
+            writer.store(if reachable { 2 } else { 1 }, Ordering::SeqCst);
+            true
+        }));
+        // Same polling budget as the resilience suite's wait_for_pipe.
+        for _ in 0..100 {
+            if observed.load(Ordering::SeqCst) != 0 {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(50)).await;
+        }
+        assert_eq!(
+            observed.load(Ordering::SeqCst),
+            2,
+            "the pipe listener must be connectable before the RUNNING report fires"
+        );
+
+        shutdown.cancel();
+        assert_eq!(
+            server.await.expect("server task"),
+            ServerExit::Requested,
+            "a shutdown request must be reported as Requested, not as a failure"
+        );
+    }
+
+    /// Scenario: `Stop-Service` semantics — after the server body returns, the pipe
+    /// instance is gone, so a restarted service (or an anti-squatting probe) can own
+    /// the name immediately instead of waiting for the kernel to reap the handle.
+    #[tokio::test]
+    async fn stopping_releases_the_pipe() {
+        let listening = Arc::new(AtomicBool::new(false));
+        let writer = listening.clone();
+        let shutdown = Arc::new(CancellationToken::new());
+        let server = tokio::spawn(run_server(RELEASE_PIPE, shutdown.clone(), move || {
+            writer.store(true, Ordering::SeqCst);
+            true
+        }));
+        for _ in 0..100 {
+            if listening.load(Ordering::SeqCst) {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(50)).await;
+        }
+        assert!(
+            listening.load(Ordering::SeqCst),
+            "the server body never reached the listener stage"
+        );
+
+        shutdown.cancel();
+        assert_eq!(server.await.expect("server task"), ServerExit::Requested);
+
+        let err = open(RELEASE_PIPE)
+            .err()
+            .expect("the pipe must be gone after stop");
+        assert_eq!(
+            err.raw_os_error(),
+            Some(ERROR_FILE_NOT_FOUND),
+            "expected the pipe name to be free after stop, got: {err}"
+        );
     }
 }

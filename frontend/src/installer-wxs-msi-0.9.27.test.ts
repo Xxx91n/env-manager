@@ -25,8 +25,10 @@ describe('installer.wxs v0.9.27 MSI hang-fix invariants', () => {
   })
 
   it('ServiceControl does not block install on service start (Start=install forbidden)', () => {
-    // Start="install" makes msiexec wait for a Running state the binary never reports
-    // (it has no StartServiceCtrlDispatcher), so the wait runs to ServicesPipeTimeout.
+    // Start="install" makes msiexec wait for a Running state during the transaction.
+    // The service does report Running (service/src/scm.rs joins the SCM control
+    // protocol), but the install must not depend on a live service: lifecycle is
+    // asserted by the runbook's Start-Service/Stop-Service steps instead.
     expect(wxs).not.toMatch(/<ServiceControl[^>]*Start="install"/)
   })
 

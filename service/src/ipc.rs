@@ -66,56 +66,138 @@ impl IpcResponse {
 // Phase 3: connection counter for leak diagnostics
 use std::sync::atomic::{AtomicU64, Ordering};
 static CONNECTION_COUNT: AtomicU64 = AtomicU64::new(0);
-pub async fn start_ipc_server(pipe_name: &str, shutdown: Arc<CancellationToken>, use_first_pipe_instance: bool) {
-    tracing::info!("IPC server listening on {}", pipe_name);
 
-    let mut first = true;
+/// Create one pipe instance. `first_pipe_instance` sets PIPE_FIRST_PIPE_INSTANCE.
+fn create_instance(pipe_name: &str, first_pipe_instance: bool) -> io::Result<NamedPipeServer> {
+    let mut options = tokio::net::windows::named_pipe::ServerOptions::new();
+    if first_pipe_instance {
+        options.first_pipe_instance(true);
+    }
+    options.create(pipe_name)
+}
+
+/// Wait out a retry delay. `false` means shutdown cancelled the wait first.
+async fn backoff(delay: Duration, shutdown: &CancellationToken) -> bool {
+    tokio::select! {
+        _ = tokio::time::sleep(delay) => true,
+        _ = shutdown.cancelled() => false,
+    }
+}
+
+/// Create the first listener, with retries, before anything is served.
+///
+/// The retry policy differs by mode on purpose:
+/// - Service mode (`first_pipe_instance = true`) keeps the anti-squatting flag and
+///   retries once, which absorbs a stale instance left by a predecessor that was
+///   stopped a moment ago. A second failure is returned to the caller: the process
+///   must not claim `SERVICE_RUNNING` without a listener (#149).
+/// - Background mode skips the flag (a previous instance's handle can linger in the
+///   kernel after shutdown, which makes the flag fail with os error 5 -- v0.9.2 fix)
+///   and retries every 5s indefinitely, as it always has.
+pub async fn listen(
+    pipe_name: &str,
+    first_pipe_instance: bool,
+    shutdown: &CancellationToken,
+) -> io::Result<NamedPipeServer> {
+    let mut attempts = 0u32;
+    loop {
+        match create_instance(pipe_name, first_pipe_instance) {
+            Ok(server) => {
+                if attempts == 0 && first_pipe_instance {
+                    tracing::info!("First pipe instance created (anti-squatting check passed)");
+                } else if attempts > 0 {
+                    tracing::info!("Pipe listener created after {} failed attempt(s)", attempts);
+                }
+                return Ok(server);
+            }
+            Err(e) => {
+                attempts += 1;
+                let delay = if first_pipe_instance {
+                    if attempts > 1 {
+                        tracing::error!(
+                            "Pipe creation failed after retry: {}. Service cannot start safely.",
+                            e
+                        );
+                        return Err(e);
+                    }
+                    tracing::warn!(
+                        "Pipe creation failed on first attempt: {}. Retrying in 1s...",
+                        e
+                    );
+                    Duration::from_secs(1)
+                } else {
+                    tracing::error!("Failed to create named pipe instance: {}", e);
+                    Duration::from_secs(5)
+                };
+                if !backoff(delay, shutdown).await {
+                    return Err(io::Error::new(
+                        io::ErrorKind::Interrupted,
+                        "shutdown requested while creating the pipe listener",
+                    ));
+                }
+            }
+        }
+    }
+}
+
+/// Serve an already-created listener. Used by Service mode, which reports
+/// `SERVICE_RUNNING` between `listen` and this call (#149).
+pub async fn serve(
+    pipe_name: &'static str,
+    first: NamedPipeServer,
+    shutdown: Arc<CancellationToken>,
+) {
+    accept_loop(pipe_name, shutdown, Some(first)).await;
+}
+
+/// `listen` + accept loop in one call, the shape the server had before Service mode
+/// needed to report `SERVICE_RUNNING` between the two steps. Background mode calls
+/// this directly (`crate::run_background_server`); Service mode calls `listen` and
+/// `serve` separately through `crate::run_server`.
+pub async fn start_ipc_server(
+    pipe_name: &'static str,
+    shutdown: Arc<CancellationToken>,
+    use_first_pipe_instance: bool,
+) {
+    tracing::info!("IPC server listening on {}", pipe_name);
+    let first = match listen(pipe_name, use_first_pipe_instance, &shutdown).await {
+        Ok(server) => server,
+        Err(e) => {
+            if !shutdown.is_cancelled() {
+                tracing::error!("IPC server cannot listen on {}: {}", pipe_name, e);
+            }
+            return;
+        }
+    };
+    accept_loop(pipe_name, shutdown, Some(first)).await;
+}
+
+/// Accept loop: serve `initial` first (when the caller already created the
+/// listener), then one fresh instance per connection.
+async fn accept_loop(
+    pipe_name: &'static str,
+    shutdown: Arc<CancellationToken>,
+    mut next: Option<NamedPipeServer>,
+) {
     loop {
         // Check shutdown before creating next pipe instance
         if shutdown.is_cancelled() {
             tracing::info!("IPC server cancelled, exiting");
             return;
         }
-        let server = if first && use_first_pipe_instance {
-            match tokio::net::windows::named_pipe::ServerOptions::new()
-                .first_pipe_instance(true)
-                .create(pipe_name)
-            {
-                Ok(s) => {
-                    first = false;
-                   tracing::info!("First pipe instance created (anti-squatting check passed)");
-                   s
-               }
-               Err(e) => {
-                   tracing::warn!("Pipe creation failed on first attempt: {}. Retrying in 1s...", e);
-                   tokio::time::sleep(Duration::from_secs(1)).await;
-                    match tokio::net::windows::named_pipe::ServerOptions::new()
-                        .first_pipe_instance(true)
-                        .create(pipe_name)
-                    {
-                        Ok(s) => {
-                            first = false;
-                            tracing::info!("First pipe instance created on retry (stale pipe cleared)");
-                            s
-                        }
-                        Err(e2) => {
-                            tracing::error!("Pipe creation failed after retry: {}. Service cannot start safely.", e2);
-                            return;
-                        }
-                    }
-                }
-           }
-       } else {
-            match tokio::net::windows::named_pipe::ServerOptions::new()
-                .create(pipe_name)
-            {
-                Ok(s) => s,
+        let server = match next.take() {
+            Some(server) => server,
+            None => match create_instance(pipe_name, false) {
+                Ok(server) => server,
                 Err(e) => {
                     tracing::error!("Failed to create named pipe instance: {}", e);
-                    tokio::time::sleep(Duration::from_secs(5)).await;
+                    if !backoff(Duration::from_secs(5), &shutdown).await {
+                        tracing::info!("IPC server cancelled while creating an instance, exiting");
+                        return;
+                    }
                     continue;
                 }
-            }
+            },
         };
 
         tokio::select! {

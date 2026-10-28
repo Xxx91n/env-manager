@@ -34,6 +34,11 @@ Invariants a change must not violate; where a test pins one, that check is the a
 - Rust IPC: command whitelist, max 64 args, max 32767 chars per arg, NUL and control characters rejected.
 - External provider processes get a fixed timeout, drained pipes before the wait, and a kill on timeout.
 
+## Service control (SCM)
+
+- `service/src/scm.rs` owns the control protocol: `StartServiceCtrlDispatcherW` runs once on the process's initial thread, `service_main` builds the tokio runtime on the SCM thread, and `run_server` creates the named-pipe listener, reports `SERVICE_RUNNING`, then starts the reconcile loop. Slow work moved ahead of the RUNNING report brings back the boot-time 1053 failure.
+- The stop path fits inside the wait hint the SCM was told: `SHUTDOWN_DRAIN` plus `RUNTIME_DRAIN` stay under `STOP_WAIT_HINT_MS`, asserted at compile time in `service/src/scm.rs`.
+
 ## Build and packaging
 
 - `<Version>` in `env-manager.csproj` is the single source; `scripts/build.mjs` syncs `frontend/package.json` and aborts on a CLI version mismatch.
