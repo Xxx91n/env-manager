@@ -4,6 +4,8 @@
 #   Step 0  hang baseline    -> a silent install that exceeds InstallTimeoutSeconds fails (default 60s, the runbook's hang threshold)
 #   Step 1  silent install   -> install the previous release (upgrade mode) or the current MSI (clean mode)
 #   Step 2  silent upgrade   -> install the current MSI over the previous release; a seeded legacy log must be cleaned up
+#           (clean mode)     -> force a repair (/fomus); the same seeded legacy log must survive
+#   Step 2b repair after upgrade -> /fomus on the upgraded product must leave a freshly seeded log alone
 #   Step 3  silent uninstall -> msiexec /x, then assert the service entry and binaries are gone
 #
 # A failure prints the msiexec action that reported "Return value 3" (or the last
@@ -187,12 +189,19 @@ function Invoke-MsiProcess {
     }
 }
 
+function Add-InstallDirOverride {
+    param([string[]]$MsiArgs, [string]$RequestedDir, [string]$ResolvedDir)
+    # Install and repair both act on the directory the cell asked for, so they share
+    # this one append. Uninstall deliberately does not use it: /x removes what is
+    # installed and must not be pointed at a directory.
+    if ([string]::IsNullOrWhiteSpace($RequestedDir)) { return $MsiArgs }
+    return ($MsiArgs + "INSTALLDIR=`"$ResolvedDir`"")
+}
+
 function Invoke-SilentInstall {
     param([string]$Stage, [string]$MsiPath, [string]$LogPath)
     $msiArgs = @('/i', "`"$MsiPath`"", '/quiet', '/norestart', '/L*v', "`"$LogPath`"")
-    if (-not [string]::IsNullOrWhiteSpace($InstallDir)) {
-        $msiArgs += "INSTALLDIR=`"$targetDir`""
-    }
+    $msiArgs = Add-InstallDirOverride -MsiArgs $msiArgs -RequestedDir $InstallDir -ResolvedDir $targetDir
     Invoke-MsiProcess -Stage $Stage -MsiArgs $msiArgs -LogPath $LogPath
 }
 
@@ -201,6 +210,19 @@ function Invoke-SilentUninstall {
     Stop-EnvManagerResidue
     $msiArgs = @('/x', "`"$MsiPath`"", '/quiet', '/norestart', '/L*v', "`"$LogPath`"")
     Invoke-MsiProcess -Stage 'Step 3: silent uninstall' -MsiArgs $msiArgs -LogPath $LogPath
+}
+
+function Invoke-SilentRepair {
+    param([string]$MsiPath, [string]$LogPath)
+    # /fomus reinstalls files (o), rewrites every machine and user registry entry
+    # (m, u) and reinstalls shortcuts (s). The registry rewrite is what gives this
+    # assertion teeth: it puts the LogsDir components into the install state, so a
+    # component that still carried an install-time RemoveFile would delete the
+    # seeded log here. Without it the repair would skip those components and the
+    # assertion would pass on an installer that still deletes the file.
+    $msiArgs = @('/fomus', "`"$MsiPath`"", '/quiet', '/norestart', '/L*v', "`"$LogPath`"")
+    $msiArgs = Add-InstallDirOverride -MsiArgs $msiArgs -RequestedDir $InstallDir -ResolvedDir $targetDir
+    Invoke-MsiProcess -Stage 'Step 2: forced repair (/fomus)' -MsiArgs $msiArgs -LogPath $LogPath
 }
 
 function Assert-ServicePresent {
@@ -249,22 +271,31 @@ try {
         Assert-InstalledPayload -Stage 'Step 1' -ExpectedVersion $PreviousVersion
         # Seed the legacy log path the old installer wrote to. The cleanup
         # component is shared across versions, so the old product's uninstall
-        # action is skipped; the current product's install-time RemoveFile must
-        # delete it during the upgrade.
+        # action is skipped; the current product's upgrade-only cleanup action
+        # must delete it during the upgrade.
         $legacyProbe = Join-Path (Join-Path $targetDir 'logs') 'upgrade-probe.log'
         New-Item -ItemType Directory -Force -Path (Split-Path -Parent $legacyProbe) | Out-Null
         Set-Content -LiteralPath $legacyProbe -Value 'legacy log probe' -Encoding utf8
-        Write-Host "Step 2: seeded $legacyProbe to prove LegacyLogsCleanup runs"
+        Write-Host "Step 2: seeded $legacyProbe to prove the upgrade cleanup runs"
         Invoke-SilentInstall -Stage 'Step 2: silent upgrade (current over previous)' -MsiPath $CurrentMsi -LogPath (Join-Path $LogDir 'step2-current-upgrade.log')
         Assert-ServicePresent -Stage 'Step 2'
         Assert-InstalledPayload -Stage 'Step 2' -ExpectedVersion $CurrentVersion
         if (Test-Path -LiteralPath $legacyProbe) {
-            throw "Step 2: LegacyLogsCleanup left $legacyProbe after the major upgrade"
+            throw "Step 2: the upgrade cleanup left $legacyProbe after the major upgrade"
         }
-        Write-Host 'Step 2: LegacyLogsCleanup removed the seeded legacy log'
+        Write-Host 'Step 2: the upgrade cleanup removed the seeded legacy log'
+        # The cleanup gate has to hold after the upgrade installed the cleanup path:
+        # a repair on an upgraded machine must leave an unrelated log alone. A
+        # component-conditioned RemoveFile fails here, because the repair replays it.
         New-Item -ItemType Directory -Force -Path (Split-Path -Parent $legacyProbe) | Out-Null
-        Set-Content -LiteralPath $legacyProbe -Value 'current uninstall probe' -Encoding utf8
-        Write-Host 'Step 3: re-seeded the legacy log to prove the current product removes it on uninstall'
+        Set-Content -LiteralPath $legacyProbe -Value 'post-upgrade repair probe' -Encoding utf8
+        Write-Host "Step 2b: seeded $legacyProbe to prove a repair after the upgrade leaves it alone"
+        Invoke-SilentRepair -MsiPath $CurrentMsi -LogPath (Join-Path $LogDir 'step2b-current-repair.log')
+        if (-not (Test-Path -LiteralPath $legacyProbe)) {
+            throw "Step 2b: a repair after the upgrade deleted $legacyProbe; the cleanup gate must not depend on the component being installed"
+        }
+        Write-Host 'Step 2b: the repair after the upgrade left the seeded log alone'
+        Write-Host 'Step 3: the same seeded log must now be removed by the product uninstall'
         Invoke-SilentUninstall -MsiPath $CurrentMsi -LogPath (Join-Path $LogDir 'step3-uninstall.log')
         if (Test-Path -LiteralPath $legacyProbe) {
             throw "Step 3: LegacyLogsCleanup left $legacyProbe after uninstall"
@@ -276,10 +307,21 @@ try {
         Invoke-SilentInstall -Stage 'Step 1: silent install (current)' -MsiPath $CurrentMsi -LogPath (Join-Path $LogDir 'step1-current-install.log')
         Assert-ServicePresent -Stage 'Step 1'
         Assert-InstalledPayload -Stage 'Step 1' -ExpectedVersion $CurrentVersion
+        # The repair is the widest maintenance pass on a product that was never
+        # upgraded, so it is where an unconditional install-time cleanup would still
+        # show up. A clean install on an empty machine has no unrelated file to lose.
+        # The probe is the same file name the upgrade leg seeds, so the two legs
+        # disagree only in the expectation.
         $legacyProbe = Join-Path (Join-Path $targetDir 'logs') 'upgrade-probe.log'
         New-Item -ItemType Directory -Force -Path (Split-Path -Parent $legacyProbe) | Out-Null
-        Set-Content -LiteralPath $legacyProbe -Value 'current uninstall probe' -Encoding utf8
-        Write-Host "Step 3: seeded $legacyProbe to prove the current product removes it on uninstall"
+        Set-Content -LiteralPath $legacyProbe -Value 'repair probe' -Encoding utf8
+        Write-Host "Step 2: seeded $legacyProbe to prove a repair does not run the install-time cleanup"
+        Invoke-SilentRepair -MsiPath $CurrentMsi -LogPath (Join-Path $LogDir 'step2-current-repair.log')
+        if (-not (Test-Path -LiteralPath $legacyProbe)) {
+            throw "Step 2: the forced repair deleted $legacyProbe; the install-time cleanup must only run on an upgrade"
+        }
+        Write-Host 'Step 2: the forced repair left the seeded log alone'
+        Write-Host 'Step 3: the same seeded log must now be removed by the product uninstall'
         Invoke-SilentUninstall -MsiPath $CurrentMsi -LogPath (Join-Path $LogDir 'step3-uninstall.log')
         if (Test-Path -LiteralPath $legacyProbe) {
             throw "Step 3: LegacyLogsCleanup left $legacyProbe after uninstall"

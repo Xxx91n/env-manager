@@ -509,7 +509,7 @@ jobs:
       # Default-path clean install cell of the matrix. It runs here, before the
       # artifacts upload, through the same script as the matrix legs so there is
       # one installation implementation and one exact-version assertion.
-      - name: MSI clean install/uninstall smoke test
+      - name: MSI clean install/repair/uninstall smoke test
         shell: pwsh
         env:
           # Keep the installed CLI probe out of the runner's real profile.
@@ -572,7 +572,8 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # Step 1 + Step 3: current MSI on an empty machine, custom path.
+          # Step 1 + Step 2 (forced repair, which must not clean logs) + Step 3:
+          # current MSI on an empty machine, custom path.
           - scenario: clean-custom-path
             mode: clean
             install_dir: 'C:\env-manager-upgrade-test'
