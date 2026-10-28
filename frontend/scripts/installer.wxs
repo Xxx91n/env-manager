@@ -180,10 +180,11 @@
            pass. Conditioning on WIX_UPGRADE_DETECTED keeps it off the clean-install
            and repair paths, where the wildcard would delete unrelated files a user
            put in INSTALLDIR\logs. Key path is a registry value, the same shape as
-           StopOldServiceOnUpgrade above. -->
+           StopOldServiceOnUpgrade above. No CreateFolder here: LogsDir already
+           belongs to the component above, and the CreateFolder table is keyed on
+           the directory, so a second row for it would be a duplicate key. -->
       <Component Id="LegacyLogsCleanupOnUpgrade" Guid="*" Win64="$(var.Win64)">
         <Condition>WIX_UPGRADE_DETECTED</Condition>
-        <CreateFolder />
         <RegistryValue Root="HKLM" Key="Software\EnvManager" Name="LegacyLogsCleanupOnUpgrade"
                        Type="integer" Value="1" KeyPath="yes" />
         <RemoveFile Id="RemoveLegacyLogsFilesOnUpgrade" Name="*.log*" On="install" />

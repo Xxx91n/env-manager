@@ -509,7 +509,7 @@ jobs:
       # Default-path clean install cell of the matrix. It runs here, before the
       # artifacts upload, through the same script as the matrix legs so there is
       # one installation implementation and one exact-version assertion.
-      - name: MSI clean install/uninstall smoke test
+      - name: MSI clean install/repair/uninstall smoke test
         shell: pwsh
         env:
           # Keep the installed CLI probe out of the runner's real profile.

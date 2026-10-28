@@ -25,7 +25,8 @@ describe('installer.wxs v0.9.27 MSI hang-fix invariants', () => {
   })
 
   it('ServiceControl does not block install on service start (Start=install forbidden)', () => {
-    // Any <ServiceControl ... Start="install" ...> re-creates the 30s SCM handshake hang.
+    // Start="install" makes msiexec wait for a Running state the binary never reports
+    // (it has no StartServiceCtrlDispatcher), so the wait runs to ServicesPipeTimeout.
     expect(wxs).not.toMatch(/<ServiceControl[^>]*Start="install"/)
   })
 
