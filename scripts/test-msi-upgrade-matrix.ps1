@@ -27,10 +27,11 @@
 # the process exits first). That case is recorded as an explicit skip - naming the SCM error
 # and the missing import - in the uploaded log directory and in the run's job summary. A
 # skip requires a determinate cause: a failure this script cannot name, or the same symptom
-# from a binary that does carry the import, is a red. The clause does not extend to the new
-# build - it was built from this tree and must carry the protocol, so its start is a hard
-# assertion. That start is also the half of this coverage that is reachable now: a
-# replacement that cannot run is not a replacement.
+# from a binary that does carry the import, is a red. The skip does not extend to the new
+# build - it was built from this tree and must carry the protocol - with the one exception
+# the ticket names: a runner that denies the start applies to any binary, so it is recorded
+# as a skip there too. That post-upgrade start is also the half of this coverage that is
+# reachable now: a replacement that cannot run is not a replacement.
 #
 # One upgrade cell installs the previous release somewhere other than the cell's own
 # INSTALLDIR: the product default first, a custom directory second. The two
@@ -180,44 +181,55 @@ function Get-ServiceStartVerdict {
     #   skip   - the binary or the runner cannot run it here, and the cause is
     #            determinate enough to name in the uploaded log;
     #   fail   - there is no determinate cause, so the coverage must not be dropped.
-    # -ExpectsProtocol marks a binary that carries the SCM control protocol: for that
-    # binary the two protocol-blind symptoms below are regressions, for the other they are
-    # the expected answer. The caller reads it from the binary (see
-    # Test-BinaryCarriesServiceProtocol), so the skip states a checked fact rather than an
+    # -ExpectsProtocol marks a binary the harness requires to run: a binary built from this
+    # tree. For it every determinate failure is a red, because the harness has to be able to
+    # start what it just built; for an installed release that may predate the SCM control
+    # protocol it is the expected answer and therefore a skip. Access denied is the one code
+    # that is a property of the runner rather than the binary, so it skips either way.
+    # The caller reads -ExpectsProtocol from the binary (see
+    # Test-BinaryCarriesServiceProtocol), so a skip states a checked fact rather than an
     # assumption about which release is current.
     # Declared here, not beside its callers, because the -SelfTest block below calls it
     # and PowerShell only sees a function after its definition.
     param([bool]$ReachedRunning, [int]$Win32Error, [switch]$ExpectsProtocol)
     if ($ReachedRunning) { return [pscustomobject]@{ Verdict = 'active'; Reason = '' } }
-    $protocolBlindSymptoms = @{
+    if ($Win32Error -eq 5) {
+        return [pscustomobject]@{
+            Verdict = 'skip'
+            Reason = 'the SCM refused the start with 5 (access denied), so this runner cannot start services'
+        }
+    }
+    # 1053 and 1067 are what a binary without StartServiceCtrlDispatcherW produces; the
+    # registration codes are properties of the installed release. Both groups are the
+    # installed release's limit, so both skip - unless the binary is the one just built.
+    $protocolBlind = @{
         1053 = 'the SCM stopped waiting for a SERVICE_RUNNING report at ServicesPipeTimeout and failed the start with 1053'
         1067 = 'the process exited before reporting SERVICE_RUNNING, and the SCM answered 1067'
     }
-    if ($protocolBlindSymptoms.ContainsKey($Win32Error)) {
-        if ($ExpectsProtocol) {
-            return [pscustomobject]@{
-                Verdict = 'fail'
-                Reason = ('{0}; this binary carries StartServiceCtrlDispatcherW, so that is the regression the SCM control protocol exists to prevent' -f $protocolBlindSymptoms[$Win32Error])
-            }
-        }
+    $registrationLimits = @{
+        1058 = 'the SCM refused the start with 1058: the service is disabled'
+        1069 = 'the SCM refused the start with 1069: the service failed to log on'
+        1075 = 'the SCM refused the start with 1075: a service dependency is missing'
+    }
+    if (-not ($protocolBlind.ContainsKey($Win32Error) -or $registrationLimits.ContainsKey($Win32Error))) {
+        return [pscustomobject]@{ Verdict = 'fail'; Reason = '' }
+    }
+    $symptom = if ($protocolBlind.ContainsKey($Win32Error)) { $protocolBlind[$Win32Error] } else { $registrationLimits[$Win32Error] }
+    if ($ExpectsProtocol) {
         return [pscustomobject]@{
-            Verdict = 'skip'
-            Reason = ('{0}; the installed binary does not carry StartServiceCtrlDispatcherW, so it cannot answer the SCM' -f $protocolBlindSymptoms[$Win32Error])
+            Verdict = 'fail'
+            Reason = ('{0}; the harness requires the binary it just built to start, so this is not skippable' -f $symptom)
         }
     }
-    switch ($Win32Error) {
-        5 {
-            return [pscustomobject]@{
-                Verdict = 'skip'
-                Reason = 'the SCM refused the start with 5 (access denied), so this runner cannot start services'
-            }
-        }
-        1058 { return [pscustomobject]@{ Verdict = 'skip'; Reason = 'the SCM refused the start with 1058: the service is disabled' } }
-        1069 { return [pscustomobject]@{ Verdict = 'skip'; Reason = 'the SCM refused the start with 1069: the service failed to log on' } }
-        1075 { return [pscustomobject]@{ Verdict = 'skip'; Reason = 'the SCM refused the start with 1075: a service dependency is missing' } }
-        default {
-            return [pscustomobject]@{ Verdict = 'fail'; Reason = '' }
-        }
+    $evidence = if ($protocolBlind.ContainsKey($Win32Error)) {
+        'the installed binary does not carry StartServiceCtrlDispatcherW, so it cannot answer the SCM'
+    }
+    else {
+        'the installed release cannot be started as it was installed'
+    }
+    return [pscustomobject]@{
+        Verdict = 'skip'
+        Reason = ('{0}; {1}' -f $symptom, $evidence)
     }
 }
 
@@ -264,11 +276,22 @@ if ($SelfTest) {
     catch { $spacedBareRefusal = $_.Exception.Message }
     # The protocol probe decides which verdict a 1053 lands in, so a probe that always
     # answered "no" would keep every matrix cell green - the failure mode this whole ticket
-    # is about. Both directions are planted in files that are deleted again below.
+    # is about. Both directions are planted in temp files, read here, and removed in the
+    # finally even when a read throws: a leftover .bin in %TEMP% is not a failure anyone
+    # would connect back to this run.
     $protocolProbe = Join-Path ([System.IO.Path]::GetTempPath()) ('env-manager-protocol-probe-' + [guid]::NewGuid().ToString('N') + '.bin')
     $noProtocolProbe = Join-Path ([System.IO.Path]::GetTempPath()) ('env-manager-noprotocol-probe-' + [guid]::NewGuid().ToString('N') + '.bin')
-    [System.IO.File]::WriteAllBytes($protocolProbe, [System.Text.Encoding]::ASCII.GetBytes('junk StartServiceCtrlDispatcherW junk'))
-    [System.IO.File]::WriteAllBytes($noProtocolProbe, [System.Text.Encoding]::ASCII.GetBytes('junk SetServiceStatus RegisterServiceCtrlHandlerExW junk'))
+    $protocolProbeReads = $null
+    $noProtocolProbeReads = $null
+    try {
+        [System.IO.File]::WriteAllBytes($protocolProbe, [System.Text.Encoding]::ASCII.GetBytes('junk StartServiceCtrlDispatcherW junk'))
+        [System.IO.File]::WriteAllBytes($noProtocolProbe, [System.Text.Encoding]::ASCII.GetBytes('junk SetServiceStatus RegisterServiceCtrlHandlerExW junk'))
+        $protocolProbeReads = Test-BinaryCarriesServiceProtocol -Path $protocolProbe
+        $noProtocolProbeReads = Test-BinaryCarriesServiceProtocol -Path $noProtocolProbe
+    }
+    finally {
+        Remove-Item -LiteralPath $protocolProbe, $noProtocolProbe -Force -ErrorAction SilentlyContinue
+    }
     $checks = @(
         @{ Name = 'Return value 3 names the action'; Actual = (Get-MsiDiagnosis -Lines $failedLog); Expected = 'StartServices' },
         @{ Name = 'first failure wins over the INSTALL wrapper'; Actual = (Get-MsiDiagnosis -Lines $multiFailureLog); Expected = 'StartServices' },
@@ -287,7 +310,7 @@ if ($SelfTest) {
         # carries the protocol is a regression, and a failure with no nameable cause is
         # never a skip. All three verdicts and both readings of the protocol probe are
         # planted here, because a policy that only ever produced "skip" would pass while
-        # turning every unexplained failure green - which is what the matrix does today.
+        # turning every unexplained failure green.
         @{ Name = 'a running service arms the upgrade assertions'; Actual = (Get-ServiceStartVerdict -ReachedRunning $true -Win32Error 0).Verdict; Expected = 'active' },
         @{ Name = '1053 without the protocol is a recorded skip'; Actual = (Get-ServiceStartVerdict -ReachedRunning $false -Win32Error 1053).Verdict; Expected = 'skip' },
         @{ Name = 'the skip names the SCM error it saw'; Actual = ((Get-ServiceStartVerdict -ReachedRunning $false -Win32Error 1053).Reason -like '*1053*'); Expected = $true },
@@ -295,13 +318,16 @@ if ($SelfTest) {
         @{ Name = '1067 without the protocol is a recorded skip'; Actual = (Get-ServiceStartVerdict -ReachedRunning $false -Win32Error 1067).Verdict; Expected = 'skip' },
         @{ Name = '1067 with the protocol is a failure'; Actual = (Get-ServiceStartVerdict -ReachedRunning $false -Win32Error 1067 -ExpectsProtocol).Verdict; Expected = 'fail' },
         @{ Name = 'a disabled service is a recorded skip'; Actual = (Get-ServiceStartVerdict -ReachedRunning $false -Win32Error 1058).Verdict; Expected = 'skip' },
+        @{ Name = 'a disabled service the harness must run is a failure'; Actual = (Get-ServiceStartVerdict -ReachedRunning $false -Win32Error 1058 -ExpectsProtocol).Verdict; Expected = 'fail' },
+        @{ Name = 'a logon failure is a recorded skip'; Actual = (Get-ServiceStartVerdict -ReachedRunning $false -Win32Error 1069).Verdict; Expected = 'skip' },
+        @{ Name = 'a missing dependency is a recorded skip'; Actual = (Get-ServiceStartVerdict -ReachedRunning $false -Win32Error 1075).Verdict; Expected = 'skip' },
         @{ Name = 'access denied is a runner limit, skipped'; Actual = (Get-ServiceStartVerdict -ReachedRunning $false -Win32Error 5).Verdict; Expected = 'skip' },
+        @{ Name = 'access denied skips even for the binary just built'; Actual = (Get-ServiceStartVerdict -ReachedRunning $false -Win32Error 5 -ExpectsProtocol).Verdict; Expected = 'skip' },
         @{ Name = 'an unexplained start failure is never skipped'; Actual = (Get-ServiceStartVerdict -ReachedRunning $false -Win32Error 87).Verdict; Expected = 'fail' },
         @{ Name = 'the failure verdict carries no skip reason'; Actual = ((Get-ServiceStartVerdict -ReachedRunning $false -Win32Error 87).Reason -eq ''); Expected = $true },
-        @{ Name = 'a binary importing the dispatcher is read as protocol-capable'; Actual = (Test-BinaryCarriesServiceProtocol -Path $protocolProbe); Expected = $true },
-        @{ Name = 'a binary without the import is read as protocol-blind'; Actual = (Test-BinaryCarriesServiceProtocol -Path $noProtocolProbe); Expected = $false }
+        @{ Name = 'a binary importing the dispatcher is read as protocol-capable'; Actual = $protocolProbeReads; Expected = $true },
+        @{ Name = 'a binary without the import is read as protocol-blind'; Actual = $noProtocolProbeReads; Expected = $false }
     )
-    Remove-Item -LiteralPath $protocolProbe, $noProtocolProbe -Force -ErrorAction SilentlyContinue
     $bad = 0
     foreach ($check in $checks) {
         if ($check.Actual -eq $check.Expected) {
@@ -697,7 +723,6 @@ public static class EnvManagerServiceControl
         Detail = ''
         ProcessId = [int]$processId
         ProcessStartTime = $startTime
-        BinaryPath = $runningImage
         BinaryHash = (Get-FileHash -LiteralPath $runningImage -Algorithm SHA256).Hash
     }
 }
@@ -745,13 +770,19 @@ function Assert-ServiceStopped {
 }
 
 function Assert-ServiceStartsAndStops {
-    # The new build's own start, after the upgrade replaced the old service. This is a hard
-    # assertion, not a skippable one: the binary was built from this tree, which carries the
-    # SCM control protocol, so a 1053 here is the regression issue #148 exists to prevent.
-    param([string]$Stage, [string]$BinaryPath)
+    # The new build's own start, after the upgrade replaced the old service. Failure here is
+    # a red, with one exception the ticket names: when the runner itself cannot start
+    # services (access denied), which applies to any binary and cannot be fixed by a change
+    # here - that case is recorded as a skip, exactly as the previous release's is, instead
+    # of turning a runner limit into a red that reads like a regression.
+    param([string]$Stage, [string]$BinaryPath, [string]$SkipRecordPath, [string]$Scenario)
     $outcome = Invoke-ServiceStart -Stage $Stage -BinaryPath $BinaryPath
     if (-not $outcome.ReachedRunning) {
         $verdict = Get-ServiceStartVerdict -ReachedRunning $outcome.ReachedRunning -Win32Error $outcome.Win32Error -ExpectsProtocol
+        if ($verdict.Verdict -eq 'skip') {
+            Write-ServiceStartSkip -Stage $Stage -Reason $verdict.Reason -Detail $outcome.Detail -RecordPath $SkipRecordPath -Scenario $Scenario
+            return
+        }
         $reason = if ([string]::IsNullOrWhiteSpace($verdict.Reason)) { 'this script cannot name a cause for it' } else { $verdict.Reason }
         throw "${Stage}: the upgraded service did not reach Running - $($outcome.Detail); $reason"
     }
@@ -938,7 +969,7 @@ try {
         # A replacement that cannot run is not a replacement, and this start is the half of
         # the running-old-service coverage that is reachable while no published release
         # carries the SCM control protocol.
-        Assert-ServiceStartsAndStops -Stage 'Step 2: start the upgraded service' -BinaryPath $serviceBinary
+        Assert-ServiceStartsAndStops -Stage 'Step 2: start the upgraded service' -BinaryPath $serviceBinary -SkipRecordPath $skipRecord -Scenario $Scenario
         # The cleanup gate has to hold after the upgrade installed the cleanup path:
         # a repair on an upgraded machine must leave an unrelated log alone. A
         # component-conditioned RemoveFile fails here, because the repair replays it.
