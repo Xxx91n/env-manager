@@ -18,8 +18,26 @@
 # executable path inside the current install directory, that file on disk - and the one
 # fact an entry cannot show: a service that was Running before the upgrade is Stopped
 # after it, its process is gone, and the binary it held open was replaced rather than
-# left for a reboot. They start EnvManagerService after the previous install and carry
-# it into the upgrade.
+# left for a reboot - or, in the migration cell, gone from the directory it ran from
+# while the new install directory holds one. They start EnvManagerService after the
+# previous install and carry it into the upgrade.
+#
+# One upgrade cell installs the previous release somewhere other than the cell's own
+# INSTALLDIR: the product default first, a custom directory second. The two
+# same-directory cells cannot show an install-directory move at all, because there the
+# previous directory is the current one by construction; in this cell "the entry follows
+# the new directory" and "the upgrade wrote the old directory back" are finally different
+# facts, and one fact a service entry cannot show joins them - the directory the product
+# migrated off holds no executable from the previous release, so anything still naming it
+# resolves to nothing. Its two log probes take opposite expectations for that reason: the
+# probe in the new directory must be deleted by the upgrade-time cleanup, because deleting
+# a log there is what proves the cleanup follows INSTALLDIR instead of the default path -
+# which in this cell is exactly where the previous release lives - while the probe in the
+# migrated-off directory must survive, because the cleanup never runs against that
+# directory and the previous product's cleanup component is skipped as shared. The
+# executables in that directory leave for a different reason (the new install moves their
+# components), so the pair distinguishes "the cleanup stayed put" from "the directory was
+# emptied anyway" - a distinction the same-directory cells cannot draw.
 #
 # Whether that start can succeed is read from the installed binary, not assumed from the
 # release's age: a binary that does not carry StartServiceCtrlDispatcherW (service/src/scm.rs)
@@ -822,8 +840,12 @@ function Assert-OldServiceStoppedAndReplaced {
     # What the upgrade owes a service that was running: stop it, then replace the binary it
     # held open. Presence and a correct ImagePath show neither - the entry can point at the
     # right path while the old image still runs and the file swap waits for a reboot, which
-    # is the failure mode a shared component GUID produces.
-    param([string]$Stage, $Before, [string]$BinaryPath)
+    # is the failure mode a shared component GUID produces. What "replaced" means splits on
+    # the cell: same-directory cells swap the file in place, so the hash is the evidence;
+    # the migration cell moves the product, so the evidence is the binary it ran from being
+    # gone while the new directory holds one - comparing hashes across a move would be
+    # vacuous, they differ by construction.
+    param([string]$Stage, $Before, [string]$PreviousBinaryPath, [string]$CurrentBinaryPath, [switch]$Migrating)
     Assert-ServiceStopped -Stage $Stage -Why 'the major upgrade stops the running old service and does not start the new one'
     $alive = Get-Process -Id ([int]$Before.ProcessId) -ErrorAction SilentlyContinue
     if ($alive) {
@@ -843,12 +865,22 @@ function Assert-OldServiceStoppedAndReplaced {
     else {
         Write-Host "${Stage}: the old service process (pid $($Before.ProcessId)) exited during the upgrade"
     }
-    if (-not (Test-Path -LiteralPath $BinaryPath)) {
-        throw "${Stage}: the service binary is missing after the upgrade ($BinaryPath)"
+    if ($Migrating) {
+        if (Test-Path -LiteralPath $PreviousBinaryPath) {
+            throw "${Stage}: the previous release's service binary is still at $PreviousBinaryPath after the upgrade; the migration must move it off the directory the product left"
+        }
+        if (-not (Test-Path -LiteralPath $CurrentBinaryPath)) {
+            throw "${Stage}: the service binary is missing after the upgrade ($CurrentBinaryPath)"
+        }
+        Write-Host "${Stage}: the binary the service ran from is gone and the new directory holds one ($CurrentBinaryPath)"
+        return
     }
-    $replaced = (Get-FileHash -LiteralPath $BinaryPath -Algorithm SHA256).Hash
+    if (-not (Test-Path -LiteralPath $CurrentBinaryPath)) {
+        throw "${Stage}: the service binary is missing after the upgrade ($CurrentBinaryPath)"
+    }
+    $replaced = (Get-FileHash -LiteralPath $CurrentBinaryPath -Algorithm SHA256).Hash
     if ([string]::Equals($replaced, $Before.BinaryHash, [System.StringComparison]::OrdinalIgnoreCase)) {
-        throw "${Stage}: the service binary still carries the hash recorded before the upgrade ($BinaryPath); the file the running service held open was not replaced, so the upgrade left the swap for a reboot instead of stopping the service first"
+        throw "${Stage}: the service binary still carries the hash recorded before the upgrade ($CurrentBinaryPath); the file the running service held open was not replaced, so the upgrade left the swap for a reboot instead of stopping the service first"
     }
     Write-Host ("${Stage}: the service binary was replaced ({0}... -> {1}...)" -f $Before.BinaryHash.Substring(0, 12), $replaced.Substring(0, 12))
 }
@@ -922,9 +954,13 @@ try {
         # installed binary can run at all is read from the binary, not assumed from its
         # version, so the skip below states a checked fact and the same code path turns red
         # by itself once a release that carries the protocol becomes the previous release.
-        $serviceBinary = Join-Path $targetDir 'env-manager-service.exe'
+        # The binary it runs is the one the previous release installed, which only the
+        # migration cell puts somewhere other than the current install directory; after the
+        # upgrade the entry and the start assertion look at the current one.
+        $previousServiceBinary = Join-Path $previousDir 'env-manager-service.exe'
+        $currentServiceBinary = Join-Path $targetDir 'env-manager-service.exe'
         $skipRecord = Join-Path $LogDir 'service-start-skip.log'
-        $previousCarriesProtocol = Test-BinaryCarriesServiceProtocol -Path $serviceBinary
+        $previousCarriesProtocol = Test-BinaryCarriesServiceProtocol -Path $previousServiceBinary
         # The previous release registers restart-on-failure actions (three restarts, 60s
         # apart), and a start that never reports RUNNING counts as one of those failures.
         # Attempting the start without clearing them would arm a retry chain at roughly
@@ -938,7 +974,7 @@ try {
         if ($LASTEXITCODE -ne 0) {
             throw "Step 1: could not clear the previous release's restart-on-failure actions (sc.exe exit $LASTEXITCODE): $($clearOutput.Trim())"
         }
-        $oldService = Invoke-ServiceStart -Stage 'Step 1: start the previous release service' -BinaryPath $serviceBinary
+        $oldService = Invoke-ServiceStart -Stage 'Step 1: start the previous release service' -BinaryPath $previousServiceBinary
         $startVerdict = Get-ServiceStartVerdict -ReachedRunning $oldService.ReachedRunning -Win32Error $oldService.Win32Error -ExpectsProtocol:$previousCarriesProtocol
         if ($startVerdict.Verdict -eq 'fail') {
             $because = if ([string]::IsNullOrWhiteSpace($startVerdict.Reason)) { 'this script cannot name a determinate cause for it' } else { $startVerdict.Reason }
@@ -997,7 +1033,9 @@ try {
             Write-Host "Step 2: the upgrade cleanup left $previousDir alone"
         }
         if ($oldService.ReachedRunning) {
-            Assert-OldServiceStoppedAndReplaced -Stage 'Step 2' -Before $oldService -BinaryPath $serviceBinary
+            Assert-OldServiceStoppedAndReplaced -Stage 'Step 2' -Before $oldService `
+                -PreviousBinaryPath $previousServiceBinary -CurrentBinaryPath $currentServiceBinary `
+                -Migrating:$migrating
         }
         if (Test-Path -LiteralPath $legacyProbe) {
             throw "Step 2: the upgrade cleanup left $legacyProbe after the major upgrade"
@@ -1006,7 +1044,7 @@ try {
         # A replacement that cannot run is not a replacement, and this start is the half of
         # the running-old-service coverage that is reachable while no published release
         # carries the SCM control protocol.
-        Assert-ServiceStartsAndStops -Stage 'Step 2: start the upgraded service' -BinaryPath $serviceBinary -SkipRecordPath $skipRecord -Scenario $Scenario
+        Assert-ServiceStartsAndStops -Stage 'Step 2: start the upgraded service' -BinaryPath $currentServiceBinary -SkipRecordPath $skipRecord -Scenario $Scenario
         # The cleanup gate has to hold after the upgrade installed the cleanup path:
         # a repair on an upgraded machine must leave an unrelated log alone. A
         # component-conditioned RemoveFile fails here, because the repair replays it.
