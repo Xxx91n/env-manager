@@ -338,6 +338,33 @@ mod startup_contract_tests {
         tokio::net::windows::named_pipe::ClientOptions::new().open(pipe)
     }
 
+    /// Run the server body on `pipe` and block until it reaches the listener stage, which
+    /// is the point where the SCM's RUNNING report would fire. Returns the body handle and
+    /// its stop token; the listener stage is asserted here because every caller depends on
+    /// it and a body that never got there would make each of them fail for the wrong reason.
+    async fn spawn_body_until_listening(
+        pipe: &'static str,
+    ) -> (tokio::task::JoinHandle<ServerExit>, Arc<CancellationToken>) {
+        let listening = Arc::new(AtomicBool::new(false));
+        let writer = listening.clone();
+        let shutdown = Arc::new(CancellationToken::new());
+        let server = tokio::spawn(run_server(pipe, shutdown.clone(), move || {
+            writer.store(true, Ordering::SeqCst);
+            true
+        }));
+        for _ in 0..100 {
+            if listening.load(Ordering::SeqCst) {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(50)).await;
+        }
+        assert!(
+            listening.load(Ordering::SeqCst),
+            "the server body never reached the listener stage"
+        );
+        (server, shutdown)
+    }
+
     /// Scenario: the RUNNING report point is reached only once the listener exists.
     #[tokio::test]
     async fn listener_is_connectable_when_the_running_report_fires() {
@@ -377,23 +404,7 @@ mod startup_contract_tests {
     /// the name immediately instead of waiting for the kernel to reap the handle.
     #[tokio::test]
     async fn stopping_releases_the_pipe() {
-        let listening = Arc::new(AtomicBool::new(false));
-        let writer = listening.clone();
-        let shutdown = Arc::new(CancellationToken::new());
-        let server = tokio::spawn(run_server(RELEASE_PIPE, shutdown.clone(), move || {
-            writer.store(true, Ordering::SeqCst);
-            true
-        }));
-        for _ in 0..100 {
-            if listening.load(Ordering::SeqCst) {
-                break;
-            }
-            tokio::time::sleep(Duration::from_millis(50)).await;
-        }
-        assert!(
-            listening.load(Ordering::SeqCst),
-            "the server body never reached the listener stage"
-        );
+        let (server, shutdown) = spawn_body_until_listening(RELEASE_PIPE).await;
 
         shutdown.cancel();
         assert_eq!(server.await.expect("server task"), ServerExit::Requested);
@@ -418,23 +429,7 @@ mod startup_contract_tests {
     /// handler was parked and the child survived into a service the SCM called Stopped.
     #[tokio::test]
     async fn stop_waits_for_an_in_flight_connection_handler() {
-        let listening = Arc::new(AtomicBool::new(false));
-        let writer = listening.clone();
-        let shutdown = Arc::new(CancellationToken::new());
-        let mut server = tokio::spawn(run_server(IN_FLIGHT_PIPE, shutdown.clone(), move || {
-            writer.store(true, Ordering::SeqCst);
-            true
-        }));
-        for _ in 0..100 {
-            if listening.load(Ordering::SeqCst) {
-                break;
-            }
-            tokio::time::sleep(Duration::from_millis(50)).await;
-        }
-        assert!(
-            listening.load(Ordering::SeqCst),
-            "the server body never reached the listener stage"
-        );
+        let (mut server, shutdown) = spawn_body_until_listening(IN_FLIGHT_PIPE).await;
 
         // A client that connects and stays silent parks `handle_connection` in its read
         // loop. That is the cheapest honest in-flight handler: no real provider rotation

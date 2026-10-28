@@ -188,8 +188,10 @@ async fn accept_loop(
 
     loop {
         // Reclaim finished handlers before anything else: a `JoinSet` only drops completed
-        // tasks when it is polled, and a long-lived service must not accumulate one task
-        // per connection.
+        // tasks when it is polled, so without this every handler ever served would stay in
+        // the set. While the loop is parked in `connect()` a handler that finishes waits
+        // for the next turn (or for the stop drain below), which bounds the set by
+        // connection activity rather than by uptime.
         while let Some(finished) = handlers.try_join_next() {
             if let Err(e) = finished {
                 tracing::warn!("IPC connection handler task failed: {}", e);

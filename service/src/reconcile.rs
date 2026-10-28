@@ -355,8 +355,10 @@ pub(crate) async fn run_cli_child(
         status = child.wait() => {
             let status = status
                 .map_err(|e| format!("failed to wait for the CLI rotate child: {}", e))?;
-            // The child is gone, so both pipes are at EOF; a panicking reader only costs
-            // the diagnostic text.
+            // The child exited, so its end of both pipes is closed and the readers reach
+            // EOF: a provider helper cannot keep the handle open, because each one
+            // redirects its own std handles (`src/Secrets/Providers/`). A panicking reader
+            // only costs the diagnostic text.
             Ok(ChildOutcome::Finished {
                 success: status.success(),
                 stdout: read_stdout.await.unwrap_or_default(),
@@ -366,9 +368,10 @@ pub(crate) async fn run_cli_child(
         _ = shutdown.cancelled() => {
             // `Child::kill` is TerminateProcess followed by `wait`, so the child is reaped
             // here rather than left as an orphan of a service the SCM already calls
-            // Stopped. The readers are aborted instead of awaited: their text is not
-            // needed, and the stop path must not spend its budget on a pipe that a helper
-            // process of the CLI may still hold open.
+            // Stopped. The readers are aborted instead of awaited: an aborted rotation has
+            // no output worth returning, and the stop path should not depend on a pipe
+            // reaching EOF - even though it does, because provider helpers redirect their
+            // own std handles (`src/Secrets/Providers/`).
             child
                 .kill()
                 .await

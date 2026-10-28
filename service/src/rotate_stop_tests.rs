@@ -122,6 +122,7 @@ async fn stop_terminates_and_reaps_the_rotate_child() {
     // the return is terminate + reap, so a slow runner cannot be blamed for the result -
     // and process startup cannot hide a convergence that took far longer than the budget.
     tokio::time::sleep(Duration::from_millis(300)).await;
+    shutdown.cancel();
     let outcome = tokio::time::timeout(SHUTDOWN_DRAIN, in_flight)
         .await
         .expect(
