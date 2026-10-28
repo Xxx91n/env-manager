@@ -217,20 +217,22 @@ Prereqs: elevated shell; no env-manager process running (`Get-Process -Name 'env
 ```powershell
 # msiexec.exe is a GUI-subsystem binary, so PowerShell does not wait for it: a bare
 # call returns in milliseconds with an empty $LASTEXITCODE and the assertions below
-# race the transaction. Every step waits on the process instead.
-function Invoke-Msi { param([string[]]$MsiArgs) (Start-Process -FilePath msiexec.exe -ArgumentList $MsiArgs -Wait -PassThru).ExitCode }
+# race the transaction. Every step waits on the process instead, and takes the command
+# line as one string: Start-Process joins an array with spaces and adds no quotes, so
+# an MSI path such as "release/msi/Env Manager_0.9.27_x64.msi" would arrive split.
+function Invoke-Msi { param([string]$CommandLine) (Start-Process -FilePath msiexec.exe -ArgumentList $CommandLine -Wait -PassThru).ExitCode }
 
 # Step 0 (RED, only once per regression): prove the broken baseline hangs
 # Build the previous-tag MSI (e.g. v0.9.26 with the old installer.wxs) and run:
 $prev = "<prev>.msi"
-$elapsed = Measure-Command { $null = Invoke-Msi @('/i', $prev, '/quiet', '/norestart', '/L*v', "$env:TEMP\msi-prev-install.log") }
+$elapsed = Measure-Command { $null = Invoke-Msi "/i `"$prev`" /quiet /norestart /L*v `"$env:TEMP\msi-prev-install.log`"" }
 if ($elapsed.TotalMilliseconds -gt 60000) { "BASELINE REPRODUCED (hang)" }   # expected for v0.9.26
-(Invoke-Msi @('/x', $prev, '/quiet', '/norestart')) -eq 0  # leave a clean machine so Step 1's shortcut assertion is meaningful
+(Invoke-Msi "/x `"$prev`" /quiet /norestart") -eq 0  # leave a clean machine so Step 1's shortcut assertion is meaningful
 Test-Path "$env:PUBLIC\Desktop\Env Manager.lnk"  # must be $false after the baseline uninstall
 
 # Step 1: silent install of the fixed MSI
 $msi = "release/msi/Env Manager_0.9.27_x64.msi"
-$elapsed = Measure-Command { $null = Invoke-Msi @('/i', $msi, '/quiet', '/norestart', '/L*v', "$env:TEMP\msi-install.log") }
+$elapsed = Measure-Command { $null = Invoke-Msi "/i `"$msi`" /quiet /norestart /L*v `"$env:TEMP\msi-install.log`"" }
 $elapsed.TotalMilliseconds -lt 10000  # expect ~1.1s; must be green
 (Get-Service EnvManagerService).Status  # 'Stopped' is CORRECT (Start=auto -> next boot); 'Running' also acceptable
 Test-Path "$env:PUBLIC\Desktop\Env Manager.lnk"  # must be $true (default INSTALLDESKTOPSHORTCUT=1)
@@ -240,22 +242,23 @@ $probe = "$env:ProgramFiles\Env Manager\logs\upgrade-probe.log"
 New-Item -ItemType Directory -Force -Path (Split-Path $probe) | Out-Null
 Set-Content -LiteralPath $probe -Value 'repair probe'
 # /fomus reinstalls files, rewrites the machine and user registry entries and
-# reinstalls shortcuts, so the LogsDir components really do reach the install path
-(Invoke-Msi @('/fomus', $msi, '/quiet', '/norestart', '/L*v', "$env:TEMP\msi-repair.log")) -eq 0
+# reinstalls shortcuts: the widest maintenance pass a silent install can run, so it
+# is where an unconditional install-time cleanup would still show up
+(Invoke-Msi "/fomus `"$msi`" /quiet /norestart /L*v `"$env:TEMP\msi-repair.log`"") -eq 0
 Test-Path $probe  # must be $true: the install-time cleanup is upgrade-only
 # ...and a plain maintenance install over the same version still succeeds
-(Invoke-Msi @('/i', $msi, '/quiet', '/norestart', '/L*v', "$env:TEMP\msi-maintenance.log")) -eq 0
+(Invoke-Msi "/i `"$msi`" /quiet /norestart /L*v `"$env:TEMP\msi-maintenance.log`"") -eq 0
 Test-Path $probe  # must be $true
 
 # Step 3: silent uninstall
-(Invoke-Msi @('/x', $msi, '/quiet', '/norestart', '/L*v', "$env:TEMP\msi-uninstall.log")) -eq 0
+(Invoke-Msi "/x `"$msi`" /quiet /norestart /L*v `"$env:TEMP\msi-uninstall.log`"") -eq 0
 Test-Path $probe  # must be $false: the product's own uninstall removes legacy logs
 Get-Service EnvManagerService -ErrorAction SilentlyContinue  # must be $null (SCM entry removed)
 
 # Shortcut property check: a silent install honours INSTALLDESKTOPSHORTCUT=0
-(Invoke-Msi @('/i', $msi, '/quiet', '/norestart', 'INSTALLDESKTOPSHORTCUT=0', '/L*v', "$env:TEMP\msi-no-shortcut.log")) -eq 0
+(Invoke-Msi "/i `"$msi`" /quiet /norestart INSTALLDESKTOPSHORTCUT=0 /L*v `"$env:TEMP\msi-no-shortcut.log`"") -eq 0
 Test-Path "$env:PUBLIC\Desktop\Env Manager.lnk"  # must be $false
-(Invoke-Msi @('/x', $msi, '/quiet', '/norestart', '/L*v', "$env:TEMP\msi-no-shortcut-uninstall.log")) -eq 0
+(Invoke-Msi "/x `"$msi`" /quiet /norestart /L*v `"$env:TEMP\msi-no-shortcut-uninstall.log`"") -eq 0
 ```
 
 Failure triage: hang at `InstallFinalize` -> `StartServices` with lowest `ActionStart` op = service-start blocking regression (check `ServiceControl/@Start` is absent and `Wait="no"` in installer.wxs). Root cause is documented in the `ServiceInstall` comment in `installer.wxs`.
@@ -326,7 +329,7 @@ Runs on push to main and pull requests. Verifies code quality (tests, lint, buil
 
 The verify job stages the five `tauri.conf.json` `bundle.resources` (`env-manager-cli.exe`/`.dll`/`.runtimeconfig.json`/`.deps.json` plus `AGENTS.cli.md`) from the CLI build output (`bin/Release/net10.0-windows/`) and the repo root into `frontend/src-tauri/bin/` immediately after the "Build CLI" step and before any cargo compile (service crate tests, Tauri crate tests, cargo check). The step is fail-closed: any of the five missing fails the job. This mirrors the local staging done by `frontend/scripts/prebuild.mjs` during `npm run build`/`tauri build`; `scripts/build.mjs` responsibilities are unchanged.
 
-The MSI install/upgrade matrix is split across the required chain. `build-package` runs the default-path clean install cell through `scripts/test-msi-upgrade-matrix.ps1` before uploading artifacts; `msi-upgrade-matrix` runs the remaining three cells in parallel: `clean-custom-path` (current MSI on an empty runner with a custom `INSTALLDIR`), `upgrade-default` (published release to current MSI), and `upgrade-custom-path` (the same upgrade with a custom `INSTALLDIR`). Each cell maps to the four-step runbook below: the 60-second bounded install timeout is the Step 0 hang-regression guard, the first install is Step 1, Step 2 is the maintenance pass, and `/x` plus the service and binary assertions is Step 3. Step 2 asserts opposite outcomes on purpose. A clean cell seeds a legacy log and forces a repair (`/fomus`), which must leave the file alone, because the install-time cleanup is conditioned on an upgrade; an upgrade cell seeds the same file before installing the current MSI over the previous release, which must remove it, because the previous product's cleanup component is shared and its uninstall action is skipped. Step 3 then asserts that the current product's own uninstall removes the legacy log. A step over 10 seconds logs a warning because hosted runners are slower than the runbook's build machine; the hard gate is the 60-second hang bound. The previous MSI is the highest published Release version strictly older than the current csproj version; on a release build that is the latest published release, while on main where the current version already equals the latest release it is the release before it (a same-version reinstall is not an upgrade). If no older published release exists, the job fails closed instead of silently skipping the upgrade coverage. A red scenario names the action that reported `Return value 3` (or the last action that started before the timeout), uploads the verbose logs as the `msi-upgrade-<scenario>` artifact (or `msi-clean-install-smoke-failure` from `build-package`), and fails the required `package` check, which blocks merge.
+The MSI install/upgrade matrix is split across the required chain. `build-package` runs the default-path clean install cell through `scripts/test-msi-upgrade-matrix.ps1` before uploading artifacts; `msi-upgrade-matrix` runs the remaining three cells in parallel: `clean-custom-path` (current MSI on an empty runner with a custom `INSTALLDIR`), `upgrade-default` (published release to current MSI), and `upgrade-custom-path` (the same upgrade with a custom `INSTALLDIR`). Each cell maps to the four-step runbook below: the 60-second bounded install timeout is the Step 0 hang-regression guard, the first install is Step 1, Step 2 is the maintenance pass, and `/x` plus the service and binary assertions is Step 3. Step 2 asserts opposite outcomes on purpose. A clean cell seeds a legacy log and forces a repair (`/fomus`), which must leave the file alone, because the upgrade-time cleanup is gated on `WIX_UPGRADE_DETECTED` in the sequence rather than carried by a component; an upgrade cell seeds the same file before installing the current MSI over the previous release, which must remove it, because the previous product's cleanup component is shared and its uninstall action is skipped. An upgrade cell then runs a second Step 2b: a repair on the just-upgraded product must leave a freshly seeded log alone. That cell is what separates a sequence-gated action from a component-conditioned `RemoveFile` — Windows Installer replays a component's install-time `RemoveFile` during a repair once an upgrade has installed that component, so the cheaper mechanism deletes the file here. Step 3 then asserts that the current product's own uninstall removes the legacy log. A step over 10 seconds logs a warning because hosted runners are slower than the runbook's build machine; the hard gate is the 60-second hang bound. The previous MSI is the highest published Release version strictly older than the current csproj version; on a release build that is the latest published release, while on main where the current version already equals the latest release it is the release before it (a same-version reinstall is not an upgrade). If no older published release exists, the job fails closed instead of silently skipping the upgrade coverage. A red scenario names the action that reported `Return value 3` (or the last action that started before the timeout), uploads the verbose logs as the `msi-upgrade-<scenario>` artifact (or `msi-clean-install-smoke-failure` from `build-package`), and fails the required `package` check, which blocks merge.
 
 ### release-please.yml (release automation takeover)
 Runs on every push to main. `googleapis/release-please-action` (pinned v5.0.0 SHA) maintains a release PR from conventional commits; merging it bumps versions, creates the `vX.Y.Z` tag, and publishes the GitHub Release with release notes.
