@@ -13,13 +13,12 @@
 # action that started when the process was killed), so a red job names the
 # failing custom action instead of only an exit code.
 #
-# The upgrade legs assert the SCM facts an upgrade can actually be judged on - the
-# entry exists, its executable path is inside the current install directory, and
-# that file is on disk - rather than "the running old service was stopped by the
-# upgrade". The latter is unreachable: EnvManagerService never joins the SCM
-# control protocol, so it cannot report Running and Start-Service only returns
-# 1053 after ServicesPipeTimeout. Nothing here starts the old service on purpose;
-# re-adding that attempt would only reintroduce a step that can never pass.
+# The upgrade legs assert the SCM facts an upgrade can be judged on - entry present,
+# executable path inside the current install directory, that file on disk - not
+# "the running old service was stopped by the upgrade". No step starts the old
+# service on purpose: under SCM it can never reach Running, so a Start-Service
+# attempt would only reintroduce a check that cannot pass (the ServiceInstall
+# comment in frontend/scripts/installer.wxs owns the mechanism).
 #
 # -SelfTest feeds synthetic msiexec logs through the diagnosis helper; it needs
 # no MSI and no elevation, so it can run anywhere PowerShell 5.1+ is installed.
@@ -283,10 +282,10 @@ function Assert-ServiceImagePath {
     if ([string]::IsNullOrWhiteSpace($executable)) {
         throw "${Stage}: cannot read an executable path from ImagePath '$commandLine'"
     }
-    # GetFullPath spares the comparison the spellings the filesystem allows (8.3
-    # short names, relative segments); the case-insensitive compare covers case,
-    # which GetFullPath preserves. Raw string equality would fail a correctly
-    # installed service on either of those.
+    # GetFullPath normalizes the spellings the filesystem allows (8.3 short names,
+    # relative segments); the case-insensitive compare covers case, which
+    # GetFullPath preserves. Raw string equality would fail a correctly installed
+    # service on either of those.
     try { $executableFull = [System.IO.Path]::GetFullPath($executable) }
     catch { throw "${Stage}: cannot normalize the ImagePath executable '$executable' ($($_.Exception.Message))" }
     if (-not [string]::Equals($executableFull, $expected, [System.StringComparison]::OrdinalIgnoreCase)) {
