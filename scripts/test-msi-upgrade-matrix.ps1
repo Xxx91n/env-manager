@@ -456,6 +456,9 @@ function Assert-PreviousPayloadGone {
 }
 
 function Assert-UninstalledBinaries {
+    # The uninstall removes the product this cell installed, so the directory to check is
+    # the cell's own. It reads that from script scope rather than taking a parameter that
+    # could only ever hold the same value.
     foreach ($name in @('env-manager.exe', 'env-manager-cli.exe')) {
         $path = Join-Path $targetDir $name
         if (Test-Path -LiteralPath $path) { throw "Step 3: installed file still present after uninstall: $path" }

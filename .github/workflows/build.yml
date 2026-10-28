@@ -590,6 +590,11 @@ jobs:
           # product default and the current MSI into a custom INSTALLDIR. The two
           # upgrade cells above install both releases into one directory, so a
           # directory move is not something they can show.
+          # previous_install_dir mirrors the installer's default INSTALLDIR
+          # (ProgramFiles64Folder + "Env Manager"). Step 1 installs the previous
+          # release into the directory named here, so if that default ever moves,
+          # this cell keeps passing while no longer testing default-to-custom:
+          # update the two together.
           - scenario: upgrade-dir-migration
             mode: upgrade
             install_dir: 'C:\env-manager-upgrade-test'
