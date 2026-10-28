@@ -644,7 +644,7 @@ jobs:
           gh release download $previous.Tag --pattern '*x64.msi' --dir artifacts/previous --clobber
           if ($LASTEXITCODE -ne 0) { throw "release asset download failed for $($previous.Tag)" }
 
-      - name: Self-test the failure-action parser
+      - name: Self-test the matrix helpers
         shell: pwsh
         run: ./scripts/test-msi-upgrade-matrix.ps1 -SelfTest
 
