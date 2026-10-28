@@ -440,10 +440,11 @@ mod startup_contract_tests {
         tokio::time::sleep(Duration::from_millis(200)).await;
 
         shutdown.cancel();
-        // The drain window is `SHUTDOWN_DRAIN`; a tenth of it is spent proving the body is
+        // The drain window is `SHUTDOWN_DRAIN`; a fifth of it is spent proving the body is
         // still inside the handler. Polling rather than one long sleep keeps a slow runner
-        // from passing the assertion by finishing early.
-        for _ in 0..10 {
+        // from passing the assertion by finishing early, and staying well inside the budget
+        // keeps drift from letting the outer drain expire the pin for the wrong reason.
+        for _ in 0..5 {
             assert!(
                 !server.is_finished(),
                 "the stop path returned while a connection handler was still in flight"
@@ -451,9 +452,12 @@ mod startup_contract_tests {
             tokio::time::sleep(Duration::from_millis(50)).await;
         }
 
-        // Releasing the handler must release the body, not merely unblock the test.
+        // Releasing the handler must release the body, not merely unblock the test. The
+        // window is a quarter of `SHUTDOWN_DRAIN` on purpose: at the full budget the body
+        // would also resolve when the drain simply expires, so the assertion could never
+        // fail for the reason it states.
         drop(client);
-        let exit = tokio::time::timeout(SHUTDOWN_DRAIN, &mut server)
+        let exit = tokio::time::timeout(SHUTDOWN_DRAIN / 4, &mut server)
             .await
             .expect("the body must return once its handler is done")
             .expect("server task");
