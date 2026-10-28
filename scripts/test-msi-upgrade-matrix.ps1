@@ -212,7 +212,13 @@ function Invoke-SilentRepair {
     # component that still carried an install-time RemoveFile would delete the
     # seeded log here. Without it the repair would skip those components and the
     # assertion would pass on an installer that still deletes the file.
+    # INSTALLDIR is passed the same way Invoke-SilentInstall passes it, so a
+    # custom-path cell repairs the path it installed rather than relying on the
+    # installer re-deriving it from the registered component paths.
     $msiArgs = @('/fomus', "`"$MsiPath`"", '/quiet', '/norestart', '/L*v', "`"$LogPath`"")
+    if (-not [string]::IsNullOrWhiteSpace($InstallDir)) {
+        $msiArgs += "INSTALLDIR=`"$targetDir`""
+    }
     Invoke-MsiProcess -Stage 'Step 2: forced repair (/fomus)' -MsiArgs $msiArgs -LogPath $LogPath
 }
 
