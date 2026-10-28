@@ -38,6 +38,7 @@ Invariants a change must not violate; where a test pins one, that check is the a
 
 - `service/src/scm.rs` owns the control protocol: `StartServiceCtrlDispatcherW` runs once on the process's initial thread, `service_main` builds the tokio runtime on the SCM thread, and `run_server` creates the named-pipe listener, reports `SERVICE_RUNNING`, then starts the reconcile loop. Slow work moved ahead of the RUNNING report brings back the boot-time 1053 failure.
 - The stop path fits inside the wait hint the SCM was told: `SHUTDOWN_DRAIN` plus `RUNTIME_DRAIN` stay under `STOP_WAIT_HINT_MS`, asserted at compile time in `service/src/scm.rs`.
+- A stop converges the rotation it interrupts (issue #153): `ipc::accept_loop` joins its in-flight connection handlers before the server body returns, and `reconcile::run_cli_child` terminates *and reaps* the delegated CLI rotate child inside that window, so `SERVICE_STOPPED` never names a process that can still write `profiles.json`. Never hand a rotation back to a detached task, and never wait a child out: the same window answers `SERVICE_ACCEPT_SHUTDOWN` during logoff. Recovery of a lost rotation is replay - the mount keeps its old `lastRotatedAt`, so the next `rotate` or reconcile tick does the work again.
 
 ## Build and packaging
 
