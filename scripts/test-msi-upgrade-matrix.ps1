@@ -3,8 +3,9 @@
 # Automates the four-step silent msiexec runbook in docs/build-and-release.md:
 #   Step 0  hang baseline    -> a silent install that exceeds InstallTimeoutSeconds fails (default 60s, the runbook's hang threshold)
 #   Step 1  silent install   -> install the previous release (upgrade mode) or the current MSI (clean mode)
-#   Step 2  silent upgrade   -> install the current MSI over the previous release; a seeded legacy log must be cleaned up
-#                               and the service entry must point at the current install directory
+#   Step 2  silent upgrade   -> install the current MSI over the previous release; a seeded legacy log must be cleaned up,
+#                               the service entry must point at the current install directory, and a service that was
+#                               running before the upgrade must be stopped with the binary it held replaced
 #           (clean mode)     -> force a repair (/fomus); the same seeded legacy log must survive
 #   Step 2b repair after upgrade -> /fomus on the upgraded product must leave a freshly seeded log alone
 #   Step 3  silent uninstall -> msiexec /x, then assert the service entry and binaries are gone
@@ -14,12 +15,25 @@
 # failing custom action instead of only an exit code.
 #
 # The upgrade legs assert the SCM facts an upgrade can be judged on - entry present,
-# executable path inside the current install directory, that file on disk - not
-# "the running old service was stopped by the upgrade". No step starts the old
-# service on purpose: the previous release's binary predates the SCM control protocol
-# (service/src/scm.rs), so it can never reach Running and a Start-Service attempt would
-# only reintroduce a check that cannot pass. The current build's start/stop is asserted
-# by the runbook's Step 1b, where it is reachable.
+# executable path inside the current install directory, that file on disk - and the one
+# fact an entry cannot show: a service that was Running before the upgrade is Stopped
+# after it, its process is gone, and the binary it held open was replaced rather than
+# left for a reboot. They start EnvManagerService after the previous install and carry
+# it into the upgrade.
+#
+# Whether that start can succeed depends on the binary the previous release ships. The
+# SCM control protocol (service/src/scm.rs) landed after the newest published release,
+# so a release published before it answers a start by never reporting SERVICE_RUNNING
+# and failing with 1053 once ServicesPipeTimeout expires - the documented symptom of a
+# binary without StartServiceCtrlDispatcherW, not a flake. That case is recorded as an
+# explicit skip, naming the SCM error, in the uploaded log directory, and the previous
+# release's restart-on-failure actions are cleared first so the SCM does not relaunch the
+# old binary out of the install directory while the upgrade replaces it. A skip requires a
+# determinate cause: an unexplained start failure is a red, because a skip this script
+# cannot explain is a silent pass with extra steps. The same clause does not extend to
+# the new build - it was built from this tree and must implement the protocol, so its
+# start is a hard assertion. That start is also the half of this coverage that is
+# reachable now: a replacement that cannot run is not a replacement.
 #
 # One upgrade cell installs the previous release somewhere other than the cell's own
 # INSTALLDIR: the product default first, a custom directory second. The two
@@ -46,10 +60,10 @@
 # carries a space elsewhere - the custom-path leg's "path --mode=service" - is
 # unambiguous and stays accepted.
 #
-# -SelfTest feeds synthetic msiexec logs through the diagnosis helper and synthetic
-# ImagePath shapes through the command-line parser, including the ambiguous shape no
-# install produces; it needs no MSI and no elevation, so it can run anywhere
-# PowerShell 5.1+ is installed.
+# -SelfTest feeds synthetic msiexec logs through the diagnosis helper, synthetic
+# ImagePath shapes through the command-line parser (including the ambiguous shape no
+# install produces) and synthetic start failures through the skip/fail verdict; it
+# needs no MSI and no elevation, so it can run anywhere PowerShell 5.1+ is installed.
 [CmdletBinding()]
 param(
     [switch]$SelfTest,
@@ -143,6 +157,59 @@ function ConvertFrom-ServiceImagePath {
     return $exe
 }
 
+function Get-ServiceStartVerdict {
+    # What a failed start of EnvManagerService means for this run. Three verdicts:
+    #   active - the service ran, so the upgrade assertions have something to assert;
+    #   skip   - the binary or the runner cannot run it here, and the cause is
+    #            determinate enough to name in the uploaded log;
+    #   fail   - there is no determinate cause, so the coverage must not be dropped.
+    # -ExpectsProtocol marks a binary built from this tree, which implements the SCM
+    # control protocol (service/src/scm.rs): for that binary a 1053 is the regression
+    # the protocol exists to prevent, not an environment limit.
+    # Declared here, not beside its callers, because the -SelfTest block below calls it
+    # and PowerShell only sees a function after its definition.
+    param([bool]$ReachedRunning, [int]$Win32Error, [switch]$ExpectsProtocol)
+    if ($ReachedRunning) { return [pscustomobject]@{ Verdict = 'active'; Reason = '' } }
+    switch ($Win32Error) {
+        1053 {
+            if ($ExpectsProtocol) {
+                return [pscustomobject]@{
+                    Verdict = 'fail'
+                    Reason = 'the service never reported SERVICE_RUNNING and the SCM failed the start with 1053 after ServicesPipeTimeout; this binary was built from a tree that implements the SCM control protocol, so that is the regression the protocol exists to prevent'
+                }
+            }
+            return [pscustomobject]@{
+                Verdict = 'skip'
+                Reason = 'the service never reported SERVICE_RUNNING and the SCM failed the start with 1053 after ServicesPipeTimeout, which is what a binary without StartServiceCtrlDispatcherW produces; this published release predates the SCM control protocol'
+            }
+        }
+        5 {
+            return [pscustomobject]@{
+                Verdict = 'skip'
+                Reason = 'the SCM refused the start with 5 (access denied), so this runner cannot start services'
+            }
+        }
+        1058 { return [pscustomobject]@{ Verdict = 'skip'; Reason = 'the SCM refused the start with 1058: the service is disabled' } }
+        1067 {
+            if ($ExpectsProtocol) {
+                return [pscustomobject]@{
+                    Verdict = 'fail'
+                    Reason = 'the service process exited before reporting SERVICE_RUNNING (1067); a binary built from this tree must report it, so the exit is a crash, not an environment limit'
+                }
+            }
+            return [pscustomobject]@{
+                Verdict = 'skip'
+                Reason = 'the service process exited before reporting SERVICE_RUNNING (1067), which is what a binary without StartServiceCtrlDispatcherW does when the SCM asks it to report'
+            }
+        }
+        1069 { return [pscustomobject]@{ Verdict = 'skip'; Reason = 'the SCM refused the start with 1069: the service failed to log on' } }
+        1075 { return [pscustomobject]@{ Verdict = 'skip'; Reason = 'the SCM refused the start with 1075: a service dependency is missing' } }
+        default {
+            return [pscustomobject]@{ Verdict = 'fail'; Reason = '' }
+        }
+    }
+}
+
 if ($SelfTest) {
     $failedLog = @(
         'Action start 9:00:00: InstallValidate.',
@@ -196,7 +263,21 @@ if ($SelfTest) {
         @{ Name = 'unquoted ImagePath without spaces yields the executable'; Actual = (ConvertFrom-ServiceImagePath -CommandLine $unquotedCustom); Expected = 'C:\env-manager-upgrade-test\env-manager-service.exe' },
         @{ Name = 'unquoted executable with spaces is refused as ambiguous'; Actual = ($spacedWithArgsRefusal.StartsWith('The executable in ImagePath is unquoted')); Expected = $true },
         @{ Name = 'the refusal carries the raw ImagePath'; Actual = ($spacedWithArgsRefusal.Contains($spacedWithArgs)); Expected = $true },
-        @{ Name = 'unquoted spaced executable without arguments is refused too'; Actual = ($spacedBareRefusal.StartsWith('The executable in ImagePath is unquoted')); Expected = $true }
+        @{ Name = 'unquoted spaced executable without arguments is refused too'; Actual = ($spacedBareRefusal.StartsWith('The executable in ImagePath is unquoted')); Expected = $true },
+        # The skip/fail split is the whole policy behind the running-old-service coverage:
+        # a published release that cannot run is a recorded skip, the same failure in a
+        # build from this tree is a regression, and a failure with no nameable cause is
+        # never a skip. Each direction is planted here, because a policy that only ever
+        # exercises "skip" would pass while turning every unexplained failure green.
+        @{ Name = 'a running service arms the upgrade assertions'; Actual = (Get-ServiceStartVerdict -ReachedRunning $true -Win32Error 0).Verdict; Expected = 'active' },
+        @{ Name = '1053 on a published release is a recorded skip'; Actual = (Get-ServiceStartVerdict -ReachedRunning $false -Win32Error 1053).Verdict; Expected = 'skip' },
+        @{ Name = 'the published-release skip names the SCM error'; Actual = ((Get-ServiceStartVerdict -ReachedRunning $false -Win32Error 1053).Reason -like '*1053*'); Expected = $true },
+        @{ Name = '1053 on a binary from this tree is a failure'; Actual = (Get-ServiceStartVerdict -ReachedRunning $false -Win32Error 1053 -ExpectsProtocol).Verdict; Expected = 'fail' },
+        @{ Name = '1067 on a published release is a recorded skip'; Actual = (Get-ServiceStartVerdict -ReachedRunning $false -Win32Error 1067).Verdict; Expected = 'skip' },
+        @{ Name = '1067 on a binary from this tree is a failure'; Actual = (Get-ServiceStartVerdict -ReachedRunning $false -Win32Error 1067 -ExpectsProtocol).Verdict; Expected = 'fail' },
+        @{ Name = 'access denied is a runner limit, skipped'; Actual = (Get-ServiceStartVerdict -ReachedRunning $false -Win32Error 5).Verdict; Expected = 'skip' },
+        @{ Name = 'an unexplained start failure is never skipped'; Actual = (Get-ServiceStartVerdict -ReachedRunning $false -Win32Error 87).Verdict; Expected = 'fail' },
+        @{ Name = 'the failure verdict carries no skip reason'; Actual = ((Get-ServiceStartVerdict -ReachedRunning $false -Win32Error 87).Reason -eq ''); Expected = $true }
     )
     $bad = 0
     foreach ($check in $checks) {
@@ -414,6 +495,278 @@ function Assert-ServiceImagePath {
     Write-Host "${Stage}: EnvManagerService points at $executableFull (file present)"
 }
 
+function Invoke-ServiceStart {
+    # Start EnvManagerService and report what the SCM said.
+    # StartServiceW is called directly instead of through Start-Service because the fact
+    # this script has to classify is a Win32 error code - 1053 above all - and
+    # Start-Service hands back a localized sentence with the code buried or absent. The
+    # call blocks until the service reports RUNNING or the SCM gives up at
+    # ServicesPipeTimeout (30s when the machine has not changed it), which is what bounds
+    # a leg whose previous release cannot start.
+    param([string]$Stage, [string]$BinaryPath)
+    if (-not ('EnvManagerServiceControl' -as [type])) {
+        Add-Type -Language CSharp -TypeDefinition @'
+using System;
+using System.Runtime.InteropServices;
+
+public static class EnvManagerServiceControl
+{
+    [StructLayout(LayoutKind.Sequential)]
+    public struct ServiceStatusProcess
+    {
+        public uint dwServiceType;
+        public uint dwCurrentState;
+        public uint dwControlsAccepted;
+        public uint dwWin32ExitCode;
+        public uint dwServiceSpecificExitCode;
+        public uint dwCheckPoint;
+        public uint dwWaitHint;
+        public uint dwProcessId;
+        public uint dwServiceFlags;
+    }
+
+    const uint SC_MANAGER_CONNECT = 0x0001;
+    const uint SERVICE_QUERY_STATUS = 0x0004;
+    const uint SERVICE_START = 0x0010;
+    const int SC_STATUS_PROCESS_INFO = 0;
+
+    [DllImport("advapi32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
+    static extern IntPtr OpenSCManager(string machineName, string databaseName, uint access);
+    [DllImport("advapi32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
+    static extern IntPtr OpenService(IntPtr scm, string serviceName, uint access);
+    [DllImport("advapi32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
+    static extern int StartService(IntPtr service, uint argumentCount, IntPtr arguments);
+    // QueryServiceStatusEx, not QueryServiceStatus: the plain struct has no process id,
+    // and the process id is what lets the upgrade assertions name the process they expect
+    // to be gone.
+    [DllImport("advapi32.dll", SetLastError = true)]
+    static extern int QueryServiceStatusEx(IntPtr service, int infoLevel, out ServiceStatusProcess status, int bufferSize, out int needed);
+    [DllImport("advapi32.dll", SetLastError = true)]
+    static extern int CloseServiceHandle(IntPtr handle);
+
+    /// 0 when the SCM accepted the start, else the Win32 error that stopped it.
+    public static int Start(string serviceName, out uint processId, out uint state, out string failure)
+    {
+        processId = 0;
+        state = 0;
+        failure = string.Empty;
+        IntPtr scm = OpenSCManager(null, null, SC_MANAGER_CONNECT);
+        if (scm == IntPtr.Zero) { failure = "OpenSCManager"; return Marshal.GetLastWin32Error(); }
+        try
+        {
+            IntPtr service = OpenService(scm, serviceName, SERVICE_QUERY_STATUS | SERVICE_START);
+            if (service == IntPtr.Zero) { failure = "OpenService"; return Marshal.GetLastWin32Error(); }
+            try
+            {
+                if (StartService(service, 0, IntPtr.Zero) == 0)
+                {
+                    int error = Marshal.GetLastWin32Error();
+                    // Already running is not a failure of this call: something else (the
+                    // SCM's failure actions, a leftover from an earlier attempt) started it,
+                    // and the status query below still answers the question that matters.
+                    if (error != 1056) { failure = "StartService"; return error; }
+                }
+                ServiceStatusProcess status;
+                int needed;
+                if (QueryServiceStatusEx(service, SC_STATUS_PROCESS_INFO, out status, Marshal.SizeOf(typeof(ServiceStatusProcess)), out needed) == 0)
+                {
+                    failure = "QueryServiceStatusEx";
+                    return Marshal.GetLastWin32Error();
+                }
+                processId = status.dwProcessId;
+                state = status.dwCurrentState;
+                // 0 means "the SCM accepted the start"; the caller decides whether the
+                // reported state is the one it needs, and polls Status() while it is still
+                // a pending state.
+                return 0;
+            }
+            finally { CloseServiceHandle(service); }
+        }
+        finally { CloseServiceHandle(scm); }
+    }
+
+    /// 0 when the query succeeded, else the Win32 error. Read-only.
+    public static int Status(string serviceName, out uint processId, out uint state)
+    {
+        processId = 0;
+        state = 0;
+        IntPtr scm = OpenSCManager(null, null, SC_MANAGER_CONNECT);
+        if (scm == IntPtr.Zero) { return Marshal.GetLastWin32Error(); }
+        try
+        {
+            IntPtr service = OpenService(scm, serviceName, SERVICE_QUERY_STATUS);
+            if (service == IntPtr.Zero) { return Marshal.GetLastWin32Error(); }
+            try
+            {
+                ServiceStatusProcess status;
+                int needed;
+                if (QueryServiceStatusEx(service, SC_STATUS_PROCESS_INFO, out status, Marshal.SizeOf(typeof(ServiceStatusProcess)), out needed) == 0)
+                {
+                    return Marshal.GetLastWin32Error();
+                }
+                processId = status.dwProcessId;
+                state = status.dwCurrentState;
+                return 0;
+            }
+            finally { CloseServiceHandle(service); }
+        }
+        finally { CloseServiceHandle(scm); }
+    }
+}
+'@
+    }
+    $processId = [uint32]0
+    $state = [uint32]0
+    $failure = ''
+    $win32Error = [EnvManagerServiceControl]::Start('EnvManagerService', [ref]$processId, [ref]$state, [ref]$failure)
+    # StartServiceW is documented to wait for the service to report RUNNING, but it can also
+    # return once the SCM has accepted the request, with the service still START_PENDING
+    # (2) or CONTINUE_PENDING (5). Poll those out on a short bound instead of calling a
+    # pending service "did not run": the failure this file cares about is 1053, which is a
+    # definitive answer from the SCM, not a pending state.
+    $pollDeadline = (Get-Date).AddSeconds(10)
+    while ($win32Error -eq 0 -and $state -in 2, 5 -and (Get-Date) -lt $pollDeadline) {
+        Start-Sleep -Milliseconds 250
+        $queryError = [EnvManagerServiceControl]::Status('EnvManagerService', [ref]$processId, [ref]$state)
+        if ($queryError -ne 0) {
+            $win32Error = $queryError
+            $failure = 'QueryServiceStatusEx'
+            break
+        }
+    }
+    $detail = ''
+    if ($win32Error -ne 0) {
+        $detail = '{0} failed with {1} ({2})' -f $failure, $win32Error, ([System.ComponentModel.Win32Exception]::new($win32Error)).Message
+    }
+    elseif ($state -ne 4) {
+        $detail = "the SCM accepted the start but the service reports state $state instead of SERVICE_RUNNING (4)"
+    }
+    if ($win32Error -ne 0 -or $state -ne 4) {
+        Write-Host "${Stage}: EnvManagerService did not reach Running - $detail"
+        return [pscustomobject]@{
+            ReachedRunning = $false
+            Win32Error = [int]$win32Error
+            Detail = $detail
+            ProcessId = 0
+            ProcessStartTime = $null
+            BinaryPath = ''
+            BinaryHash = ''
+        }
+    }
+    $process = Get-Process -Id ([int]$processId) -ErrorAction SilentlyContinue
+    if (-not $process) {
+        throw "${Stage}: the SCM reports EnvManagerService Running with process $processId, but no such process is visible"
+    }
+    # The hash below is the evidence the upgrade replaced the file this service held open,
+    # so the running image has to be the file that gets hashed. Reading it from the process
+    # rather than assuming the install directory is what makes that a fact.
+    try { $runningImage = [System.IO.Path]::GetFullPath($process.Path) }
+    catch { throw "${Stage}: cannot read the image path of the service process $processId ($($_.Exception.Message)); without it the upgrade's binary-replacement assertion cannot be tied to the service that ran" }
+    $expectedImage = [System.IO.Path]::GetFullPath($BinaryPath)
+    if (-not [string]::Equals($runningImage, $expectedImage, [System.StringComparison]::OrdinalIgnoreCase)) {
+        throw "${Stage}: the running service is $runningImage, expected the installed binary at $expectedImage"
+    }
+    $startTime = $null
+    try { $startTime = $process.StartTime }
+    catch { Write-Warning "${Stage}: cannot read the service process start time ($($_.Exception.Message)); the post-upgrade check falls back to the process id alone" }
+    Write-Host "${Stage}: EnvManagerService reached Running (pid $processId, $runningImage)"
+    return [pscustomobject]@{
+        ReachedRunning = $true
+        Win32Error = 0
+        Detail = ''
+        ProcessId = [int]$processId
+        ProcessStartTime = $startTime
+        BinaryPath = $runningImage
+        BinaryHash = (Get-FileHash -LiteralPath $runningImage -Algorithm SHA256).Hash
+    }
+}
+
+function Write-ServiceStartSkip {
+    # A skip is only allowed with a determinate cause, and it has to survive the job: a
+    # console line scrolls away and the job is green, so the reason also lands in the log
+    # directory that the workflow uploads as the cell's artifact.
+    param([string]$Stage, [string]$Reason, [string]$Detail, [string]$RecordPath)
+    Write-Warning "${Stage}: SKIP - $Reason"
+    if (-not [string]::IsNullOrWhiteSpace($Detail)) { Write-Warning "${Stage}: SKIP - $Detail" }
+    $stamp = (Get-Date).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ')
+    Add-Content -LiteralPath $RecordPath -Value ('{0} scenario={1} stage={2} reason={3} detail={4}' -f $stamp, $Scenario, $Stage, $Reason, $Detail) -Encoding utf8
+}
+
+function Assert-ServiceStartsAndStops {
+    # The new build's own start, after the upgrade replaced the old service. This is a hard
+    # assertion, not a skippable one: the binary was built from this tree, which implements
+    # the SCM control protocol, so a 1053 here is the regression #148 exists to prevent.
+    param([string]$Stage, [string]$BinaryPath)
+    $outcome = Invoke-ServiceStart -Stage $Stage -BinaryPath $BinaryPath
+    if (-not $outcome.ReachedRunning) {
+        $verdict = Get-ServiceStartVerdict -ReachedRunning $outcome.ReachedRunning -Win32Error $outcome.Win32Error -ExpectsProtocol
+        throw "${Stage}: the upgraded service did not reach Running - $($outcome.Detail). $($verdict.Reason)"
+    }
+    # Stop-Service on a service that already stopped reports "not started", which would read
+    # as a stop failure. Check the state first so a service that reports RUNNING and then
+    # exits on its own is named as that, not as a stop that did not work.
+    $running = Get-EnvManagerService
+    if (-not $running) { throw "${Stage}: the SCM entry disappeared after the service reported Running" }
+    if ($running.Status -eq 'Stopped') {
+        throw "${Stage}: the service reported Running and then stopped on its own; it has to stay running until Stop-Service asks it to stop"
+    }
+    Stop-Service -Name 'EnvManagerService' -ErrorAction Stop
+    $deadline = (Get-Date).AddSeconds(15)
+    while ($true) {
+        $service = Get-EnvManagerService
+        if (-not $service) { break }
+        if ($service.Status -eq 'Stopped') { break }
+        if ((Get-Date) -ge $deadline) { break }
+        Start-Sleep -Milliseconds 500
+    }
+    if (-not $service) {
+        throw "${Stage}: the SCM entry disappeared when the running service was stopped"
+    }
+    if ($service.Status -ne 'Stopped') {
+        throw "${Stage}: the service did not stop within 15s of Stop-Service (status: $($service.Status))"
+    }
+    Write-Host "${Stage}: the upgraded service reached Running and answered Stop-Service (Stopped)"
+}
+
+function Assert-OldServiceStopped {
+    # What the upgrade owes a service that was running: stop it, then replace the binary it
+    # held open. Presence and a correct ImagePath show neither - the entry can point at the
+    # right path while the old image still runs and the file swap waits for a reboot, which
+    # is the failure mode a shared component GUID produces.
+    param([string]$Stage, $Before, [string]$BinaryPath)
+    $service = Get-EnvManagerService
+    if (-not $service) { throw "${Stage}: EnvManagerService SCM entry is missing after the upgrade" }
+    if ($service.Status -ne 'Stopped') {
+        throw "${Stage}: EnvManagerService is $($service.Status) after the upgrade; the major upgrade must stop the running old service and does not start the new one"
+    }
+    $alive = Get-Process -Id ([int]$Before.ProcessId) -ErrorAction SilentlyContinue
+    if ($alive) {
+        # A reused process id is not the old service. The start time is what tells them
+        # apart; when it cannot be read, the id alone is treated as the same process, so an
+        # unreadable process never buys a pass.
+        $sameProcess = $true
+        if ($Before.ProcessStartTime) {
+            try { $sameProcess = ($alive.StartTime -eq $Before.ProcessStartTime) }
+            catch { $sameProcess = $true }
+        }
+        if ($sameProcess) {
+            throw "${Stage}: the process that ran the old service before the upgrade (pid $($Before.ProcessId)) is still alive; the upgrade left it running"
+        }
+        Write-Host "${Stage}: pid $($Before.ProcessId) now belongs to another process; the old service process is gone"
+    }
+    else {
+        Write-Host "${Stage}: the old service process (pid $($Before.ProcessId)) exited during the upgrade"
+    }
+    if (-not (Test-Path -LiteralPath $BinaryPath)) {
+        throw "${Stage}: the service binary is missing after the upgrade ($BinaryPath)"
+    }
+    $replaced = (Get-FileHash -LiteralPath $BinaryPath -Algorithm SHA256).Hash
+    if ([string]::Equals($replaced, $Before.BinaryHash, [System.StringComparison]::OrdinalIgnoreCase)) {
+        throw "${Stage}: the service binary still carries the hash recorded before the upgrade ($BinaryPath); the file the running service held open was not replaced, so the upgrade left the swap for a reboot instead of stopping the service first"
+    }
+    Write-Host ("${Stage}: the service binary was replaced ({0}... -> {1}...)" -f $Before.BinaryHash.Substring(0, 12), $replaced.Substring(0, 12))
+}
+
 function Assert-ServiceAbsent {
     param([string]$Stage)
     $service = Get-EnvManagerService
@@ -477,6 +830,33 @@ try {
             -RequestedDir $previousRequestedDir -ResolvedDir $previousDir
         Assert-ServicePresent -Stage 'Step 1'
         Assert-InstalledPayload -Stage 'Step 1' -ExpectedVersion $PreviousVersion -TargetDir $previousDir
+        # The old service runs into the upgrade on purpose: an upgrade over a stopped
+        # service cannot show that the old service is stopped before the binary it holds
+        # open is replaced, which is the coverage #133 was written for. Whether it can run
+        # here depends on the previous release's binary - see the header.
+        $serviceBinary = Join-Path $targetDir 'env-manager-service.exe'
+        $skipRecord = Join-Path $LogDir 'service-start-skip.log'
+        $oldService = Invoke-ServiceStart -Stage 'Step 1: start the previous release service' -BinaryPath $serviceBinary
+        $startVerdict = Get-ServiceStartVerdict -ReachedRunning $oldService.ReachedRunning -Win32Error $oldService.Win32Error
+        if ($startVerdict.Verdict -eq 'fail') {
+            throw "Step 1: EnvManagerService did not reach Running and this script cannot name a determinate cause ($($oldService.Detail)); the running-old-service coverage is not skippable without one"
+        }
+        if ($startVerdict.Verdict -eq 'skip') {
+            Write-ServiceStartSkip -Stage 'Step 1' -Reason $startVerdict.Reason -Detail $oldService.Detail -RecordPath $skipRecord
+            # A start that never reported RUNNING counts as a service failure, and this
+            # product registers restart-on-failure actions with a 60s delay. Left alone, the
+            # SCM could relaunch the old binary out of the install directory while the
+            # upgrade is replacing it - interference the assertions below would inherit. The
+            # actions belong to the previous release's registration, and the new
+            # ServiceInstall writes its own, so clearing them does not change what the
+            # upgrade is judged on. sc.exe wants the empty action list as a quoted empty
+            # argument; a bare "actions=" is rejected as an invalid option.
+            $clearOutput = & sc.exe failure EnvManagerService reset= 0 actions= '""' 2>&1 | Out-String
+            if ($LASTEXITCODE -ne 0) {
+                throw "Step 1: could not clear the previous release's restart-on-failure actions (sc.exe exit $LASTEXITCODE): $($clearOutput.Trim())"
+            }
+            Write-Host 'Step 1: cleared the previous release failure actions, so the SCM does not retry the start during the upgrade'
+        }
         # Seed the legacy log path the old installer wrote to. The cleanup
         # component is shared across versions, so the old product's uninstall
         # action is skipped; the current product's upgrade-only cleanup action
@@ -516,10 +896,17 @@ try {
             }
             Write-Host "Step 2: the upgrade cleanup left $previousDir alone"
         }
+        if ($oldService.ReachedRunning) {
+            Assert-OldServiceStopped -Stage 'Step 2' -Before $oldService -BinaryPath $serviceBinary
+        }
         if (Test-Path -LiteralPath $legacyProbe) {
             throw "Step 2: the upgrade cleanup left $legacyProbe after the major upgrade"
         }
         Write-Host 'Step 2: the upgrade cleanup removed the seeded legacy log'
+        # A replacement that cannot run is not a replacement, and this start is the half of
+        # the running-old-service coverage that is reachable while no published release
+        # carries the SCM control protocol.
+        Assert-ServiceStartsAndStops -Stage 'Step 2: start the upgraded service' -BinaryPath $serviceBinary
         # The cleanup gate has to hold after the upgrade installed the cleanup path:
         # a repair on an upgraded machine must leave an unrelated log alone. A
         # component-conditioned RemoveFile fails here, because the repair replays it.
