@@ -946,6 +946,11 @@ try {
         }
         if ($startVerdict.Verdict -eq 'skip') {
             Write-ServiceStartSkip -Stage 'Step 1' -Reason $startVerdict.Reason -Detail $oldService.Detail -RecordPath $skipRecord -Scenario $Scenario
+            # A start that never reported RUNNING can still leave the binary running as an
+            # ordinary process - that is what a pre-protocol build does: it serves the pipe
+            # and waits. Such a process holds the file the upgrade has to replace, so the
+            # skip path clears it the way the uninstall path already does.
+            Stop-EnvManagerResidue
         }
         # Seed the legacy log path the old installer wrote to. The cleanup
         # component is shared across versions, so the old product's uninstall
