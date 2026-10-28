@@ -158,17 +158,31 @@
     <DirectoryRef Id="LogsDir">
       <Component Id="LegacyLogsCleanup" Guid="*" Win64="$(var.Win64)">
         <CreateFolder />
+        <!-- Uninstall-time cleanup only. The product owns this directory, so removing
+             the logs it wrote while uninstalling is the uninstall's own byte; the
+             upgrade-time pass lives in LegacyLogsCleanupOnUpgrade and a clean install
+             or repair never touches this wildcard. -->
         <RemoveFile Id="RemoveLegacyLogsFiles" Name="*.log*" On="uninstall" />
-        <!-- Guid="*" resolves to the same component id across builds, so a major
-             upgrade treats the new product as another client and skips the old
-             product's component removal (observed in the MSI upgrade matrix:
-             "Disallowing uninstallation ... since another client exists").
-             Removing on install as well lets the NEW product clear legacy logs
-             while it upgrades; uninstall keeps the original cleanup. -->
-        <RemoveFile Id="RemoveLegacyLogsFilesOnInstall" Name="*.log*" On="install" />
         <RemoveFolder Id="RemoveLegacyLogsDir" On="uninstall" />
         <RegistryValue Root="HKCU" Key="Software\EnvManager" Name="LegacyLogsCleanup"
                        Type="integer" Value="1" KeyPath="yes" />
+      </Component>
+      <!-- Install-time cleanup, upgrade only.
+           Guid="*" resolves to the same component id across builds, so a major
+           upgrade treats the new product as another client and skips the old
+           product's component removal (observed in the MSI upgrade matrix:
+           "Disallowing uninstallation ... since another client exists"). The old
+           logs therefore have to be cleared by the NEW product while it upgrades.
+           Conditioning on WIX_UPGRADE_DETECTED keeps that pass off the clean-install
+           and repair paths, where the wildcard would delete unrelated files a user
+           put in INSTALLDIR\logs. Key path is a registry value, the same shape as
+           StopOldServiceOnUpgrade above. -->
+      <Component Id="LegacyLogsCleanupOnUpgrade" Guid="*" Win64="$(var.Win64)">
+        <Condition>WIX_UPGRADE_DETECTED</Condition>
+        <CreateFolder />
+        <RegistryValue Root="HKLM" Key="Software\EnvManager" Name="LegacyLogsCleanupOnUpgrade"
+                       Type="integer" Value="1" KeyPath="yes" />
+        <RemoveFile Id="RemoveLegacyLogsFilesOnUpgrade" Name="*.log*" On="install" />
       </Component>
     </DirectoryRef>
 
@@ -197,6 +211,7 @@
       <ComponentRef Id="StartMenuShortcut" />
       <ComponentRef Id="DesktopShortcut" />
       <ComponentRef Id="LegacyLogsCleanup" />
+      <ComponentRef Id="LegacyLogsCleanupOnUpgrade" />
     </Feature>
 
   </Product>
