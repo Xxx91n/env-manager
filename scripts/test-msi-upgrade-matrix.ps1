@@ -244,7 +244,9 @@ function Assert-ServicePresent {
 function Get-ServiceImagePath {
     # The service's configured command line, read from the store ServiceInstall
     # writes to: GET-SERVICE only answers "does the entry exist", and Get-CimInstance
-    # would add a WMI round trip for the same string.
+    # would add a WMI round trip for the same string. Read-only on purpose - this
+    # asserts state, it never writes the registry, so test-with-restore.ps1 does not
+    # apply (that harness exists to roll back variable writes).
     $key = 'HKLM:\SYSTEM\CurrentControlSet\Services\EnvManagerService'
     $entry = Get-ItemProperty -LiteralPath $key -Name 'ImagePath' -ErrorAction SilentlyContinue
     if (-not $entry) { return '' }
@@ -271,8 +273,8 @@ function ConvertFrom-ServiceImagePath {
 }
 
 function Assert-ServiceImagePath {
-    param([string]$Stage, [string]$ExpectedDir)
-    $expected = [System.IO.Path]::GetFullPath((Join-Path $ExpectedDir 'env-manager-service.exe'))
+    param([string]$Stage, [string]$TargetDir)
+    $expected = [System.IO.Path]::GetFullPath((Join-Path $TargetDir 'env-manager-service.exe'))
     $imagePath = Get-ServiceImagePath
     if ([string]::IsNullOrWhiteSpace($imagePath)) {
         throw "${Stage}: EnvManagerService has no ImagePath; expected the service binary at $expected"
@@ -343,11 +345,10 @@ try {
         Invoke-SilentInstall -Stage 'Step 2: silent upgrade (current over previous)' -MsiPath $CurrentMsi -LogPath (Join-Path $LogDir 'step2-current-upgrade.log')
         Assert-ServicePresent -Stage 'Step 2'
         Assert-InstalledPayload -Stage 'Step 2' -ExpectedVersion $CurrentVersion
-        # Presence alone cannot tell a correct service entry from one that still
-        # names the previous install directory, so the upgrade legs check where it
-        # points: the entry must name the binary under THIS install directory, and
-        # that file must be on disk.
-        Assert-ServiceImagePath -Stage 'Step 2' -ExpectedDir $targetDir
+        # Presence alone cannot tell a correct service entry from one naming some
+        # other directory, so the upgrade legs check where it points and that the
+        # file is there.
+        Assert-ServiceImagePath -Stage 'Step 2' -TargetDir $targetDir
         if (Test-Path -LiteralPath $legacyProbe) {
             throw "Step 2: the upgrade cleanup left $legacyProbe after the major upgrade"
         }
