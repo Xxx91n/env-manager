@@ -660,7 +660,7 @@ jobs:
           }
           if ('${{ matrix.install_dir }}') { $scriptArgs.InstallDir = '${{ matrix.install_dir }}' }
           # Unset for every cell that keeps the previous release in its own directory;
-          # naming a different one is what makes the leg a directory migration.
+          # naming a different one is what makes the cell a directory migration.
           if ('${{ matrix.previous_install_dir }}') { $scriptArgs.PreviousInstallDir = '${{ matrix.previous_install_dir }}' }
           if ('${{ matrix.mode }}' -eq 'upgrade') {
             $previousMsis = @(Get-ChildItem artifacts/previous -Recurse -Filter '*x64.msi')
