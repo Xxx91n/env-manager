@@ -223,10 +223,12 @@ Prereqs: elevated shell; no env-manager process running (`Get-Process -Name 'env
 function Invoke-Msi { param([string]$CommandLine) (Start-Process -FilePath msiexec.exe -ArgumentList $CommandLine -Wait -PassThru).ExitCode }
 
 # Step 0 (RED, only once per regression): prove the broken baseline hangs
-# Build the previous-tag MSI (e.g. v0.9.26 with the old installer.wxs) and run:
+# Build the previous-tag MSI (e.g. v0.9.26 with the old installer.wxs) and run.
+# A hang is the measurement, so Step 0 is the one step that must not wait forever:
+# start it, give it the runbook's 60s threshold, and kill it when that expires.
 $prev = "<prev>.msi"
-$elapsed = Measure-Command { $null = Invoke-Msi "/i `"$prev`" /quiet /norestart /L*v `"$env:TEMP\msi-prev-install.log`"" }
-if ($elapsed.TotalMilliseconds -gt 60000) { "BASELINE REPRODUCED (hang)" }   # expected for v0.9.26
+$p = Start-Process -FilePath msiexec.exe -PassThru -ArgumentList "/i `"$prev`" /quiet /norestart /L*v `"$env:TEMP\msi-prev-install.log`""
+if (-not $p.WaitForExit(60000)) { $p.Kill(); "BASELINE REPRODUCED (hang)" }   # expected for v0.9.26
 (Invoke-Msi "/x `"$prev`" /quiet /norestart") -eq 0  # leave a clean machine so Step 1's shortcut assertion is meaningful
 Test-Path "$env:PUBLIC\Desktop\Env Manager.lnk"  # must be $false after the baseline uninstall
 
