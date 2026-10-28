@@ -189,17 +189,19 @@ function Invoke-MsiProcess {
 }
 
 function Add-InstallDirOverride {
-    param([string[]]$MsiArgs)
-    # A custom-path cell installs and repairs the same explicitly chosen directory;
-    # keeping the two in step here is what stops one call site drifting from the other.
-    if ([string]::IsNullOrWhiteSpace($InstallDir)) { return $MsiArgs }
-    return ($MsiArgs + "INSTALLDIR=`"$targetDir`"")
+    param([string[]]$MsiArgs, [string]$RequestedDir, [string]$ResolvedDir)
+    # Install and repair both act on the directory the cell asked for, so they share
+    # this one append. Uninstall deliberately does not use it: /x removes what is
+    # installed and must not be pointed at a directory.
+    if ([string]::IsNullOrWhiteSpace($RequestedDir)) { return $MsiArgs }
+    return ($MsiArgs + "INSTALLDIR=`"$ResolvedDir`"")
 }
 
 function Invoke-SilentInstall {
     param([string]$Stage, [string]$MsiPath, [string]$LogPath)
     $msiArgs = @('/i', "`"$MsiPath`"", '/quiet', '/norestart', '/L*v', "`"$LogPath`"")
-    Invoke-MsiProcess -Stage $Stage -MsiArgs (Add-InstallDirOverride -MsiArgs $msiArgs) -LogPath $LogPath
+    $msiArgs = Add-InstallDirOverride -MsiArgs $msiArgs -RequestedDir $InstallDir -ResolvedDir $targetDir
+    Invoke-MsiProcess -Stage $Stage -MsiArgs $msiArgs -LogPath $LogPath
 }
 
 function Invoke-SilentUninstall {
@@ -218,7 +220,8 @@ function Invoke-SilentRepair {
     # seeded log here. Without it the repair would skip those components and the
     # assertion would pass on an installer that still deletes the file.
     $msiArgs = @('/fomus', "`"$MsiPath`"", '/quiet', '/norestart', '/L*v', "`"$LogPath`"")
-    Invoke-MsiProcess -Stage 'Step 2: forced repair (/fomus)' -MsiArgs (Add-InstallDirOverride -MsiArgs $msiArgs) -LogPath $LogPath
+    $msiArgs = Add-InstallDirOverride -MsiArgs $msiArgs -RequestedDir $InstallDir -ResolvedDir $targetDir
+    Invoke-MsiProcess -Stage 'Step 2: forced repair (/fomus)' -MsiArgs $msiArgs -LogPath $LogPath
 }
 
 function Assert-ServicePresent {
@@ -294,11 +297,11 @@ try {
         Invoke-SilentInstall -Stage 'Step 1: silent install (current)' -MsiPath $CurrentMsi -LogPath (Join-Path $LogDir 'step1-current-install.log')
         Assert-ServicePresent -Stage 'Step 1'
         Assert-InstalledPayload -Stage 'Step 1' -ExpectedVersion $CurrentVersion
-        # The repair is what proves the install-time wildcard is upgrade-only: a
-        # clean install on an empty machine has no unrelated file to lose, and the
-        # unconditional RemoveFile ran when a component was installed, which is the
-        # repair path. The probe is the same file name the upgrade leg seeds, so the
-        # two legs disagree only in the expectation.
+        # The repair is what proves the install-time wildcard is upgrade-only. A clean
+        # install on an empty machine has no unrelated file to lose, whereas the
+        # wildcard would act on any component that reaches the install state — which
+        # is exactly the state a repair puts it in. The probe is the same file name
+        # the upgrade leg seeds, so the two legs disagree only in the expectation.
         $legacyProbe = Join-Path (Join-Path $targetDir 'logs') 'upgrade-probe.log'
         New-Item -ItemType Directory -Force -Path (Split-Path -Parent $legacyProbe) | Out-Null
         Set-Content -LiteralPath $legacyProbe -Value 'repair probe' -Encoding utf8
