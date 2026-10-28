@@ -572,7 +572,8 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # Step 1 + Step 3: current MSI on an empty machine, custom path.
+          # Step 1 + Step 2 (forced repair, which must not clean logs) + Step 3:
+          # current MSI on an empty machine, custom path.
           - scenario: clean-custom-path
             mode: clean
             install_dir: 'C:\env-manager-upgrade-test'

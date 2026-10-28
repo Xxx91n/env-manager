@@ -173,7 +173,11 @@
            product's component removal (observed in the MSI upgrade matrix:
            "Disallowing uninstallation ... since another client exists"). The old
            logs therefore have to be cleared by the NEW product while it upgrades.
-           Conditioning on WIX_UPGRADE_DETECTED keeps that pass off the clean-install
+           That shared identity is a property of the LegacyLogsCleanup component
+           above, not of the element moved out of it: the autoguid is seeded on the
+           directory plus the key path, and both are unchanged, so upgrades from
+           already-shipped versions still skip the old removal and still need this
+           pass. Conditioning on WIX_UPGRADE_DETECTED keeps it off the clean-install
            and repair paths, where the wildcard would delete unrelated files a user
            put in INSTALLDIR\logs. Key path is a registry value, the same shape as
            StopOldServiceOnUpgrade above. -->

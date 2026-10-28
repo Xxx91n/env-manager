@@ -239,6 +239,10 @@ Set-Content -LiteralPath $probe -Value 'repair probe'
 msiexec /fomus $msi /quiet /norestart /L*v "$env:TEMP\msi-repair.log"
 $LASTEXITCODE -eq 0
 Test-Path $probe  # must be $true: the install-time cleanup is upgrade-only
+# ...and a plain maintenance install over the same version still succeeds
+msiexec /i $msi /quiet /norestart /L*v "$env:TEMP\msi-maintenance.log"
+$LASTEXITCODE -eq 0
+Test-Path $probe  # must be $true
 
 # Step 3: silent uninstall
 msiexec /x $msi /quiet /norestart /L*v "$env:TEMP\msi-uninstall.log"
