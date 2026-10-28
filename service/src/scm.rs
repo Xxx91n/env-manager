@@ -44,8 +44,10 @@ const RUNTIME_DRAIN: Duration = Duration::from_secs(2);
 /// The stop path must fit inside the wait hint the SCM was given, otherwise the SCM
 /// declares the service unresponsive instead of waiting it out. Two drains are the
 /// whole budget: the server body drains its tasks, then the runtime drains.
+/// Both sides are milliseconds: comparing `as_secs()` against a millisecond constant
+/// would make the guard vacuous (it would only fire past ~83 minutes).
 const _: () = assert!(
-    crate::SHUTDOWN_DRAIN.as_secs() + RUNTIME_DRAIN.as_secs() <= STOP_WAIT_HINT_MS as u64,
+    crate::SHUTDOWN_DRAIN.as_millis() + RUNTIME_DRAIN.as_millis() < STOP_WAIT_HINT_MS as u128,
     "the stop path must finish inside STOP_WAIT_HINT_MS"
 );
 
