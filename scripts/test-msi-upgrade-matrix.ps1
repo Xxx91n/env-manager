@@ -96,9 +96,11 @@ function ConvertFrom-ServiceImagePath {
         if ($end -lt 1) { return '' }
         return $trimmed.Substring(1, $end - 1)
     }
-    # Unquoted: cut at the first argument-shaped token, not at the first space,
-    # because an unquoted path under Program Files contains spaces itself and the
-    # arguments in this repo always start with '-'.
+    # Unquoted: cut at the first argument-shaped token, not at the first space, because
+    # the arguments in this repo always start with '-'. Cutting at the first space would
+    # truncate a spaced path to its first word (C:\Program Files\... -> C:\Program) and
+    # hand the refusal below a prefix with no spaces in it, so it would compare that
+    # fragment instead of reporting the ambiguity.
     $match = [regex]::Match($trimmed, '^(?<exe>.*?)\s+--?\S')
     if ($match.Success) { $exe = $match.Groups['exe'].Value } else { $exe = $trimmed }
     # An unquoted command line resolves by progressive prefixes (see the header), so an
@@ -107,7 +109,7 @@ function ConvertFrom-ServiceImagePath {
     # returning '', keeps the ambiguity out of the caller's "cannot read an executable
     # path" message, which would be false here.
     if ($exe -match '\s') {
-        throw "The executable in ImagePath is unquoted and contains spaces, so Windows resolves the module name by trying progressively longer prefixes of this command line (for a path under Program Files it may start C:\Program.exe, or another prefix, before the intended binary); the executable that starts need not be the one this assertion read. Quote the executable path. ImagePath: '$trimmed'"
+        throw "The executable in ImagePath is unquoted and contains spaces, so Windows resolves the module name by trying progressively longer prefixes of this command line (for a path under Program Files it may start C:\Program.exe, or another prefix, instead of the intended path); which binary starts is therefore ambiguous, and it need not be the one this assertion read. Quote the executable path. ImagePath: '$trimmed'"
     }
     return $exe
 }
