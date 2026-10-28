@@ -33,22 +33,10 @@
 # as a skip there too. That post-upgrade start is also the half of this coverage that is
 # reachable now: a replacement that cannot run is not a replacement.
 #
-# One upgrade cell installs the previous release somewhere other than the cell's own
-# INSTALLDIR: the product default first, a custom directory second. The two
-# same-directory cells cannot show an install-directory move at all, because there the
-# previous directory is the current one by construction; in this cell "the entry follows
-# the new directory" and "the upgrade wrote the old directory back" are finally different
-# facts, and one fact a service entry cannot show joins them - the directory the product
-# migrated off holds no executable from the previous release, so anything still naming it
-# resolves to nothing. Its two log probes take opposite expectations for that reason: the
-# probe in the new directory must be deleted by the upgrade-time cleanup, because deleting
-# a log there is what proves the cleanup follows INSTALLDIR instead of the default path -
-# which in this cell is exactly where the previous release lives - while the probe in the
-# migrated-off directory must survive, because the cleanup never runs against that
-# directory and the previous product's cleanup component is skipped as shared. The
-# executables in that directory leave for a different reason (the new install moves their
-# components), so the pair distinguishes "the cleanup stayed put" from "the directory was
-# emptied anyway" - a distinction the same-directory cells cannot draw.
+# Before attempting the start the leg clears the previous release's restart-on-failure
+# actions. A start that never reports RUNNING counts as a failure, and the registered retry
+# chain (three restarts, 60s apart) would fire inside Step 2, Step 2b and Step 3 - each of
+# which replaces or deletes the binary the retry would relaunch.
 #
 # Reading the executable out of ImagePath has one shape it refuses rather than
 # judges: an unquoted executable that contains spaces. Windows resolves an unquoted
@@ -203,6 +191,9 @@ function Get-ServiceStartVerdict {
     # registration codes are properties of the installed release. Both groups are the
     # installed release's limit, so both skip - unless the binary is the one just built.
     $protocolBlind = @{
+        # 0 means the SCM accepted the start and the service then never reported RUNNING,
+        # which is the same event as 1067 seen from the other side.
+        0 = 'the SCM accepted the start but the service never reported SERVICE_RUNNING'
         1053 = 'the SCM stopped waiting for a SERVICE_RUNNING report at ServicesPipeTimeout and failed the start with 1053'
         1067 = 'the process exited before reporting SERVICE_RUNNING, and the SCM answered 1067'
     }
@@ -320,7 +311,11 @@ if ($SelfTest) {
         @{ Name = 'a disabled service is a recorded skip'; Actual = (Get-ServiceStartVerdict -ReachedRunning $false -Win32Error 1058).Verdict; Expected = 'skip' },
         @{ Name = 'a disabled service the harness must run is a failure'; Actual = (Get-ServiceStartVerdict -ReachedRunning $false -Win32Error 1058 -ExpectsProtocol).Verdict; Expected = 'fail' },
         @{ Name = 'a logon failure is a recorded skip'; Actual = (Get-ServiceStartVerdict -ReachedRunning $false -Win32Error 1069).Verdict; Expected = 'skip' },
+        @{ Name = 'a logon failure the harness must run is a failure'; Actual = (Get-ServiceStartVerdict -ReachedRunning $false -Win32Error 1069 -ExpectsProtocol).Verdict; Expected = 'fail' },
         @{ Name = 'a missing dependency is a recorded skip'; Actual = (Get-ServiceStartVerdict -ReachedRunning $false -Win32Error 1075).Verdict; Expected = 'skip' },
+        @{ Name = 'a missing dependency the harness must run is a failure'; Actual = (Get-ServiceStartVerdict -ReachedRunning $false -Win32Error 1075 -ExpectsProtocol).Verdict; Expected = 'fail' },
+        @{ Name = 'an accepted start that never reported is a recorded skip'; Actual = (Get-ServiceStartVerdict -ReachedRunning $false -Win32Error 0).Verdict; Expected = 'skip' },
+        @{ Name = 'an accepted start that never reported is a failure for this build'; Actual = (Get-ServiceStartVerdict -ReachedRunning $false -Win32Error 0 -ExpectsProtocol).Verdict; Expected = 'fail' },
         @{ Name = 'access denied is a runner limit, skipped'; Actual = (Get-ServiceStartVerdict -ReachedRunning $false -Win32Error 5).Verdict; Expected = 'skip' },
         @{ Name = 'access denied skips even for the binary just built'; Actual = (Get-ServiceStartVerdict -ReachedRunning $false -Win32Error 5 -ExpectsProtocol).Verdict; Expected = 'skip' },
         @{ Name = 'an unexplained start failure is never skipped'; Actual = (Get-ServiceStartVerdict -ReachedRunning $false -Win32Error 87).Verdict; Expected = 'fail' },
@@ -738,7 +733,7 @@ function Write-ServiceStartSkip {
     $stamp = (Get-Date).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ')
     Add-Content -LiteralPath $RecordPath -Value ('{0} scenario={1} stage={2} reason={3} detail={4}' -f $stamp, $Scenario, $Stage, $Reason, $Detail) -Encoding utf8
     if (-not [string]::IsNullOrWhiteSpace($env:GITHUB_STEP_SUMMARY)) {
-        Add-Content -LiteralPath $env:GITHUB_STEP_SUMMARY -Encoding utf8 -Value ('- `{0}` / {1}: the running-old-service assertions did not run - {2}' -f $Scenario, $Stage, $Reason)
+        Add-Content -LiteralPath $env:GITHUB_STEP_SUMMARY -Encoding utf8 -Value ('- `{0}` / {1}: skipped, so the assertion there did not run - {2}' -f $Scenario, $Stage, $Reason)
     }
 }
 
@@ -797,6 +792,30 @@ function Assert-ServiceStartsAndStops {
     Stop-Service -Name 'EnvManagerService' -ErrorAction Stop
     Assert-ServiceStopped -Stage $Stage -Why 'Stop-Service must bring it back to Stopped'
     Write-Host "${Stage}: the upgraded service reached Running and answered Stop-Service (Stopped)"
+}
+
+function Assert-ServiceStillRunning {
+    # The upgrade's stop assertion is only worth something if the service was still running
+    # when the upgrade began: a process that exited on its own makes "the upgrade stopped it"
+    # and "the process exited during the upgrade" equally true of a service that was already
+    # gone. Called immediately before the upgrade, so the pair of assertions brackets msiexec.
+    param([string]$Stage, $Before)
+    $service = Get-EnvManagerService
+    if (-not $service) { throw "${Stage}: EnvManagerService SCM entry is missing before the upgrade" }
+    if ($service.Status -ne 'Running') {
+        throw "${Stage}: EnvManagerService is $($service.Status) before the upgrade; the stop assertion needs it still Running when the upgrade starts"
+    }
+    $alive = Get-Process -Id ([int]$Before.ProcessId) -ErrorAction SilentlyContinue
+    if (-not $alive) {
+        throw "${Stage}: the process the service started as (pid $($Before.ProcessId)) is gone before the upgrade, so the upgrade cannot be what ends it"
+    }
+    if ($Before.ProcessStartTime) {
+        $sameProcess = $true
+        try { $sameProcess = ($alive.StartTime -eq $Before.ProcessStartTime) }
+        catch { $sameProcess = $true }
+        if (-not $sameProcess) { throw "${Stage}: pid $($Before.ProcessId) already belongs to another process before the upgrade" }
+    }
+    Write-Host "${Stage}: EnvManagerService is still Running as pid $($Before.ProcessId)"
 }
 
 function Assert-OldServiceStoppedAndReplaced {
@@ -906,18 +925,26 @@ try {
         $serviceBinary = Join-Path $targetDir 'env-manager-service.exe'
         $skipRecord = Join-Path $LogDir 'service-start-skip.log'
         $previousCarriesProtocol = Test-BinaryCarriesServiceProtocol -Path $serviceBinary
+        # The previous release registers restart-on-failure actions (three restarts, 60s
+        # apart), and a start that never reports RUNNING counts as one of those failures.
+        # Attempting the start without clearing them would arm a retry chain at roughly
+        # +90s, +150s and +210s - inside this leg's Step 2, Step 2b and Step 3, each of which
+        # replaces or deletes the binary the retry would relaunch. Clearing them first keeps
+        # those steps independent of a timer this script started; the new ServiceInstall
+        # writes its own actions during the upgrade, so nothing under test changes.
+        # sc.exe takes the empty action list as a quoted empty argument; a bare "actions=" is
+        # rejected as an invalid option.
+        $clearOutput = & sc.exe failure EnvManagerService reset= 0 actions= '""' 2>&1 | Out-String
+        if ($LASTEXITCODE -ne 0) {
+            throw "Step 1: could not clear the previous release's restart-on-failure actions (sc.exe exit $LASTEXITCODE): $($clearOutput.Trim())"
+        }
         $oldService = Invoke-ServiceStart -Stage 'Step 1: start the previous release service' -BinaryPath $serviceBinary
         $startVerdict = Get-ServiceStartVerdict -ReachedRunning $oldService.ReachedRunning -Win32Error $oldService.Win32Error -ExpectsProtocol:$previousCarriesProtocol
         if ($startVerdict.Verdict -eq 'fail') {
-            throw "Step 1: EnvManagerService did not reach Running and this script cannot name a determinate cause ($($oldService.Detail)); the running-old-service coverage is not skippable without one"
+            $because = if ([string]::IsNullOrWhiteSpace($startVerdict.Reason)) { 'this script cannot name a determinate cause for it' } else { $startVerdict.Reason }
+            throw "Step 1: EnvManagerService did not reach Running - $($oldService.Detail); $because"
         }
         if ($startVerdict.Verdict -eq 'skip') {
-            # The failed start also arms this product's restart-on-failure actions, which
-            # retry after 60s. The upgrade is bounded by InstallTimeoutSeconds (60s by
-            # default) and recreates the service entry, so a retry cannot land inside the
-            # file replacement - a leg slow enough for that has already tripped the hang
-            # gate. That coupling is why this branch clears no service configuration: the
-            # upgrade stays the only thing the leg changes.
             Write-ServiceStartSkip -Stage 'Step 1' -Reason $startVerdict.Reason -Detail $oldService.Detail -RecordPath $skipRecord -Scenario $Scenario
         }
         # Seed the legacy log path the old installer wrote to. The cleanup
@@ -942,6 +969,11 @@ try {
             New-Item -ItemType Directory -Force -Path (Split-Path -Parent $migratedOffProbe) | Out-Null
             Set-Content -LiteralPath $migratedOffProbe -Value 'migrated-off log probe' -Encoding utf8
             Write-Host "Step 2: seeded $migratedOffProbe to prove the upgrade cleanup stays in the new directory"
+        }
+        if ($oldService.ReachedRunning) {
+            # Brackets msiexec: the one assertion before the upgrade and the ones after it
+            # only mean something together.
+            Assert-ServiceStillRunning -Stage 'Step 2 (before the upgrade)' -Before $oldService
         }
         Invoke-SilentInstall -Stage 'Step 2: silent upgrade (current over previous)' -MsiPath $CurrentMsi `
             -LogPath (Join-Path $LogDir 'step2-current-upgrade.log') `
