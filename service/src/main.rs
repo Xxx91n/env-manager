@@ -440,10 +440,11 @@ mod startup_contract_tests {
         tokio::time::sleep(Duration::from_millis(200)).await;
 
         shutdown.cancel();
-        // The drain window is `SHUTDOWN_DRAIN`; a fifth of it is spent proving the body is
-        // still inside the handler. Polling rather than one long sleep keeps a slow runner
-        // from passing the assertion by finishing early, and staying well inside the budget
-        // keeps drift from letting the outer drain expire the pin for the wrong reason.
+        // The drain window is `SHUTDOWN_DRAIN`; an eighth of it (5 x 50ms) is spent proving
+        // the body is still inside the handler. Polling rather than one long sleep keeps a
+        // slow runner from passing the assertion by finishing early, and staying well inside
+        // the budget keeps drift from letting the outer drain expire the pin for the wrong
+        // reason.
         for _ in 0..5 {
             assert!(
                 !server.is_finished(),
