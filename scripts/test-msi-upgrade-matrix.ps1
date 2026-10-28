@@ -4,6 +4,7 @@
 #   Step 0  hang baseline    -> a silent install that exceeds InstallTimeoutSeconds fails (default 60s, the runbook's hang threshold)
 #   Step 1  silent install   -> install the previous release (upgrade mode) or the current MSI (clean mode)
 #   Step 2  silent upgrade   -> install the current MSI over the previous release; a seeded legacy log must be cleaned up
+#                               and the service entry must point at the current install directory
 #           (clean mode)     -> force a repair (/fomus); the same seeded legacy log must survive
 #   Step 2b repair after upgrade -> /fomus on the upgraded product must leave a freshly seeded log alone
 #   Step 3  silent uninstall -> msiexec /x, then assert the service entry and binaries are gone
@@ -11,6 +12,14 @@
 # A failure prints the msiexec action that reported "Return value 3" (or the last
 # action that started when the process was killed), so a red job names the
 # failing custom action instead of only an exit code.
+#
+# The upgrade legs assert the SCM facts an upgrade can actually be judged on - the
+# entry exists, its executable path is inside the current install directory, and
+# that file is on disk - rather than "the running old service was stopped by the
+# upgrade". The latter is unreachable: EnvManagerService never joins the SCM
+# control protocol, so it cannot report Running and Start-Service only returns
+# 1053 after ServicesPipeTimeout. Nothing here starts the old service on purpose;
+# re-adding that attempt would only reintroduce a step that can never pass.
 #
 # -SelfTest feeds synthetic msiexec logs through the diagnosis helper; it needs
 # no MSI and no elevation, so it can run anywhere PowerShell 5.1+ is installed.
@@ -232,6 +241,60 @@ function Assert-ServicePresent {
     Write-Host "${Stage}: EnvManagerService present (status: $($service.Status))"
 }
 
+function Get-ServiceImagePath {
+    # The service's configured command line, read from the store ServiceInstall
+    # writes to: GET-SERVICE only answers "does the entry exist", and Get-CimInstance
+    # would add a WMI round trip for the same string.
+    $key = 'HKLM:\SYSTEM\CurrentControlSet\Services\EnvManagerService'
+    $entry = Get-ItemProperty -LiteralPath $key -Name 'ImagePath' -ErrorAction SilentlyContinue
+    if (-not $entry) { return '' }
+    return ([string]$entry.ImagePath).Trim()
+}
+
+function ConvertFrom-ServiceImagePath {
+    # ImagePath is the configured command line: the executable plus the installer's
+    # arguments, with SCM quoting optional. Return the executable only.
+    param([string]$ImagePath)
+    $trimmed = ([string]$ImagePath).Trim()
+    if ($trimmed.Length -eq 0) { return '' }
+    if ($trimmed.StartsWith('"')) {
+        $end = $trimmed.IndexOf('"', 1)
+        if ($end -lt 1) { return '' }
+        return $trimmed.Substring(1, $end - 1)
+    }
+    # Unquoted: cut at the first argument-shaped token, not at the first space,
+    # because an unquoted path under Program Files contains spaces itself and the
+    # arguments in this repo always start with '-'.
+    $match = [regex]::Match($trimmed, '^(?<exe>.*?)\s+--?\S')
+    if ($match.Success) { return $match.Groups['exe'].Value }
+    return $trimmed
+}
+
+function Assert-ServiceImagePath {
+    param([string]$Stage, [string]$ExpectedDir)
+    $expected = [System.IO.Path]::GetFullPath((Join-Path $ExpectedDir 'env-manager-service.exe'))
+    $imagePath = Get-ServiceImagePath
+    if ([string]::IsNullOrWhiteSpace($imagePath)) {
+        throw "${Stage}: EnvManagerService has no ImagePath; expected the service binary at $expected"
+    }
+    $actual = ConvertFrom-ServiceImagePath -ImagePath $imagePath
+    if ([string]::IsNullOrWhiteSpace($actual)) {
+        throw "${Stage}: cannot read an executable path from ImagePath '$imagePath'"
+    }
+    # Normalize both sides before comparing: the same directory can be spelled with
+    # a different case, a trailing separator or an 8.3 name, and a string compare on
+    # the raw values would make the gate fail for a correctly installed service.
+    try { $actualFull = [System.IO.Path]::GetFullPath($actual) }
+    catch { throw "${Stage}: cannot normalize the ImagePath executable '$actual' ($($_.Exception.Message))" }
+    if (-not [string]::Equals($actualFull, $expected, [System.StringComparison]::OrdinalIgnoreCase)) {
+        throw "${Stage}: EnvManagerService points at '$actual', expected the service binary in the current install directory ($expected); ImagePath: '$imagePath'"
+    }
+    if (-not (Test-Path -LiteralPath $actualFull)) {
+        throw "${Stage}: EnvManagerService points at $actualFull, but that file does not exist"
+    }
+    Write-Host "${Stage}: EnvManagerService points at $actualFull (file present)"
+}
+
 function Assert-ServiceAbsent {
     param([string]$Stage)
     $service = Get-EnvManagerService
@@ -280,6 +343,11 @@ try {
         Invoke-SilentInstall -Stage 'Step 2: silent upgrade (current over previous)' -MsiPath $CurrentMsi -LogPath (Join-Path $LogDir 'step2-current-upgrade.log')
         Assert-ServicePresent -Stage 'Step 2'
         Assert-InstalledPayload -Stage 'Step 2' -ExpectedVersion $CurrentVersion
+        # Presence alone cannot tell a correct service entry from one that still
+        # names the previous install directory, so the upgrade legs check where it
+        # points: the entry must name the binary under THIS install directory, and
+        # that file must be on disk.
+        Assert-ServiceImagePath -Stage 'Step 2' -ExpectedDir $targetDir
         if (Test-Path -LiteralPath $legacyProbe) {
             throw "Step 2: the upgrade cleanup left $legacyProbe after the major upgrade"
         }
