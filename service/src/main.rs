@@ -107,9 +107,6 @@ tracing_subscriber::fmt()
 std::mem::forget(guard);
     tracing::info!("env-manager-service starting in {:?} mode", mode);
 
-    // Process hardening (WER, hash, debugger, modules, lock)
-    process_guard::init();
-
     // Entry guard (A7): refuse direct double-click launch with no --mode.
     // If interactive session and no --mode flag, print guidance and exit.
     if matches!(mode, RuntimeMode::Background) && !args.iter().any(|a| a.starts_with("--mode=")) {
@@ -130,6 +127,11 @@ std::mem::forget(guard);
         return;
     }
 
+    // Process hardening (WER, hash, debugger, modules, lock). Service mode runs this
+    // inside service_main, after SERVICE_START_PENDING, and only reaches this line when
+    // the SCM did not launch the process.
+    process_guard::init();
+
     let rt = match tokio::runtime::Builder::new_multi_thread()
         .enable_all()
         .build()
@@ -146,7 +148,7 @@ std::mem::forget(guard);
             RuntimeMode::Service | RuntimeMode::Background => {
                 let shutdown = Arc::new(CancellationToken::new());
                 let exit = match mode {
-                    RuntimeMode::Service => run_server(mode.pipe_endpoint(), shutdown, || {}).await,
+                    RuntimeMode::Service => run_server(mode.pipe_endpoint(), shutdown, || true).await,
                     _ => run_background_server(mode.pipe_endpoint(), shutdown).await,
                 };
                 match exit {
@@ -186,11 +188,13 @@ pub enum ServerExit {
 /// Ordering is a hard constraint (#149): the named-pipe listener is created first,
 /// `on_listening` fires the moment it exists, and only then does the reconcile loop
 /// start. Service mode reports `SERVICE_RUNNING` from `on_listening`, so any slow work
-/// moved ahead of that point brings back the boot-time 1053 failure.
+/// moved ahead of that point brings back the boot-time 1053 failure. `on_listening`
+/// returns whether the listener was announced; a `false` means a stop is already
+/// pending and the body must not start working.
 pub async fn run_server(
     pipe_name: &'static str,
     shutdown: Arc<CancellationToken>,
-    on_listening: impl FnOnce() + Send,
+    on_listening: impl FnOnce() -> bool + Send,
 ) -> ServerExit {
     tracing::info!("IPC pipe: {}", pipe_name);
 
@@ -205,15 +209,12 @@ pub async fn run_server(
         }
     };
 
-    // A stop that arrived while the listener was being created already reported
-    // SERVICE_STOP_PENDING; reporting RUNNING now would move the SCM state backwards.
-    if shutdown.is_cancelled() {
-        tracing::info!("stop requested before the listener came up, not reporting RUNNING");
+    // Listen -> report -> reconcile, in that order. Reporting RUNNING is skipped when a
+    // stop landed while the listener was being created: the SCM already has
+    // STOP_PENDING, and moving its state forward again would be wrong.
+    if !on_listening() {
         return ServerExit::Requested;
     }
-
-    // Listen -> report -> reconcile, in that order.
-    on_listening();
 
     let reconcile = tokio::spawn(reconcile::reconcile_loop(shutdown.clone()));
     let ipc = tokio::spawn(ipc::serve(pipe_name, first, shutdown.clone()));
@@ -334,6 +335,7 @@ mod startup_contract_tests {
         let server = tokio::spawn(run_server(ORDER_PIPE, shutdown.clone(), move || {
             let reachable = open(ORDER_PIPE).is_ok();
             writer.store(if reachable { 2 } else { 1 }, Ordering::SeqCst);
+            true
         }));
         // Same polling budget as the resilience suite's wait_for_pipe.
         for _ in 0..100 {
@@ -365,7 +367,8 @@ mod startup_contract_tests {
         let writer = listening.clone();
         let shutdown = Arc::new(CancellationToken::new());
         let server = tokio::spawn(run_server(RELEASE_PIPE, shutdown.clone(), move || {
-            writer.store(true, Ordering::SeqCst)
+            writer.store(true, Ordering::SeqCst);
+            true
         }));
         for _ in 0..100 {
             if listening.load(Ordering::SeqCst) {

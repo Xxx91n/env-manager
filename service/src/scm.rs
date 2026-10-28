@@ -16,8 +16,7 @@
 // and "reconcile spawned"; moving slow work ahead of that point reintroduces 1053.
 
 use std::ffi::c_void;
-use std::sync::atomic::{AtomicU32, Ordering};
-use std::sync::{Arc, OnceLock};
+use std::sync::{Arc, Mutex, MutexGuard, OnceLock};
 use std::time::Duration;
 use tokio_util::sync::CancellationToken;
 use windows_sys::core::PWSTR;
@@ -58,8 +57,15 @@ const EXIT_CODE_BODY_FAILED: u32 = 1;
 /// `static` requires; it is written once, on the SCM's service thread.
 static STATUS_HANDLE: OnceLock<usize> = OnceLock::new();
 
-/// Last reported state, so `SERVICE_CONTROL_INTERROGATE` can answer with it.
-static CURRENT_STATE: AtomicU32 = AtomicU32::new(SERVICE_START_PENDING);
+/// Serializes status transitions against the control handler. The SCM reads states in
+/// order, so a RUNNING report must not land after the STOP_PENDING the handler already
+/// sent; the check and the report have to be one critical section. Never held across an
+/// await or a second lock.
+static STATUS_LOCK: Mutex<()> = Mutex::new(());
+
+/// Last status sent to the SCM, replayed verbatim for `SERVICE_CONTROL_INTERROGATE` so
+/// the checkpoint, wait hint and exit code the SCM already knows are not reset.
+static LAST_STATUS: Mutex<Option<SERVICE_STATUS>> = Mutex::new(None);
 
 /// Cancellation shared with the server body. The control handler trips it, which is
 /// what makes a STOP/SHUTDOWN request reach the IPC listener and the reconcile loop.
@@ -71,13 +77,51 @@ fn to_wide(s: &str) -> Vec<u16> {
     wide
 }
 
+/// Take the status lock, ignoring poisoning: a panic elsewhere must not stop the stop
+/// path from reporting.
+fn status_lock() -> MutexGuard<'static, ()> {
+    STATUS_LOCK
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+}
+
 /// Report one state transition to the SCM. A no-op before the status handle exists,
 /// so the same call sites stay valid on the non-SCM fallback path.
 fn report(state: u32, checkpoint: u32, wait_hint_ms: u32) {
-    report_with(state, checkpoint, wait_hint_ms, 0, 0);
+    let _guard = status_lock();
+    report_locked(state, checkpoint, wait_hint_ms, 0, 0);
 }
 
-fn report_with(
+/// Report a terminal STOPPED whose cause was a failure, so the SCM records a service
+/// error (and applies the configured recovery actions) instead of a clean stop.
+fn report_failure(service_exit_code: u32) {
+    let _guard = status_lock();
+    report_locked(
+        SERVICE_STOPPED,
+        0,
+        0,
+        ERROR_SERVICE_SPECIFIC_ERROR,
+        service_exit_code,
+    );
+}
+
+/// Report SERVICE_RUNNING unless a stop request already landed.
+///
+/// The check and the report share `STATUS_LOCK` with the control handler, so the SCM can
+/// never end up with RUNNING after STOP_PENDING. Returns whether RUNNING was sent; the
+/// caller stops the body when it was not.
+pub fn report_running_unless_stopping() -> bool {
+    let _guard = status_lock();
+    let stopping = SHUTDOWN.get().is_some_and(|token| token.is_cancelled());
+    if stopping {
+        return false;
+    }
+    report_locked(SERVICE_RUNNING, 0, 0, 0, 0);
+    true
+}
+
+/// Caller must hold `STATUS_LOCK`.
+fn report_locked(
     state: u32,
     checkpoint: u32,
     wait_hint_ms: u32,
@@ -87,7 +131,6 @@ fn report_with(
     let Some(handle) = STATUS_HANDLE.get() else {
         return;
     };
-    CURRENT_STATE.store(state, Ordering::SeqCst);
     let status = SERVICE_STATUS {
         dwServiceType: SERVICE_WIN32_OWN_PROCESS,
         dwCurrentState: state,
@@ -100,18 +143,9 @@ fn report_with(
     unsafe {
         SetServiceStatus(*handle as *mut c_void, &status);
     }
-}
-
-/// Report a terminal STOPPED whose cause was a failure, so the SCM records a service
-/// error (and applies the configured recovery actions) instead of a clean stop.
-fn report_failure(service_exit_code: u32) {
-    report_with(
-        SERVICE_STOPPED,
-        0,
-        0,
-        ERROR_SERVICE_SPECIFIC_ERROR,
-        service_exit_code,
-    );
+    *LAST_STATUS
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner()) = Some(status);
 }
 
 /// SCM control handler. Runs on an SCM-owned thread, so it only reports state and
@@ -125,14 +159,24 @@ unsafe extern "system" fn control_handler(
     match control {
         SERVICE_CONTROL_STOP | SERVICE_CONTROL_SHUTDOWN => {
             tracing::info!("SCM control {} received, stopping the service", control);
-            report(SERVICE_STOP_PENDING, 1, STOP_WAIT_HINT_MS);
+            // One critical section: STOP_PENDING cannot be followed by a RUNNING report.
+            let _guard = status_lock();
+            report_locked(SERVICE_STOP_PENDING, 1, STOP_WAIT_HINT_MS, 0, 0);
             if let Some(shutdown) = SHUTDOWN.get() {
                 shutdown.cancel();
             }
             NO_ERROR
         }
         SERVICE_CONTROL_INTERROGATE => {
-            report(CURRENT_STATE.load(Ordering::SeqCst), 0, 0);
+            let _guard = status_lock();
+            let last = *LAST_STATUS
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
+            if let (Some(status), Some(handle)) = (last, STATUS_HANDLE.get()) {
+                unsafe {
+                    SetServiceStatus(*handle as *mut c_void, &status);
+                }
+            }
             NO_ERROR
         }
         _ => NO_ERROR,
@@ -163,6 +207,11 @@ unsafe extern "system" fn service_main(_argc: u32, _argv: *mut PWSTR) {
     let _ = SHUTDOWN.set(shutdown.clone());
     report(SERVICE_START_PENDING, 1, START_WAIT_HINT_MS);
 
+    // Expensive hardening (binary hash, module enumeration, Authenticode) runs only
+    // after START_PENDING: the SCM now holds a wait hint, so a slow check cannot burn
+    // the whole ServicesPipeTimeout window before the first status arrives.
+    crate::process_guard::init();
+
     let runtime = match tokio::runtime::Builder::new_multi_thread()
         .enable_all()
         .build()
@@ -179,8 +228,13 @@ unsafe extern "system" fn service_main(_argc: u32, _argv: *mut PWSTR) {
     let exit = runtime.block_on(crate::run_server(pipe, shutdown, || {
         // Report as soon as the listener exists: this is the point that keeps the
         // boot-time start inside ServicesPipeTimeout (#149).
-        report(SERVICE_RUNNING, 0, 0);
-        tracing::info!("reported SERVICE_RUNNING");
+        let reported = report_running_unless_stopping();
+        if reported {
+            tracing::info!("reported SERVICE_RUNNING");
+        } else {
+            tracing::info!("stop requested before the listener came up, RUNNING not reported");
+        }
+        reported
     }));
 
     // Drain before reporting STOPPED so that "Stopped" implies the pipe is free for
