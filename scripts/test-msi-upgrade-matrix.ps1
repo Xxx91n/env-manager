@@ -22,9 +22,11 @@
 # by the runbook's Step 1b, where it is reachable.
 #
 # Reading the executable out of ImagePath has one shape it refuses rather than
-# judges: an unquoted command line that contains spaces. Windows splits that at the
-# first space, so the SCM may start the token before it (for a path under Program
-# Files, C:\Program.exe) and the path read here would not be the binary that starts.
+# judges: an unquoted executable that contains spaces. Windows splits such a command
+# line at the first space, so the SCM may start the token before it (for a path under
+# Program Files, C:\Program.exe) and the path read here would not be the binary that
+# starts. A command line that merely carries a space elsewhere - the custom-path leg's
+# "path --mode=service" - is unambiguous and stays accepted.
 #
 # -SelfTest feeds synthetic msiexec logs through the diagnosis helper and synthetic
 # ImagePath shapes through the command-line parser, including the ambiguous shape no
@@ -104,7 +106,7 @@ function ConvertFrom-ServiceImagePath {
     # returning '', keeps the ambiguity out of the caller's "cannot read an executable
     # path" message, which would be false here.
     if ($exe -match '\s') {
-        throw "ImagePath is unquoted and contains spaces, so the SCM splits it at the first space and may start an executable other than the one this assertion read; only the quoted form is unambiguous. Quote the executable path. ImagePath: '$trimmed'"
+        throw "The executable in ImagePath is unquoted and contains spaces, so the SCM splits it at the first space and may start an executable other than the one this assertion read; only the quoted form is unambiguous. Quote the executable path. ImagePath: '$trimmed'"
     }
     return $exe
 }
@@ -135,9 +137,11 @@ if ($SelfTest) {
     $emptyLog = @()
     # The two shapes the installer actually produces, plus the ambiguous ones it does
     # not: the refusal cannot be reached by the matrix, so this is the only place it
-    # runs. The spaced path is tried with and without arguments because the parser
-    # reaches the refusal by two routes - a split that leaves spaces in the executable,
-    # and no splittable argument at all.
+    # runs. $unquotedCustom's command line does contain a space (before --mode=service)
+    # and is still accepted, because the refusal checks the extracted executable rather
+    # than the command line. The spaced path is tried with and without arguments because
+    # the parser reaches the refusal by two routes - a split that leaves spaces in the
+    # executable, and no splittable argument at all.
     $quotedDefault = '"C:\Program Files\Env Manager\env-manager-service.exe" --mode=service'
     $unquotedCustom = 'C:\env-manager-upgrade-test\env-manager-service.exe --mode=service'
     $spacedWithArgs = 'C:\Program Files\Env Manager\env-manager-service.exe --mode=service'
@@ -158,9 +162,9 @@ if ($SelfTest) {
         @{ Name = 'empty log reports no failure'; Actual = (Get-MsiDiagnosis -Lines $emptyLog); Expected = 'no action information in the msiexec log' },
         @{ Name = 'quoted ImagePath yields the executable'; Actual = (ConvertFrom-ServiceImagePath -CommandLine $quotedDefault); Expected = 'C:\Program Files\Env Manager\env-manager-service.exe' },
         @{ Name = 'unquoted ImagePath without spaces yields the executable'; Actual = (ConvertFrom-ServiceImagePath -CommandLine $unquotedCustom); Expected = 'C:\env-manager-upgrade-test\env-manager-service.exe' },
-        @{ Name = 'unquoted ImagePath with spaces is refused as ambiguous'; Actual = ($spacedWithArgsRefusal.StartsWith('ImagePath is unquoted')); Expected = $true },
+        @{ Name = 'unquoted executable with spaces is refused as ambiguous'; Actual = ($spacedWithArgsRefusal.StartsWith('The executable in ImagePath is unquoted')); Expected = $true },
         @{ Name = 'the refusal carries the raw ImagePath'; Actual = ($spacedWithArgsRefusal.Contains($spacedWithArgs)); Expected = $true },
-        @{ Name = 'unquoted spaced ImagePath without arguments is refused too'; Actual = ($spacedBareRefusal.StartsWith('ImagePath is unquoted')); Expected = $true }
+        @{ Name = 'unquoted spaced executable without arguments is refused too'; Actual = ($spacedBareRefusal.StartsWith('The executable in ImagePath is unquoted')); Expected = $true }
     )
     $bad = 0
     foreach ($check in $checks) {
