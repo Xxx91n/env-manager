@@ -95,7 +95,7 @@
               "message": "expired",
               "name": "APP_KEY",
               "provider": "credential-manager",
-              "refreshPolicy": "CreatedOnce"
+              "refreshPolicy": "CreatedOnly"
             }
           ]
         },

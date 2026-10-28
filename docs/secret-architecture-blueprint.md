@@ -107,7 +107,7 @@ Rejected alternative: keep secrets inside the Profile but add the metadata field
 
 ### P2: External authority + reconciliation loop, modeled on External Secrets Operator
 
-A Secrets coordinator (see P3) runs as a background service (`env-manager-service.exe` with `--mode=service` or `--mode=background`) that periodically reconciles each SecretMount against its provider, refreshes the envelope if needed, records the audit, and surfaces new state to subscribers (the GUI, the CLI on next read). The reconcile contract is `spec.refreshPolicy: Periodic | CreatedOnce | OnChange` with `spec.refreshIntervalSeconds` default 300. This removes L1/L4.
+A Secrets coordinator (see P3) runs as a background service (`env-manager-service.exe` with `--mode=service` or `--mode=background`) that periodically reconciles each SecretMount against its provider, refreshes the envelope if needed, records the audit, and surfaces new state to subscribers (the GUI, the CLI on next read). The reconcile contract is `spec.refreshPolicy: Periodic | CreatedOnly | OnChange` with `spec.refreshIntervalSeconds` default 300. This removes L1/L4.
 
 Rejected alternative: on-demand fetch only, no reconcile loop. This is the current behaviour and it leaks stale credentials. On-demand only belongs at the very-low-end of provider sophistication (DPAPI) and is the wrong default for the network providers.
 
@@ -149,7 +149,7 @@ Rejected alternative: command-string allow-list. Already what AGENTS.md document
 
 ## Architecture delta - what changes
 
-- The on-disk schema introduces `secretMount.json` alongside `profiles.json`. The Migration reads existing `SecretVariables` envelopes, attaches default `refreshPolicy: CreatedOnce` and `lastRotatedAt: updatedAt-via-audit`, and writes the new file in one transaction. Rollback = delete the file.
+- The on-disk schema introduces `secretMount.json` alongside `profiles.json`. The Migration reads existing `SecretVariables` envelopes, attaches default `refreshPolicy: CreatedOnly` and `lastRotatedAt: updatedAt-via-audit`, and writes the new file in one transaction. Rollback = delete the file.
 - `secret-providers.json` learns `agentCapabilities` and `defaultRefreshPolicy`. Backward-compatible (defaults filled in when missing).
 - `SecretEnvelope` grows from `{ provider, version, targetName, createdAt }` to `{ provider, version, targetName, createdAt, expiresAt, rotationPolicyId, schemaVersion: 2 }`. v0.8 envelopes have only the first four; the new fields are auto-prefilled on next read.
 - New CLI commands: `mount list/show/add/remove/refresh/rotate/set-policy`, `secret-store list-providers/set-default/health/audit`. Secret-oriented `profile *` commands become aliases for back-compat.
@@ -218,7 +218,7 @@ The phases are commensurate with the current v0.7.5 baseline. Each phase is ship
 Problem solved: L3, L5, L7, L9.
 
 - Add `SecretMount` type. Profiles hold `secretMountRefs: List<string>` (mount ids) instead of `secretVariables: List<string>`.
-- Add `secretMount.json` schema: `{ id, provider, name, targetName, scope, refreshPolicy: "CreatedOnce", refreshIntervalSeconds: null, lastRotatedAt, expiresAt, createdAt, createdAt, schemaVersion: 2 }`.
+- Add `secretMount.json` schema: `{ id, provider, name, targetName, scope, refreshPolicy: "CreatedOnly", refreshIntervalSeconds: null, lastRotatedAt, expiresAt, createdAt, createdAt, schemaVersion: 2 }`.
 - Auto-migrate existing `secretVariables` envelopes into mounts in one atomic write.
 - New CLI: `mount list / show / refresh / rotate / set-policy`.
 - The audit file gains a SecretMount-state sub-tree beside the existing Profile/Registry audit: per-mount `id`, `lastFetchedAt`, `lastRotatedAt`, `provider`, `name`, never the value.
@@ -244,9 +244,9 @@ Problem solved: L1, L4 (partial).
 
 - Ship `env-manager-service.exe` as a separate binary bundled in `release/portable/` and `release/cli-only/`. GUI Settings toggle opt-in.
 - Default reconcile interval 300s. Only providers with `CanRotate=true` get a lease concept (`VaultKV2Provider`'s 1000s lease, Azure's 90-day secret expiry, AWS rotation Lambda's `pending/current/staged`).
-- Per-mount `refreshPolicy: Periodic | CreatedOnce | OnChange`. `OnChange` requires file-system watch on `secretMount.json`.
+- Per-mount `refreshPolicy: Periodic | CreatedOnly | OnChange`. `OnChange` requires file-system watch on `secretMount.json`.
 - AGENTS.md: add hard boundary `v0.9.0 Optional reconcile loop (hard boundary)` describing the no-drift contract and the fail-closed behaviour when `env-manager-service.exe` is missing.
-- Tests: reconcile loop updates envelope without dropping semantics; `CreatedOnce` does not refresh on schedule; `Periodic` honour `interval`; crash recovery resumes reconcile.
+- Tests: reconcile loop updates envelope without dropping semantics; `CreatedOnly` does not refresh on schedule; `Periodic` honour `interval`; crash recovery resumes reconcile.
 - Exit criteria: a Vault KV2 secret rotated upstream surfaces in the next process launch within `refreshIntervalSeconds`; the loop never writes stale plaintext to the registry.
 
 ### Phase D (v0.9.5): Passkey / hardware-bridge identity layer
