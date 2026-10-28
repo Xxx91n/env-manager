@@ -12,6 +12,7 @@ use std::time::Duration;
 use std::sync::Arc;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::windows::named_pipe::NamedPipeServer;
+use tokio::task::JoinSet; // in-flight connection handlers, joined by the stop path (#153)
 use tokio_util::sync::CancellationToken;
 
 // Architecture-recovery: these two structs are THE authoritative IPC
@@ -179,11 +180,25 @@ async fn accept_loop(
     shutdown: Arc<CancellationToken>,
     mut next: Option<NamedPipeServer>,
 ) {
+    // Connection handlers are tracked here rather than left detached. A `rotate` handler
+    // owns a CLI child, and the stop path below waits for the handler: reporting
+    // `SERVICE_STOPPED` while one is still live is exactly the silent "stopped, but
+    // something can still write profiles.json" window #153 closes.
+    let mut handlers: JoinSet<()> = JoinSet::new();
+
     loop {
+        // Reclaim finished handlers before anything else: a `JoinSet` only drops completed
+        // tasks when it is polled, and a long-lived service must not accumulate one task
+        // per connection.
+        while let Some(finished) = handlers.try_join_next() {
+            if let Err(e) = finished {
+                tracing::warn!("IPC connection handler task failed: {}", e);
+            }
+        }
         // Check shutdown before creating next pipe instance
         if shutdown.is_cancelled() {
             tracing::info!("IPC server cancelled, exiting");
-            return;
+            break;
         }
         let server = match next.take() {
             Some(server) => server,
@@ -193,7 +208,7 @@ async fn accept_loop(
                     tracing::error!("Failed to create named pipe instance: {}", e);
                     if !backoff(Duration::from_secs(5), &shutdown).await {
                         tracing::info!("IPC server cancelled while creating an instance, exiting");
-                        return;
+                        break;
                     }
                     continue;
                 }
@@ -212,21 +227,44 @@ async fn accept_loop(
             }
             _ = shutdown.cancelled() => {
                 tracing::info!("IPC server cancelled during connect, exiting");
-                return;
+                break;
             }
         }
 
         let conn_token = shutdown.clone();
-        tokio::spawn(async move {
+        handlers.spawn(async move {
             if let Err(e) = handle_connection(server, conn_token).await {
                 tracing::warn!("Connection handler error: {}", e);
             }
         });
     }
+
+    // Stop path: join the in-flight handlers before returning, so the caller cannot report
+    // a stopped service with a rotation still owned by one of them. Each handler races its
+    // child against the same token (`reconcile::run_cli_child`), so this normally returns
+    // as soon as the children are terminated and reaped.
+    //
+    // The window is `SHUTDOWN_DRAIN` - the same budget `crate::run_until_exit` already
+    // spends waiting for this task - so the compile-time stop budget in `crate::scm` still
+    // bounds the whole chain. If it does expire, dropping the set aborts the handlers and
+    // `kill_on_drop` still terminates the child; only the reap becomes best-effort, which
+    // is why this join is the guarantee and the timeout is the net.
+    let drain = async { while handlers.join_next().await.is_some() {} };
+    let timed_out = tokio::time::timeout(crate::SHUTDOWN_DRAIN, drain).await.is_err();
+    if timed_out {
+        tracing::warn!(
+            "IPC connection handlers still running after {:?}",
+            crate::SHUTDOWN_DRAIN
+        );
+    }
 }
 
 /// Handle a single client connection: read one request line, process, write one response line.
-async fn handle_connection(mut server: NamedPipeServer, _shutdown: Arc<CancellationToken>) -> io::Result<()> {
+///
+/// `shutdown` is the service stop token, forwarded to the verbs that delegate to a CLI
+/// subprocess so the child is converged with the stop instead of orphaned by it (#153).
+/// `accept_loop` tracks this handler and joins it before the server body returns.
+async fn handle_connection(mut server: NamedPipeServer, shutdown: Arc<CancellationToken>) -> io::Result<()> {
     tracing::info!("IPC connection accepted");
     let conn_id = CONNECTION_COUNT.fetch_add(1, Ordering::Relaxed) + 1;
     tracing::info!("IPC connection #{} (total: {})", conn_id, CONNECTION_COUNT.load(Ordering::Relaxed));
@@ -258,7 +296,7 @@ async fn handle_connection(mut server: NamedPipeServer, _shutdown: Arc<Cancellat
         }
     };
 
-    let response = process_request(&request, &_shutdown).await;
+    let response = process_request(&request, &shutdown).await;
     tracing::info!("IPC response: ok={} method={}", response.ok, request.method);
     let line = serde_json::to_string(&response).unwrap_or_default();
     server.write_all((line + "\n").as_bytes()).await?;
@@ -267,7 +305,7 @@ async fn handle_connection(mut server: NamedPipeServer, _shutdown: Arc<Cancellat
     Ok(())
 }
 
-async fn process_request(req: &IpcRequest, shutdown: &Arc<CancellationToken>) -> IpcResponse {
+async fn process_request(req: &IpcRequest, shutdown: &CancellationToken) -> IpcResponse {
     tracing::info!("IPC request: method={} request_id={}", req.method, req.request_id.as_deref().unwrap_or("-"));
     match req.method.as_str() {
         // enriched ping with heartbeat data (uptime, reconcile status, mount health)
@@ -308,7 +346,7 @@ async fn process_request(req: &IpcRequest, shutdown: &Arc<CancellationToken>) ->
             if mount_id.is_empty() {
                 return IpcResponse::err("rotate requires mountId");
             }
-            match crate::reconcile::rotate_mount(mount_id).await {
+            match crate::reconcile::rotate_mount(mount_id, shutdown).await {
                 Ok(info) => IpcResponse::ok(info),
                 Err(e) => IpcResponse::err(&format!("rotate failed: {}", e)),
             }

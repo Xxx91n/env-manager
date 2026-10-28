@@ -6,14 +6,25 @@
 // See CONTEXT.md A5(revised), A8 (Domain 3).
 
 use serde::{Deserialize, Serialize};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::time::Duration;
 use std::io::Write;
 use chrono::{DateTime, Utc};
 use tokio_util::sync::CancellationToken;
 use std::sync::Arc;
+use tokio::io::AsyncReadExt; // draining the CLI child's pipes while it runs
+use tokio::process::Stdio; // piped stdout/stderr on the CLI child
 use tokio::sync::Mutex; // Phase 4C: TOCTOU protection
 use std::os::windows::process::CommandExt; // CREATE_NO_WINDOW for CLI subprocess
+
+/// `CREATE_NO_WINDOW`: the service has no console, and without the flag the CLI child
+/// would flash a window on the interactive desktop.
+const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+
+/// The CLI argv a rotation delegates to. Rotation is not a circular dependency: it is a
+/// one-shot write of profiles.json, not an IPC back into the service. `--json` is absent
+/// because CLI rotate does not support it (it exits non-zero).
+const ROTATE_ARGS: [&str; 3] = ["profile", "secret-provider", "rotate"];
 
 /// SecretMount mirror of the C# SecretMount class.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -186,24 +197,54 @@ pub async fn refresh_mount(mount_id: &str) -> Result<serde_json::Value, String> 
 }
 
 /// Rotate a single mount by ID (IPC `rotate` method).
-pub async fn rotate_mount(mount_id: &str) -> Result<serde_json::Value, String> {
-    let _guard = RECONCILE_LOCK.lock().await; // Phase 4C: TOCTOU protection
-    let path = crate::secret_mount_path();
-    let mut mounts = load_mounts(&path);
-    let mount = mounts
-        .iter()
-        .find(|m| m.id == mount_id)
-        .ok_or_else(|| format!("mount not found: {}", mount_id))?
-        .clone();
+///
+/// `shutdown` is the service stop token, handed down by the connection handler that owns
+/// this request: the CLI child a rotation spawns belongs to the stop path, not to whatever
+/// task happened to spawn it (#153).
+pub async fn rotate_mount(
+    mount_id: &str,
+    shutdown: &CancellationToken,
+) -> Result<serde_json::Value, String> {
+    let cli_exe = find_cli_exe()?;
+    rotate_mount_at(
+        &crate::secret_mount_path(),
+        &cli_exe,
+        &ROTATE_ARGS,
+        mount_id,
+        shutdown,
+    )
+    .await
+}
 
-    let result = call_cli_rotate().await?;
+/// `rotate_mount` with the mount file and the delegated command taken as parameters.
+/// That seam is what lets `rotate_stop_tests` interrupt a real child process against a
+/// temp mount file, instead of the real `%LOCALAPPDATA%` / `ProgramData` state.
+pub(crate) async fn rotate_mount_at(
+    mount_path: &Path,
+    cli_exe: &str,
+    cli_args: &[&str],
+    mount_id: &str,
+    shutdown: &CancellationToken,
+) -> Result<serde_json::Value, String> {
+    let _guard = RECONCILE_LOCK.lock().await; // Phase 4C: TOCTOU protection
+    let mut mounts = load_mounts(mount_path);
+    if !mounts.iter().any(|m| m.id == mount_id) {
+        return Err(format!("mount not found: {}", mount_id));
+    }
+
+    // Any error here - a failing child or an interrupted one - returns before the
+    // metadata is touched. That is the replay half of #153's recovery semantics: the mount
+    // still reads as un-rotated, so the next `rotate` or the reconcile tick does the work
+    // again, and re-rotating is harmless (`RotateAll` decrypts then re-encrypts per
+    // secret, `src/Secrets/Manager/SecretProviderManager.cs`).
+    let result = call_cli_rotate(cli_exe, cli_args, shutdown).await?;
     let now = Utc::now().to_rfc3339();
 
     if let Some(m) = mounts.iter_mut().find(|m| m.id == mount_id) {
         m.lastRotatedAt = Some(now.clone());
         m.lastFetchedAt = Some(now.clone());
     }
-    save_mounts(&path, &mounts)?;
+    save_mounts(mount_path, &mounts)?;
 
     Ok(serde_json::json!({
         "mountId": mount_id,
@@ -259,27 +300,113 @@ async fn refresh_mount_internal(_provider: &str) -> Result<(), String> {
     Ok(())
   }
 
-async fn call_cli_rotate() -> Result<String, String> {
-    // Rotation delegates to the CLI's existing secret-provider rotate path.
-    // This is NOT a circular dependency because rotate is a one-shot write
-    // (mutates profiles.json/secretMount.json), not an IPC to the service.
-    // CREATE_NO_WINDOW (0x08000000) prevents console window flash.
-    //          --json removed: CLI rotate does not support it (exits non-zero).
-    let cli_exe = find_cli_exe()?;
-    let output = tokio::process::Command::new(&cli_exe)
-        .args(["profile", "secret-provider", "rotate"])
-        .creation_flags(0x08000000) // CREATE_NO_WINDOW
-        .output()
-        .await
+/// How a delegated CLI child ended.
+pub(crate) enum ChildOutcome {
+    /// The child ran to completion; its whole output is attached.
+    Finished {
+        success: bool,
+        stdout: String,
+        stderr: String,
+    },
+    /// A stop was requested while the child was still running. By the time this variant
+    /// is returned the child has been terminated *and reaped* (#153).
+    Interrupted { pid: Option<u32> },
+}
+
+/// Run a CLI child and converge it with the service stop path (#153).
+///
+/// Strategy, chosen over join-to-completion: **terminate and reap**. A rotate waits on
+/// provider round-trips that can outlive the SCM stop window, and STOP shares that window
+/// with `SERVICE_ACCEPT_SHUTDOWN` during logoff, so the stop path cannot afford to wait a
+/// child out. On cancellation the child is killed and its exit awaited before this
+/// returns, which is what makes `SERVICE_STOPPED` mean "no CLI process is left that can
+/// write profiles.json". The abandoned rotation is recovered by replay, not by waiting -
+/// see `rotate_mount_at`.
+pub(crate) async fn run_cli_child(
+    cli_exe: &str,
+    args: &[&str],
+    shutdown: &CancellationToken,
+) -> Result<ChildOutcome, String> {
+    let mut child = tokio::process::Command::new(cli_exe)
+        .args(args)
+        .creation_flags(CREATE_NO_WINDOW)
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        // Backstop for the one exit this function cannot await: the runtime dropping this
+        // task. The guarantee is the cancellation branch below, which also reaps.
+        .kill_on_drop(true)
+        .spawn()
         .map_err(|e| format!("failed to run CLI rotate: {}", e))?;
 
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        return Err(format!("CLI rotate failed: {}", stderr.trim()));
-    }
+    let pid = child.id();
+    // Output is drained while the child runs, never after the wait: a child that fills a
+    // pipe buffer would otherwise block on write and never observe the kill.
+    let mut stdout = child.stdout.take().ok_or("CLI rotate child has no stdout pipe")?;
+    let mut stderr = child.stderr.take().ok_or("CLI rotate child has no stderr pipe")?;
+    let read_stdout = tokio::spawn(async move { read_pipe(&mut stdout).await });
+    let read_stderr = tokio::spawn(async move { read_pipe(&mut stderr).await });
 
-    Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
-  }
+    tokio::select! {
+        status = child.wait() => {
+            let status = status
+                .map_err(|e| format!("failed to wait for the CLI rotate child: {}", e))?;
+            // The child is gone, so both pipes are at EOF; a panicking reader only costs
+            // the diagnostic text.
+            Ok(ChildOutcome::Finished {
+                success: status.success(),
+                stdout: read_stdout.await.unwrap_or_default(),
+                stderr: read_stderr.await.unwrap_or_default(),
+            })
+        }
+        _ = shutdown.cancelled() => {
+            // `Child::kill` is TerminateProcess followed by `wait`, so the child is reaped
+            // here rather than left as an orphan of a service the SCM already calls
+            // Stopped. The readers are aborted instead of awaited: their text is not
+            // needed, and the stop path must not spend its budget on a pipe that a helper
+            // process of the CLI may still hold open.
+            child
+                .kill()
+                .await
+                .map_err(|e| format!("failed to terminate the CLI rotate child: {}", e))?;
+            read_stdout.abort();
+            read_stderr.abort();
+            Ok(ChildOutcome::Interrupted { pid })
+        }
+    }
+}
+
+/// Read a child pipe to the end, lossy-decoded and trimmed.
+async fn read_pipe<R: tokio::io::AsyncRead + Unpin>(pipe: &mut R) -> String {
+    let mut buf = Vec::new();
+    // A terminated child closes its end, so this reaches EOF rather than failing.
+    let _ = pipe.read_to_end(&mut buf).await;
+    String::from_utf8_lossy(&buf).trim().to_string()
+}
+
+async fn call_cli_rotate(
+    cli_exe: &str,
+    cli_args: &[&str],
+    shutdown: &CancellationToken,
+) -> Result<String, String> {
+    match run_cli_child(cli_exe, cli_args, shutdown).await? {
+        ChildOutcome::Finished {
+            success: true,
+            stdout,
+            ..
+        } => Ok(stdout),
+        ChildOutcome::Finished { stderr, .. } => {
+            Err(format!("CLI rotate failed: {}", stderr.trim()))
+        }
+        ChildOutcome::Interrupted { pid } => {
+            let pid = pid
+                .map(|p| p.to_string())
+                .unwrap_or_else(|| "unknown".to_string());
+            Err(format!(
+                "CLI rotate interrupted by service stop (child {pid} terminated and reaped)"
+            ))
+        }
+    }
+}
 
 fn find_cli_exe() -> Result<String, String> {
     if let Ok(exe_path) = std::env::current_exe() {
@@ -303,7 +430,7 @@ fn find_cli_exe() -> Result<String, String> {
     Ok("env-manager-cli.exe".to_string())
 }
 
-fn load_mounts(path: &PathBuf) -> Vec<SecretMount> {
+fn load_mounts(path: &Path) -> Vec<SecretMount> {
     if !path.exists() {
         return Vec::new();
     }
@@ -321,7 +448,7 @@ fn load_mounts(path: &PathBuf) -> Vec<SecretMount> {
 
 /// Save mounts atomically (temp + fsync + rename). Matches C# AtomicWriteProfiles pattern (A3).
 /// A3 hard boundary: fsync BEFORE rename for crash-safety (same as Rust write_atomic in main.rs).
-fn save_mounts(path: &PathBuf, mounts: &[SecretMount]) -> Result<(), String> {
+fn save_mounts(path: &Path, mounts: &[SecretMount]) -> Result<(), String> {
     let json = serde_json::to_string_pretty(mounts)
         .map_err(|e| format!("serialize error: {}", e))?;
 

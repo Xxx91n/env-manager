@@ -12,7 +12,8 @@ use tokio_util::sync::CancellationToken;
 
 /// Budget for draining the task that is still running after one of them stops.
 /// Bounded together with `scm::RUNTIME_DRAIN` by `scm::STOP_WAIT_HINT_MS`, which is
-/// asserted at compile time.
+/// asserted at compile time. `ipc::accept_loop` drains its in-flight connection
+/// handlers inside this same window, so the assert covers the whole stop chain.
 pub(crate) const SHUTDOWN_DRAIN: Duration = Duration::from_secs(2);
 
 mod reconcile;
@@ -25,6 +26,8 @@ mod process_guard;
 mod scm;
 #[cfg(test)]
 mod resilience_tests;
+#[cfg(test)]
+mod rotate_stop_tests;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RuntimeMode {
@@ -239,6 +242,10 @@ pub async fn run_background_server(
 
 /// Wait for either task to finish, then drain the other one under a bounded timeout,
 /// so the caller can report a stopped service knowing the pipe handle is closed.
+///
+/// The IPC task's budget covers its own connection handlers: `ipc::accept_loop` joins
+/// them before returning, which is what keeps a delegated CLI rotate from outliving the
+/// `SERVICE_STOPPED` report (#153).
 async fn run_until_exit(
     mut reconcile: tokio::task::JoinHandle<()>,
     mut ipc: tokio::task::JoinHandle<()>,

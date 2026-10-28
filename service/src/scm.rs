@@ -44,6 +44,8 @@ const RUNTIME_DRAIN: Duration = Duration::from_secs(2);
 /// The stop path must fit inside the wait hint the SCM was given, otherwise the SCM
 /// declares the service unresponsive instead of waiting it out. Two drains are the
 /// whole budget: the server body drains its tasks, then the runtime drains.
+/// The connection-handler join in `ipc::accept_loop` (#153) runs inside the first of them
+/// and reuses `crate::SHUTDOWN_DRAIN`, so it adds no window of its own.
 /// Both sides are milliseconds: comparing `as_secs()` against a millisecond constant
 /// would make the guard vacuous (it would only fire past ~83 minutes).
 const _: () = assert!(
