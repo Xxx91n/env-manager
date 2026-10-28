@@ -215,17 +215,22 @@ CI covers the same install/maintenance/uninstall sequence on every pull request,
 Prereqs: elevated shell; no env-manager process running (`Get-Process -Name 'env-manager*' | Stop-Process -Force`); WiX logs land in `%TEMP%`.
 
 ```powershell
+# msiexec.exe is a GUI-subsystem binary, so PowerShell does not wait for it: a bare
+# call returns in milliseconds with an empty $LASTEXITCODE and the assertions below
+# race the transaction. Every step waits on the process instead.
+function Invoke-Msi { param([string[]]$MsiArgs) (Start-Process -FilePath msiexec.exe -ArgumentList $MsiArgs -Wait -PassThru).ExitCode }
+
 # Step 0 (RED, only once per regression): prove the broken baseline hangs
 # Build the previous-tag MSI (e.g. v0.9.26 with the old installer.wxs) and run:
-$elapsed = Measure-Command { msiexec /i "<prev>.msi" /quiet /norestart /L*v "$env:TEMP\msi-prev-install.log" }
+$prev = "<prev>.msi"
+$elapsed = Measure-Command { $null = Invoke-Msi @('/i', $prev, '/quiet', '/norestart', '/L*v', "$env:TEMP\msi-prev-install.log") }
 if ($elapsed.TotalMilliseconds -gt 60000) { "BASELINE REPRODUCED (hang)" }   # expected for v0.9.26
-msiexec /x "<prev>.msi" /quiet /norestart  # leave a clean machine so Step 1's shortcut assertion is meaningful
-$LASTEXITCODE -eq 0
+(Invoke-Msi @('/x', $prev, '/quiet', '/norestart')) -eq 0  # leave a clean machine so Step 1's shortcut assertion is meaningful
 Test-Path "$env:PUBLIC\Desktop\Env Manager.lnk"  # must be $false after the baseline uninstall
 
 # Step 1: silent install of the fixed MSI
 $msi = "release/msi/Env Manager_0.9.27_x64.msi"
-$elapsed = Measure-Command { msiexec /i $msi /quiet /norestart /L*v "$env:TEMP\msi-install.log" }
+$elapsed = Measure-Command { $null = Invoke-Msi @('/i', $msi, '/quiet', '/norestart', '/L*v', "$env:TEMP\msi-install.log") }
 $elapsed.TotalMilliseconds -lt 10000  # expect ~1.1s; must be green
 (Get-Service EnvManagerService).Status  # 'Stopped' is CORRECT (Start=auto -> next boot); 'Running' also acceptable
 Test-Path "$env:PUBLIC\Desktop\Env Manager.lnk"  # must be $true (default INSTALLDESKTOPSHORTCUT=1)
@@ -236,26 +241,21 @@ New-Item -ItemType Directory -Force -Path (Split-Path $probe) | Out-Null
 Set-Content -LiteralPath $probe -Value 'repair probe'
 # /fomus reinstalls files, rewrites the machine and user registry entries and
 # reinstalls shortcuts, so the LogsDir components really do reach the install path
-msiexec /fomus $msi /quiet /norestart /L*v "$env:TEMP\msi-repair.log"
-$LASTEXITCODE -eq 0
+(Invoke-Msi @('/fomus', $msi, '/quiet', '/norestart', '/L*v', "$env:TEMP\msi-repair.log")) -eq 0
 Test-Path $probe  # must be $true: the install-time cleanup is upgrade-only
 # ...and a plain maintenance install over the same version still succeeds
-msiexec /i $msi /quiet /norestart /L*v "$env:TEMP\msi-maintenance.log"
-$LASTEXITCODE -eq 0
+(Invoke-Msi @('/i', $msi, '/quiet', '/norestart', '/L*v', "$env:TEMP\msi-maintenance.log")) -eq 0
 Test-Path $probe  # must be $true
 
 # Step 3: silent uninstall
-msiexec /x $msi /quiet /norestart /L*v "$env:TEMP\msi-uninstall.log"
-$LASTEXITCODE -eq 0
+(Invoke-Msi @('/x', $msi, '/quiet', '/norestart', '/L*v', "$env:TEMP\msi-uninstall.log")) -eq 0
 Test-Path $probe  # must be $false: the product's own uninstall removes legacy logs
 Get-Service EnvManagerService -ErrorAction SilentlyContinue  # must be $null (SCM entry removed)
 
 # Shortcut property check: a silent install honours INSTALLDESKTOPSHORTCUT=0
-msiexec /i $msi /quiet /norestart INSTALLDESKTOPSHORTCUT=0 /L*v "$env:TEMP\msi-no-shortcut.log"
-$LASTEXITCODE -eq 0
+(Invoke-Msi @('/i', $msi, '/quiet', '/norestart', 'INSTALLDESKTOPSHORTCUT=0', '/L*v', "$env:TEMP\msi-no-shortcut.log")) -eq 0
 Test-Path "$env:PUBLIC\Desktop\Env Manager.lnk"  # must be $false
-msiexec /x $msi /quiet /norestart /L*v "$env:TEMP\msi-no-shortcut-uninstall.log"
-$LASTEXITCODE -eq 0
+(Invoke-Msi @('/x', $msi, '/quiet', '/norestart', '/L*v', "$env:TEMP\msi-no-shortcut-uninstall.log")) -eq 0
 ```
 
 Failure triage: hang at `InstallFinalize` -> `StartServices` with lowest `ActionStart` op = service-start blocking regression (check `ServiceControl/@Start` is absent and `Wait="no"` in installer.wxs). Root cause is documented in the `ServiceInstall` comment in `installer.wxs`.
