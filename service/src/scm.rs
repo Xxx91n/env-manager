@@ -38,8 +38,17 @@ const START_WAIT_HINT_MS: u32 = 3_000;
 const STOP_WAIT_HINT_MS: u32 = 5_000;
 
 /// Budget for draining the tokio runtime (and its pipe handles) after the server
-/// body returns. Kept well under the stop wait hint.
-const RUNTIME_DRAIN: Duration = Duration::from_secs(5);
+/// body returns. Kept well under the stop wait hint, together with
+/// `crate::SHUTDOWN_DRAIN`.
+const RUNTIME_DRAIN: Duration = Duration::from_secs(2);
+
+/// The stop path must fit inside the wait hint the SCM was given, otherwise the SCM
+/// declares the service unresponsive instead of waiting it out. Two drains are the
+/// whole budget: the server body drains its tasks, then the runtime drains.
+const _: () = assert!(
+    crate::SHUTDOWN_DRAIN.as_secs() + RUNTIME_DRAIN.as_secs() <= STOP_WAIT_HINT_MS as u64,
+    "the stop path must finish inside STOP_WAIT_HINT_MS"
+);
 
 /// Service-specific exit code reported when the body ends without a stop request.
 const EXIT_CODE_BODY_FAILED: u32 = 1;

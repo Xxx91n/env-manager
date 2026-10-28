@@ -11,7 +11,9 @@ use std::time::Duration;
 use tokio_util::sync::CancellationToken;
 
 /// Budget for draining the task that is still running after one of them stops.
-const SHUTDOWN_DRAIN: Duration = Duration::from_secs(5);
+/// Bounded together with `scm::RUNTIME_DRAIN` by `scm::STOP_WAIT_HINT_MS`, which is
+/// asserted at compile time.
+pub(crate) const SHUTDOWN_DRAIN: Duration = Duration::from_secs(2);
 
 mod reconcile;
 mod ipc;

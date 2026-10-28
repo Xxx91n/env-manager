@@ -150,10 +150,10 @@ pub async fn serve(
     accept_loop(pipe_name, shutdown, Some(first)).await;
 }
 
-/// Test-only entry used by the fault-injection suite: listen + accept loop in one call,
-/// the shape the server had before Service mode needed to report `SERVICE_RUNNING`
-/// between the two steps. Production paths call `listen` and `serve` separately through
-/// [`crate::run_server`] / [`crate::run_background_server`].
+/// `listen` + accept loop in one call, the shape the server had before Service mode
+/// needed to report `SERVICE_RUNNING` between the two steps. Background mode calls
+/// this directly (`crate::run_background_server`); Service mode calls `listen` and
+/// `serve` separately through `crate::run_server`.
 pub async fn start_ipc_server(
     pipe_name: &'static str,
     shutdown: Arc<CancellationToken>,
