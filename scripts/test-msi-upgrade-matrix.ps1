@@ -22,11 +22,12 @@
 # by the runbook's Step 1b, where it is reachable.
 #
 # Reading the executable out of ImagePath has one shape it refuses rather than
-# judges: an unquoted executable that contains spaces. Windows splits such a command
-# line at the first space, so the SCM may start the token before it (for a path under
-# Program Files, C:\Program.exe) and the path read here would not be the binary that
-# starts. A command line that merely carries a space elsewhere - the custom-path leg's
-# "path --mode=service" - is unambiguous and stays accepted.
+# judges: an unquoted executable that contains spaces. Windows resolves an unquoted
+# command line by trying progressively longer prefixes of it as the module name (for a
+# path under Program Files: C:\Program.exe, then C:\Program Files\Env.exe, and so on),
+# so the binary that starts need not be the one read here. A command line that merely
+# carries a space elsewhere - the custom-path leg's "path --mode=service" - is
+# unambiguous and stays accepted.
 #
 # -SelfTest feeds synthetic msiexec logs through the diagnosis helper and synthetic
 # ImagePath shapes through the command-line parser, including the ambiguous shape no
@@ -100,13 +101,13 @@ function ConvertFrom-ServiceImagePath {
     # arguments in this repo always start with '-'.
     $match = [regex]::Match($trimmed, '^(?<exe>.*?)\s+--?\S')
     if ($match.Success) { $exe = $match.Groups['exe'].Value } else { $exe = $trimmed }
-    # An unquoted command line is split at the first space (see the header), so an
+    # An unquoted command line resolves by progressive prefixes (see the header), so an
     # executable still holding spaces here is not a fact this assertion can judge:
     # refuse instead of returning a path that only looks right. Throwing, rather than
     # returning '', keeps the ambiguity out of the caller's "cannot read an executable
     # path" message, which would be false here.
     if ($exe -match '\s') {
-        throw "The executable in ImagePath is unquoted and contains spaces, so the SCM splits it at the first space and may start an executable other than the one this assertion read; only the quoted form is unambiguous. Quote the executable path. ImagePath: '$trimmed'"
+        throw "The executable in ImagePath is unquoted and contains spaces, so Windows resolves the module name by trying progressively longer prefixes of this command line (for a path under Program Files it may start C:\Program.exe, or another prefix, before the intended binary); the executable that starts need not be the one this assertion read. Quote the executable path. ImagePath: '$trimmed'"
     }
     return $exe
 }
