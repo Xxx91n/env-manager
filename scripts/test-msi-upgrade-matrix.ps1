@@ -241,12 +241,12 @@ function Assert-ServicePresent {
     Write-Host "${Stage}: EnvManagerService present (status: $($service.Status))"
 }
 
-function Get-ServiceImagePath {
-    # The service's configured command line, read from the store ServiceInstall
-    # writes to: GET-SERVICE only answers "does the entry exist", and Get-CimInstance
-    # would add a WMI round trip for the same string. Read-only on purpose - this
-    # asserts state, it never writes the registry, so test-with-restore.ps1 does not
-    # apply (that harness exists to roll back variable writes).
+function Get-ServiceImageCommandLine {
+    # The service's configured command line (executable plus arguments), read from
+    # the store ServiceInstall writes to: GET-SERVICE only answers "does the entry
+    # exist", and Get-CimInstance would add a WMI round trip for the same string.
+    # Read-only on purpose - this asserts state, it never writes the registry, so
+    # test-with-restore.ps1 does not apply (that harness rolls back variable writes).
     $key = 'HKLM:\SYSTEM\CurrentControlSet\Services\EnvManagerService'
     $entry = Get-ItemProperty -LiteralPath $key -Name 'ImagePath' -ErrorAction SilentlyContinue
     if (-not $entry) { return '' }
@@ -254,10 +254,10 @@ function Get-ServiceImagePath {
 }
 
 function ConvertFrom-ServiceImagePath {
-    # ImagePath is the configured command line: the executable plus the installer's
-    # arguments, with SCM quoting optional. Return the executable only.
-    param([string]$ImagePath)
-    $trimmed = ([string]$ImagePath).Trim()
+    # ImagePath holds the configured command line: the executable plus the
+    # installer's arguments, with SCM quoting optional. Return the executable only.
+    param([string]$CommandLine)
+    $trimmed = ([string]$CommandLine).Trim()
     if ($trimmed.Length -eq 0) { return '' }
     if ($trimmed.StartsWith('"')) {
         $end = $trimmed.IndexOf('"', 1)
@@ -275,26 +275,27 @@ function ConvertFrom-ServiceImagePath {
 function Assert-ServiceImagePath {
     param([string]$Stage, [string]$TargetDir)
     $expected = [System.IO.Path]::GetFullPath((Join-Path $TargetDir 'env-manager-service.exe'))
-    $imagePath = Get-ServiceImagePath
-    if ([string]::IsNullOrWhiteSpace($imagePath)) {
+    $commandLine = Get-ServiceImageCommandLine
+    if ([string]::IsNullOrWhiteSpace($commandLine)) {
         throw "${Stage}: EnvManagerService has no ImagePath; expected the service binary at $expected"
     }
-    $actual = ConvertFrom-ServiceImagePath -ImagePath $imagePath
-    if ([string]::IsNullOrWhiteSpace($actual)) {
-        throw "${Stage}: cannot read an executable path from ImagePath '$imagePath'"
+    $executable = ConvertFrom-ServiceImagePath -CommandLine $commandLine
+    if ([string]::IsNullOrWhiteSpace($executable)) {
+        throw "${Stage}: cannot read an executable path from ImagePath '$commandLine'"
     }
-    # Normalize both sides before comparing: the same directory can be spelled with
-    # a different case, a trailing separator or an 8.3 name, and a string compare on
-    # the raw values would make the gate fail for a correctly installed service.
-    try { $actualFull = [System.IO.Path]::GetFullPath($actual) }
-    catch { throw "${Stage}: cannot normalize the ImagePath executable '$actual' ($($_.Exception.Message))" }
-    if (-not [string]::Equals($actualFull, $expected, [System.StringComparison]::OrdinalIgnoreCase)) {
-        throw "${Stage}: EnvManagerService points at '$actual', expected the service binary in the current install directory ($expected); ImagePath: '$imagePath'"
+    # GetFullPath spares the comparison the spellings the filesystem allows (8.3
+    # short names, relative segments); the case-insensitive compare covers case,
+    # which GetFullPath preserves. Raw string equality would fail a correctly
+    # installed service on either of those.
+    try { $executableFull = [System.IO.Path]::GetFullPath($executable) }
+    catch { throw "${Stage}: cannot normalize the ImagePath executable '$executable' ($($_.Exception.Message))" }
+    if (-not [string]::Equals($executableFull, $expected, [System.StringComparison]::OrdinalIgnoreCase)) {
+        throw "${Stage}: EnvManagerService points at '$executable', expected the service binary in the current install directory ($expected); ImagePath: '$commandLine'"
     }
-    if (-not (Test-Path -LiteralPath $actualFull)) {
-        throw "${Stage}: EnvManagerService points at $actualFull, but that file does not exist"
+    if (-not (Test-Path -LiteralPath $executableFull)) {
+        throw "${Stage}: EnvManagerService points at $executableFull, but that file does not exist"
     }
-    Write-Host "${Stage}: EnvManagerService points at $actualFull (file present)"
+    Write-Host "${Stage}: EnvManagerService points at $executableFull (file present)"
 }
 
 function Assert-ServiceAbsent {
