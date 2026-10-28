@@ -49,7 +49,7 @@ Invariants a change must not violate; where a test pins one, that check is the a
 - No `ServiceControl/@Start="install"` and no `Wait="yes"` on Stop/Remove: silent install and uninstall must not block on the service.
 - `MajorUpgrade` pins `Schedule="afterInstallExecute"`; the old-service stop is its own component conditioned on `WIX_UPGRADE_DETECTED`.
 - `Guid="*"` everywhere except the three rename-prone binaries, which pin explicit GUIDs. Never use `util:RemoveFolderEx`.
-- Any `installer.wxs` change repasses three real acceptance layers: WiX structural compilation (`scripts/build.mjs` compiles `installer.wxs` into the MSI, so structure errors fail the build — but only when WiX 3.14 is present: set the `WIX` env var or install WiX 3.14; without it, build.mjs logs "WiX tools not found, skipping MSI" and skips the MSI, leaving structure errors hidden on a local build), the four-cell silent MSI install/upgrade matrix (`scripts/test-msi-upgrade-matrix.ps1` and the `msi-upgrade-matrix` job in `.github/workflows/build.yml`), and the four-step silent msiexec runbook in `docs/build-and-release.md`.
+- Any `installer.wxs` change repasses three real acceptance layers: WiX structural compilation (`scripts/build.mjs` compiles `installer.wxs` into the MSI, so structure errors fail the build — but only when WiX 3.14 is present: set the `WIX` env var or install WiX 3.14; without it, build.mjs logs "WiX tools not found, skipping MSI" and skips the MSI, leaving structure errors hidden on a local build), the five-cell silent MSI install/upgrade matrix (`scripts/test-msi-upgrade-matrix.ps1` and the `msi-upgrade-matrix` job in `.github/workflows/build.yml`), and the four-step silent msiexec runbook in `docs/build-and-release.md`.
 
 ## Frontend
 

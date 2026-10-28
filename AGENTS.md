@@ -15,7 +15,7 @@ Windows environment-variable manager: a C# .NET 10 CLI that reads and writes the
 
 ## Non-obvious traps
 - `env-manager.csproj` holds the only version; `build.mjs` syncs it to `frontend/package.json`.
-- Changing `installer.wxs` must pass three real acceptance layers: WiX structural compilation (`scripts/build.mjs` compiles `installer.wxs` into the MSI, so structure errors fail the build — but only when WiX 3.14 is present: set the `WIX` env var or install WiX 3.14; without it, build.mjs logs "WiX tools not found, skipping MSI" and skips the MSI, leaving structure errors hidden on a local build), the four-cell silent MSI install/upgrade matrix (`scripts/test-msi-upgrade-matrix.ps1` and the `msi-upgrade-matrix` job in `.github/workflows/build.yml`), and the four-step silent msiexec runbook in `docs/build-and-release.md`.
+- Changing `installer.wxs` must pass three real acceptance layers: WiX structural compilation (`scripts/build.mjs` compiles `installer.wxs` into the MSI, so structure errors fail the build — but only when WiX 3.14 is present: set the `WIX` env var or install WiX 3.14; without it, build.mjs logs "WiX tools not found, skipping MSI" and skips the MSI, leaving structure errors hidden on a local build), the five-cell silent MSI install/upgrade matrix (`scripts/test-msi-upgrade-matrix.ps1` and the `msi-upgrade-matrix` job in `.github/workflows/build.yml`), and the four-step silent msiexec runbook in `docs/build-and-release.md`.
 - `GLOSSARY.md` owns vocabulary; a README change is mirrored into the 9 locale files in the same section.
 - Version control is `but` (GitButler). No push, merge, tag, release or secret change without an explicit instruction.
 
