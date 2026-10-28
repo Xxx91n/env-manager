@@ -21,8 +21,18 @@
 # only reintroduce a check that cannot pass. The current build's start/stop is asserted
 # by the runbook's Step 1b, where it is reachable.
 #
-# -SelfTest feeds synthetic msiexec logs through the diagnosis helper; it needs
-# no MSI and no elevation, so it can run anywhere PowerShell 5.1+ is installed.
+# Reading the executable out of ImagePath has one shape it refuses rather than
+# judges: an unquoted executable that contains spaces. Windows resolves an unquoted
+# command line by trying progressively longer prefixes of it as the module name (for a
+# path under Program Files: C:\Program.exe, then C:\Program Files\Env.exe, and so on),
+# so the binary that starts need not be the one read here. A command line that merely
+# carries a space elsewhere - the custom-path leg's "path --mode=service" - is
+# unambiguous and stays accepted.
+#
+# -SelfTest feeds synthetic msiexec logs through the diagnosis helper and synthetic
+# ImagePath shapes through the command-line parser, including the ambiguous shape no
+# install produces; it needs no MSI and no elevation, so it can run anywhere
+# PowerShell 5.1+ is installed.
 [CmdletBinding()]
 param(
     [switch]$SelfTest,
@@ -73,6 +83,37 @@ function Get-MsiDiagnosis {
     return 'no action information in the msiexec log'
 }
 
+function ConvertFrom-ServiceImagePath {
+    # ImagePath holds the configured command line: the executable plus the
+    # installer's arguments, with SCM quoting optional. Return the executable only.
+    # Declared here, not beside Assert-ServiceImagePath, because the -SelfTest block
+    # below calls it and PowerShell only sees a function after its definition.
+    param([string]$CommandLine)
+    $trimmed = ([string]$CommandLine).Trim()
+    if ($trimmed.Length -eq 0) { return '' }
+    if ($trimmed.StartsWith('"')) {
+        $end = $trimmed.IndexOf('"', 1)
+        if ($end -lt 1) { return '' }
+        return $trimmed.Substring(1, $end - 1)
+    }
+    # Unquoted: cut at the first argument-shaped token, not at the first space, because
+    # the arguments in this repo always start with '-'. Cutting at the first space would
+    # truncate a spaced path to its first word (C:\Program Files\... -> C:\Program) and
+    # hand the refusal below a prefix with no spaces in it, so it would compare that
+    # fragment instead of reporting the ambiguity.
+    $match = [regex]::Match($trimmed, '^(?<exe>.*?)\s+--?\S')
+    if ($match.Success) { $exe = $match.Groups['exe'].Value } else { $exe = $trimmed }
+    # An unquoted command line resolves by progressive prefixes (see the header), so an
+    # executable still holding spaces here is not a fact this assertion can judge:
+    # refuse instead of returning a path that only looks right. Throwing, rather than
+    # returning '', keeps the ambiguity out of the caller's "cannot read an executable
+    # path" message, which would be false here.
+    if ($exe -match '\s') {
+        throw "The executable in ImagePath is unquoted and contains spaces, so Windows resolves the module name by trying progressively longer prefixes of this command line (for a path under Program Files it may start C:\Program.exe, or another prefix, instead of the intended path); which binary starts is therefore ambiguous, and it need not be the one this assertion read. Quote the executable path. ImagePath: '$trimmed'"
+    }
+    return $exe
+}
+
 if ($SelfTest) {
     $failedLog = @(
         'Action start 9:00:00: InstallValidate.',
@@ -97,6 +138,23 @@ if ($SelfTest) {
         'Action ended 9:00:06: INSTALL. Return value 3.'
     )
     $emptyLog = @()
+    # The two shapes the installer actually produces, plus the ambiguous ones it does
+    # not: the refusal cannot be reached by the matrix, so this is the only place it
+    # runs. $unquotedCustom's command line does contain a space (before --mode=service)
+    # and is still accepted, because the refusal checks the extracted executable rather
+    # than the command line. The spaced path is tried with and without arguments because
+    # the parser reaches the refusal by two routes - a split that leaves spaces in the
+    # executable, and no splittable argument at all.
+    $quotedDefault = '"C:\Program Files\Env Manager\env-manager-service.exe" --mode=service'
+    $unquotedCustom = 'C:\env-manager-upgrade-test\env-manager-service.exe --mode=service'
+    $spacedWithArgs = 'C:\Program Files\Env Manager\env-manager-service.exe --mode=service'
+    $spacedBare = 'C:\Program Files\Env Manager\env-manager-service.exe'
+    $spacedWithArgsRefusal = ''
+    try { $null = ConvertFrom-ServiceImagePath -CommandLine $spacedWithArgs }
+    catch { $spacedWithArgsRefusal = $_.Exception.Message }
+    $spacedBareRefusal = ''
+    try { $null = ConvertFrom-ServiceImagePath -CommandLine $spacedBare }
+    catch { $spacedBareRefusal = $_.Exception.Message }
     $checks = @(
         @{ Name = 'Return value 3 names the action'; Actual = (Get-MsiDiagnosis -Lines $failedLog); Expected = 'StartServices' },
         @{ Name = 'first failure wins over the INSTALL wrapper'; Actual = (Get-MsiDiagnosis -Lines $multiFailureLog); Expected = 'StartServices' },
@@ -104,7 +162,12 @@ if ($SelfTest) {
         @{ Name = 'longer banner version does not match'; Actual = (Test-VersionBanner -Banner 'Env Manager v0.12.1.1' -ExpectedVersion '0.12.1'); Expected = $false },
         @{ Name = 'clean log reports no failure'; Actual = (Get-MsiDiagnosis -Lines $cleanLog); Expected = 'no action information in the msiexec log' },
         @{ Name = 'killed log names the last action that started'; Actual = (Get-MsiDiagnosis -Lines $killedLog); Expected = 'last action started before the failure: Action start 9:00:02: StartServices.' },
-        @{ Name = 'empty log reports no failure'; Actual = (Get-MsiDiagnosis -Lines $emptyLog); Expected = 'no action information in the msiexec log' }
+        @{ Name = 'empty log reports no failure'; Actual = (Get-MsiDiagnosis -Lines $emptyLog); Expected = 'no action information in the msiexec log' },
+        @{ Name = 'quoted ImagePath yields the executable'; Actual = (ConvertFrom-ServiceImagePath -CommandLine $quotedDefault); Expected = 'C:\Program Files\Env Manager\env-manager-service.exe' },
+        @{ Name = 'unquoted ImagePath without spaces yields the executable'; Actual = (ConvertFrom-ServiceImagePath -CommandLine $unquotedCustom); Expected = 'C:\env-manager-upgrade-test\env-manager-service.exe' },
+        @{ Name = 'unquoted executable with spaces is refused as ambiguous'; Actual = ($spacedWithArgsRefusal.StartsWith('The executable in ImagePath is unquoted')); Expected = $true },
+        @{ Name = 'the refusal carries the raw ImagePath'; Actual = ($spacedWithArgsRefusal.Contains($spacedWithArgs)); Expected = $true },
+        @{ Name = 'unquoted spaced executable without arguments is refused too'; Actual = ($spacedBareRefusal.StartsWith('The executable in ImagePath is unquoted')); Expected = $true }
     )
     $bad = 0
     foreach ($check in $checks) {
@@ -253,25 +316,6 @@ function Get-ServiceImageCommandLine {
     return ([string]$entry.ImagePath).Trim()
 }
 
-function ConvertFrom-ServiceImagePath {
-    # ImagePath holds the configured command line: the executable plus the
-    # installer's arguments, with SCM quoting optional. Return the executable only.
-    param([string]$CommandLine)
-    $trimmed = ([string]$CommandLine).Trim()
-    if ($trimmed.Length -eq 0) { return '' }
-    if ($trimmed.StartsWith('"')) {
-        $end = $trimmed.IndexOf('"', 1)
-        if ($end -lt 1) { return '' }
-        return $trimmed.Substring(1, $end - 1)
-    }
-    # Unquoted: cut at the first argument-shaped token, not at the first space,
-    # because an unquoted path under Program Files contains spaces itself and the
-    # arguments in this repo always start with '-'.
-    $match = [regex]::Match($trimmed, '^(?<exe>.*?)\s+--?\S')
-    if ($match.Success) { return $match.Groups['exe'].Value }
-    return $trimmed
-}
-
 function Assert-ServiceImagePath {
     param([string]$Stage, [string]$TargetDir)
     $expected = [System.IO.Path]::GetFullPath((Join-Path $TargetDir 'env-manager-service.exe'))
@@ -279,7 +323,10 @@ function Assert-ServiceImagePath {
     if ([string]::IsNullOrWhiteSpace($commandLine)) {
         throw "${Stage}: EnvManagerService has no ImagePath; expected the service binary at $expected"
     }
-    $executable = ConvertFrom-ServiceImagePath -CommandLine $commandLine
+    # The parser refuses an ambiguous command line instead of returning a path, so
+    # carry its reason out with the stage that hit it.
+    try { $executable = ConvertFrom-ServiceImagePath -CommandLine $commandLine }
+    catch { throw "${Stage}: $($_.Exception.Message)" }
     if ([string]::IsNullOrWhiteSpace($executable)) {
         throw "${Stage}: cannot read an executable path from ImagePath '$commandLine'"
     }
