@@ -83,9 +83,8 @@ function Get-MsiDiagnosis {
 function ConvertFrom-ServiceImagePath {
     # ImagePath holds the configured command line: the executable plus the
     # installer's arguments, with SCM quoting optional. Return the executable only.
-    # Defined ahead of the -SelfTest block because the refusal below is the one
-    # branch the matrix cannot reach: both real legs produce either a quoted path
-    # or an unquoted path with no spaces, so only a synthetic ImagePath exercises it.
+    # Declared here, not beside Assert-ServiceImagePath, because the -SelfTest block
+    # below calls it and PowerShell only sees a function after its definition.
     param([string]$CommandLine)
     $trimmed = ([string]$CommandLine).Trim()
     if ($trimmed.Length -eq 0) { return '' }
@@ -99,12 +98,11 @@ function ConvertFrom-ServiceImagePath {
     # arguments in this repo always start with '-'.
     $match = [regex]::Match($trimmed, '^(?<exe>.*?)\s+--?\S')
     if ($match.Success) { $exe = $match.Groups['exe'].Value } else { $exe = $trimmed }
-    # Windows splits an unquoted command line at the first space, so the SCM can
-    # start an executable other than the one just read: for the path below it tries
-    # 'C:\Program.exe' before 'C:\Program Files\...'. The executable is then not a
-    # fact this assertion can judge, so refuse instead of returning a path that only
-    # looks right. Throwing, rather than returning '', keeps the ambiguity out of the
-    # caller's "cannot read an executable path" message, which would be false here.
+    # An unquoted command line is split at the first space (see the header), so an
+    # executable still holding spaces here is not a fact this assertion can judge:
+    # refuse instead of returning a path that only looks right. Throwing, rather than
+    # returning '', keeps the ambiguity out of the caller's "cannot read an executable
+    # path" message, which would be false here.
     if ($exe -match '\s') {
         throw "ImagePath is unquoted and contains spaces, so the SCM splits it at the first space and may start an executable other than the one this assertion read; only the quoted form is unambiguous. Quote the executable path. ImagePath: '$trimmed'"
     }
