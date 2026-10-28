@@ -1099,6 +1099,10 @@ catch {
     Write-Host "=== MSI upgrade matrix FAILED ($Scenario) ==="
     Write-Host $_.Exception.Message
     Write-Host "msiexec logs: $LogDir"
+    # A failure before Step 3 leaves behind whatever the leg started: the skip path cleans
+    # up only on its own branch, and the uninstall's cleanup has not run. Clear it here so
+    # a red job still ends with no EnvManagerService process of ours running.
+    Stop-EnvManagerResidue
     throw
 }
 Write-Host "=== MSI upgrade matrix PASSED ($Scenario) ==="
