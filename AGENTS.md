@@ -11,6 +11,7 @@ Windows environment-variable manager: a C# .NET 10 CLI that reads and writes the
 ## Don't touch
 - `src/Audit/` and `src/Secrets/` are bounded contexts: cross-context code consumes only `Secrets.Core` and `Secrets.Manager`. `release/`, `bin/`, `obj/` are artifacts.
 - Three top rules (read `docs/agents/hard-boundaries.md` before changing code): protected variables and PATH entries are never written or deleted; every write takes all three locks (mutex + `CLI_RWLOCK` + `writeChain`); rename/scope-change writes and verifies the target before deleting the source, and TxR/TxF is banned.
+- Service startup order and thread model (`service/src/scm.rs`, `service/src/main.rs`): `StartServiceCtrlDispatcherW` runs once on the process's initial thread and `service_main` builds the tokio runtime on the SCM thread; `run_server` creates the named-pipe listener, reports `SERVICE_RUNNING`, and only then starts the reconcile loop. Moving slow work ahead of the RUNNING report brings back the boot-time 1053 failure.
 
 ## Non-obvious traps
 - `env-manager.csproj` holds the only version; `build.mjs` syncs it to `frontend/package.json`.
