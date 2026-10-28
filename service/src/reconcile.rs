@@ -322,6 +322,11 @@ pub(crate) enum ChildOutcome {
 /// returns, which is what makes `SERVICE_STOPPED` mean "no CLI process is left that can
 /// write profiles.json". The abandoned rotation is recovered by replay, not by waiting -
 /// see `rotate_mount_at`.
+///
+/// Scope of the guarantee: the child spawned here. A provider helper that child started
+/// (`op`, `sops`, `pwsh` in `src/Secrets/Providers/`) is not tree-killed - that needs a
+/// kill-on-close job object - but no helper writes `profiles.json` or `secretMount.json`,
+/// so the window this ticket closes is closed.
 pub(crate) async fn run_cli_child(
     cli_exe: &str,
     args: &[&str],
