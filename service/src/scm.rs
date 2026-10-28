@@ -143,10 +143,13 @@ unsafe extern "system" fn service_main(_argc: u32, _argv: *mut PWSTR) {
         return;
     }
     let _ = STATUS_HANDLE.set(handle as usize);
-    report(SERVICE_START_PENDING, 1, START_WAIT_HINT_MS);
 
+    // Install the cancellation token BEFORE the first report: that report advertises
+    // SERVICE_ACCEPT_STOP, so a STOP arriving in the window between the two must find
+    // a token to trip instead of being dropped while the SCM waits for STOPPED.
     let shutdown = Arc::new(CancellationToken::new());
     let _ = SHUTDOWN.set(shutdown.clone());
+    report(SERVICE_START_PENDING, 1, START_WAIT_HINT_MS);
 
     let runtime = match tokio::runtime::Builder::new_multi_thread()
         .enable_all()
@@ -161,7 +164,7 @@ unsafe extern "system" fn service_main(_argc: u32, _argv: *mut PWSTR) {
     };
 
     let pipe = crate::RuntimeMode::Service.pipe_endpoint();
-    let exit = runtime.block_on(crate::run_server(pipe, true, shutdown, || {
+    let exit = runtime.block_on(crate::run_server(pipe, shutdown, || {
         // Report as soon as the listener exists: this is the point that keeps the
         // boot-time start inside ServicesPipeTimeout (#149).
         report(SERVICE_RUNNING, 0, 0);

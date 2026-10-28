@@ -10,6 +10,9 @@ use std::time::Duration;
 use tokio_util::sync::CancellationToken;
 use std::sync::Arc;
 
+/// Budget for draining the task that is still running after one of them stops.
+const SHUTDOWN_DRAIN: Duration = Duration::from_secs(5);
+
 mod reconcile;
 mod ipc;
 mod cert_bootstrap;
@@ -140,8 +143,10 @@ std::mem::forget(guard);
         match mode {
             RuntimeMode::Service | RuntimeMode::Background => {
                 let shutdown = Arc::new(CancellationToken::new());
-                let first_pipe_instance = matches!(mode, RuntimeMode::Service);
-                let exit = run_server(mode.pipe_endpoint(), first_pipe_instance, shutdown, || {}).await;
+                let exit = match mode {
+                    RuntimeMode::Service => run_server(mode.pipe_endpoint(), shutdown, || {}).await,
+                    _ => run_background_server(mode.pipe_endpoint(), shutdown).await,
+                };
                 match exit {
                     ServerExit::Requested => tracing::info!("service shutting down (all tasks exited)"),
                     other => tracing::error!("server exited without a stop request: {:?}", other),
@@ -172,7 +177,7 @@ pub enum ServerExit {
     ReconcileExited,
 }
 
-/// Run the IPC server and the reconcile loop until shutdown.
+/// Run the server body used by Service mode: listener, `SERVICE_RUNNING`, reconcile.
 ///
 /// Ordering is a hard constraint (#149): the named-pipe listener is created first,
 /// `on_listening` fires the moment it exists, and only then does the reconcile loop
@@ -180,13 +185,12 @@ pub enum ServerExit {
 /// moved ahead of that point brings back the boot-time 1053 failure.
 pub async fn run_server(
     pipe_name: &'static str,
-    first_pipe_instance: bool,
     shutdown: Arc<CancellationToken>,
     on_listening: impl FnOnce() + Send,
 ) -> ServerExit {
     tracing::info!("IPC pipe: {}", pipe_name);
 
-    let first = match ipc::listen(pipe_name, first_pipe_instance, &shutdown).await {
+    let first = match ipc::listen(pipe_name, true, &shutdown).await {
         Ok(server) => server,
         Err(e) => {
             if shutdown.is_cancelled() {
@@ -197,15 +201,45 @@ pub async fn run_server(
         }
     };
 
+    // A stop that arrived while the listener was being created already reported
+    // SERVICE_STOP_PENDING; reporting RUNNING now would move the SCM state backwards.
+    if shutdown.is_cancelled() {
+        tracing::info!("stop requested before the listener came up, not reporting RUNNING");
+        return ServerExit::Requested;
+    }
+
     // Listen -> report -> reconcile, in that order.
     on_listening();
 
-    let mut reconcile_handle = tokio::spawn(reconcile::reconcile_loop(shutdown.clone()));
-    let mut ipc_handle = tokio::spawn(ipc::serve(pipe_name, first, shutdown.clone()));
+    let reconcile = tokio::spawn(reconcile::reconcile_loop(shutdown.clone()));
+    let ipc = tokio::spawn(ipc::serve(pipe_name, first, shutdown.clone()));
+    run_until_exit(reconcile, ipc, &shutdown).await
+}
 
-    let raw = tokio::select! {
-        _ = &mut reconcile_handle => ServerExit::ReconcileExited,
-        _ = &mut ipc_handle => ServerExit::IpcExited,
+/// Run the server body used by Background mode. Keeps its historical order - reconcile
+/// starts immediately and the IPC server creates the pipe on its own, retrying a
+/// failure every 5s instead of ending the process - because the GUI owns the lifecycle
+/// there and a missing listener must not starve the reconcile loop.
+pub async fn run_background_server(
+    pipe_name: &'static str,
+    shutdown: Arc<CancellationToken>,
+) -> ServerExit {
+    tracing::info!("IPC pipe: {}", pipe_name);
+    let reconcile = tokio::spawn(reconcile::reconcile_loop(shutdown.clone()));
+    let ipc = tokio::spawn(ipc::start_ipc_server(pipe_name, shutdown.clone(), false));
+    run_until_exit(reconcile, ipc, &shutdown).await
+}
+
+/// Wait for either task to finish, then drain the other one under a bounded timeout,
+/// so the caller can report a stopped service knowing the pipe handle is closed.
+async fn run_until_exit(
+    mut reconcile: tokio::task::JoinHandle<()>,
+    mut ipc: tokio::task::JoinHandle<()>,
+    shutdown: &CancellationToken,
+) -> ServerExit {
+    let finished = tokio::select! {
+        _ = &mut reconcile => ServerExit::ReconcileExited,
+        _ = &mut ipc => ServerExit::IpcExited,
     };
 
     // Both loops only return on cancellation in normal operation, so a cancelled
@@ -214,22 +248,22 @@ pub async fn run_server(
     let exit = if shutdown.is_cancelled() {
         ServerExit::Requested
     } else {
-        raw
+        finished
     };
     match exit {
         ServerExit::Requested => tracing::info!("shutdown requested, draining tasks"),
         other => tracing::warn!("a server task exited on its own: {:?}", other),
     }
 
-    // Trip the task that is still running, then give both a bounded drain so the pipe
-    // handle is closed before the caller reports STOPPED.
+    // Drain the task that is still running. Which one finished first is a race, and
+    // re-polling a completed JoinHandle panics, so this keys off `finished`, not `exit`.
     shutdown.cancel();
-    let pending: &mut tokio::task::JoinHandle<()> = match exit {
-        ServerExit::ReconcileExited => &mut ipc_handle,
-        _ => &mut reconcile_handle,
+    let pending = match finished {
+        ServerExit::ReconcileExited => &mut ipc,
+        _ => &mut reconcile,
     };
-    if tokio::time::timeout(Duration::from_secs(5), pending).await.is_err() {
-        tracing::warn!("shutdown drain timed out after 5s");
+    if tokio::time::timeout(SHUTDOWN_DRAIN, pending).await.is_err() {
+        tracing::warn!("shutdown drain timed out after {:?}", SHUTDOWN_DRAIN);
     }
     exit
 }
@@ -293,15 +327,10 @@ mod startup_contract_tests {
         let observed = Arc::new(AtomicU8::new(0));
         let writer = observed.clone();
         let shutdown = Arc::new(CancellationToken::new());
-        let server = tokio::spawn(run_server(
-            ORDER_PIPE,
-            true,
-            shutdown.clone(),
-            move || {
-                let reachable = open(ORDER_PIPE).is_ok();
-                writer.store(if reachable { 2 } else { 1 }, Ordering::SeqCst);
-            },
-        ));
+        let server = tokio::spawn(run_server(ORDER_PIPE, shutdown.clone(), move || {
+            let reachable = open(ORDER_PIPE).is_ok();
+            writer.store(if reachable { 2 } else { 1 }, Ordering::SeqCst);
+        }));
         // Same polling budget as the resilience suite's wait_for_pipe.
         for _ in 0..100 {
             if observed.load(Ordering::SeqCst) != 0 {
@@ -331,12 +360,9 @@ mod startup_contract_tests {
         let listening = Arc::new(AtomicBool::new(false));
         let writer = listening.clone();
         let shutdown = Arc::new(CancellationToken::new());
-        let server = tokio::spawn(run_server(
-            RELEASE_PIPE,
-            true,
-            shutdown.clone(),
-            move || writer.store(true, Ordering::SeqCst),
-        ));
+        let server = tokio::spawn(run_server(RELEASE_PIPE, shutdown.clone(), move || {
+            writer.store(true, Ordering::SeqCst)
+        }));
         for _ in 0..100 {
             if listening.load(Ordering::SeqCst) {
                 break;

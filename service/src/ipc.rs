@@ -76,6 +76,14 @@ fn create_instance(pipe_name: &str, first_pipe_instance: bool) -> io::Result<Nam
     options.create(pipe_name)
 }
 
+/// Wait out a retry delay. `false` means shutdown cancelled the wait first.
+async fn backoff(delay: Duration, shutdown: &CancellationToken) -> bool {
+    tokio::select! {
+        _ = tokio::time::sleep(delay) => true,
+        _ = shutdown.cancelled() => false,
+    }
+}
+
 /// Create the first listener, with retries, before anything is served.
 ///
 /// The retry policy differs by mode on purpose:
@@ -115,16 +123,12 @@ pub async fn listen(
                     tracing::error!("Failed to create named pipe instance: {}", e);
                     Duration::from_secs(5)
                 };
-                tokio::select! {
-                    _ = tokio::time::sleep(delay) => {}
-                    _ = shutdown.cancelled() => {
-                        return Err(io::Error::new(
-                            io::ErrorKind::Interrupted,
-                            "shutdown requested while creating the pipe listener",
-                        ));
-                    }
-                }
-            }
+                if !backoff(delay, shutdown).await {
+                    return Err(io::Error::new(
+                        io::ErrorKind::Interrupted,
+                        "shutdown requested while creating the pipe listener",
+                    ));
+                }            }
         }
     }
 }
@@ -135,12 +139,10 @@ pub async fn serve(pipe_name: &'static str, first: NamedPipeServer, shutdown: Ar
     accept_loop(pipe_name, shutdown, Some(first)).await;
 }
 
-/// Test-only entry: `listen` + accept loop in one call, the shape the server had
-/// before Service mode needed to report `SERVICE_RUNNING` between the two steps.
-/// Production paths use `listen` and `serve` separately via
-/// [`crate::run_server`]; this wrapper keeps the fault-injection tests pointed at the
-/// accept loop alone.
-#[cfg(test)]
+/// Test-only entry used by the fault-injection suite: listen + accept loop in one call,
+/// the shape the server had before Service mode needed to report `SERVICE_RUNNING`
+/// between the two steps. Production paths call `listen` and `serve` separately through
+/// [`crate::run_server`] / [`crate::run_background_server`].
 pub async fn start_ipc_server(pipe_name: &'static str, shutdown: Arc<CancellationToken>, use_first_pipe_instance: bool) {
     tracing::info!("IPC server listening on {}", pipe_name);
     let first = match listen(pipe_name, use_first_pipe_instance, &shutdown).await {
@@ -170,12 +172,9 @@ async fn accept_loop(pipe_name: &'static str, shutdown: Arc<CancellationToken>, 
                 Ok(server) => server,
                 Err(e) => {
                     tracing::error!("Failed to create named pipe instance: {}", e);
-                    tokio::select! {
-                        _ = tokio::time::sleep(Duration::from_secs(5)) => {}
-                        _ = shutdown.cancelled() => {
-                            tracing::info!("IPC server cancelled while creating an instance, exiting");
-                            return;
-                        }
+                    if !backoff(Duration::from_secs(5), &shutdown).await {
+                        tracing::info!("IPC server cancelled while creating an instance, exiting");
+                        return;
                     }
                     continue;
                 }
