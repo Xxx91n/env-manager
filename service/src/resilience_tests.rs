@@ -14,7 +14,8 @@ const HALF_OPEN_PIPE: &str = r"\\.\pipe\EnvManager.TestHalfOpen";
 const TIMEOUT_PIPE: &str = r"\\.\pipe\EnvManager.TestTimeout";
 
 /// Poll-connect until the server's first pipe instance is up (max 5s).
-async fn wait_for_pipe(pipe: &str) {
+/// `pub(crate)` because `startup_contract_tests` drives the same server shape (#153).
+pub(crate) async fn wait_for_pipe(pipe: &str) {
     for _ in 0..100 {
         if tokio::net::windows::named_pipe::ClientOptions::new()
             .open(pipe)
@@ -31,7 +32,8 @@ async fn wait_for_pipe(pipe: &str) {
 /// suite's own wait_for_pipe probe) consumes the server's pending instance;
 /// the next instance exists only after the server loop returns to create().
 /// Retry instead of racing it (documented Windows named-pipe client pattern).
-async fn open_with_retry(pipe: &str) -> tokio::net::windows::named_pipe::NamedPipeClient {
+/// `pub(crate)`: #153's stop contract needs a client it can hold open without writing.
+pub(crate) async fn open_with_retry(pipe: &str) -> tokio::net::windows::named_pipe::NamedPipeClient {
     for _ in 0..100 {
         match tokio::net::windows::named_pipe::ClientOptions::new().open(pipe) {
             Ok(c) => return c,

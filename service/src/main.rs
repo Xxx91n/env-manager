@@ -320,6 +320,10 @@ mod startup_contract_tests {
     //! (otherwise a slow first tick pushes the report past `ServicesPipeTimeout` and
     //! start fails with 1053 again). Only the first property is observable from
     //! outside; the second follows from the report firing before the spawns.
+    //!
+    //! The stop side of the same contract lives here too (#153): when the body returns,
+    //! the caller reports `SERVICE_STOPPED`, so the body must have released the pipe *and*
+    //! joined the connection handlers that may own a delegated CLI child.
     use super::*;
     use std::sync::atomic::{AtomicBool, AtomicU8, Ordering};
     use std::time::Duration;
@@ -327,6 +331,7 @@ mod startup_contract_tests {
     /// Test-only pipe names so a run never collides with a real service instance.
     const ORDER_PIPE: &str = r"\\.\pipe\EnvManager.TestScmOrdering";
     const RELEASE_PIPE: &str = r"\\.\pipe\EnvManager.TestScmRelease";
+    const IN_FLIGHT_PIPE: &str = r"\\.\pipe\EnvManager.TestScmInFlight";
     const ERROR_FILE_NOT_FOUND: i32 = 2;
 
     fn open(pipe: &str) -> std::io::Result<tokio::net::windows::named_pipe::NamedPipeClient> {
@@ -401,5 +406,62 @@ mod startup_contract_tests {
             Some(ERROR_FILE_NOT_FOUND),
             "expected the pipe name to be free after stop, got: {err}"
         );
+    }
+
+    /// Scenario: `Stop-Service` with a connection already accepted and a request still
+    /// being served. The body must not return until that handler does: the caller reports
+    /// `SERVICE_STOPPED` the moment the body returns, and a `rotate` handler owns the CLI
+    /// child that is allowed to write profiles.json (#153).
+    ///
+    /// Regression pin for the shape before this ticket: the accept loop used to return on
+    /// cancellation with the handler still detached, so the body resolved while the
+    /// handler was parked and the child survived into a service the SCM called Stopped.
+    #[tokio::test]
+    async fn stop_waits_for_an_in_flight_connection_handler() {
+        let listening = Arc::new(AtomicBool::new(false));
+        let writer = listening.clone();
+        let shutdown = Arc::new(CancellationToken::new());
+        let mut server = tokio::spawn(run_server(IN_FLIGHT_PIPE, shutdown.clone(), move || {
+            writer.store(true, Ordering::SeqCst);
+            true
+        }));
+        for _ in 0..100 {
+            if listening.load(Ordering::SeqCst) {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(50)).await;
+        }
+        assert!(
+            listening.load(Ordering::SeqCst),
+            "the server body never reached the listener stage"
+        );
+
+        // A client that connects and stays silent parks `handle_connection` in its read
+        // loop. That is the cheapest honest in-flight handler: no real provider rotation
+        // is available to a test, and the join under test is the same either way. The
+        // sleep lets the accept loop observe the connect and register the handler before
+        // the stop lands.
+        let client = crate::resilience_tests::open_with_retry(IN_FLIGHT_PIPE).await;
+        tokio::time::sleep(Duration::from_millis(200)).await;
+
+        shutdown.cancel();
+        // The drain window is `SHUTDOWN_DRAIN`; a tenth of it is spent proving the body is
+        // still inside the handler. Polling rather than one long sleep keeps a slow runner
+        // from passing the assertion by finishing early.
+        for _ in 0..10 {
+            assert!(
+                !server.is_finished(),
+                "the stop path returned while a connection handler was still in flight"
+            );
+            tokio::time::sleep(Duration::from_millis(50)).await;
+        }
+
+        // Releasing the handler must release the body, not merely unblock the test.
+        drop(client);
+        let exit = tokio::time::timeout(SHUTDOWN_DRAIN, &mut server)
+            .await
+            .expect("the body must return once its handler is done")
+            .expect("server task");
+        assert_eq!(exit, ServerExit::Requested);
     }
 }

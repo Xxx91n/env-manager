@@ -4,16 +4,17 @@
 // (`reconcile::run_cli_child` and `reconcile::rotate_mount_at`) driven against a real
 // child process and a temp mount file. A literal `Stop-Service` run would additionally
 // need an installed service, a working provider and a rotation slow enough to still be in
-// flight when the stop lands, none of which is deterministic on a CI runner. The SCM layer
-// above this seam is already pinned by `startup_contract_tests` in `main.rs`, which holds
-// the body to "listener up before SERVICE_RUNNING" and "pipe released before
-// SERVICE_STOPPED".
+// flight when the stop lands, none of which is deterministic on a CI runner. The layer
+// above this seam is pinned by `startup_contract_tests` in `main.rs`: listener before
+// SERVICE_RUNNING, pipe released before SERVICE_STOPPED, and - added for #153 - the body
+// does not return while a connection handler is still in flight, which is the property the
+// handler join in `ipc::accept_loop` contributes to the stop path.
 //
 // Isolation: every fixture is a uniquely named file under `%TEMP%`, removed on drop. No
 // registry, no real `%LOCALAPPDATA%\EnvManager` or `ProgramData\EnvManager` state.
 
 use std::path::PathBuf;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 use tokio_util::sync::CancellationToken;
 
 use crate::reconcile::{rotate_mount_at, run_cli_child, ChildOutcome};
@@ -29,6 +30,9 @@ const STUB_SLOW_ARGS: [&str; 3] = ["-n", "30", "127.0.0.1"];
 /// Cancel the token after a short delay, so the stop lands while the child is in flight.
 /// 300ms is nothing against a 30s stub, and `run_cli_child` has already spawned the child
 /// before it races the token, so the ordering under test is the real one.
+///
+/// A test that needs to time the stop itself drives the call from a task and cancels from
+/// the test body instead (`stop_terminates_and_reaps_the_rotate_child`).
 fn cancel_after(shutdown: &std::sync::Arc<CancellationToken>, delay: Duration) {
     let timer = shutdown.clone();
     tokio::spawn(async move {
@@ -110,31 +114,30 @@ async fn stop_terminates_and_reaps_the_rotate_child() {
     );
 
     let shutdown = std::sync::Arc::new(CancellationToken::new());
-    cancel_after(&shutdown, Duration::from_millis(300));
+    let token = shutdown.clone();
+    let in_flight =
+        tokio::spawn(async move { run_cli_child(STUB_EXE, &STUB_SLOW_ARGS, &token).await });
 
-    let started = Instant::now();
-    let outcome = tokio::time::timeout(
-        ALWAYS_TOO_LONG,
-        run_cli_child(STUB_EXE, &STUB_SLOW_ARGS, &shutdown),
-    )
-    .await
-    .expect("the stop must converge the child, not wait its 30s lifetime out")
-    .expect("spawn the stub rotate child");
-    let elapsed = started.elapsed();
+    // Let the child get going, then time only the stop: everything between the cancel and
+    // the return is terminate + reap, so a slow runner cannot be blamed for the result -
+    // and process startup cannot hide a convergence that took far longer than the budget.
+    tokio::time::sleep(Duration::from_millis(300)).await;
+    let outcome = tokio::time::timeout(SHUTDOWN_DRAIN, in_flight)
+        .await
+        .expect(
+            "the stop must terminate and reap the child inside SHUTDOWN_DRAIN; waiting the \
+             stub out would take 30s and stall the join in `ipc::accept_loop`",
+        )
+        .expect("the rotate call task must not panic")
+        .expect("spawn the stub rotate child");
 
     let ChildOutcome::Interrupted { pid } = outcome else {
         panic!("a stop during the rotation must report the child as interrupted");
     };
     let pid = pid.expect("a spawned child reports its pid");
 
-    // Waiting for the child to finish on its own would take ~30s; the stop budget is
-    // `SHUTDOWN_DRAIN`, and the whole stop chain is asserted against the SCM wait hint in
-    // `scm.rs`. Returning inside the budget is what makes the join in `ipc::accept_loop`
-    // a guarantee rather than a stall.
-    assert!(
-        elapsed < SHUTDOWN_DRAIN,
-        "terminating and reaping must fit the stop budget, took {elapsed:?}"
-    );
+    // `Child::kill` is TerminateProcess followed by `wait`, so the pid is already gone
+    // when the call returns: nothing that can write profiles.json outlives the stop.
     assert!(
         !pid_is_running(pid),
         "the CLI child {pid} must be gone by the time the stop path returns"
@@ -157,6 +160,10 @@ async fn interrupted_rotation_leaves_the_mount_unrotated() {
     .await
     .expect("an interrupted rotate must converge, not wait the stub out")
     .expect_err("an interrupted rotate must fail for its client");
+    // Pinned on the message because the message is what the client sees: `process_request`
+    // prefixes it into the `rotate failed: ...` response the GUI shows. The typed
+    // discriminant is pinned by `stop_terminates_and_reaps_the_rotate_child`, so rewording
+    // this string is a deliberate change to user-visible text, not a refactor.
     assert!(
         err.contains("interrupted by service stop"),
         "the client must be told the rotation was interrupted, got: {err}"
