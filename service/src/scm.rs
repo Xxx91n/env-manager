@@ -91,14 +91,15 @@ fn status_lock() -> MutexGuard<'static, ()> {
 /// so the same call sites stay valid on the non-SCM fallback path.
 fn report(state: u32, checkpoint: u32, wait_hint_ms: u32) {
     let _guard = status_lock();
-    report_locked(state, checkpoint, wait_hint_ms, 0, 0);
+    // Fire-and-forget: a rejected START_PENDING/STOPPED leaves nothing to decide.
+    let _ = report_locked(state, checkpoint, wait_hint_ms, 0, 0);
 }
 
 /// Report a terminal STOPPED whose cause was a failure, so the SCM records a service
 /// error (and applies the configured recovery actions) instead of a clean stop.
 fn report_failure(service_exit_code: u32) {
     let _guard = status_lock();
-    report_locked(
+    let _ = report_locked(
         SERVICE_STOPPED,
         0,
         0,
@@ -110,28 +111,38 @@ fn report_failure(service_exit_code: u32) {
 /// Report SERVICE_RUNNING unless a stop request already landed.
 ///
 /// The check and the report share `STATUS_LOCK` with the control handler, so the SCM can
-/// never end up with RUNNING after STOP_PENDING. Returns whether RUNNING was sent; the
-/// caller stops the body when it was not.
+/// never end up with RUNNING after STOP_PENDING. Returns whether the SCM actually holds
+/// RUNNING; the caller stops the body when it does not. A rejected report must not start
+/// the body either - the SCM would stay in START_PENDING and time the start out (1053)
+/// while the service is alive behind a status it never accepted.
 pub fn report_running_unless_stopping() -> bool {
     let _guard = status_lock();
-    let stopping = SHUTDOWN.get().is_some_and(|token| token.is_cancelled());
-    if stopping {
+    if SHUTDOWN.get().is_some_and(|token| token.is_cancelled()) {
+        tracing::info!("stop requested before the listener came up, RUNNING not reported");
         return false;
     }
-    report_locked(SERVICE_RUNNING, 0, 0, 0, 0);
+    if !report_locked(SERVICE_RUNNING, 0, 0, 0, 0) {
+        tracing::error!(
+            "SetServiceStatus(SERVICE_RUNNING) failed (os error {}); not starting the service body",
+            std::io::Error::last_os_error()
+        );
+        return false;
+    }
+    tracing::info!("reported SERVICE_RUNNING");
     true
 }
 
-/// Caller must hold `STATUS_LOCK`.
+/// Caller must hold `STATUS_LOCK`. Returns whether the SCM accepted the status; only an
+/// accepted status is remembered for `SERVICE_CONTROL_INTERROGATE` to replay.
 fn report_locked(
     state: u32,
     checkpoint: u32,
     wait_hint_ms: u32,
     exit_code: u32,
     service_exit_code: u32,
-) {
+) -> bool {
     let Some(handle) = STATUS_HANDLE.get() else {
-        return;
+        return false;
     };
     let status = SERVICE_STATUS {
         dwServiceType: SERVICE_WIN32_OWN_PROCESS,
@@ -142,12 +153,13 @@ fn report_locked(
         dwCheckPoint: checkpoint,
         dwWaitHint: wait_hint_ms,
     };
-    unsafe {
-        SetServiceStatus(*handle as *mut c_void, &status);
+    let accepted = unsafe { SetServiceStatus(*handle as *mut c_void, &status) != 0 };
+    if accepted {
+        *LAST_STATUS
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner()) = Some(status);
     }
-    *LAST_STATUS
-        .lock()
-        .unwrap_or_else(|poisoned| poisoned.into_inner()) = Some(status);
+    accepted
 }
 
 /// SCM control handler. Runs on an SCM-owned thread, so it only reports state and
@@ -163,7 +175,7 @@ unsafe extern "system" fn control_handler(
             tracing::info!("SCM control {} received, stopping the service", control);
             // One critical section: STOP_PENDING cannot be followed by a RUNNING report.
             let _guard = status_lock();
-            report_locked(SERVICE_STOP_PENDING, 1, STOP_WAIT_HINT_MS, 0, 0);
+            let _ = report_locked(SERVICE_STOP_PENDING, 1, STOP_WAIT_HINT_MS, 0, 0);
             if let Some(shutdown) = SHUTDOWN.get() {
                 shutdown.cancel();
             }
@@ -227,17 +239,13 @@ unsafe extern "system" fn service_main(_argc: u32, _argv: *mut PWSTR) {
     };
 
     let pipe = crate::RuntimeMode::Service.pipe_endpoint();
-    let exit = runtime.block_on(crate::run_server(pipe, shutdown, || {
-        // Report as soon as the listener exists: this is the point that keeps the
-        // boot-time start inside ServicesPipeTimeout (#149).
-        let reported = report_running_unless_stopping();
-        if reported {
-            tracing::info!("reported SERVICE_RUNNING");
-        } else {
-            tracing::info!("stop requested before the listener came up, RUNNING not reported");
-        }
-        reported
-    }));
+    // Report as soon as the listener exists: this is the point that keeps the boot-time
+    // start inside ServicesPipeTimeout (#149).
+    let exit = runtime.block_on(crate::run_server(
+        pipe,
+        shutdown,
+        report_running_unless_stopping,
+    ));
 
     // Drain before reporting STOPPED so that "Stopped" implies the pipe is free for
     // the next start.
