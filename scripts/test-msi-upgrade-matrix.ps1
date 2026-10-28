@@ -23,7 +23,7 @@
 #
 # Reading the executable out of ImagePath has one shape it refuses rather than
 # judges: an unquoted command line that contains spaces. Windows splits that at the
-# first space, so the SCM would start the token before it (for a path under Program
+# first space, so the SCM may start the token before it (for a path under Program
 # Files, C:\Program.exe) and the path read here would not be the binary that starts.
 #
 # -SelfTest feeds synthetic msiexec logs through the diagnosis helper and synthetic
@@ -135,15 +135,21 @@ if ($SelfTest) {
         'Action ended 9:00:06: INSTALL. Return value 3.'
     )
     $emptyLog = @()
-    # The two shapes the installer actually produces, plus the ambiguous one it does
-    # not: the refusal branch cannot be reached by the matrix, so this is the only
-    # place it runs.
+    # The two shapes the installer actually produces, plus the ambiguous ones it does
+    # not: the refusal cannot be reached by the matrix, so this is the only place it
+    # runs. The spaced path is tried with and without arguments because the parser
+    # reaches the refusal by two routes - a split that leaves spaces in the executable,
+    # and no splittable argument at all.
     $quotedDefault = '"C:\Program Files\Env Manager\env-manager-service.exe" --mode=service'
     $unquotedCustom = 'C:\env-manager-upgrade-test\env-manager-service.exe --mode=service'
-    $ambiguousPath = 'C:\Program Files\Env Manager\env-manager-service.exe --mode=service'
-    $ambiguousOutcome = ''
-    try { $ambiguousOutcome = 'parsed: ' + (ConvertFrom-ServiceImagePath -CommandLine $ambiguousPath) }
-    catch { $ambiguousOutcome = $_.Exception.Message }
+    $spacedWithArgs = 'C:\Program Files\Env Manager\env-manager-service.exe --mode=service'
+    $spacedBare = 'C:\Program Files\Env Manager\env-manager-service.exe'
+    $spacedWithArgsRefusal = ''
+    try { $null = ConvertFrom-ServiceImagePath -CommandLine $spacedWithArgs }
+    catch { $spacedWithArgsRefusal = $_.Exception.Message }
+    $spacedBareRefusal = ''
+    try { $null = ConvertFrom-ServiceImagePath -CommandLine $spacedBare }
+    catch { $spacedBareRefusal = $_.Exception.Message }
     $checks = @(
         @{ Name = 'Return value 3 names the action'; Actual = (Get-MsiDiagnosis -Lines $failedLog); Expected = 'StartServices' },
         @{ Name = 'first failure wins over the INSTALL wrapper'; Actual = (Get-MsiDiagnosis -Lines $multiFailureLog); Expected = 'StartServices' },
@@ -154,8 +160,9 @@ if ($SelfTest) {
         @{ Name = 'empty log reports no failure'; Actual = (Get-MsiDiagnosis -Lines $emptyLog); Expected = 'no action information in the msiexec log' },
         @{ Name = 'quoted ImagePath yields the executable'; Actual = (ConvertFrom-ServiceImagePath -CommandLine $quotedDefault); Expected = 'C:\Program Files\Env Manager\env-manager-service.exe' },
         @{ Name = 'unquoted ImagePath without spaces yields the executable'; Actual = (ConvertFrom-ServiceImagePath -CommandLine $unquotedCustom); Expected = 'C:\env-manager-upgrade-test\env-manager-service.exe' },
-        @{ Name = 'unquoted ImagePath with spaces is refused as ambiguous'; Actual = ($ambiguousOutcome.StartsWith('ImagePath is unquoted')); Expected = $true },
-        @{ Name = 'the refusal carries the raw ImagePath'; Actual = ($ambiguousOutcome.Contains($ambiguousPath)); Expected = $true }
+        @{ Name = 'unquoted ImagePath with spaces is refused as ambiguous'; Actual = ($spacedWithArgsRefusal.StartsWith('ImagePath is unquoted')); Expected = $true },
+        @{ Name = 'the refusal carries the raw ImagePath'; Actual = ($spacedWithArgsRefusal.Contains($spacedWithArgs)); Expected = $true },
+        @{ Name = 'unquoted spaced ImagePath without arguments is refused too'; Actual = ($spacedBareRefusal.StartsWith('ImagePath is unquoted')); Expected = $true }
     )
     $bad = 0
     foreach ($check in $checks) {
