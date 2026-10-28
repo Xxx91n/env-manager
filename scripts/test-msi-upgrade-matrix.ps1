@@ -21,6 +21,20 @@
 # only reintroduce a check that cannot pass. The current build's start/stop is asserted
 # by the runbook's Step 1b, where it is reachable.
 #
+# One upgrade cell installs the previous release somewhere other than the cell's own
+# INSTALLDIR: the product default first, a custom directory second. The two
+# same-directory cells cannot show an install-directory move at all, because there the
+# previous directory is the current one by construction; in this cell "the entry follows
+# the new directory" and "the upgrade wrote the old directory back" are finally different
+# facts, and one fact a service entry cannot show joins them - the directory the product
+# migrated off holds no executable from the previous release, so anything still naming it
+# resolves to nothing. Its two log probes take opposite expectations for that reason: the
+# probe in the new directory must be deleted by the upgrade-time cleanup, because deleting
+# a log there is what proves the cleanup follows INSTALLDIR instead of the default path -
+# which in this cell is exactly where the previous release lives - while the probe in the
+# migrated-off directory must survive, because that file was never the new product's to
+# delete.
+#
 # Reading the executable out of ImagePath has one shape it refuses rather than
 # judges: an unquoted executable that contains spaces. Windows resolves an unquoted
 # command line by trying progressively longer prefixes of it as the module name (for a
@@ -42,6 +56,7 @@ param(
     [string]$CurrentVersion = '',
     [string]$PreviousVersion = '',
     [string]$InstallDir = '',
+    [string]$PreviousInstallDir = '',
     [string]$LogDir = 'test-results/msi-upgrade',
     [int]$InstallTimeoutSeconds = 60
 )
@@ -81,6 +96,17 @@ function Get-MsiDiagnosis {
         return 'last action started before the failure: ' + ([string]$starts[-1]).Trim()
     }
     return 'no action information in the msiexec log'
+}
+
+function Get-ComparableDirectory {
+    # Normalized form for "are these the same directory" comparisons: GetFullPath resolves
+    # relative segments and 8.3 spellings, and the trailing separator has to go with it.
+    # TrimEndingDirectorySeparator is .NET Core only and this script also runs on Windows
+    # PowerShell 5.1, where a trailing separator survives GetFullPath and would make one
+    # directory compare unequal to itself - turning a same-directory cell into a
+    # migration, whose assertions then contradict the cell they run in.
+    param([string]$Path)
+    return ([System.IO.Path]::GetFullPath($Path)).TrimEnd('\', '/')
 }
 
 function ConvertFrom-ServiceImagePath {
@@ -203,11 +229,33 @@ if ([string]::IsNullOrWhiteSpace($targetDir)) {
     $targetDir = Join-Path $env:ProgramFiles 'Env Manager'
 }
 
+# Where Step 1 puts the previous release. Empty means the cell's own directory, which is
+# what both same-directory upgrade cells ask for; naming a different directory asks for a
+# directory migration, and Step 1 is then the only step that writes there.
+$previousDir = $PreviousInstallDir
+if ([string]::IsNullOrWhiteSpace($previousDir)) { $previousDir = $targetDir }
+$migrating = $upgrade -and -not [string]::Equals(
+    (Get-ComparableDirectory $previousDir),
+    (Get-ComparableDirectory $targetDir),
+    [System.StringComparison]::OrdinalIgnoreCase)
+if (-not $upgrade -and -not [string]::IsNullOrWhiteSpace($PreviousInstallDir)) {
+    throw '-PreviousInstallDir applies to an upgrade cell only (it needs -PreviousMsi)'
+}
+if ($upgrade -and -not [string]::IsNullOrWhiteSpace($PreviousInstallDir) -and -not $migrating) {
+    # A cell that names the directory it already installs into asks for the
+    # same-directory upgrade the other two cells cover, and would otherwise run their
+    # assertions under a name that claims a move happened.
+    throw "-PreviousInstallDir resolves to the cell's own INSTALLDIR ($targetDir); a same-directory upgrade is the upgrade-default or upgrade-custom-path cell"
+}
+
 New-Item -ItemType Directory -Force -Path $LogDir | Out-Null
 
 if ([string]::IsNullOrWhiteSpace($Scenario)) {
     if (-not $upgrade) {
         $Scenario = 'clean-current'
+    }
+    elseif ($migrating) {
+        $Scenario = 'upgrade-dir-migration'
     }
     elseif ([string]::IsNullOrWhiteSpace($InstallDir)) {
         $Scenario = 'upgrade-default'
@@ -220,6 +268,7 @@ Write-Host "=== MSI upgrade matrix: $Scenario ==="
 Write-Host "current MSI: $CurrentMsi (v$CurrentVersion)"
 if ($upgrade) { Write-Host "previous MSI: $PreviousMsi (v$PreviousVersion)" }
 Write-Host "install dir: $targetDir"
+if ($migrating) { Write-Host "previous install dir: $previousDir (this cell moves the product)" }
 
 function Get-EnvManagerService {
     return (Get-Service -Name 'EnvManagerService' -ErrorAction SilentlyContinue)
@@ -271,9 +320,17 @@ function Add-InstallDirOverride {
 }
 
 function Invoke-SilentInstall {
-    param([string]$Stage, [string]$MsiPath, [string]$LogPath)
+    # Both directories are passed in rather than read from script scope: an upgrade cell
+    # installs two releases, and a pair read from the wrong place would put the previous
+    # release on top of the current directory with no assertion noticing. An empty
+    # resolved directory is a bug in this script, not a cell that installs somewhere
+    # implicit.
+    param([string]$Stage, [string]$MsiPath, [string]$LogPath, [string]$RequestedDir, [string]$ResolvedDir)
+    if ([string]::IsNullOrWhiteSpace($ResolvedDir)) {
+        throw "${Stage}: no install directory was passed, so the cell cannot know where this install writes"
+    }
     $msiArgs = @('/i', "`"$MsiPath`"", '/quiet', '/norestart', '/L*v', "`"$LogPath`"")
-    $msiArgs = Add-InstallDirOverride -MsiArgs $msiArgs -RequestedDir $InstallDir -ResolvedDir $targetDir
+    $msiArgs = Add-InstallDirOverride -MsiArgs $msiArgs -RequestedDir $RequestedDir -ResolvedDir $ResolvedDir
     Invoke-MsiProcess -Stage $Stage -MsiArgs $msiArgs -LogPath $LogPath
 }
 
@@ -353,19 +410,37 @@ function Assert-ServiceAbsent {
 }
 
 function Assert-InstalledPayload {
-    param([string]$Stage, [string]$ExpectedVersion)
+    param([string]$Stage, [string]$ExpectedVersion, [string]$TargetDir)
     foreach ($name in @('env-manager.exe', 'env-manager-cli.exe')) {
-        $path = Join-Path $targetDir $name
+        $path = Join-Path $TargetDir $name
         if (-not (Test-Path -LiteralPath $path)) { throw "${Stage}: installed file missing at $path" }
     }
     if ([string]::IsNullOrWhiteSpace($ExpectedVersion)) { return }
-    $cli = Join-Path $targetDir 'env-manager-cli.exe'
+    $cli = Join-Path $TargetDir 'env-manager-cli.exe'
     $banner = & $cli 2>&1 | Out-String
     if ($LASTEXITCODE -ne 0) { throw "${Stage}: installed CLI exited $LASTEXITCODE" }
     if (-not (Test-VersionBanner -Banner $banner -ExpectedVersion $ExpectedVersion)) {
         throw "${Stage}: installed CLI version does not match v$ExpectedVersion. Banner: $($banner.Trim())"
     }
     Write-Host "${Stage}: installed payload reports v$ExpectedVersion"
+}
+
+function Assert-PreviousPayloadGone {
+    param([string]$Stage, [string]$PreviousDir)
+    # What a directory migration has to leave behind is nothing that can still be run: a
+    # service entry, a shortcut or a user's PATH entry naming the old directory would point
+    # at a binary this upgrade no longer put there. Only the product's own executables are
+    # asserted - a leftover directory is residue the uninstall check warns about rather
+    # than fails on, and says nothing about where the product now lives.
+    $leftovers = @()
+    foreach ($name in @('env-manager.exe', 'env-manager-cli.exe', 'env-manager-service.exe')) {
+        $path = Join-Path $PreviousDir $name
+        if (Test-Path -LiteralPath $path) { $leftovers += $path }
+    }
+    if ($leftovers.Count -gt 0) {
+        throw "${Stage}: the upgrade left $($leftovers.Count) executable(s) from the previous release in $PreviousDir ($($leftovers -join ', ')), a directory this upgrade no longer installs into"
+    }
+    Write-Host "${Stage}: the previous install directory holds no executable from the previous release"
 }
 
 function Assert-UninstalledBinaries {
@@ -379,9 +454,14 @@ function Assert-UninstalledBinaries {
 
 try {
     if ($upgrade) {
-        Invoke-SilentInstall -Stage 'Step 1: silent install (previous release)' -MsiPath $PreviousMsi -LogPath (Join-Path $LogDir 'step1-previous-install.log')
+        # Step 1 writes the previous release where the cell says it was installed, which
+        # only the migration cell makes different from the current directory. The pair is
+        # passed rather than read from script scope so no cell installs into the wrong one.
+        Invoke-SilentInstall -Stage 'Step 1: silent install (previous release)' -MsiPath $PreviousMsi `
+            -LogPath (Join-Path $LogDir 'step1-previous-install.log') `
+            -RequestedDir $PreviousInstallDir -ResolvedDir $previousDir
         Assert-ServicePresent -Stage 'Step 1'
-        Assert-InstalledPayload -Stage 'Step 1' -ExpectedVersion $PreviousVersion
+        Assert-InstalledPayload -Stage 'Step 1' -ExpectedVersion $PreviousVersion -TargetDir $previousDir
         # Seed the legacy log path the old installer wrote to. The cleanup
         # component is shared across versions, so the old product's uninstall
         # action is skipped; the current product's upgrade-only cleanup action
@@ -390,13 +470,32 @@ try {
         New-Item -ItemType Directory -Force -Path (Split-Path -Parent $legacyProbe) | Out-Null
         Set-Content -LiteralPath $legacyProbe -Value 'legacy log probe' -Encoding utf8
         Write-Host "Step 2: seeded $legacyProbe to prove the upgrade cleanup runs"
-        Invoke-SilentInstall -Stage 'Step 2: silent upgrade (current over previous)' -MsiPath $CurrentMsi -LogPath (Join-Path $LogDir 'step2-current-upgrade.log')
+        $migratedOffProbe = ''
+        if ($migrating) {
+            # The other half of the migration pair. The cleanup acts on the new INSTALLDIR
+            # only, so a log left in the directory the product moves away from must
+            # survive; a cleanup that followed the old path would delete it here.
+            $migratedOffProbe = Join-Path (Join-Path $previousDir 'logs') 'upgrade-probe.log'
+            New-Item -ItemType Directory -Force -Path (Split-Path -Parent $migratedOffProbe) | Out-Null
+            Set-Content -LiteralPath $migratedOffProbe -Value 'migrated-off log probe' -Encoding utf8
+            Write-Host "Step 2: seeded $migratedOffProbe to prove the upgrade cleanup stays in the new directory"
+        }
+        Invoke-SilentInstall -Stage 'Step 2: silent upgrade (current over previous)' -MsiPath $CurrentMsi `
+            -LogPath (Join-Path $LogDir 'step2-current-upgrade.log') `
+            -RequestedDir $InstallDir -ResolvedDir $targetDir
         Assert-ServicePresent -Stage 'Step 2'
-        Assert-InstalledPayload -Stage 'Step 2' -ExpectedVersion $CurrentVersion
+        Assert-InstalledPayload -Stage 'Step 2' -ExpectedVersion $CurrentVersion -TargetDir $targetDir
         # Presence alone cannot tell a correct service entry from one naming some
         # other directory, so the upgrade legs check where it points and that the
         # file is there.
         Assert-ServiceImagePath -Stage 'Step 2' -TargetDir $targetDir
+        if ($migrating) {
+            Assert-PreviousPayloadGone -Stage 'Step 2' -PreviousDir $previousDir
+            if (-not (Test-Path -LiteralPath $migratedOffProbe)) {
+                throw "Step 2: the upgrade cleanup deleted $migratedOffProbe, a log in the directory the product migrated off; the cleanup acts on the new install directory ($targetDir) only"
+            }
+            Write-Host "Step 2: the upgrade cleanup left $previousDir alone"
+        }
         if (Test-Path -LiteralPath $legacyProbe) {
             throw "Step 2: the upgrade cleanup left $legacyProbe after the major upgrade"
         }
@@ -421,9 +520,11 @@ try {
         Assert-UninstalledBinaries
     }
     else {
-        Invoke-SilentInstall -Stage 'Step 1: silent install (current)' -MsiPath $CurrentMsi -LogPath (Join-Path $LogDir 'step1-current-install.log')
+        Invoke-SilentInstall -Stage 'Step 1: silent install (current)' -MsiPath $CurrentMsi `
+            -LogPath (Join-Path $LogDir 'step1-current-install.log') `
+            -RequestedDir $InstallDir -ResolvedDir $targetDir
         Assert-ServicePresent -Stage 'Step 1'
-        Assert-InstalledPayload -Stage 'Step 1' -ExpectedVersion $CurrentVersion
+        Assert-InstalledPayload -Stage 'Step 1' -ExpectedVersion $CurrentVersion -TargetDir $targetDir
         # The repair is the widest maintenance pass on a product that was never
         # upgraded, so it is where an unconditional install-time cleanup would still
         # show up. A clean install on an empty machine has no unrelated file to lose.
