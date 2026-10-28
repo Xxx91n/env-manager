@@ -560,10 +560,11 @@ jobs:
 
   # Silent MSI install/upgrade matrix. build-package covers the default-path
   # clean install with the same script; this job covers the remaining cells:
-  # custom-path clean install, and default/custom-path upgrades from the
-  # newest published release strictly older than the current version. Each leg
-  # runs on a fresh runner, so the MSI's machine-state writes die with the VM;
-  # user-state writes are redirected.
+  # custom-path clean install, default/custom-path upgrades from the newest
+  # published release strictly older than the current version, and the upgrade
+  # that moves the product between directories. Each leg runs on a fresh runner,
+  # so the MSI's machine-state writes die with the VM; user-state writes are
+  # redirected.
   msi-upgrade-matrix:
     needs: build-package
     runs-on: windows-latest
@@ -585,6 +586,14 @@ jobs:
           - scenario: upgrade-custom-path
             mode: upgrade
             install_dir: 'C:\env-manager-upgrade-test'
+          # The upgrade moves the product: the published release goes into the
+          # product default and the current MSI into a custom INSTALLDIR. The two
+          # upgrade cells above install both releases into one directory, so a
+          # directory move is not something they can show.
+          - scenario: upgrade-dir-migration
+            mode: upgrade
+            install_dir: 'C:\env-manager-upgrade-test'
+            previous_install_dir: 'C:\Program Files\Env Manager'
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -650,6 +659,9 @@ jobs:
             LogDir = 'test-results/msi-upgrade'
           }
           if ('${{ matrix.install_dir }}') { $scriptArgs.InstallDir = '${{ matrix.install_dir }}' }
+          # Unset for every cell that keeps the previous release in its own directory;
+          # naming a different one is what makes the leg a directory migration.
+          if ('${{ matrix.previous_install_dir }}') { $scriptArgs.PreviousInstallDir = '${{ matrix.previous_install_dir }}' }
           if ('${{ matrix.mode }}' -eq 'upgrade') {
             $previousMsis = @(Get-ChildItem artifacts/previous -Recurse -Filter '*x64.msi')
             if ($previousMsis.Count -ne 1) { throw "expected one x64 MSI in artifacts/previous, found $($previousMsis.Count)" }
