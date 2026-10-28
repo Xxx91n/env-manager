@@ -856,9 +856,10 @@ jobs:
   # kept out of the per-PR path; the brain triggers it on demand and records
   # the run-id. The runner VM is per-job disposable, which is exactly the
   # user-state isolation constraint; no secrets are needed.
-  # env-manager-service.exe does not implement the SCM service-control-
-  # dispatcher protocol, so the Service-mode auto-restart path stays
-  # documented-only; this job exercises the Background-mode chain:
+  # env-manager-service.exe does implement the SCM control protocol now
+  # (service/src/scm.rs), but this job drives a background-mode process, not an
+  # SCM-managed one, so the Service-mode auto-restart path is still not what runs
+  # here; this job exercises the Background-mode chain:
   # start -> ping -> taskkill /F (kill -9) -> liveness detection -> restart
   # (harness plays the watchdog role) -> ping + secretMount.json persistence
   # + health endpoint.

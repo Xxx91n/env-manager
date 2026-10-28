@@ -148,7 +148,9 @@ std::mem::forget(guard);
             RuntimeMode::Service | RuntimeMode::Background => {
                 let shutdown = Arc::new(CancellationToken::new());
                 let exit = match mode {
-                    RuntimeMode::Service => run_server(mode.pipe_endpoint(), shutdown, || true).await,
+                    RuntimeMode::Service => {
+                        run_server(mode.pipe_endpoint(), shutdown, || true).await
+                    }
                     _ => run_background_server(mode.pipe_endpoint(), shutdown).await,
                 };
                 match exit {

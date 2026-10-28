@@ -60,7 +60,7 @@ static STATUS_HANDLE: OnceLock<usize> = OnceLock::new();
 /// Serializes status transitions against the control handler. The SCM reads states in
 /// order, so a RUNNING report must not land after the STOP_PENDING the handler already
 /// sent; the check and the report have to be one critical section. Never held across an
-/// await or a second lock.
+/// await. The only nested lock is LAST_STATUS, always taken after this one.
 static STATUS_LOCK: Mutex<()> = Mutex::new(());
 
 /// Last status sent to the SCM, replayed verbatim for `SERVICE_CONTROL_INTERROGATE` so
