@@ -6,8 +6,9 @@
 #   seed secretMount.json -> start `env-manager-service --mode=background` ->
 #   `service ping` OK -> taskkill /F (TerminateProcess = kill -9 equivalent) ->
 #   liveness probe detects death -> harness restarts the process (playing the
-#   production watchdog role; SCM auto-recovery is out of scope because the
-#   binary does not implement the service-control-dispatcher protocol) ->
+#   production watchdog role; SCM auto-recovery stays out of scope here because this
+#   harness drives a background-mode process, not an SCM-managed one, even though the
+#   binary now joins the SCM control protocol - see service/src/scm.rs) ->
 #   `service ping` OK (new PID) + secretMount.json persisted + `service health`
 #   reachable.
 #

@@ -103,15 +103,17 @@
             RestartServiceDelayInSeconds="60"
             ResetPeriodInDays="1" />
         </ServiceInstall>
-        <!-- Wait=no because the service binary never joins the SCM control protocol:
-             it has no StartServiceCtrlDispatcher/ServiceMain/SetServiceStatus, so SCM
-             never observes a Running state no matter how fast the process boots.
-             A blocking wait would therefore always run to ServicesPipeTimeout and
-             fail the install (1053) — the v0.9.26 hang. This is not a slow-start
-             bound: adding time would not help, implementing the control protocol
-             would (tracked in https://github.com/Xxx91n/env-manager/issues/141).
-             ServiceInstall Start="auto" lets SCM try at next boot; GUI exposes a
-             manual start. -->
+        <!-- Wait=no: ServiceControl issues the stop without blocking the transaction.
+             The service joins the SCM control protocol (StartServiceCtrlDispatcherW,
+             ServiceMain and SetServiceStatus in service/src/scm.rs), so a stop is
+             answered in well under a second and a start no longer runs to
+             ServicesPipeTimeout with error 1053 (the v0.9.26 install hang). The wait
+             stays suppressed so the install transaction never depends on a service
+             being live; service lifecycle is asserted where it can pass, by the
+             Start-Service -> Running and Stop-Service -> Stopped steps in the runbook
+             in docs/build-and-release.md.
+             ServiceInstall Start="auto" is unchanged: SCM starts it at boot, and the
+             install itself does not start it. -->
         <ServiceControl Id="EnvManagerServiceControl" Name="EnvManagerService"
                         Stop="both" Remove="uninstall" Wait="no" />
       </Component>

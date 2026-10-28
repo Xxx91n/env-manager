@@ -16,9 +16,10 @@
 # The upgrade legs assert the SCM facts an upgrade can be judged on - entry present,
 # executable path inside the current install directory, that file on disk - not
 # "the running old service was stopped by the upgrade". No step starts the old
-# service on purpose: under SCM it can never reach Running, so a Start-Service
-# attempt would only reintroduce a check that cannot pass (the ServiceInstall
-# comment in frontend/scripts/installer.wxs owns the mechanism).
+# service on purpose: the previous release's binary predates the SCM control protocol
+# (service/src/scm.rs), so it can never reach Running and a Start-Service attempt would
+# only reintroduce a check that cannot pass. The current build's start/stop is asserted
+# by the runbook's Step 1b, where it is reachable.
 #
 # -SelfTest feeds synthetic msiexec logs through the diagnosis helper; it needs
 # no MSI and no elevation, so it can run anywhere PowerShell 5.1+ is installed.
