@@ -299,7 +299,7 @@ try {
         Assert-InstalledPayload -Stage 'Step 1' -ExpectedVersion $CurrentVersion
         # The repair is what proves the install-time wildcard is upgrade-only. A clean
         # install on an empty machine has no unrelated file to lose, whereas the
-        # wildcard would act on any component that reaches the install state — which
+        # wildcard would act on any component that reaches the install state, which
         # is exactly the state a repair puts it in. The probe is the same file name
         # the upgrade leg seeds, so the two legs disagree only in the expectation.
         $legacyProbe = Join-Path (Join-Path $targetDir 'logs') 'upgrade-probe.log'
