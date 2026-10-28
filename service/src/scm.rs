@@ -26,7 +26,7 @@ use windows_sys::Win32::System::Services::{
     RegisterServiceCtrlHandlerExW, SetServiceStatus, StartServiceCtrlDispatcherW,
     SERVICE_ACCEPT_SHUTDOWN, SERVICE_ACCEPT_STOP, SERVICE_CONTROL_INTERROGATE,
     SERVICE_CONTROL_SHUTDOWN, SERVICE_CONTROL_STOP, SERVICE_RUNNING, SERVICE_START_PENDING,
-    SERVICE_STATUS, SERVICE_STOP_PENDING, SERVICE_STOPPED, SERVICE_TABLE_ENTRYW,
+    SERVICE_STATUS, SERVICE_STOPPED, SERVICE_STOP_PENDING, SERVICE_TABLE_ENTRYW,
     SERVICE_WIN32_OWN_PROCESS,
 };
 
@@ -68,7 +68,13 @@ fn report(state: u32, checkpoint: u32, wait_hint_ms: u32) {
     report_with(state, checkpoint, wait_hint_ms, 0, 0);
 }
 
-fn report_with(state: u32, checkpoint: u32, wait_hint_ms: u32, exit_code: u32, service_exit_code: u32) {
+fn report_with(
+    state: u32,
+    checkpoint: u32,
+    wait_hint_ms: u32,
+    exit_code: u32,
+    service_exit_code: u32,
+) {
     let Some(handle) = STATUS_HANDLE.get() else {
         return;
     };
@@ -128,11 +134,8 @@ unsafe extern "system" fn control_handler(
 /// runtime is created; the initial thread stays blocked in the dispatcher.
 unsafe extern "system" fn service_main(_argc: u32, _argv: *mut PWSTR) {
     let name = to_wide(SERVICE_NAME);
-    let handle = RegisterServiceCtrlHandlerExW(
-        name.as_ptr(),
-        Some(control_handler),
-        std::ptr::null(),
-    );
+    let handle =
+        RegisterServiceCtrlHandlerExW(name.as_ptr(), Some(control_handler), std::ptr::null());
     if handle.is_null() {
         // Without a status handle every later report is a no-op, so the SCM would
         // run to ServicesPipeTimeout. Nothing else can be done from here.

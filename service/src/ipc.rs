@@ -114,10 +114,16 @@ pub async fn listen(
                 attempts += 1;
                 let delay = if first_pipe_instance {
                     if attempts > 1 {
-                        tracing::error!("Pipe creation failed after retry: {}. Service cannot start safely.", e);
+                        tracing::error!(
+                            "Pipe creation failed after retry: {}. Service cannot start safely.",
+                            e
+                        );
                         return Err(e);
                     }
-                    tracing::warn!("Pipe creation failed on first attempt: {}. Retrying in 1s...", e);
+                    tracing::warn!(
+                        "Pipe creation failed on first attempt: {}. Retrying in 1s...",
+                        e
+                    );
                     Duration::from_secs(1)
                 } else {
                     tracing::error!("Failed to create named pipe instance: {}", e);
@@ -128,14 +134,19 @@ pub async fn listen(
                         io::ErrorKind::Interrupted,
                         "shutdown requested while creating the pipe listener",
                     ));
-                }            }
+                }
+            }
         }
     }
 }
 
 /// Serve an already-created listener. Used by Service mode, which reports
 /// `SERVICE_RUNNING` between `listen` and this call (#149).
-pub async fn serve(pipe_name: &'static str, first: NamedPipeServer, shutdown: Arc<CancellationToken>) {
+pub async fn serve(
+    pipe_name: &'static str,
+    first: NamedPipeServer,
+    shutdown: Arc<CancellationToken>,
+) {
     accept_loop(pipe_name, shutdown, Some(first)).await;
 }
 
@@ -143,7 +154,11 @@ pub async fn serve(pipe_name: &'static str, first: NamedPipeServer, shutdown: Ar
 /// the shape the server had before Service mode needed to report `SERVICE_RUNNING`
 /// between the two steps. Production paths call `listen` and `serve` separately through
 /// [`crate::run_server`] / [`crate::run_background_server`].
-pub async fn start_ipc_server(pipe_name: &'static str, shutdown: Arc<CancellationToken>, use_first_pipe_instance: bool) {
+pub async fn start_ipc_server(
+    pipe_name: &'static str,
+    shutdown: Arc<CancellationToken>,
+    use_first_pipe_instance: bool,
+) {
     tracing::info!("IPC server listening on {}", pipe_name);
     let first = match listen(pipe_name, use_first_pipe_instance, &shutdown).await {
         Ok(server) => server,
@@ -159,7 +174,11 @@ pub async fn start_ipc_server(pipe_name: &'static str, shutdown: Arc<Cancellatio
 
 /// Accept loop: serve `initial` first (when the caller already created the
 /// listener), then one fresh instance per connection.
-async fn accept_loop(pipe_name: &'static str, shutdown: Arc<CancellationToken>, mut next: Option<NamedPipeServer>) {
+async fn accept_loop(
+    pipe_name: &'static str,
+    shutdown: Arc<CancellationToken>,
+    mut next: Option<NamedPipeServer>,
+) {
     loop {
         // Check shutdown before creating next pipe instance
         if shutdown.is_cancelled() {

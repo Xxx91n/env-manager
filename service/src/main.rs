@@ -6,9 +6,9 @@
 
 use std::env;
 use std::path::PathBuf;
+use std::sync::Arc;
 use std::time::Duration;
 use tokio_util::sync::CancellationToken;
-use std::sync::Arc;
 
 /// Budget for draining the task that is still running after one of them stops.
 const SHUTDOWN_DRAIN: Duration = Duration::from_secs(5);
@@ -148,7 +148,9 @@ std::mem::forget(guard);
                     _ => run_background_server(mode.pipe_endpoint(), shutdown).await,
                 };
                 match exit {
-                    ServerExit::Requested => tracing::info!("service shutting down (all tasks exited)"),
+                    ServerExit::Requested => {
+                        tracing::info!("service shutting down (all tasks exited)")
+                    }
                     other => tracing::error!("server exited without a stop request: {:?}", other),
                 }
             }
@@ -377,7 +379,9 @@ mod startup_contract_tests {
         shutdown.cancel();
         assert_eq!(server.await.expect("server task"), ServerExit::Requested);
 
-        let err = open(RELEASE_PIPE).err().expect("the pipe must be gone after stop");
+        let err = open(RELEASE_PIPE)
+            .err()
+            .expect("the pipe must be gone after stop");
         assert_eq!(
             err.raw_os_error(),
             Some(ERROR_FILE_NOT_FOUND),
