@@ -11,16 +11,45 @@ on:
   pull_request:
     branches: [main]
   workflow_dispatch:
+    # PROTOTYPE (p3-boundary-probes) only: proto_leg selects a throwaway observation leg.
+    # An empty value is the ordinary CI/CD dispatch, which is what main uses.
+    inputs:
+      proto_leg:
+        description: 'PROTOTYPE leg: leave empty for the normal CI/CD run'
+        required: false
+        default: ''
+        type: choice
+        options:
+          - ''
+          - v1-pipe-dacl
+          - v2-helper-residue
+          - v3-rotate-timing
+          - all
+      proto_v2_mode:
+        description: 'PROTOTYPE V2 scope (Service = real sc stop under LocalSystem)'
+        required: false
+        default: 'Both'
+        type: choice
+        options:
+          - Both
+          - Service
+          - Background
 
 permissions:
   contents: read
 
 concurrency:
-  group: env-manager-${{ github.workflow }}-${{ github.ref }}
+  # PROTOTYPE (p3-boundary-probes): the leg name joins the group so V1/V2/V3 can run on
+  # three runners at once instead of cancelling each other. For push/PR and for an empty
+  # proto_leg this evaluates to the same string it had before.
+  group: env-manager-${{ github.workflow }}-${{ github.ref }}-${{ github.event.inputs.proto_leg }}
   cancel-in-progress: true
 
 jobs:
   verify:
+    # PROTOTYPE (p3-boundary-probes): a proto dispatch skips the normal lanes so the
+    # observation job runs on its own; main never sets proto_leg.
+    if: ${{ github.event_name != 'workflow_dispatch' || inputs.proto_leg == '' }}
     runs-on: windows-latest
     timeout-minutes: 30
     steps:
@@ -689,7 +718,7 @@ jobs:
   # as satisfied. `if: !cancelled()` lets the gate run after a failed
   # dependency so it can fail on purpose; the gate step names the red job.
   package:
-    if: ${{ !cancelled() }}
+    if: ${{ !cancelled() && (github.event_name != 'workflow_dispatch' || inputs.proto_leg == '') }}
     needs: [build-package, msi-upgrade-matrix]
     runs-on: windows-latest
     timeout-minutes: 5
@@ -828,7 +857,7 @@ jobs:
   # no dispatch ever produced the stryker-mutation-report artifact).
   stryker:
     # Tag dispatches are the release bridge; keep the on-demand run to branches.
-    if: github.event_name == 'workflow_dispatch' && !startsWith(github.ref, 'refs/tags/')
+    if: github.event_name == 'workflow_dispatch' && !startsWith(github.ref, 'refs/tags/') && inputs.proto_leg == ''
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
@@ -882,7 +911,7 @@ jobs:
   # + health endpoint.
   kill9-resilience:
     # Tag dispatches are the release bridge; keep the on-demand run to branches.
-    if: github.event_name == 'workflow_dispatch' && !startsWith(github.ref, 'refs/tags/')
+    if: github.event_name == 'workflow_dispatch' && !startsWith(github.ref, 'refs/tags/') && inputs.proto_leg == ''
     runs-on: windows-latest
     timeout-minutes: 25
     steps:
@@ -923,3 +952,117 @@ jobs:
           name: kill9-resilience-evidence
           path: test-results/
           if-no-files-found: ignore
+
+  # PROTOTYPE (p3-boundary-probes) - throwaway observation legs for questions V1/V2/V3 of
+  # the P3 boundary cluster (#160 #154 #161). Exists on the prototype branch only and is
+  # never merged; see prototype/p3-boundary-probes/README.md.
+  # Why a runner and not a test: the questions are "what does the SCM-issued service token
+  # actually put on the pipe's DACL" and "does a provider helper outlive sc stop" - both are
+  # properties of a real LocalSystem service on a real machine, and the repo rule is no local
+  # compilation, so this is the temporary remote leg that answers them. Each leg installs and
+  # removes its own service, standard user and stub install, and uploads evidence.
+  proto-p3-observations:
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.proto_leg != '' }}
+    runs-on: windows-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68
+        with:
+          dotnet-version: '10.0.x'
+
+      - uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          workspaces: |
+            service -> target
+          save-if: false
+
+      - name: Syntax preflight (parse every prototype script)
+        shell: pwsh
+        run: |
+          # Cheap gate before the expensive builds: a typo in a probe script should cost
+          # seconds, not a 20-minute round trip.
+          $fail = 0
+          foreach ($f in Get-ChildItem prototype/p3-boundary-probes -Filter *.ps1) {
+            $errs = $null
+            [void][System.Management.Automation.Language.Parser]::ParseFile($f.FullName, [ref]$null, [ref]$errs)
+            if ($errs -and $errs.Count -gt 0) {
+              $fail++
+              Write-Host "::error file=$($f.Name)::parse failed"
+              $errs | ForEach-Object { Write-Host "  line $($_.Extent.StartLineNumber): $($_.Message)" }
+            } else {
+              Write-Host "parse ok: $($f.Name)"
+            }
+          }
+          if ($fail -gt 0) { exit 1 }
+
+      - name: Stage prototype binaries into C:\proto
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path 'C:\proto\bin\app','C:\proto\bin\stub','test-results/proto' | Out-Null
+          # Self-contained so a LocalSystem service child does not depend on where the
+          # .NET runtime was installed by setup-dotnet.
+          dotnet publish env-manager.csproj -c Release -r win-x64 --self-contained true -o C:\proto\bin\app
+          if ($LASTEXITCODE -ne 0) { throw 'CLI publish failed' }
+          dotnet publish prototype/p3-boundary-probes/sops-stub/sops-stub.csproj -c Release -r win-x64 --self-contained true -o C:\proto\bin\stub
+          if ($LASTEXITCODE -ne 0) { throw 'sops stub publish failed' }
+          Push-Location service
+          cargo build --release --locked
+          $cargoExit = $LASTEXITCODE
+          Pop-Location
+          if ($cargoExit -ne 0) { throw 'service build failed' }
+          # find_cli_exe resolves env-manager-cli.exe next to the service binary first
+          # (service/src/reconcile.rs), so both go in one directory.
+          Copy-Item service\target\x86_64-pc-windows-msvc\release\env-manager-service.exe C:\proto\bin\app\ -Force
+          foreach ($p in @('C:\proto\bin\app\env-manager-cli.exe','C:\proto\bin\app\env-manager-service.exe','C:\proto\bin\stub\sops-stub.exe')) {
+            if (-not (Test-Path $p)) { throw "missing $p" }
+            Write-Host "staged: $p $((Get-Item $p).Length) bytes"
+          }
+
+      - name: 'V1 pipe DACL'
+        if: ${{ inputs.proto_leg == 'v1-pipe-dacl' || inputs.proto_leg == 'all' }}
+        continue-on-error: true
+        shell: pwsh
+        env:
+          PROTO_EVIDENCE_DIR: ${{ github.workspace }}\test-results\proto
+        run: ./prototype/p3-boundary-probes/v1-pipe-dacl.ps1 -CliExe C:\proto\bin\app\env-manager-cli.exe -ServiceExe C:\proto\bin\app\env-manager-service.exe *>&1 | Tee-Object -FilePath test-results/proto/v1-console.log
+
+      - name: 'V2 helper residue'
+        if: ${{ inputs.proto_leg == 'v2-helper-residue' || inputs.proto_leg == 'all' }}
+        continue-on-error: true
+        shell: pwsh
+        env:
+          PROTO_EVIDENCE_DIR: ${{ github.workspace }}\test-results\proto
+        run: ./prototype/p3-boundary-probes/v2-helper-residue.ps1 -CliExe C:\proto\bin\app\env-manager-cli.exe -ServiceExe C:\proto\bin\app\env-manager-service.exe -StubDir C:\proto\bin\stub -Mode '${{ inputs.proto_v2_mode }}' *>&1 | Tee-Object -FilePath test-results/proto/v2-console.log
+
+      - name: 'V3 rotate timing'
+        if: ${{ inputs.proto_leg == 'v3-rotate-timing' || inputs.proto_leg == 'all' }}
+        continue-on-error: true
+        shell: pwsh
+        env:
+          PROTO_EVIDENCE_DIR: ${{ github.workspace }}\test-results\proto
+        run: ./prototype/p3-boundary-probes/v3-rotate-timing.ps1 -CliExe C:\proto\bin\app\env-manager-cli.exe -ServiceExe C:\proto\bin\app\env-manager-service.exe -StubDir C:\proto\bin\stub *>&1 | Tee-Object -FilePath test-results/proto/v3-console.log
+
+      - name: Evidence presence gate
+        shell: pwsh
+        run: |
+          $want = switch ('${{ inputs.proto_leg }}') {
+            'v1-pipe-dacl'      { @('evidence-v1-pipe-dacl.jsonl') }
+            'v2-helper-residue' { @('evidence-v2-helper-residue.jsonl') }
+            'v3-rotate-timing'  { @('evidence-v3-rotate-timing.jsonl') }
+            default             { @('evidence-v1-pipe-dacl.jsonl','evidence-v2-helper-residue.jsonl','evidence-v3-rotate-timing.jsonl') }
+          }
+          $missing = @($want | Where-Object { -not (Test-Path (Join-Path 'test-results/proto' $_)) })
+          (Get-ChildItem test-results/proto -ErrorAction SilentlyContinue | Select-Object Name, Length | Format-Table -AutoSize | Out-String) | Write-Host
+          if ($missing.Count -gt 0) { throw "legs that produced no evidence file: $($missing -join ', ')" }
+
+      - name: Upload prototype evidence
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: proto-p3-observations-${{ inputs.proto_leg }}
+          path: test-results/proto/
+          if-no-files-found: error
