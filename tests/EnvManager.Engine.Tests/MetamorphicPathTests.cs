@@ -9,8 +9,7 @@ using Xunit;
 namespace EnvManager.Engine.Tests;
 
 /// <summary>
-/// Metamorphic relations (MR) over two oracle-free semantic faces selected by the ticket-34
-/// pilot: PATH entry normalization (expand %VAR% / trim / trailing separators) and name
+/// Metamorphic relations (MR) over two oracle-free semantic faces: PATH entry normalization (expand %VAR% / trim / trailing separators) and name
 /// case-folding. Each relation follows the MR shape "source input T, follow-up input T
 /// transformed by M, then relation R(sourceOutput, followUpOutput) must hold" - no golden
 /// oracle needed. The free oracle is the documented CLI contract (docs/cli-commands.md:

@@ -11,7 +11,7 @@ namespace EnvManager.Engine.Tests;
 /// Phase 5, mental-model M2 fitness functions). Three guards in this file:
 ///   - DomainIsolation: ProfileSecretCommand does not depend on
 ///     ProfileLaunchCommand or ProfileCommand internals.
-///   - CommandDispatchSurface: the three ramp-1 ticket-27 domains expose
+///   - CommandDispatchSurface: the three ramp-1 command domains expose
 ///     exactly one Run entry each, and Program still owns Main.
 ///   - DependencyDirectionAcyclic: no two of ProfileCommand /
 ///     ProfileLaunchCommand / ProfileSecretCommand mutually reference one
@@ -176,9 +176,9 @@ public class StructuralFitnessTests
     // -- Rule 2: dispatch surface contract ------------------------------------
 
     [Fact]
-    public void Ticket27_Ramp1_Domains_ExposeExactlyOneRunEntry()
+    public void Ramp1_Domains_ExposeExactlyOneRunEntry()
     {
-        // Each ramp-1 ticket-27 domain is `internal static class` with one
+        // Each ramp-1 domain is `internal static class` with one
         // `internal static int Run(...)` entry point. Reflection guarantees
         // the surface matches the AGENTS.md doc; if a future ramp adds a
         // second entry point it must consciously update this test.
@@ -296,7 +296,7 @@ public class StructuralFitnessTests
     }
 
     /// <summary>
-    /// Helpers explicitly named in the ticket-26 handoff as belonging to each
+    /// Helpers explicitly named in the architecture-recovery handoff as belonging to each
     /// subdomain. Anything else (e.g. ResolveProfileName, ScrubExceptionMessage,
     /// DebugLog) is shared infrastructure and not in scope for the cycle guard.
     /// </summary>

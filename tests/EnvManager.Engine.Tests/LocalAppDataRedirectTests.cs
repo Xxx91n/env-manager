@@ -12,7 +12,7 @@ namespace EnvManager.Engine.Tests;
 /// when the variable is set, <c>Program.LocalAppDataRoot</c> returns it and every user-state
 /// file resolution composed on that root (AppDataDirectory, profiles.json, audit, secret
 /// mounts, provider config, provider hash, protection stores) follows the redirect; when
-/// unset or empty, the resolution is byte-identical to the pre-issue-24 shell folder.
+/// unset or empty, the resolution is byte-identical to the pre-redirect shell folder.
 /// This is the cross-process equivalent of the in-process SetAppDataDirectoryForTests seam
 /// CI integration suites set the variable in the CLI subprocess environment so
 /// profiles.json and friends land in the job-private directory, not the runner user profile.

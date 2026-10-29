@@ -4,7 +4,7 @@
 // Per-provider ISecretProviderHarness implementations whose Seed/ReadRaw go straight
 // to the L1 backend (emulator container, localhost Connect mock, or local CLI
 // primitive), never through the provider's own Encrypt/Decrypt - the same neutrality
-// rule the ticket-10 DPAPI harness established.
+// rule the DPAPI contract harness established.
 
 using System.Text;
 using System.Text.Json;

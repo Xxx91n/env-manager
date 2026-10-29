@@ -98,15 +98,25 @@ Log-Step "Service: $ServiceExe"
 $mountDir = Join-Path $env:LOCALAPPDATA "EnvManager"
 $mountFile = Join-Path $mountDir "secretMount.json"
 $backupFile = $null
+$backupCreated = $false
 $service = $null
 $service2 = $null
 $script:exitCode = 1
 
 try {
     # Pre-existing user state (dev-machine safety): back up, never destroy.
+    # A leftover backup from a crashed earlier run must never be overwritten
+    # or removed, so the path embeds a timestamp plus the PID, the copy is
+    # refused outright if the path somehow still exists, and the restore /
+    # cleanup below only runs when THIS run actually created the backup -
+    # a path check alone cannot tell a leftover from this run's own file.
     if (Test-Path $mountFile) {
-        $backupFile = "$mountFile.ticket49.bak"
-        Copy-Item $mountFile $backupFile -Force
+        $backupFile = "$mountFile.bak-{0:yyyyMMddHHmmss}-{1}" -f (Get-Date), $PID
+        if (Test-Path $backupFile) {
+            throw "backup path already exists, refusing to overwrite: $backupFile"
+        }
+        [System.IO.File]::Copy($mountFile, $backupFile, $false)
+        $backupCreated = $true
         Log-Step "pre-existing secretMount.json backed up to $backupFile"
     }
     New-Item -ItemType Directory -Force -Path $mountDir | Out-Null
@@ -166,7 +176,7 @@ finally {
             if (-not $p.HasExited) { try { Stop-Process -Id $p.Id -Force } catch { Write-Verbose "force stop ignored: $_" } }
         }
     }
-    if ($backupFile -and (Test-Path $backupFile)) {
+    if ($backupCreated -and (Test-Path $backupFile)) {
         Copy-Item $backupFile $mountFile -Force
         Remove-Item $backupFile -Force
         Log-Step "pre-existing secretMount.json restored"

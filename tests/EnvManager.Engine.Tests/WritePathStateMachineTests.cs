@@ -30,8 +30,8 @@ namespace EnvManager.Engine.Tests;
 ///
 /// Known edge excluded from the operation domain: self-rename (old == new) with --overwrite
 /// currently deletes the variable (write target, verify, then delete source removes the target
-/// too). That is a pre-existing product decision outside this ticket's contract surface; the
-/// generator only produces old != new rename pairs. Reported in the ticket-12 report.
+/// too). That is a pre-existing product decision outside this suite's contract surface; the
+/// generator only produces old != new rename pairs. Reported during the architecture-recovery audit.
 /// </summary>
 public class WritePathStateMachineTests
 {

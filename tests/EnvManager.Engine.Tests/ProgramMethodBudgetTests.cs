@@ -12,15 +12,15 @@ namespace EnvManager.Engine.Tests;
 ///
 /// Program used to be the catch-all partial class hosting every command domain as
 /// static methods (RunAgents / RunUpdate / RunExpand / RunSet / RunBackup / ...). The
-/// ticket-27 ramp pulls command domains out of partial class Program into their own
+/// ramp-1 migration pulls command domains out of partial class Program into their own
 /// `internal static class XxxCommand` files so Program.cs collapses to a thin Main
 /// dispatcher + the cross-cutting try/catch/finally flow.
 ///
 /// This guard pins the thinning: a reflection-driven assertion counts the public +
 /// non-public static and instance methods declared directly on Program (excluding
 /// inherited members and excluding compiler-generated nested helpers) and fails the
-/// build once the count exceeds the budget. The budget starts at the post-ticket-27
-/// ramp-1 baseline (MethodsAfterRamp1) and any future ramp that adds methods must
+/// build once the count exceeds the budget. The budget starts at the post-ramp-1
+/// baseline (MethodsAfterRamp1) and any future ramp that adds methods must
 /// update it together with the migration.
 ///
 /// Red drill: when this test was introduced, the baseline was deliberately set to 0
@@ -32,7 +32,7 @@ namespace EnvManager.Engine.Tests;
 public class ProgramMethodBudgetTests
 {
     /// <summary>
-    /// Methods allowed on Program after the ticket-27 ramp-1 migration. The ramp
+    /// Methods allowed on Program after the ramp-1 migration. The ramp
     /// moved AgentsCommand / UpdateCommand / ExpandCommand out of partial class
     /// Program, dropping RunAgents / RunUpdate / RunExpand. Remaining members on
     /// Program itself = Main (1) + compiler-generated entry points. Update this
@@ -68,7 +68,7 @@ public class ProgramMethodBudgetTests
 
         Assert.True(
             humanAuthored <= MethodsAfterRamp1,
-            $"Program declares {humanAuthored} human-authored methods (budget {MethodsAfterRamp1} after ticket-27 ramp 1). "
+            $"Program declares {humanAuthored} human-authored methods (budget {MethodsAfterRamp1} after ramp 1). "
             + "If a new migration ramp legitimately needs more methods on Program, bump MethodsAfterRamp1 in tests/EnvManager.Engine.Tests/ProgramMethodBudgetTests.cs in the same PR. "
             + $"Methods: {string.Join(", ", declared.Where(m => !m.IsSpecialName && m.DeclaringType == programType).Select(m => m.Name))}");
     }

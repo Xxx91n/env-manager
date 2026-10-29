@@ -172,7 +172,7 @@ partial class Program
     // separators) so dedupe agrees with `path list` / `path health` and the documented
     // case-insensitive matching contract (docs/cli-commands.md); the set stays
     // OrdinalIgnoreCase so case-only variants keep folding. Outputs still carry the
-    // original entry strings. (DEF-1, found by the ticket-34 metamorphic pilot: the raw-
+    // original entry strings. (DEF-1, found by the metamorphic path pilot: the raw-
     // string seen-set kept separator variants of the same directory.)
     internal static int PathDedupeCore(IEnvironmentScope env, Func<string, string, bool> isProtectedVariable, Func<string, bool> isProtectedPathEntry, string scope, bool dryRun)
     {
@@ -414,7 +414,7 @@ partial class Program
         var entries = GetPathEntriesCore(env, scope);
 
         // Don't add duplicates. The guard normalizes both sides (DEF-3, found by the
-        // ticket-34 metamorphic pilot: the raw-compare guard let trailing-separator
+        // metamorphic path pilot: the raw-compare guard let trailing-separator
         // variants of an existing entry through) so `path add` agrees with list/health/dedupe.
         if (entries.Any(e => NormalizePathEntry(e).Equals(NormalizePathEntry(dir), StringComparison.OrdinalIgnoreCase)))
         {

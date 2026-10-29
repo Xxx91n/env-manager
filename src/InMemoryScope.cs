@@ -6,7 +6,7 @@ namespace EnvManager;
 /// Dictionary-backed IEnvironmentScope test double preserving user/system scope semantics: the two
 /// scopes are isolated stores, so a user write never affects a system read and vice versa.
 /// Broadcasts are counted (BroadcastCount) instead of hitting user32. The mechanics mirror
-/// RegistryScope operation-for-operation so the ticket-02 test net can run the same assertions
+/// RegistryScope operation-for-operation so the same test net can run the same assertions
 /// against both implementations.
 /// </summary>
 internal sealed class InMemoryScope : IEnvironmentScope

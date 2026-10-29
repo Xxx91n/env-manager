@@ -62,4 +62,4 @@ Invariants a change must not violate; where a test pins one, that check is the a
 ## Verification
 
 - `scripts/test-all.ps1` runs both suites, keeps the full log on disk and reports exit codes only. Engine tests never touch the real registry; the differential oracle is opt-in via `EM_DIFFERENTIAL_ORACLE=1` under `test-with-restore.ps1`.
-- `scripts/check-bare-ids.ps1` fails CI when a bare ticket/issue number, a retired ADR number, or a version label survives outside `docs/history/` and `CHANGELOG.md`.
+- `scripts/check-bare-ids.ps1` fails CI when a bare ticket/issue number, a retired ADR or decision-ledger number, or a version label survives outside `docs/history/` and `CHANGELOG.md`.

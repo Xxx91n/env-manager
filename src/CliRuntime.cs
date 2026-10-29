@@ -369,7 +369,7 @@ static void AtomicWriteJson<T>(string path, T value)
     // also resolves the v0.8 secret-mount envelope ("mount:" prefixed ID).
     // CI unblock: moved verbatim from ProfileSecretCommand.cs - it is shared
     // reveal-path infrastructure (ProfileCommand show-with-reveal consumes it across
-    // subdomains) and the ticket-28 acyclic guard prescribes CliRuntime.cs as its home.
+    // subdomains) and the dependency-acyclicity guard prescribes CliRuntime.cs as its home.
     static string TryDecryptSafe(string ciphertext)
     {
         try { return SecretStore.Reveal(ResolveSecretMount(ciphertext) ?? ciphertext); }
