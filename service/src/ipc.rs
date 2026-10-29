@@ -74,7 +74,95 @@ fn create_instance(pipe_name: &str, first_pipe_instance: bool) -> io::Result<Nam
     if first_pipe_instance {
         options.first_pipe_instance(true);
     }
-    options.create(pipe_name)
+    // PROTOTYPE(p3-boundary-probes) - DO NOT MERGE. Observation switch for question V1:
+    // which of the three pipe-security policies is in force. Unset reproduces the shipped
+    // path exactly. Read from argv so a probe can carry it through the SCM's ImagePath
+    // (machine environment does not reliably reach an already-running services.exe).
+    match proto_pipe_sd() {
+        0 => options.create(pipe_name),
+        1 => {
+            let server = options.create(pipe_name)?;
+            let rc = crate::pipe_dacl::measure_set_pipe_dacl(pipe_name);
+            tracing::warn!("[PROTO] post-creation DACL apply on {pipe_name}: {rc}");
+            Ok(server)
+        }
+        2 => create_with_declared_sd(&mut options, pipe_name),
+        _ => options.create(pipe_name),
+    }
+}
+
+/// PROTOTYPE(p3-boundary-probes) - DO NOT MERGE. 0 = shipped behaviour, 1 = apply the
+/// declared SDDL after CreateNamedPipeW, 2 = pass it as lpSecurityAttributes.
+fn proto_pipe_sd() -> u8 {
+    static POLICY: std::sync::OnceLock<u8> = std::sync::OnceLock::new();
+    *POLICY.get_or_init(|| {
+        let argv: Vec<String> = std::env::args().collect();
+        let mut requested: Option<String> = None;
+        for (i, arg) in argv.iter().enumerate() {
+            if let Some(v) = arg.strip_prefix("--proto-pipe-sd=") {
+                requested = Some(v.to_string());
+            } else if arg == "--proto-pipe-sd" {
+                requested = argv.get(i + 1).cloned();
+            }
+        }
+        if requested.is_none() {
+            requested = std::env::var("ENVMANAGER_PROTO_PIPE_SD").ok();
+        }
+        match requested.as_deref() {
+            Some("post") => 1,
+            Some("creation") => 2,
+            _ => 0,
+        }
+    })
+}
+
+/// PROTOTYPE(p3-boundary-probes) - DO NOT MERGE.
+///
+/// tokio 1.54 exposes `create_with_security_attributes_raw(&self, addr, *mut c_void)`,
+/// which forwards straight to CreateNamedPipeW's lpSecurityAttributes. The pointer is
+/// opaque, so this crate's own windows-sys 0.59 SECURITY_ATTRIBUTES is what the API sees;
+/// no dependency change is needed to hand a SD over at creation time. The struct must stay
+/// alive across the call, hence the local here rather than a helper that returns one.
+fn create_with_declared_sd(
+    options: &mut tokio::net::windows::named_pipe::ServerOptions,
+    pipe_name: &str,
+) -> io::Result<NamedPipeServer> {
+    use std::ffi::c_void;
+    use windows_sys::Win32::Foundation::LocalFree;
+    use windows_sys::Win32::Security::Authorization::{
+        ConvertStringSecurityDescriptorToSecurityDescriptorW, SDDL_REVISION_1,
+    };
+    use windows_sys::Win32::Security::SECURITY_ATTRIBUTES;
+
+    let sddl: Vec<u16> = crate::pipe_dacl::PROTO_DECLARED_SDDL
+        .encode_utf16()
+        .chain(std::iter::once(0))
+        .collect();
+    let mut psd: *mut c_void = std::ptr::null_mut();
+    if unsafe {
+        ConvertStringSecurityDescriptorToSecurityDescriptorW(
+            sddl.as_ptr(),
+            SDDL_REVISION_1,
+            &mut psd,
+            std::ptr::null_mut(),
+        )
+    } == 0
+    {
+        tracing::warn!("[PROTO] SDDL conversion failed; creating with the default descriptor");
+        return options.create(pipe_name);
+    }
+    let mut sa = SECURITY_ATTRIBUTES {
+        nLength: std::mem::size_of::<SECURITY_ATTRIBUTES>() as u32,
+        lpSecurityDescriptor: psd,
+        bInheritHandle: 0,
+    };
+    let created = unsafe { options.create_with_security_attributes_raw(pipe_name, &mut sa as *mut _ as *mut c_void) };
+    unsafe { LocalFree(psd as *mut c_void); }
+    tracing::warn!(
+        "[PROTO] {pipe_name} created with the declared SD at creation time: ok={}",
+        created.is_ok()
+    );
+    created
 }
 
 /// Wait out a retry delay. `false` means shutdown cancelled the wait first.
