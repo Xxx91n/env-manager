@@ -126,13 +126,16 @@ try {
         # 3.13 windows asset does not exist), so read the release manifest instead of
         # guessing filenames.
         $gotSops = $false
-        foreach ($tag in @('v3.9.0', 'latest')) {
+        foreach ($tag in @('latest', 'v3.13.3')) {
             try {
                 $rel = Invoke-RestMethod -Uri ("https://api.github.com/repos/getsops/sops/releases/" + $tag) -Headers @{ 'User-Agent' = 'proto-p3-observations'; 'Accept' = 'application/vnd.github+json' } -TimeoutSec 60
-                $assets = @($rel.assets | Where-Object { $_.name -match 'windows' })
-                $exe = @($assets | Where-Object { $_.name -match '\.exe$' })
-                $pick = if ($exe.Count -gt 0) { $exe[0] } elseif ($assets.Count -gt 0) { $assets[0] } else { $null }
-                if (-not $pick) { Write-Evidence -Key 'real_sops.manifest' -Value "tag=$tag no windows asset (assets=$(($rel.assets.name) -join ','))"; continue }
+                # sops names its Windows binary "sops-v<ver>.amd64.exe" - the asset name
+                # carries no "windows" token, which is why the repo's L1 provisioner
+                # concludes there is no Windows asset. Match the extension, not the OS word.
+                $exe = @($rel.assets | Where-Object { $_.name -match '\.exe$' -and $_.name -notmatch 'spdx|sbom|sig' })
+                $amd = @($exe | Where-Object { $_.name -match 'amd64|x64' })
+                $pick = if ($amd.Count -gt 0) { $amd[0] } elseif ($exe.Count -gt 0) { $exe[0] } else { $null }
+                if (-not $pick) { Write-Evidence -Key 'real_sops.manifest' -Value "tag=$tag no exe asset (assets=$(($rel.assets.name) -join ','))"; continue }
                 Invoke-WebRequest -Uri $pick.browser_download_url -OutFile (Join-Path $realDir 'sops.exe') -TimeoutSec 180 -ErrorAction Stop
                 $gotSops = $true
                 Write-Evidence -Key 'real_sops.download' -Value "tag=$tag asset=$($pick.name) size=$($pick.size) ok"
@@ -183,6 +186,11 @@ try {
                     $r = Invoke-ProtoProcess -Exe $CliExe -Arguments @('profile', 'secret-provider', 'rotate') -TimeoutSec 900 -Environment $envMap
                     Write-Evidence -Key 'real_sops.rotate' -Value ("dur_ms=$($r.DurMs) exit=$($r.Code) out=$($r.StdOut.Trim() -replace '\s+',' ') err=$($r.StdErr.Trim() -replace '\s+',' ')")
                     Add-Row -Provider 'sops(real)' -Secrets 5 -Path 'cli-direct' -DurMs $r.DurMs -Spawns 0 -Failures 'n/a' -Note $r.StdOut.Trim()
+                    # Put the stub back so the service-pipe cell that follows is comparable
+                    # with the stub rows rather than silently measuring the real binary.
+                    $target = Join-Path ([Environment]::GetFolderPath([Environment+SpecialFolder]::ProgramFiles)) 'sops'
+                    Copy-Item -Path (Join-Path $StubDir 'sops-stub.exe') -Destination (Join-Path $target 'sops.exe') -Force
+                    Write-Evidence -Key 'real_sops.restored_stub' -Value (Join-Path $target 'sops.exe')
                 }
             } else {
                 Write-Evidence -Key 'real_sops' -Value 'skipped: no usable age recipient'

@@ -18,6 +18,9 @@ param(
 
 $ErrorActionPreference = 'Continue'
 
+# The exit code is the ONLY thing this returns: writing the log line to the success stream
+# too made every "$rc = Run-Cli ..." a two-element array, so "-ne 0" filtered instead of
+# comparing and the seed reported failure after a successful CLI call.
 function Run-Cli([string[]]$a) {
     $psi = New-Object System.Diagnostics.ProcessStartInfo
     $psi.FileName = $CliExe
@@ -30,7 +33,7 @@ function Run-Cli([string[]]$a) {
     $o = $p.StandardOutput.ReadToEnd()
     $e = $p.StandardError.ReadToEnd()
     $p.WaitForExit()
-    Write-Output ("CLI argv=[" + ($a -join ' ') + "] exit=" + $p.ExitCode + " out=" + ($o -replace '\s+', ' ').Trim() + " err=" + ($e -replace '\s+', ' ').Trim())
+    [Console]::Out.WriteLine("CLI argv=[" + ($a -join ' ') + "] exit=" + $p.ExitCode + " out=" + ($o -replace '\s+', ' ').Trim() + " err=" + ($e -replace '\s+', ' ').Trim())
     return $p.ExitCode
 }
 

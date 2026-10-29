@@ -38,7 +38,7 @@ $path = "\\.\pipe\$Pipe"
 Write-Output "PROBE label=$Label pipe=$path"
 Write-Output "PROBE identity=$env:USERDOMAIN\$env:USERNAME pid=$PID"
 Write-Output "PROBE open_duplex=$([LowProto]::Open($path, 0x120000))"
-Write-Output "PROBE open_readonly=$([LowProto]::Open($path, 0x80000000))"
+Write-Output "PROBE open_readonly=$([LowProto]::Open($path, 2147483648))"
 Write-Output "PROBE open_writeonly=$([LowProto]::Open($path, 0x40000000))"
 
 try {

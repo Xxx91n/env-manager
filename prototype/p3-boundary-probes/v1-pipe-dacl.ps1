@@ -36,7 +36,7 @@ $low = $null
 $bgProc = $null
 
 function Invoke-ConnectMatrix {
-    param([Parameter(Mandatory)][string]$Label, [Parameter(Mandatory)][pscustomobject]$Low, [string]$Pipe = $PipeName)
+    param([Parameter(Mandatory)][string]$Label, [pscustomobject]$Low, [string]$Pipe = $PipeName)
     $rows = [ordered]@{}
 
     # Client 1: the CLI gateway with --service-pipe (src/ServiceCommand.cs switches the
@@ -58,6 +58,10 @@ function Invoke-ConnectMatrix {
 
     # Non-privileged interactive logon (Start-Process -Credential -> token carries the
     # Interactive logon SID).
+    if (-not $Low) {
+        Write-Evidence -Key "connect.low[$Label]" -Value 'SKIPPED: no secondary identity available'
+        return $rows
+    }
     try {
         $i = Invoke-ProtoAsUserInteractive -As $Low -Exe $CliExe -Arguments @('service', 'ping', '--service-pipe') -TimeoutSec 90
         Write-Evidence -Key "connect.cli_low_interactive[$Label]" -Value $i.Out
@@ -120,8 +124,8 @@ function Invoke-ServiceCell {
     # (2) The post-creation route, from OUTSIDE the service process: exactly what
     #     service/src/pipe_dacl.rs would do, measured as a Win32 result.
     if ($ApplyExternalAfterStart) {
-        $rc = [ProtoWin]::ApplyDaclFromSddl("\\.\pipe\$PipeName", $ExternalSddl)
-        Write-Evidence -Key "apply.external[$Label]" -Value $rc -Note 'SetNamedSecurityInfoW on SE_FILE_OBJECT after the pipe exists'
+        $applied = Set-ProtoPipeDacl -Pipe $PipeName -Sddl $ExternalSddl -Label "$Label external"
+        Write-Evidence -Key "apply.result[$Label]" -Value ($applied | ConvertTo-Json -Compress)
         Get-ProtoPipeSddl -Pipe $PipeName -Label "$Label after-external-apply" | Out-Null
         $null = Invoke-ConnectMatrix -Label "$Label after-external-apply" -Low $low
         # The accept loop creates a FRESH instance per connection, so the instance that
@@ -147,10 +151,18 @@ function Invoke-ServiceCell {
 }
 
 try {
-    $low = New-ProtoLocalUser
-    Grant-ProtoDirAccess -Path 'C:\proto' -User $low.Name
-    Grant-ProtoDirAccess -Path (Get-ProtoScratchDir 'out') -User $low.Name
-    foreach ($d in @('C:\proto\bin', (Get-ProtoScratchDir 'out'))) { Grant-ProtoDirAccess -Path $d -User $low.Name }
+    # A secondary identity is what makes the "non-privileged refused" half of the matrix,
+    # but losing it must not cost the SDDL evidence: creation is best-effort and the matrix
+    # records a skip instead of aborting the leg.
+    try {
+        $low = New-ProtoLocalUser
+        foreach ($d in @('C:\proto', 'C:\proto\bin', 'C:\proto\bin\app', (Get-ProtoScratchDir 'out'))) {
+            Grant-ProtoDirAccess -Path $d -User $low.Name
+        }
+    } catch {
+        Write-Evidence -Key 'lowuser.failed' -Value $_.Exception.Message
+        $low = $null
+    }
 
     # Control: the Background pipe, created by the same binary in the same session as the
     # probe process. Its SDDL is the reference point for "what the token default DACL

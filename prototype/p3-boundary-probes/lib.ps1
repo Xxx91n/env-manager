@@ -131,6 +131,20 @@ public static class ProtoWin {
     [return: MarshalAs(UnmanagedType.Bool)]
     public static extern bool AdjustTokenPrivileges(IntPtr token, bool disableAll, ref TOKEN_PRIVILEGES newState, uint bufferLength, IntPtr previousState, IntPtr returnLength);
 
+    [DllImport("advapi32.dll", SetLastError = true)]
+    public static extern uint GetSecurityInfo(
+        IntPtr handle, uint objectType, uint si,
+        out IntPtr owner, out IntPtr group, out IntPtr dacl, out IntPtr sacl, out IntPtr sd);
+
+    [DllImport("advapi32.dll", SetLastError = true)]
+    public static extern uint SetSecurityInfo(
+        IntPtr handle, uint objectType, uint si,
+        IntPtr owner, IntPtr group, IntPtr dacl, IntPtr sacl);
+
+    [DllImport("advapi32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static extern bool GetSecurityDescriptorDacl(IntPtr sd, out bool daclPresent, out IntPtr dacl, out bool daclDefaulted);
+
     public static string EnablePrivilege(string name) {
         IntPtr token;
         if (!OpenProcessToken(GetCurrentProcess(), TOKEN_ADJUST_PRIVILEGES | TOKEN_QUERY, out token)) {
@@ -224,6 +238,63 @@ public static class ProtoWin {
         }
         CloseHandle(h);
         return "OPENED ok";
+    }
+
+    // The name-based GetNamedSecurityInfoW cannot open a live named pipe (87
+    // ERROR_INVALID_PARAMETER for "\\.\pipe\x", 3 ERROR_PATH_NOT_FOUND for "\pipe\x",
+    // 5 ERROR_ACCESS_DENIED for the "\\localhost\pipe" form), so the descriptor is read
+    // and written through a handle instead - the route the Sysinternals pipe tools use.
+    public static string ReadSddlByHandle(string path, uint si) {
+        // READ_CONTROL = 0x00020000; share mode 3 = FILE_SHARE_READ|FILE_SHARE_WRITE,
+        // which CreateFile requires for a named pipe.
+        IntPtr h = CreateFileW(path, 0x00020000, 3, IntPtr.Zero, 3, 0, IntPtr.Zero);
+        if (h == new IntPtr(-1)) {
+            int e = Marshal.GetLastWin32Error();
+            return "OPEN-READ-CONTROL-ERR=" + e + Describe(e);
+        }
+        try {
+            IntPtr owner, group, dacl, sacl, sd;
+            uint rc = GetSecurityInfo(h, SE_FILE_OBJECT, si, out owner, out group, out dacl, out sacl, out sd);
+            if (rc != 0) { return "GET-SEC-INFO-ERR=" + rc + Describe((int)rc); }
+            if (sd == IntPtr.Zero) { return "SD-NULL"; }
+            IntPtr text; uint len;
+            if (!ConvertSecurityDescriptorToStringSecurityDescriptorW(sd, SDDL_REVISION_1, si, out text, out len)) {
+                return "CONVERT-ERR=" + Marshal.GetLastWin32Error();
+            }
+            string result = Marshal.PtrToStringUni(text);
+            LocalFree(text);
+            LocalFree(sd);
+            return result;
+        } finally { CloseHandle(h); }
+    }
+
+    /// Applies a DACL through a handle opened for WRITE_DAC (0x00040000). This is the
+    /// realistic shape of "change the DACL after creation"; the name-based API could not
+    /// even open the pipe to change it.
+    public static string ApplyDaclByHandle(string path, string sddl) {
+        IntPtr h = CreateFileW(path, 0x00040000, 3, IntPtr.Zero, 3, 0, IntPtr.Zero);
+        if (h == new IntPtr(-1)) {
+            int e = Marshal.GetLastWin32Error();
+            return "OPEN-WRITE-DAC-ERR=" + e + Describe(e);
+        }
+        try {
+            IntPtr sd; uint size;
+            if (!ConvertStringSecurityDescriptorToSecurityDescriptorW(sddl, SDDL_REVISION_1, out sd, out size)) {
+                return "CONVERT-ERR=" + Marshal.GetLastWin32Error();
+            }
+            try {
+                IntPtr dacl; bool present; bool defaulted;
+                if (!GetSecurityDescriptorDacl(sd, out present, out dacl, out defaulted)) {
+                    return "GET-SD-DACL-ERR=" + Marshal.GetLastWin32Error();
+                }
+                uint rc = SetSecurityInfo(h, SE_FILE_OBJECT, DACL_SECURITY_INFORMATION, IntPtr.Zero, IntPtr.Zero, dacl, IntPtr.Zero);
+                return "rc=" + rc + Describe((int)rc) + " (0 == ERROR_SUCCESS) daclPresent=" + present;
+            } finally { LocalFree(sd); }
+        } finally { CloseHandle(h); }
+    }
+
+    public static string DaclByHandle(string path) {
+        return ReadSddlByHandle(path, DACL_SECURITY_INFORMATION | OWNER_SECURITY_INFORMATION | GROUP_SECURITY_INFORMATION | LABEL_SECURITY_INFORMATION);
     }
 
     public static string ClientIdentity() {
@@ -340,25 +411,46 @@ function Get-ProtoHostFacts {
 function Get-ProtoPipeSddl {
     param([Parameter(Mandatory)][string]$Pipe, [string]$Label = '')
     Add-ProtoNativeType
-    $results = [ordered]@{}
+    # The handle route is the one that works on a live pipe, so it is the primary reading.
+    # The name forms are still recorded, because their failure codes are themselves the
+    # answer to "can issue #154's post-creation SetNamedSecurityInfoW route be applied at
+    # all". Note that each of these opens consumes one pipe instance, which the service's
+    # accept loop then replaces - that is the behaviour being measured, not a side effect.
+    $byHandle = [ProtoWin]::DaclByHandle("\\.\pipe\$Pipe")
+    Write-Evidence -Key "sddl.handle[$Label]" -Value "\\.\pipe\$Pipe => $byHandle"
+    if ($byHandle -notmatch 'ERR=') {
+        Write-Evidence -Key "sddl.sacl[$Label]" -Value ("\\.\pipe\$Pipe => " + [ProtoWin]::SaclOf("\\.\pipe\$Pipe")) -Note 'SACL via the name API; needs SeSecurityPrivilege'
+    }
     foreach ($f in @("\\.\pipe\$Pipe", "\pipe\$Pipe", "\\localhost\pipe\$Pipe")) {
         $d = [ProtoWin]::DaclOf($f)
-        $results[$f] = $d
-        Write-Evidence -Key "sddl.dacl[$Label]" -Value "$f => $d"
-        if ($d -notlike 'GET-NAMED-SEC-ERR=*' -and $d -notlike 'CONVERT-ERR=*') {
-            Write-Evidence -Key "sddl.sacl[$Label]" -Value ("$f => " + [ProtoWin]::SaclOf($f)) -Note 'SACL needs SeSecurityPrivilege'
+        Write-Evidence -Key "sddl.byName[$Label]" -Value "$f => $d"
+        if ($byHandle -match 'ERR=' -and $d -notlike 'GET-NAMED-SEC-ERR=*' -and $d -notlike 'CONVERT-ERR=*') {
             return $d
         }
     }
-    return 'ALL-FORMS-FAILED'
+    return $byHandle
+}
+
+# Applies the declared DACL by both post-creation routes and records each result: the
+# name-based one the shipped helper uses, and the handle-based one that can actually work.
+function Set-ProtoPipeDacl {
+    param([Parameter(Mandatory)][string]$Pipe, [string]$Sddl = $script:ProtoSddlConst, [string]$Label = '')
+    Add-ProtoNativeType
+    $byName = [ProtoWin]::ApplyDaclFromSddl("\\.\pipe\$Pipe", $Sddl)
+    $byHandle = [ProtoWin]::ApplyDaclByHandle("\\.\pipe\$Pipe", $Sddl)
+    Write-Evidence -Key "apply.byName[$Label]" -Value "\\.\pipe\$Pipe => $byName" -Note 'the exact two calls service/src/pipe_dacl.rs performs'
+    Write-Evidence -Key "apply.byHandle[$Label]" -Value "\\.\pipe\$Pipe => $byHandle" -Note 'SetSecurityInfo on a WRITE_DAC handle'
+    return [pscustomobject]@{ ByName = $byName; ByHandle = $byHandle }
 }
 
 function Test-ProtoPipeOpen {
     param([Parameter(Mandatory)][string]$Pipe, [string]$Label = '', [switch]$ReadOnly)
     Add-ProtoNativeType
-    $access = if ($ReadOnly) { 0x80000000 } else { 0x120000 }
+    # 2147483648 == 0x80000000 GENERIC_READ. The hex literal cannot be used: PowerShell
+    # reads 0x80000000 as Int32.MinValue and the UInt32 marshal refuses it.
+    $access = if ($ReadOnly) { 2147483648 } else { 0x120000 }
     $r = [ProtoWin]::TryOpen("\\.\pipe\$Pipe", $access)
-    Write-Evidence -Key "open[$Label]" -Value "\\.\pipe\$Pipe access=$('0x{0:X}' -f $access) => $r"
+    Write-Evidence -Key "open[$Label]" -Value "\\.\pipe\$Pipe access=$('0x{0:X}' -f [uint32]$access) => $r"
     return $r
 }
 
