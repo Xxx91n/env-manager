@@ -13,12 +13,12 @@ use chrono::{DateTime, Utc};
 use tokio_util::sync::CancellationToken;
 use std::sync::Arc;
 use tokio::io::AsyncReadExt; // draining the CLI child's pipes while it runs
-use tokio::process::Stdio; // piped stdout/stderr on the CLI child
+use std::process::Stdio; // piped stdout/stderr on the CLI child (tokio takes std's type)
 use tokio::sync::Mutex; // Phase 4C: TOCTOU protection
-use std::os::windows::process::CommandExt; // CREATE_NO_WINDOW for CLI subprocess
 
 /// `CREATE_NO_WINDOW`: the service has no console, and without the flag the CLI child
-/// would flash a window on the interactive desktop.
+/// would flash a window on the interactive desktop. Passed to tokio's own
+/// `Command::creation_flags`, so no `CommandExt` import is needed here.
 const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 
 /// The CLI argv a rotation delegates to. Rotation is not a circular dependency: it is a
