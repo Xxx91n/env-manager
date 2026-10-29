@@ -29,6 +29,18 @@
 # each branch (space, hyphen, underscore, none, double space, plural) so a
 # future narrowing fails the self-test instead of passing silently.
 #
+# The noun alternative accepts a hyphen, an underscore, or no separator at all
+# between the noun and the number, mirroring the ADR branch's separator
+# coverage, and the branch ends without a trailing word boundary so an
+# identifier glued into a longer token (digits followed by an underscore,
+# as in a method name) stays visible. Requiring whitespace hid two more live
+# dialects behind a green
+# gate - the fourth occurrence of the same class of miss (the counter read one
+# spelling while the residue wore another). The ledger alternative catches the
+# retired D-number decision-ledger ids; the scan skips binary files so
+# archived media (demo recordings) cannot trip the gate. The fixture plants
+# one bad form per new branch (hyphen, no separator, ledger).
+#
 # Self-test polarity (-SelfTest): this switch answers "did the scanner fire
 # when it should have?", not "is the repo clean?". It exits 0 when every bad
 # form planted in the tracked fixture scripts/bare-ids-selftest-fixture.md is
@@ -40,7 +52,7 @@ param([switch]$SelfTest)
 
 $ErrorActionPreference = 'Continue'
 $root = Split-Path -Parent $PSScriptRoot
-$pattern = '\b(?:[Tt]ickets?|[Ii]ssues?)\s+\d+(?:\s*/\s*\d+)*\b|\bv[01]\.[0-9]+(\.[0-9]+)?[^0-9]{0,12}Phase|\b[Aa][Dd][Rr][Ss]?[-_\s]*\d{3,4}\b'
+$pattern = '\b(?:[Tt]ickets?|[Ii]ssues?)[-_\s]*\d+(?:\s*/\s*\d+)*|\bv[01]\.[0-9]+(\.[0-9]+)?[^0-9]{0,12}Phase|\b[Aa][Dd][Rr][Ss]?[-_\s]*\d{3,4}\b|\b[Dd]-\d+\b'
 $fixture = 'scripts/bare-ids-selftest-fixture.md'
 $negativeMarker = 'SELFTESTOK'
 
@@ -61,7 +73,7 @@ if ($SelfTest) {
     }
     Push-Location $root
     try {
-        $hits = & git grep -nP $pattern -- $fixture
+        $hits = & git grep -InP $pattern -- $fixture
         $code = $LASTEXITCODE
     }
     finally {
@@ -90,7 +102,7 @@ if ($SelfTest) {
         $negHits | ForEach-Object { Write-Host ("  false positive: " + $_) }
     }
     else {
-        Write-Host ("  negative controls stayed unmatched (marker {0}): real GitHub issue URL, prose version mention, retired-ADR prose" -f $negativeMarker)
+        Write-Host ("  negative controls stayed unmatched (marker {0}): real GitHub issue URL, prose version mention, retired-ADR prose, hyphen-glued words without a ledger id" -f $negativeMarker)
     }
     $unexpected = @(
         $lines | Where-Object {
@@ -115,7 +127,7 @@ if ($SelfTest) {
 Push-Location $root
 try {
     $excludeFixture = ':(exclude)' + $fixture
-    $hits = & git grep -nP $pattern -- . ':(exclude)docs/history' ':(exclude)CHANGELOG.md' $excludeFixture
+    $hits = & git grep -InP $pattern -- . ':(exclude)docs/history' ':(exclude)CHANGELOG.md' $excludeFixture
     $code = $LASTEXITCODE
 }
 finally {
@@ -123,7 +135,7 @@ finally {
 }
 
 if ($code -eq 1) {
-    Write-Host 'PASS: no bare ticket/issue ids, retired ADR numbers, or version labels outside the archive'
+    Write-Host 'PASS: no bare ticket/issue ids, retired ADR or ledger numbers, or version labels outside the archive'
     exit 0
 }
 if ($code -ne 0) {
@@ -132,6 +144,6 @@ if ($code -ne 0) {
 }
 
 @($hits) | ForEach-Object { Write-Host ("  " + $_) }
-Write-Host ("FAIL: {0} line(s) carry a bare id, retired ADR number, or version label" -f @($hits).Count)
+Write-Host ("FAIL: {0} line(s) carry a bare id, retired ADR or ledger number, or version label" -f @($hits).Count)
 Write-Host 'Replace the number with a self-contained sentence, or link a real GitHub issue by URL.'
 exit 1
