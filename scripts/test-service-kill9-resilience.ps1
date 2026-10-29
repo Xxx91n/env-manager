@@ -105,11 +105,15 @@ $script:exitCode = 1
 try {
     # Pre-existing user state (dev-machine safety): back up, never destroy.
     # A leftover backup from a crashed earlier run must never be overwritten
-    # or removed, so the path is unique per run and the cleanup below only
-    # ever touches this run's own backup.
+    # or removed, so the path embeds a timestamp plus the PID and the copy is
+    # refused outright if the path somehow still exists; the cleanup below
+    # only ever touches this run's own backup.
     if (Test-Path $mountFile) {
-        $backupFile = "$mountFile.bak-$PID"
-        Copy-Item $mountFile $backupFile -Force
+        $backupFile = "$mountFile.bak-{0:yyyyMMddHHmmss}-{1}" -f (Get-Date), $PID
+        if (Test-Path $backupFile) {
+            throw "backup path already exists, refusing to overwrite: $backupFile"
+        }
+        Copy-Item $mountFile $backupFile
         Log-Step "pre-existing secretMount.json backed up to $backupFile"
     }
     New-Item -ItemType Directory -Force -Path $mountDir | Out-Null
