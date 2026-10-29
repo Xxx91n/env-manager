@@ -22,6 +22,7 @@ BAD Ticket27_Ramp - identifier form, the noun glued to digits with no separator 
 BAD D-008 - ledger-style D-number pointing at the retired decision ledger.
 SELFTESTOK self-describing provenance: the defect was found by the metamorphic path pilot, no numbered id needed.
 SELFTESTOK words like 3D-printed glue the letter to a word character, so no boundary precedes it and no ledger id is implied.
+SELFTESTOK Tickets for 2024 keep a word between the noun and the number, so no bare id is implied.
 SELFTESTOK a real GitHub issue link: https://github.com/env-manager/env-manager/issues/38
 SELFTESTOK versions mentioned in prose, not as a leading label: the exporter landed before v0.8 shipped and the split into phases was decided later.
 SELFTESTOK the ADR tree is retired; live docs point at the code or section that owns the decision.

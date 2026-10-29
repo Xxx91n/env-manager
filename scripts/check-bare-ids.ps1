@@ -37,9 +37,10 @@
 # dialects behind a green
 # gate - the fourth occurrence of the same class of miss (the counter read one
 # spelling while the residue wore another). The ledger alternative catches the
-# retired D-number decision-ledger ids; the scan skips binary files so
-# archived media (demo recordings) cannot trip the gate. The fixture plants
-# one bad form per new branch (hyphen, no separator, ledger).
+# retired D-number decision-ledger ids; it ends without a word boundary for
+# the same glued-identifier reason as the noun branch. The scan skips binary
+# files so archived media (demo recordings) cannot trip the gate. The fixture
+# plants one bad form per new branch (hyphen, no separator, ledger).
 #
 # Self-test polarity (-SelfTest): this switch answers "did the scanner fire
 # when it should have?", not "is the repo clean?". It exits 0 when every bad
@@ -52,7 +53,7 @@ param([switch]$SelfTest)
 
 $ErrorActionPreference = 'Continue'
 $root = Split-Path -Parent $PSScriptRoot
-$pattern = '\b(?:[Tt]ickets?|[Ii]ssues?)[-_\s]*\d+(?:\s*/\s*\d+)*|\bv[01]\.[0-9]+(\.[0-9]+)?[^0-9]{0,12}Phase|\b[Aa][Dd][Rr][Ss]?[-_\s]*\d{3,4}\b|\b[Dd]-\d+\b'
+$pattern = '\b(?:[Tt]ickets?|[Ii]ssues?)[-_\s]*\d+(?:\s*/\s*\d+)*|\bv[01]\.[0-9]+(\.[0-9]+)?[^0-9]{0,12}Phase|\b[Aa][Dd][Rr][Ss]?[-_\s]*\d{3,4}\b|\b[Dd]-\d+'
 $fixture = 'scripts/bare-ids-selftest-fixture.md'
 $negativeMarker = 'SELFTESTOK'
 
