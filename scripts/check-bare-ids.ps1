@@ -33,7 +33,11 @@
 # between the noun and the number, mirroring the ADR branch's separator
 # coverage, and the branch ends without a trailing word boundary so an
 # identifier glued into a longer token (digits followed by an underscore,
-# as in a method name) stays visible. Requiring whitespace hid two more live
+# as in a method name) stays visible. The noun and ledger branches open with
+# a lookbehind instead of a word boundary for the same reason on the other
+# side: an underscore-prefixed glued identifier stays visible, while a word
+# whose letter or digit neighbor is glued to the id letter cannot impersonate
+# an id. Requiring whitespace hid two more live
 # dialects behind a green
 # gate - the fourth occurrence of the same class of miss (the counter read one
 # spelling while the residue wore another). The ledger alternative catches the
@@ -53,7 +57,7 @@ param([switch]$SelfTest)
 
 $ErrorActionPreference = 'Continue'
 $root = Split-Path -Parent $PSScriptRoot
-$pattern = '\b(?:[Tt]ickets?|[Ii]ssues?)[-_\s]*\d+(?:\s*/\s*\d+)*|\bv[01]\.[0-9]+(\.[0-9]+)?[^0-9]{0,12}Phase|\b[Aa][Dd][Rr][Ss]?[-_\s]*\d{3,4}\b|\b[Dd]-\d+'
+$pattern = '(?<![A-Za-z0-9])(?:[Tt]ickets?|[Ii]ssues?)[-_\s]*\d+(?:\s*/\s*\d+)*|\bv[01]\.[0-9]+(\.[0-9]+)?[^0-9]{0,12}Phase|\b[Aa][Dd][Rr][Ss]?[-_\s]*\d{3,4}\b|(?<![A-Za-z0-9])[Dd]-\d+'
 $fixture = 'scripts/bare-ids-selftest-fixture.md'
 $negativeMarker = 'SELFTESTOK'
 

@@ -20,6 +20,8 @@ BAD ADR 101 - three-digit ADR number; the lower bound of the digit-width branch 
 BAD ticket-27 - hyphen-joined ticket number; a whitespace-only noun branch misses this dialect.
 BAD Ticket27_Ramp - identifier form, the noun glued to digits with no separator at all.
 BAD D-008 - ledger-style D-number pointing at the retired decision ledger.
+BAD Verify_Ticket27_Ramp - underscore-prefixed glued identifier; a leading word-boundary assertion fails after an underscore.
+BAD state_D-008.bak - underscore-prefixed ledger id; the leading boundary must tolerate an underscore prefix.
 SELFTESTOK self-describing provenance: the defect was found by the metamorphic path pilot, no numbered id needed.
 SELFTESTOK words like 3D-printed glue the letter to a word character, so no boundary precedes it and no ledger id is implied.
 SELFTESTOK Tickets for 2024 keep a word between the noun and the number, so no bare id is implied.

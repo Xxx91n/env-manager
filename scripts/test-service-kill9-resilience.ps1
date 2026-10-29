@@ -104,8 +104,11 @@ $script:exitCode = 1
 
 try {
     # Pre-existing user state (dev-machine safety): back up, never destroy.
+    # A leftover backup from a crashed earlier run must never be overwritten
+    # or removed, so the path is unique per run and the cleanup below only
+    # ever touches this run's own backup.
     if (Test-Path $mountFile) {
-        $backupFile = "$mountFile.bak"
+        $backupFile = "$mountFile.bak-$PID"
         Copy-Item $mountFile $backupFile -Force
         Log-Step "pre-existing secretMount.json backed up to $backupFile"
     }
