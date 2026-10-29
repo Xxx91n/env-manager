@@ -28,7 +28,10 @@ param(
     [Parameter(Mandatory)][string]$ServiceExe,
     [Parameter(Mandatory)][string]$StubDir,
     [ValidateSet('Both', 'Service', 'Background')][string]$Mode = 'Both',
-    [int]$SecretCount = 1,
+    # Two or more: the seeded profile's first secret rotates as a failure (it is not a
+    # provider envelope), and a failed secret never reaches the helper - with one secret
+    # nothing spawns and there is no residue to measure.
+    [int]$SecretCount = 3,
     [int]$HoldSleepMs = 20000,
     [int]$QuickSleepMs = 1500,
     [int]$StopDelaySec = 6
@@ -94,6 +97,15 @@ function Invoke-Sample {
     return (Get-ProtoProcessSnapshot -Names @('sops.exe'))
 }
 
+function Clear-ProtoStaleCli {
+    # A rotate child that outlives its caller keeps the registry-mutation mutex, and the
+    # next rotate then answers "Another Env Manager write operation is still running" after
+    # a 30s stall - which would be measured as an interrupted rotation.
+    $null = Invoke-ProtoProcess -Exe taskkill.exe -Arguments @('/F', '/IM', 'env-manager-cli.exe') -TimeoutSec 30
+    Start-Sleep -Seconds 2
+    Write-Evidence -Key 'stale-cli.cleared' -Value (Get-ProtoProcessSnapshot -Names @('env-manager-cli.exe'))
+}
+
 function Invoke-BackgroundCell {
     Write-Host ''
     Write-Host '---------------- V2 CELL Background (probe user, IPC shutdown) ----------------'
@@ -122,6 +134,7 @@ function Invoke-BackgroundCell {
     $null = Invoke-ResidueCheck -Label 'control-after-complete' -Root $temp -Marker $marker
 
     # Interrupted: hold the helper, start a rotate, then stop the service mid-rotation.
+    Clear-ProtoStaleCli
     Set-StubSleep -Ms $HoldSleepMs
     $job = Start-Job -ScriptBlock {
         param($cli, $id)
@@ -192,6 +205,7 @@ function Invoke-ServiceCell {
     $null = Invoke-ResidueCheck -Label 'service.control.after-complete' -Root $systemTemp -Marker $marker -AsSystem
 
     # Interrupted: hold the helper, start the rotate, sc stop inside the hold window.
+    Clear-ProtoStaleCli
     Set-StubSleep -Ms $HoldSleepMs
     $job = Start-Job -ScriptBlock {
         param($cli, $id)
