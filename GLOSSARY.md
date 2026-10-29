@@ -44,6 +44,10 @@ _Avoid_: event store, event log, audit log (ambiguous with audit.json), blockcha
 The service-side loop that refreshes `Periodic` mounts, default off. Only `CanRotate=true` providers carry a lease concept.
 _Avoid_: refresh daemon, sync loop, agent process
 
+**Interrupted Rotation**:
+A `rotate` whose delegated CLI child was terminated by a service stop before the rotation completed. Names who owns that child, not the provider verb.
+_Avoid_: cancelled rotation, aborted write, half-written file
+
 **Capability-Scoped Agentic Surface**:
 The `agentCapabilities` whitelist on `secret-providers.json`; empty (the default) means all-allowed. Opt-in deployments use it to reject parallel set/delete calls from LLM agents.
 _Avoid_: agent gate, capability filter, agent whitelist

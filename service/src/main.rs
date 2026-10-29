@@ -12,7 +12,8 @@ use tokio_util::sync::CancellationToken;
 
 /// Budget for draining the task that is still running after one of them stops.
 /// Bounded together with `scm::RUNTIME_DRAIN` by `scm::STOP_WAIT_HINT_MS`, which is
-/// asserted at compile time.
+/// asserted at compile time. `ipc::accept_loop` drains its in-flight connection
+/// handlers inside this same window, so the assert covers the whole stop chain.
 pub(crate) const SHUTDOWN_DRAIN: Duration = Duration::from_secs(2);
 
 mod reconcile;
@@ -25,6 +26,8 @@ mod process_guard;
 mod scm;
 #[cfg(test)]
 mod resilience_tests;
+#[cfg(test)]
+mod rotate_stop_tests;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RuntimeMode {
@@ -239,6 +242,10 @@ pub async fn run_background_server(
 
 /// Wait for either task to finish, then drain the other one under a bounded timeout,
 /// so the caller can report a stopped service knowing the pipe handle is closed.
+///
+/// The IPC task's budget covers its own connection handlers: `ipc::accept_loop` joins
+/// them before returning, which is what keeps a delegated CLI rotate from outliving the
+/// `SERVICE_STOPPED` report (#153).
 async fn run_until_exit(
     mut reconcile: tokio::task::JoinHandle<()>,
     mut ipc: tokio::task::JoinHandle<()>,
@@ -313,6 +320,10 @@ mod startup_contract_tests {
     //! (otherwise a slow first tick pushes the report past `ServicesPipeTimeout` and
     //! start fails with 1053 again). Only the first property is observable from
     //! outside; the second follows from the report firing before the spawns.
+    //!
+    //! The stop side of the same contract lives here too (#153): when the body returns,
+    //! the caller reports `SERVICE_STOPPED`, so the body must have released the pipe *and*
+    //! joined the connection handlers that may own a delegated CLI child.
     use super::*;
     use std::sync::atomic::{AtomicBool, AtomicU8, Ordering};
     use std::time::Duration;
@@ -320,10 +331,38 @@ mod startup_contract_tests {
     /// Test-only pipe names so a run never collides with a real service instance.
     const ORDER_PIPE: &str = r"\\.\pipe\EnvManager.TestScmOrdering";
     const RELEASE_PIPE: &str = r"\\.\pipe\EnvManager.TestScmRelease";
+    const IN_FLIGHT_PIPE: &str = r"\\.\pipe\EnvManager.TestScmInFlight";
     const ERROR_FILE_NOT_FOUND: i32 = 2;
 
     fn open(pipe: &str) -> std::io::Result<tokio::net::windows::named_pipe::NamedPipeClient> {
         tokio::net::windows::named_pipe::ClientOptions::new().open(pipe)
+    }
+
+    /// Run the server body on `pipe` and block until it reaches the listener stage, which
+    /// is the point where the SCM's RUNNING report would fire. Returns the body handle and
+    /// its stop token; the listener stage is asserted here because every caller depends on
+    /// it and a body that never got there would make each of them fail for the wrong reason.
+    async fn spawn_body_until_listening(
+        pipe: &'static str,
+    ) -> (tokio::task::JoinHandle<ServerExit>, Arc<CancellationToken>) {
+        let listening = Arc::new(AtomicBool::new(false));
+        let writer = listening.clone();
+        let shutdown = Arc::new(CancellationToken::new());
+        let server = tokio::spawn(run_server(pipe, shutdown.clone(), move || {
+            writer.store(true, Ordering::SeqCst);
+            true
+        }));
+        for _ in 0..100 {
+            if listening.load(Ordering::SeqCst) {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(50)).await;
+        }
+        assert!(
+            listening.load(Ordering::SeqCst),
+            "the server body never reached the listener stage"
+        );
+        (server, shutdown)
     }
 
     /// Scenario: the RUNNING report point is reached only once the listener exists.
@@ -365,23 +404,7 @@ mod startup_contract_tests {
     /// the name immediately instead of waiting for the kernel to reap the handle.
     #[tokio::test]
     async fn stopping_releases_the_pipe() {
-        let listening = Arc::new(AtomicBool::new(false));
-        let writer = listening.clone();
-        let shutdown = Arc::new(CancellationToken::new());
-        let server = tokio::spawn(run_server(RELEASE_PIPE, shutdown.clone(), move || {
-            writer.store(true, Ordering::SeqCst);
-            true
-        }));
-        for _ in 0..100 {
-            if listening.load(Ordering::SeqCst) {
-                break;
-            }
-            tokio::time::sleep(Duration::from_millis(50)).await;
-        }
-        assert!(
-            listening.load(Ordering::SeqCst),
-            "the server body never reached the listener stage"
-        );
+        let (server, shutdown) = spawn_body_until_listening(RELEASE_PIPE).await;
 
         shutdown.cancel();
         assert_eq!(server.await.expect("server task"), ServerExit::Requested);
@@ -394,5 +417,51 @@ mod startup_contract_tests {
             Some(ERROR_FILE_NOT_FOUND),
             "expected the pipe name to be free after stop, got: {err}"
         );
+    }
+
+    /// Scenario: `Stop-Service` with a connection already accepted and a request still
+    /// being served. The body must not return until that handler does: the caller reports
+    /// `SERVICE_STOPPED` the moment the body returns, and a `rotate` handler owns the CLI
+    /// child that is allowed to write profiles.json (#153).
+    ///
+    /// Regression pin for the shape before this ticket: the accept loop used to return on
+    /// cancellation with the handler still detached, so the body resolved while the
+    /// handler was parked and the child survived into a service the SCM called Stopped.
+    #[tokio::test]
+    async fn stop_waits_for_an_in_flight_connection_handler() {
+        let (mut server, shutdown) = spawn_body_until_listening(IN_FLIGHT_PIPE).await;
+
+        // A client that connects and stays silent parks `handle_connection` in its read
+        // loop. That is the cheapest honest in-flight handler: no real provider rotation
+        // is available to a test, and the join under test is the same either way. The
+        // sleep lets the accept loop observe the connect and register the handler before
+        // the stop lands.
+        let client = crate::resilience_tests::open_with_retry(IN_FLIGHT_PIPE).await;
+        tokio::time::sleep(Duration::from_millis(200)).await;
+
+        shutdown.cancel();
+        // The drain window is `SHUTDOWN_DRAIN`; an eighth of it (5 x 50ms) is spent proving
+        // the body is still inside the handler. Polling rather than one long sleep keeps a
+        // slow runner from passing the assertion by finishing early, and staying well inside
+        // the budget keeps drift from letting the outer drain expire the pin for the wrong
+        // reason.
+        for _ in 0..5 {
+            assert!(
+                !server.is_finished(),
+                "the stop path returned while a connection handler was still in flight"
+            );
+            tokio::time::sleep(Duration::from_millis(50)).await;
+        }
+
+        // Releasing the handler must release the body, not merely unblock the test. The
+        // window is a quarter of `SHUTDOWN_DRAIN` on purpose: at the full budget the body
+        // would also resolve when the drain simply expires, so the assertion could never
+        // fail for the reason it states.
+        drop(client);
+        let exit = tokio::time::timeout(SHUTDOWN_DRAIN / 4, &mut server)
+            .await
+            .expect("the body must return once its handler is done")
+            .expect("server task");
+        assert_eq!(exit, ServerExit::Requested);
     }
 }
