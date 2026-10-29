@@ -41,8 +41,11 @@
 # dialects behind a green
 # gate - the fourth occurrence of the same class of miss (the counter read one
 # spelling while the residue wore another). The ledger alternative catches the
-# retired D-number decision-ledger ids; it ends without a word boundary for
-# the same glued-identifier reason as the noun branch. The scan skips binary
+# retired D-number decision-ledger ids; the ledger namespace is zero-padded
+# three-digit, so the branch requires at least three digits and
+# prose like a vitamin dosage cannot impersonate an id; it ends without a word
+# boundary for the same glued-identifier reason as the noun branch. The scan
+# skips binary
 # files so archived media (demo recordings) cannot trip the gate. The fixture
 # plants one bad form per new branch (hyphen, no separator, ledger).
 #
@@ -57,7 +60,7 @@ param([switch]$SelfTest)
 
 $ErrorActionPreference = 'Continue'
 $root = Split-Path -Parent $PSScriptRoot
-$pattern = '(?<![A-Za-z0-9])(?:[Tt]ickets?|[Ii]ssues?)[-_\s]*\d+(?:\s*/\s*\d+)*|\bv[01]\.[0-9]+(\.[0-9]+)?[^0-9]{0,12}Phase|\b[Aa][Dd][Rr][Ss]?[-_\s]*\d{3,4}\b|(?<![A-Za-z0-9])[Dd]-\d+'
+$pattern = '(?<![A-Za-z0-9])(?:[Tt]ickets?|[Ii]ssues?)[-_\s]*\d+(?:\s*/\s*\d+)*|\bv[01]\.[0-9]+(\.[0-9]+)?[^0-9]{0,12}Phase|\b[Aa][Dd][Rr][Ss]?[-_\s]*\d{3,4}\b|(?<![A-Za-z0-9])[Dd]-\d{3,}'
 $fixture = 'scripts/bare-ids-selftest-fixture.md'
 $negativeMarker = 'SELFTESTOK'
 

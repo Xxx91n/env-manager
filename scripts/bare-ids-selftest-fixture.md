@@ -24,6 +24,7 @@ BAD Verify_Ticket27_Ramp - underscore-prefixed glued identifier; a leading word-
 BAD state_D-008.bak - underscore-prefixed ledger id; the leading boundary must tolerate an underscore prefix.
 SELFTESTOK self-describing provenance: the defect was found by the metamorphic path pilot, no numbered id needed.
 SELFTESTOK words like 3D-printed glue the letter to a word character, so no boundary precedes it and no ledger id is implied.
+SELFTESTOK ordinary prose such as a vitamin D-3 dosage carries too few digits to be a zero-padded ledger id.
 SELFTESTOK Tickets for 2024 keep a word between the noun and the number, so no bare id is implied.
 SELFTESTOK a real GitHub issue link: https://github.com/env-manager/env-manager/issues/38
 SELFTESTOK versions mentioned in prose, not as a leading label: the exporter landed before v0.8 shipped and the split into phases was decided later.
