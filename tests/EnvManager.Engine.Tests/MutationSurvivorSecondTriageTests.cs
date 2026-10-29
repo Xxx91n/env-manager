@@ -174,7 +174,7 @@ public class MutationSurvivorSecondTriageTests : IDisposable
     // ---- warn report always prints "strict mode: refusing") ----
 
     /// <summary>The non-strict warn report must say "continuing", not "refusing" -
-    /// the stderr clause is the human-facing half of the ticket-19 two-tier contract.</summary>
+    /// the stderr clause is the human-facing half of the two-tier preflight contract.</summary>
     [Fact]
     public void WarnReport_NonStrict_PrintsContinuing()
     {

@@ -70,7 +70,7 @@ public abstract class SecretProviderContractTests
         AssertRoundTrip_EncryptThenDecrypt_ReturnsPlaintext(_harness);
 
     // L1 mounts run the same assertions against a real backend harness while
-    // the base class keeps the ticket-10 backend-independent Fact set unchanged.
+    // the base class keeps the backend-independent Fact set unchanged.
     internal void AssertRoundTrip_EncryptThenDecrypt_ReturnsPlaintext(ISecretProviderHarness l1Harness)
     {
         const string plain = "contract-round-trip-42";

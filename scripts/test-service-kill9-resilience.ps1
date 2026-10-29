@@ -105,7 +105,7 @@ $script:exitCode = 1
 try {
     # Pre-existing user state (dev-machine safety): back up, never destroy.
     if (Test-Path $mountFile) {
-        $backupFile = "$mountFile.ticket49.bak"
+        $backupFile = "$mountFile.bak"
         Copy-Item $mountFile $backupFile -Force
         Log-Step "pre-existing secretMount.json backed up to $backupFile"
     }

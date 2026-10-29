@@ -13,7 +13,7 @@ partial class Program
         if (IsInternalToggleBackupName(oldName) || IsInternalToggleBackupName(newName))
             return ArgError("Error: Internal disabled-variable backup names cannot be renamed");
 
-        // DEF-2 (found by the ticket-34 metamorphic pilot): a case-only rename with
+        // DEF-2 (found by the metamorphic path pilot): a case-only rename with
         // --overwrite writes the new slot and then deletes the source - both fold to the
         // same registry value name, so the value would vanish entirely. Windows env-var
         // names are case-insensitive, so refuse it exactly like a self-rename.
