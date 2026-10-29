@@ -92,8 +92,13 @@ if ($MountPath) {
             profileName            = $ProfileName
         }
     )
-    ($mount | ConvertTo-Json -Depth 5) | Set-Content -Path $MountPath -Encoding utf8
+    # -InputObject, not a pipe: piping a single-element array makes ConvertTo-Json emit the
+    # bare object, and secretMount.json has to be a JSON array for the service's load_mounts.
+    # Written through .NET rather than Set-Content -Encoding utf8, because under Windows
+    # PowerShell that adds a BOM, which serde_json refuses as "expected value at line 1".
+    [System.IO.File]::WriteAllText($MountPath, (ConvertTo-Json -InputObject $mount -Depth 5), (New-Object System.Text.UTF8Encoding($false)))
     Write-Output "SEED mount_file=$MountPath exists=$(Test-Path $MountPath)"
+    Write-Output "SEED mount_head=$((Get-Content -Raw -Path $MountPath).Substring(0, [Math]::Min(120, (Get-Content -Raw -Path $MountPath).Length)))"
 }
 
 $profilesFile = Join-Path $stateDir 'profiles.json'

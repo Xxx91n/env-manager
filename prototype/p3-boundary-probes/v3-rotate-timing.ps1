@@ -104,9 +104,11 @@ try {
     }
 
     # --- stub-sops with a held helper: the cost of a provider that is slow per call ---
+    # The provider stays sops (an invented provider name is refused by `secret-provider
+    # set`); only the stub's hold changes, and the CSV note column carries that.
     Set-StubSleep -Ms $SopsHoldSleepMs
     foreach ($n in @(1, 5, 20)) {
-        $null = Invoke-RotateCell -Provider "sops-held$SopsHoldSleepMs" -Secrets $n -StateSub 'stubhold'
+        $null = Invoke-RotateCell -Provider 'sops' -Secrets $n -StateSub 'stubhold' -Note "cli-direct-held${SopsHoldSleepMs}ms"
     }
     Set-StubSleep -Ms 0
 
@@ -126,9 +128,23 @@ try {
         # 3.13 windows asset does not exist), so read the release manifest instead of
         # guessing filenames.
         $gotSops = $false
+        # The asset name came out of round three's manifest listing (sops-v3.13.3.amd64.exe),
+        # so try the direct download first: the unauthenticated API endpoint is rate-limited
+        # from the shared runner IP and answered 403 in round four.
+        try {
+            $u = 'https://github.com/getsops/sops/releases/download/v3.13.3/sops-v3.13.3.amd64.exe'
+            Invoke-WebRequest -Uri $u -OutFile (Join-Path $realDir 'sops.exe') -TimeoutSec 180 -ErrorAction Stop
+            $gotSops = $true
+            Write-Evidence -Key 'real_sops.download' -Value "direct ok size=$((Get-Item (Join-Path $realDir 'sops.exe')).Length)"
+        } catch {
+            Write-Evidence -Key 'real_sops.download' -Value "direct FAILED $($_.Exception.Message)"
+        }
         foreach ($tag in @('latest', 'v3.13.3')) {
+            if ($gotSops) { break }
             try {
-                $rel = Invoke-RestMethod -Uri ("https://api.github.com/repos/getsops/sops/releases/" + $tag) -Headers @{ 'User-Agent' = 'proto-p3-observations'; 'Accept' = 'application/vnd.github+json' } -TimeoutSec 60
+                $headers = @{ 'User-Agent' = 'proto-p3-observations'; 'Accept' = 'application/vnd.github+json' }
+                if ($env:GH_TOKEN) { $headers['Authorization'] = "Bearer $env:GH_TOKEN" }
+                $rel = Invoke-RestMethod -Uri ("https://api.github.com/repos/getsops/sops/releases/" + $tag) -Headers $headers -TimeoutSec 60
                 # sops names its Windows binary "sops-v<ver>.amd64.exe" - the asset name
                 # carries no "windows" token, which is why the repo's L1 provisioner
                 # concludes there is no Windows asset. Match the extension, not the OS word.

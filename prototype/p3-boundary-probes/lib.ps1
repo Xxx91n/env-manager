@@ -63,6 +63,9 @@ using System.Runtime.InteropServices;
 
 public static class ProtoWin {
     public const uint SE_FILE_OBJECT = 1;
+    // A named pipe instance is a kernel object, not a file object: GetSecurityInfo with
+    // SE_FILE_OBJECT on a pipe handle answers 87 ERROR_INVALID_PARAMETER.
+    public const uint SE_KERNEL_OBJECT = 6;
     public const uint OWNER_SECURITY_INFORMATION = 0x1;
     public const uint GROUP_SECURITY_INFORMATION = 0x2;
     public const uint DACL_SECURITY_INFORMATION  = 0x4;
@@ -251,6 +254,10 @@ public static class ProtoWin {
     // 5 ERROR_ACCESS_DENIED for the "\\localhost\pipe" form), so the descriptor is read
     // and written through a handle instead - the route the Sysinternals pipe tools use.
     public static string ReadSddlByHandle(string path, uint si) {
+        return ReadSddlByHandle(path, si, SE_KERNEL_OBJECT);
+    }
+
+    public static string ReadSddlByHandle(string path, uint si, uint objType) {
         // READ_CONTROL = 0x00020000; share mode 3 = FILE_SHARE_READ|FILE_SHARE_WRITE,
         // which CreateFile requires for a named pipe.
         IntPtr h = CreateFileW(path, 0x00020000, 3, IntPtr.Zero, 3, 0, IntPtr.Zero);
@@ -260,8 +267,8 @@ public static class ProtoWin {
         }
         try {
             IntPtr owner, group, dacl, sacl, sd;
-            uint rc = GetSecurityInfo(h, SE_FILE_OBJECT, si, out owner, out group, out dacl, out sacl, out sd);
-            if (rc != 0) { return "GET-SEC-INFO-ERR=" + rc + Describe((int)rc); }
+            uint rc = GetSecurityInfo(h, objType, si, out owner, out group, out dacl, out sacl, out sd);
+            if (rc != 0) { return "GET-SEC-INFO-ERR=" + rc + Describe((int)rc) + " objType=" + objType; }
             if (sd == IntPtr.Zero) { return "SD-NULL"; }
             IntPtr text; uint len;
             if (!ConvertSecurityDescriptorToStringSecurityDescriptorW(sd, SDDL_REVISION_1, si, out text, out len)) {
@@ -278,6 +285,10 @@ public static class ProtoWin {
     /// realistic shape of "change the DACL after creation"; the name-based API could not
     /// even open the pipe to change it.
     public static string ApplyDaclByHandle(string path, string sddl) {
+        return ApplyDaclByHandle(path, sddl, SE_KERNEL_OBJECT);
+    }
+
+    public static string ApplyDaclByHandle(string path, string sddl, uint objType) {
         IntPtr h = CreateFileW(path, 0x00040000, 3, IntPtr.Zero, 3, 0, IntPtr.Zero);
         if (h == new IntPtr(-1)) {
             int e = Marshal.GetLastWin32Error();
@@ -293,8 +304,8 @@ public static class ProtoWin {
                 if (!GetSecurityDescriptorDacl(sd, out present, out dacl, out defaulted)) {
                     return "GET-SD-DACL-ERR=" + Marshal.GetLastWin32Error();
                 }
-                uint rc = SetSecurityInfo(h, SE_FILE_OBJECT, DACL_SECURITY_INFORMATION, IntPtr.Zero, IntPtr.Zero, dacl, IntPtr.Zero);
-                return "rc=" + rc + Describe((int)rc) + " (0 == ERROR_SUCCESS) daclPresent=" + present;
+                uint rc = SetSecurityInfo(h, objType, DACL_SECURITY_INFORMATION, IntPtr.Zero, IntPtr.Zero, dacl, IntPtr.Zero);
+                return "rc=" + rc + Describe((int)rc) + " (0 == ERROR_SUCCESS) objType=" + objType + " daclPresent=" + present;
             } finally { LocalFree(sd); }
         } finally { CloseHandle(h); }
     }
@@ -429,6 +440,7 @@ function Get-ProtoPipeSddl {
     $attempts = @(
         @{ key = 'sddl.handle.daclOnly'; fn = { param($p) [ProtoWin]::DaclOnlyByHandle($p) }; path = "\\.\pipe\$Pipe" },
         @{ key = 'sddl.handle.daclOwnerGroup'; fn = { param($p) [ProtoWin]::DaclByHandle($p) }; path = "\\.\pipe\$Pipe" },
+        @{ key = 'sddl.handle.daclOnlyFileObj'; fn = { param($p) [ProtoWin]::ReadSddlByHandle($p, 4, 1) }; path = "\\.\pipe\$Pipe" },
         @{ key = 'sddl.byName.daclOnly'; fn = { param($p) [ProtoWin]::DaclOnlyOf($p) }; path = "\\.\pipe\$Pipe" },
         @{ key = 'sddl.byName.daclOnly'; fn = { param($p) [ProtoWin]::DaclOnlyOf($p) }; path = "\pipe\$Pipe" },
         @{ key = 'sddl.byName.daclOnly'; fn = { param($p) [ProtoWin]::DaclOnlyOf($p) }; path = "\\localhost\pipe\$Pipe" },
@@ -450,9 +462,11 @@ function Set-ProtoPipeDacl {
     Add-ProtoNativeType
     $byName = [ProtoWin]::ApplyDaclFromSddl("\\.\pipe\$Pipe", $Sddl)
     $byHandle = [ProtoWin]::ApplyDaclByHandle("\\.\pipe\$Pipe", $Sddl)
+    $byHandleFileObj = [ProtoWin]::ApplyDaclByHandle("\\.\pipe\$Pipe", $Sddl, 1)
     Write-Evidence -Key "apply.byName[$Label]" -Value "\\.\pipe\$Pipe => $byName" -Note 'the exact two calls service/src/pipe_dacl.rs performs'
-    Write-Evidence -Key "apply.byHandle[$Label]" -Value "\\.\pipe\$Pipe => $byHandle" -Note 'SetSecurityInfo on a WRITE_DAC handle'
-    return [pscustomobject]@{ ByName = $byName; ByHandle = $byHandle }
+    Write-Evidence -Key "apply.byHandle[$Label]" -Value "\\.\pipe\$Pipe => $byHandle" -Note 'SetSecurityInfo on a WRITE_DAC handle, SE_KERNEL_OBJECT'
+    Write-Evidence -Key "apply.byHandleFileObj[$Label]" -Value "\\.\pipe\$Pipe => $byHandleFileObj" -Note 'same call with SE_FILE_OBJECT, for contrast'
+    return [pscustomobject]@{ ByName = $byName; ByHandle = $byHandle; ByHandleFileObj = $byHandleFileObj }
 }
 
 function Test-ProtoPipeOpen {

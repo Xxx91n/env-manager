@@ -86,9 +86,11 @@ function Invoke-ResidueCheck {
 }
 
 function Invoke-Sample {
-    param([Parameter(Mandatory)][string]$Label, [Parameter(Mandatory)][string]$Root, [Parameter(Mandatory)][string]$Marker, [bool]$AsSystem)
+    param([Parameter(Mandatory)][string]$Label, [Parameter(Mandatory)][string[]]$Roots, [Parameter(Mandatory)][string]$Marker, [bool]$AsSystem)
     Write-Evidence -Key "sample[$Label]" -Value (Get-ProtoProcessSnapshot -Names @('sops.exe', 'env-manager-cli.exe', 'env-manager-service.exe')) -Note 'ppid of a helper whose parent is gone is the orphan proof'
-    $null = Invoke-ResidueCheck -Label $Label -Root $Root -Marker $Marker -AsSystem:$AsSystem
+    foreach ($root in $Roots) {
+        $null = Invoke-ResidueCheck -Label "$Label root=$root" -Root $root -Marker $Marker -AsSystem:$AsSystem
+    }
     return (Get-ProtoProcessSnapshot -Names @('sops.exe'))
 }
 
@@ -130,13 +132,13 @@ function Invoke-BackgroundCell {
     $tShut = Get-Date
     $shut = Invoke-ProtoProcess -Exe $CliExe -Arguments @('service', 'shutdown') -TimeoutSec 30
     Write-Evidence -Key 'interrupt.shutdown_ipc' -Value ("exit=$($shut.Code) dur_ms=$(((Get-Date)-$tShut).TotalMilliseconds) out=$($shut.StdOut.Trim())")
-    $null = Invoke-Sample -Label 'interrupt-bg-+0s' -Root $temp -Marker $marker -AsSystem $false
+    $null = Invoke-Sample -Label 'interrupt-bg-+0s' -Roots @($temp) -Marker $marker -AsSystem $false
     Start-Sleep -Seconds 3
-    $null = Invoke-Sample -Label 'interrupt-bg-+3s' -Root $temp -Marker $marker -AsSystem $false
+    $null = Invoke-Sample -Label 'interrupt-bg-+3s' -Roots @($temp) -Marker $marker -AsSystem $false
     Start-Sleep -Seconds 5
-    $null = Invoke-Sample -Label 'interrupt-bg-+8s' -Root $temp -Marker $marker -AsSystem $false
+    $null = Invoke-Sample -Label 'interrupt-bg-+8s' -Roots @($temp) -Marker $marker -AsSystem $false
     Start-Sleep -Seconds 14
-    $null = Invoke-Sample -Label 'interrupt-bg-+22s' -Root $temp -Marker $marker -AsSystem $false
+    $null = Invoke-Sample -Label 'interrupt-bg-+22s' -Roots @($temp) -Marker $marker -AsSystem $false
     $rotateOut = (Receive-Job -Job $job -Wait -ErrorAction SilentlyContinue) -join ' '
     Write-Evidence -Key 'interrupt.bg_rotate_client_saw' -Value $rotateOut
     Remove-Job -Job $job -Force -ErrorAction SilentlyContinue
@@ -152,7 +154,11 @@ function Invoke-ServiceCell {
     Write-Host '---------------- V2 CELL Service (LocalSystem, real sc stop) ----------------'
     $marker = "PROTO-V2-SVC-$([guid]::NewGuid().ToString('N').Substring(0,8))"
     $mountPath = 'C:\ProgramData\EnvManager\secretMount.json'
+    # A LocalSystem process gets %Windir%\SystemTemp from Path.GetTempPath() on current
+    # Windows, not %Windir%\Temp - and the seed run recorded exactly that. Both roots are
+    # sampled because which one holds the plaintext decides who can read it afterwards.
     $winTemp = 'C:\Windows\Temp'
+    $systemTemp = 'C:\Windows\SystemTemp'
     New-Item -ItemType Directory -Force -Path 'C:\ProgramData\EnvManager' | Out-Null
 
     # Seed as LocalSystem so profiles.json / secret-providers.json land where the service's
@@ -183,6 +189,7 @@ function Invoke-ServiceCell {
     Write-Evidence -Key 'service.control.rotate' -Value ("exit=$($ctrl.Code) dur_ms=$([math]::Round(((Get-Date)-$t0).TotalMilliseconds)) out=$($ctrl.StdOut.Trim()) err=$($ctrl.StdErr.Trim())")
     Write-Evidence -Key 'service.control.helper_spawns' -Value (Get-StubSpawnCount -SinceLines $linesBefore)
     $null = Invoke-ResidueCheck -Label 'service.control.after-complete' -Root $winTemp -Marker $marker -AsSystem
+    $null = Invoke-ResidueCheck -Label 'service.control.after-complete' -Root $systemTemp -Marker $marker -AsSystem
 
     # Interrupted: hold the helper, start the rotate, sc stop inside the hold window.
     Set-StubSleep -Ms $HoldSleepMs
@@ -194,13 +201,13 @@ function Invoke-ServiceCell {
     Write-Evidence -Key 'service.interrupt.before_stop' -Value (Get-ProtoProcessSnapshot -Names @('sops.exe', 'env-manager-cli.exe', 'env-manager-service.exe'))
     $stop = Stop-ProtoService
     Write-Evidence -Key 'service.interrupt.sc_stop' -Value ($stop | ConvertTo-Json -Compress)
-    $null = Invoke-Sample -Label 'service.interrupt-+0s' -Root $winTemp -Marker $marker -AsSystem $true
+    $null = Invoke-Sample -Label 'service.interrupt-+0s' -Roots @($winTemp, $systemTemp) -Marker $marker -AsSystem $true
     Start-Sleep -Seconds 3
-    $null = Invoke-Sample -Label 'service.interrupt-+3s' -Root $winTemp -Marker $marker -AsSystem $true
+    $null = Invoke-Sample -Label 'service.interrupt-+3s' -Roots @($winTemp, $systemTemp) -Marker $marker -AsSystem $true
     Start-Sleep -Seconds 5
-    $null = Invoke-Sample -Label 'service.interrupt-+8s' -Root $winTemp -Marker $marker -AsSystem $true
+    $null = Invoke-Sample -Label 'service.interrupt-+8s' -Roots @($winTemp, $systemTemp) -Marker $marker -AsSystem $true
     Start-Sleep -Seconds 14
-    $null = Invoke-Sample -Label 'service.interrupt-+22s' -Root $winTemp -Marker $marker -AsSystem $true
+    $null = Invoke-Sample -Label 'service.interrupt-+22s' -Roots @($winTemp, $systemTemp) -Marker $marker -AsSystem $true
     $rotateOut = (Receive-Job -Job $job -Wait -ErrorAction SilentlyContinue) -join ' '
     Write-Evidence -Key 'service.interrupt.rotate_client_saw' -Value $rotateOut
     Remove-Job -Job $job -Force -ErrorAction SilentlyContinue
@@ -208,6 +215,7 @@ function Invoke-ServiceCell {
     Write-Evidence -Key 'service.interrupt.stub_log_tail' -Value (Get-StubLogTail -Lines 20)
     Remove-ProtoService
     $null = Invoke-ResidueCheck -Label 'service.cleanup' -Root $winTemp -Marker $marker -AsSystem -Delete
+    $null = Invoke-ResidueCheck -Label 'service.cleanup' -Root $systemTemp -Marker $marker -AsSystem -Delete
     return $marker
 }
 
@@ -248,6 +256,7 @@ V2 observations (no decision attached; the question is binary: residue / no resi
     $null = Invoke-ProtoProcess -Exe taskkill.exe -Arguments @('/F', '/IM', 'env-manager-cli.exe') -TimeoutSec 30
     $null = Invoke-ProtoProcess -Exe taskkill.exe -Arguments @('/F', '/IM', 'env-manager-service.exe') -TimeoutSec 30
     $null = Invoke-ResidueCheck -Label 'final-cleanup-wintemp' -Root 'C:\Windows\Temp' -Marker '' -AsSystem -Delete
+    $null = Invoke-ResidueCheck -Label 'final-cleanup-systemtemp' -Root 'C:\Windows\SystemTemp' -Marker '' -AsSystem -Delete
     $null = Invoke-ResidueCheck -Label 'final-cleanup-prototemp' -Root (Join-Path $script:ProtoRoot 'temp-bg') -Marker '' -Delete
     try { Remove-Item -LiteralPath 'C:\ProgramData\EnvManager' -Recurse -Force -ErrorAction Stop } catch { Write-Evidence -Key 'cleanup.programdata' -Value $_.Exception.Message }
     if (Test-Path $sopsInstallDir) { try { Remove-Item $sopsInstallDir -Recurse -Force } catch { Write-Evidence -Key 'cleanup.stub_dir' -Value "FAILED $($_.Exception.Message)" } }

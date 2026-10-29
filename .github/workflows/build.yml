@@ -1049,6 +1049,9 @@ jobs:
         shell: pwsh
         env:
           PROTO_EVIDENCE_DIR: ${{ github.workspace }}\test-results\proto
+          # Only used to raise the GitHub release-API rate limit when the direct sops asset
+          # URL is unreachable; the leg still records "unreachable" without it.
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: C:/proto/v3-rotate-timing.ps1 -CliExe C:\proto\bin\app\env-manager-cli.exe -ServiceExe C:\proto\bin\app\env-manager-service.exe -StubDir C:\proto\bin\stub *>&1 | Tee-Object -FilePath test-results/proto/v3-console.log
 
       - name: Evidence presence gate
