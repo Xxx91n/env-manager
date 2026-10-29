@@ -44,7 +44,7 @@ Write-Output "PROBE open_writeonly=$([LowProto]::Open($path, 0x40000000))"
 try {
     $client = New-Object System.IO.Pipes.NamedPipeClientStream('.', $Pipe, [System.IO.Pipes.PipeDirection]::InOut)
     $client.Connect(5000)
-    $w = New-Object System.IO.StreamWriter($client, [System.Text.Encoding]::UTF8, 1024, $true)
+    $w = New-Object System.IO.StreamWriter($client, (New-Object System.Text.UTF8Encoding($false)), 1024, $true)
     $w.WriteLine('{"method":"ping"}')
     $w.Flush()
     $rd = New-Object System.IO.StreamReader($client, [System.Text.Encoding]::UTF8, $false, 1024, $true)

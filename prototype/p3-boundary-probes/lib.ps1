@@ -369,7 +369,9 @@ function Connect-ProtoPipeClient {
     try {
         $client = New-Object System.IO.Pipes.NamedPipeClientStream('.', $Pipe, [System.IO.Pipes.PipeDirection]::InOut)
         $client.Connect($ConnectTimeoutMs)
-        $w = New-Object System.IO.StreamWriter($client, [System.Text.Encoding]::UTF8, 1024, $true)
+        # No preamble: the service parses the first byte, and a UTF-8 BOM turns the request
+        # into "invalid request: expected value at line 1 column 1".
+        $w = New-Object System.IO.StreamWriter($client, (New-Object System.Text.UTF8Encoding($false)), 1024, $true)
         $w.WriteLine($Request)
         $w.Flush()
         $rd = New-Object System.IO.StreamReader($client, [System.Text.Encoding]::UTF8, $false, 1024, $true)
@@ -419,8 +421,8 @@ function New-ProtoService {
     if ($r.Code -ne 0) { throw "sc create failed: $($r.StdErr)" }
     $qc = Invoke-ProtoProcess -Exe sc.exe -Arguments @('qc', $Name) -TimeoutSec 20
     Write-Evidence -Key 'service.qc' -Value $qc.StdOut -Note 'SERVICE_START_NAME must be LocalSystem (or NT AUTHORITY\SYSTEM) for the V1 premise'
-    $sid = Invoke-ProtoProcess -Exe sc.exe -Arguments @('showsids', $Name) -TimeoutSec 20
-    Write-Evidence -Key 'service.showsids' -Value $sid.StdOut
+    $sid = Invoke-ProtoProcess -Exe sc.exe -Arguments @('showsid', $Name) -TimeoutSec 20
+    Write-Evidence -Key 'service.showsid' -Value ($sid.StdOut.Trim() -replace '\s+', ' ') -Note 'the service logon SID; LocalSystem pipes carry no per-user owner SID'
     return $r
 }
 
@@ -516,11 +518,18 @@ function Remove-ProtoLocalUser {
 
 function Grant-ProtoDirAccess {
     param([Parameter(Mandatory)][string]$Path, [string]$User = 'emp3low')
+    # Translate through the local-account SID rather than a "machine-name" style string: the
+    # just-created account does not always resolve through LookupAccountName yet, and
+    # SetAccessRule then throws "Some or all identity references could not be translated".
+    $local = Get-LocalUser -Name $User -ErrorAction SilentlyContinue
+    if (-not $local) { Write-Evidence -Key "acl.grant[$User]" -Value "SKIPPED: no such local user for $Path"; return }
+    $sidText = if ($local.SID -is [string]) { $local.SID } else { $local.SID.Value }
+    $sid = New-Object System.Security.Principal.SecurityIdentifier($sidText)
     $acl = Get-Acl -Path $Path
-    $rule = New-Object System.Security.AccessControl.FileSystemAccessRule(".\$User", 'Modify', 'ContainerInherit,ObjectInherit', 'None', 'Allow')
+    $rule = New-Object System.Security.AccessControl.FileSystemAccessRule($sid, 'Modify', 'ContainerInherit,ObjectInherit', 'None', 'Allow')
     $acl.SetAccessRule($rule)
     Set-Acl -Path $Path -AclObject $acl
-    Write-Evidence -Key "acl.grant[$User]" -Value $Path
+    Write-Evidence -Key "acl.grant[$User]" -Value "$Path ($sidText)"
 }
 
 # Two logon shapes on purpose: a named pipe default DACL commonly keys on the LOGON SID
@@ -631,4 +640,17 @@ function Get-ProtoTempResidue {
         }
     }
     return [pscustomobject]@{ Root = $Root; Found = $true; Detail = ($detail -join ' || ') }
+}
+
+# Records a terminating error as evidence, so a leg that dies mid-run still leaves the
+# reason in the artifact instead of only in the step log.
+function Write-ProtoFatal {
+    param([Parameter(Mandatory)]$ErrorRecord)
+    $where = ''
+    try { $where = $ErrorRecord.InvocationInfo.PositionMessage } catch { }
+    $trace = ''
+    try { $trace = $ErrorRecord.ScriptStackTrace } catch { }
+    Write-Evidence -Key 'FATAL' -Value ($ErrorRecord.Exception.Message + ' @ ' + $where)
+    Write-Evidence -Key 'FATAL.trace' -Value ((($trace -split "`n") -join " <- ") -replace "^ +", "")
+    Write-Host ("PROTOTYPE FATAL: " + $ErrorRecord.Exception.Message)
 }

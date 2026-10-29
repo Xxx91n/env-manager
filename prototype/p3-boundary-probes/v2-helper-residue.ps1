@@ -239,6 +239,8 @@ V2 observations (no decision attached; the question is binary: residue / no resi
   - the Background cell is the same stop chain minus the SCM, run where the probe can
     read the files; the Service cell is the installed-product shape.
 '@
+} catch {
+    Write-ProtoFatal $_
 } finally {
     if ($script:bgProc -and -not $script:bgProc.HasExited) { try { $null = $script:bgProc.Kill($true) } catch { } }
     Remove-ProtoService

@@ -1058,6 +1058,16 @@ jobs:
           $missing = @($want | Where-Object { -not (Test-Path (Join-Path 'test-results/proto' $_)) })
           (Get-ChildItem test-results/proto -ErrorAction SilentlyContinue | Select-Object Name, Length | Format-Table -AutoSize | Out-String) | Write-Host
           if ($missing.Count -gt 0) { throw "legs that produced no evidence file: $($missing -join ', ')" }
+          # The legs run with continue-on-error so a crash still uploads evidence; this step
+          # is what makes a crashed leg visible in the job instead of only in the artifact.
+          $fatal = @(Get-ChildItem test-results/proto -Filter 'evidence-*.jsonl' | ForEach-Object {
+            Select-String -Path $_.FullName -Pattern '"key":"FATAL"' -SimpleMatch -ErrorAction SilentlyContinue
+          })
+          if ($fatal.Count -gt 0) {
+            $fatal | ForEach-Object { Write-Host "FATAL in $(Split-Path $_.Path -Leaf): $($_.Line.Substring(0, [Math]::Min(500, $_.Line.Length)))" }
+            throw "prototype leg(s) recorded a FATAL error: $($fatal.Count)"
+          }
+          Write-Host 'prototype evidence: no FATAL records'
 
       - name: Upload prototype evidence
         if: always()

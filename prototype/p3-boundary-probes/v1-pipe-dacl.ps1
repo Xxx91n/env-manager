@@ -193,6 +193,8 @@ V1 observations (no decision attached):
   - open[...low...] cells are the access-check outcome per identity/logon type;
     cli_low_* cells show what the shipped gateway reports back to a user in that case.
 '@
+} catch {
+    Write-ProtoFatal $_
 } finally {
     if ($bgProc -and -not $bgProc.HasExited) { try { $null = $bgProc.Kill($true) } catch { } }
     $null = Invoke-ProtoProcess -Exe taskkill.exe -Arguments @('/F', '/IM', 'env-manager-service.exe') -TimeoutSec 30

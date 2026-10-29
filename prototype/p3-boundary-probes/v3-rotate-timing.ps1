@@ -46,9 +46,11 @@ function Add-Row {
 }
 
 function Get-StubLineCount {
+    # One line per invocation; the ':exit' lines are the same process closing, so counting
+    # every line would double each helper start.
     $log = Join-Path $script:ProtoRoot 'stub.log'
     if (-not (Test-Path $log)) { return 0 }
-    return @([System.IO.File]::ReadAllLines($log)).Count
+    return @([System.IO.File]::ReadAllLines($log) | Where-Object { $_ -notmatch ':exit' }).Count
 }
 
 function Set-StubSleep {
@@ -120,19 +122,23 @@ try {
     if (-not $SkipRealSops) {
         $realDir = Join-Path $script:ProtoRoot 'real-sops'
         New-Item -ItemType Directory -Force -Path $realDir | Out-Null
-        $sopsCandidates = @(
-            'https://github.com/getsops/sops/releases/download/v3.9.0/sops-v3.9.0.windows.amd64.exe',
-            'https://github.com/getsops/sops/releases/download/v3.9.0/sops.v3.9.0.windows.amd64.exe'
-        )
+        # Asset names differ across sops releases (and the repo's own L1 provisioner notes a
+        # 3.13 windows asset does not exist), so read the release manifest instead of
+        # guessing filenames.
         $gotSops = $false
-        foreach ($u in $sopsCandidates) {
+        foreach ($tag in @('v3.9.0', 'latest')) {
             try {
-                Invoke-WebRequest -Uri $u -OutFile (Join-Path $realDir 'sops.exe') -TimeoutSec 120 -ErrorAction Stop
+                $rel = Invoke-RestMethod -Uri ("https://api.github.com/repos/getsops/sops/releases/" + $tag) -Headers @{ 'User-Agent' = 'proto-p3-observations'; 'Accept' = 'application/vnd.github+json' } -TimeoutSec 60
+                $assets = @($rel.assets | Where-Object { $_.name -match 'windows' })
+                $exe = @($assets | Where-Object { $_.name -match '\.exe$' })
+                $pick = if ($exe.Count -gt 0) { $exe[0] } elseif ($assets.Count -gt 0) { $assets[0] } else { $null }
+                if (-not $pick) { Write-Evidence -Key 'real_sops.manifest' -Value "tag=$tag no windows asset (assets=$(($rel.assets.name) -join ','))"; continue }
+                Invoke-WebRequest -Uri $pick.browser_download_url -OutFile (Join-Path $realDir 'sops.exe') -TimeoutSec 180 -ErrorAction Stop
                 $gotSops = $true
-                Write-Evidence -Key 'real_sops.download' -Value "$u ok"
+                Write-Evidence -Key 'real_sops.download' -Value "tag=$tag asset=$($pick.name) size=$($pick.size) ok"
                 break
             } catch {
-                Write-Evidence -Key 'real_sops.download' -Value "$u FAILED $($_.Exception.Message)"
+                Write-Evidence -Key 'real_sops.download' -Value "tag=$tag FAILED $($_.Exception.Message)"
             }
         }
         $gotAge = $false
@@ -215,6 +221,8 @@ V3 observations (a range, not a pass/fail):
   - service-pipe row is what a rotate caller waits for end to end; compare it with the
     client budgets recorded above to see where a timeout has to land.
 "@
+} catch {
+    Write-ProtoFatal $_
 } finally {
     if ($script:bgProc -and -not $script:bgProc.HasExited) { try { $null = $script:bgProc.Kill($true) } catch { } }
     $null = Invoke-ProtoProcess -Exe taskkill.exe -Arguments @('/F', '/IM', 'env-manager-service.exe') -TimeoutSec 30

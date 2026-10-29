@@ -30,6 +30,10 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Remove="tests\**\*.cs"/>
+    <!-- PROTOTYPE(p3-boundary-probes): the throwaway sops stub is a separate project. Its
+         top-level-statement Program.cs must not join this CLI's compile, or its global code
+         becomes the entry point and env-manager-cli.exe silently runs the stub instead. -->
+    <Compile Remove="prototype\**\*.cs"/>
   </ItemGroup>
 
 </Project>
