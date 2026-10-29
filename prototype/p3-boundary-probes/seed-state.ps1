@@ -6,6 +6,9 @@
 #
 # Self-contained: dot-sources nothing, because it runs under a different account.
 
+# The launch target only has to satisfy the CLI's own profile rules; a target under
+# \Windows\System32 is refused outright ("rejected to prevent system32 hijacking"), so the
+# probe uses the stub binary staged under C:\proto. Space-free, because Run-Cli joins argv.
 param(
     [Parameter(Mandatory)][string]$CliExe,
     [string]$ProfileName = 'proto-v2',
@@ -13,10 +16,16 @@ param(
     [string]$Provider = 'sops',
     [string]$MountPath = '',
     [string]$MountId = 'proto-v2-mount',
-    [string]$MarkerPrefix = 'PROTO-ROTATE-MARKER'
+    [string]$MarkerPrefix = 'PROTO-ROTATE-MARKER',
+    [string]$LaunchTarget = 'C:\proto\bin\stub\sops-stub.exe'
 )
 
 $ErrorActionPreference = 'Continue'
+if ($LaunchTarget -eq $CliExe -or -not (Test-Path $LaunchTarget)) {
+    # Fall back to the CLI binary itself if the stub is not staged; a launch profile only
+    # needs a target path that passes the create-time rules, and nothing launches it here.
+    $LaunchTarget = $CliExe
+}
 
 # The exit code is the ONLY thing this returns: writing the log line to the success stream
 # too made every "$rc = Run-Cli ..." a two-element array, so "-ne 0" filtered instead of
@@ -55,7 +64,7 @@ Write-Output "SEED sops_common_paths=$sopsStates"
 # Start from a clean profile name so repeated cells do not accumulate secrets.
 $null = Run-Cli @('profile', 'delete', $ProfileName)
 
-$rc = Run-Cli @('profile', 'create', $ProfileName, '--type', 'launch', '--target', 'C:\Windows\System32\cmd.exe')
+$rc = Run-Cli @('profile', 'create', $ProfileName, '--type', 'launch', '--target', $LaunchTarget)
 if ($rc -ne 0) { Write-Output 'SEED FAILED=profile-create'; exit 1 }
 
 $rc = Run-Cli @('profile', 'secret-provider', 'set', $Provider)

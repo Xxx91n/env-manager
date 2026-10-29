@@ -88,6 +88,18 @@ function Invoke-ConnectMatrix {
     # And the watchdog shape (raw open, no CLI process) as the low user, so a refusal is
     # attributed to the access check rather than to the CLI's own error handling.
     $probeScript = Join-Path $PSScriptRoot 'pipe-client-probe.ps1'
+    # The CLI renders any UnauthorizedAccessException as "Access denied (requires
+    # elevation)" (src/Program.cs catch-all), so a refused low-user CLI call says nothing
+    # about the pipe DACL. This probe opens the pipe itself and reports the Win32 code,
+    # which is the actual access-check answer, under an interactive logon (IU present).
+    try {
+        $pp = Invoke-ProtoAsUserInteractive -As $Low -Exe $probeScript -Arguments @('-Pipe', $Pipe, '-Label', "$Label-low-interactive") -TimeoutSec 90
+        Write-Evidence -Key "connect.probe_low_interactive[$Label]" -Value $pp.Out
+        $rows['probe_low_interactive'] = ($pp.Out -replace '\s+', ' ')
+    } catch {
+        Write-Evidence -Key "connect.probe_low_interactive[$Label]" -Value ("FAILED: " + $_.Exception.Message)
+        $rows['probe_low_interactive'] = 'launch-failed'
+    }
     foreach ($lt in @('S4U')) {
         try {
             $t = Invoke-ProtoAsUserViaTask -As $Low -Exe $probeScript -Arguments @('-Pipe', $Pipe, '-Label', "$Label-low-$lt") -LogonType $lt -TimeoutSec 120

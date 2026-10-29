@@ -205,7 +205,13 @@ public static class ProtoWin {
     }
 
     public static string DaclOf(string path) {
-        return ReadSddl(path, DACL_SECURITY_INFORMATION | OWNER_SECURITY_INFORMATION | GROUP_SECURITY_INFORMATION | LABEL_SECURITY_INFORMATION);
+        // No LABEL_SECURITY_INFORMATION: an integrity-label query on a named pipe object is
+        // itself refused, and it poisoned the whole request with 87 ERROR_INVALID_PARAMETER.
+        return ReadSddl(path, DACL_SECURITY_INFORMATION | OWNER_SECURITY_INFORMATION | GROUP_SECURITY_INFORMATION);
+    }
+
+    public static string DaclOnlyOf(string path) {
+        return ReadSddl(path, DACL_SECURITY_INFORMATION);
     }
 
     public static string SaclOf(string path) {
@@ -294,7 +300,11 @@ public static class ProtoWin {
     }
 
     public static string DaclByHandle(string path) {
-        return ReadSddlByHandle(path, DACL_SECURITY_INFORMATION | OWNER_SECURITY_INFORMATION | GROUP_SECURITY_INFORMATION | LABEL_SECURITY_INFORMATION);
+        return ReadSddlByHandle(path, DACL_SECURITY_INFORMATION | OWNER_SECURITY_INFORMATION | GROUP_SECURITY_INFORMATION);
+    }
+
+    public static string DaclOnlyByHandle(string path) {
+        return ReadSddlByHandle(path, DACL_SECURITY_INFORMATION);
     }
 
     public static string ClientIdentity() {
@@ -411,24 +421,26 @@ function Get-ProtoHostFacts {
 function Get-ProtoPipeSddl {
     param([Parameter(Mandatory)][string]$Pipe, [string]$Label = '')
     Add-ProtoNativeType
-    # The handle route is the one that works on a live pipe, so it is the primary reading.
-    # The name forms are still recorded, because their failure codes are themselves the
-    # answer to "can issue #154's post-creation SetNamedSecurityInfoW route be applied at
-    # all". Note that each of these opens consumes one pipe instance, which the service's
-    # accept loop then replaces - that is the behaviour being measured, not a side effect.
-    $byHandle = [ProtoWin]::DaclByHandle("\\.\pipe\$Pipe")
-    Write-Evidence -Key "sddl.handle[$Label]" -Value "\\.\pipe\$Pipe => $byHandle"
-    if ($byHandle -notmatch 'ERR=') {
-        Write-Evidence -Key "sddl.sacl[$Label]" -Value ("\\.\pipe\$Pipe => " + [ProtoWin]::SaclOf("\\.\pipe\$Pipe")) -Note 'SACL via the name API; needs SeSecurityPrivilege'
+    # Every combination that could plausibly answer is tried and recorded, because which one
+    # works is itself the evidence for issue #154: a DACL that cannot be read by name or by
+    # handle cannot be retuned after creation either. Each open consumes one pipe instance,
+    # which the service's accept loop then replaces - that is the behaviour measured, not a
+    # side effect.
+    $attempts = @(
+        @{ key = 'sddl.handle.daclOnly'; fn = { param($p) [ProtoWin]::DaclOnlyByHandle($p) }; path = "\\.\pipe\$Pipe" },
+        @{ key = 'sddl.handle.daclOwnerGroup'; fn = { param($p) [ProtoWin]::DaclByHandle($p) }; path = "\\.\pipe\$Pipe" },
+        @{ key = 'sddl.byName.daclOnly'; fn = { param($p) [ProtoWin]::DaclOnlyOf($p) }; path = "\\.\pipe\$Pipe" },
+        @{ key = 'sddl.byName.daclOnly'; fn = { param($p) [ProtoWin]::DaclOnlyOf($p) }; path = "\pipe\$Pipe" },
+        @{ key = 'sddl.byName.daclOnly'; fn = { param($p) [ProtoWin]::DaclOnlyOf($p) }; path = "\\localhost\pipe\$Pipe" },
+        @{ key = 'sddl.byName.daclOnly'; fn = { param($p) [ProtoWin]::DaclOnlyOf($p) }; path = "\Device\NamedPipe\$Pipe" }
+    )
+    $answer = 'ALL-ROUTES-FAILED'
+    foreach ($a in $attempts) {
+        $r = & $a.fn $a.path
+        Write-Evidence -Key "$($a.key)[$Label]" -Value "$($a.path) => $r"
+        if ($r -notmatch 'ERR=' -and $r -ne 'SD-NULL') { $answer = $r }
     }
-    foreach ($f in @("\\.\pipe\$Pipe", "\pipe\$Pipe", "\\localhost\pipe\$Pipe")) {
-        $d = [ProtoWin]::DaclOf($f)
-        Write-Evidence -Key "sddl.byName[$Label]" -Value "$f => $d"
-        if ($byHandle -match 'ERR=' -and $d -notlike 'GET-NAMED-SEC-ERR=*' -and $d -notlike 'CONVERT-ERR=*') {
-            return $d
-        }
-    }
-    return $byHandle
+    return $answer
 }
 
 # Applies the declared DACL by both post-creation routes and records each result: the
@@ -667,13 +679,16 @@ function Invoke-ProtoAsUserViaTask {
         Register-ScheduledTask -TaskName $TaskName -Action $action -Principal $principal -Force -ErrorAction Stop | Out-Null
     }
     $null = Start-ScheduledTask -TaskName $TaskName
+    # LastTaskResult is 267011 (SCHED_S_TASK_NOT_SCHEDULED) before the first run finishes,
+    # so polling it alone returned immediately and the output file had not been written yet.
+    # The wrapper's own TASKDONE marker is the completion signal.
     $deadline = (Get-Date).AddSeconds($TimeoutSec)
     $info = $null
     while ((Get-Date) -lt $deadline) {
-        $info = Get-ScheduledTaskInfo -TaskName $TaskName -ErrorAction SilentlyContinue
-        if ($info -and $info.LastTaskResult -ne 267009) { break }
+        if ((Test-Path $out) -and ((Get-Content -Raw -Path $out) -match 'TASKDONE')) { break }
         Start-Sleep -Milliseconds 400
     }
+    $info = Get-ScheduledTaskInfo -TaskName $TaskName -ErrorAction SilentlyContinue
     Unregister-ScheduledTask -TaskName $TaskName -Confirm:$false -ErrorAction SilentlyContinue
     $text = if (Test-Path $out) { [System.IO.File]::ReadAllText($out) } else { '(no output file)' }
     return [pscustomobject]@{ Out = $text; LastResult = $info.LastTaskResult; ResultText = $info.ResultExpression }
@@ -698,10 +713,12 @@ function Invoke-ProtoAsSystemViaTask {
     $deadline = (Get-Date).AddSeconds($TimeoutSec)
     $info = $null
     while ((Get-Date) -lt $deadline) {
-        $info = Get-ScheduledTaskInfo -TaskName $TaskName -ErrorAction SilentlyContinue
-        if ($info -and $info.LastTaskResult -ne 267009) { break }
+        # Same reason as Invoke-ProtoAsUserViaTask: wait for the wrapper's own marker rather
+        # than LastTaskResult, which reads "not scheduled" until the first run completes.
+        if ((Test-Path $out) -and ((Get-Content -Raw -Path $out) -match 'SYSTEMTASK_EXIT')) { break }
         Start-Sleep -Milliseconds 500
     }
+    $info = Get-ScheduledTaskInfo -TaskName $TaskName -ErrorAction SilentlyContinue
     Unregister-ScheduledTask -TaskName $TaskName -Confirm:$false -ErrorAction SilentlyContinue
     $text = if (Test-Path $out) { [System.IO.File]::ReadAllText($out) } else { '(no output file)' }
     return [pscustomobject]@{ Out = $text; File = $out; LastResult = $info.LastTaskResult }

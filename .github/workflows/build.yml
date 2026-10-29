@@ -1021,6 +1021,11 @@ jobs:
             if (-not (Test-Path $p)) { throw "missing $p" }
             Write-Host "staged: $p $((Get-Item $p).Length) bytes"
           }
+          # The legs are copied under C:\proto and run from there too: the V1 matrix hands
+          # pipe-client-probe.ps1 to a standard-user process, and the runner workspace under
+          # D:\a is not readable by that account.
+          Copy-Item -Path prototype/p3-boundary-probes/* -Destination C:\proto\ -Recurse -Force
+          Get-ChildItem C:\proto -Filter *.ps1 | Select-Object -ExpandProperty Name | Out-Host
 
       - name: 'V1 pipe DACL'
         if: ${{ inputs.proto_leg == 'v1-pipe-dacl' || inputs.proto_leg == 'all' }}
@@ -1028,7 +1033,7 @@ jobs:
         shell: pwsh
         env:
           PROTO_EVIDENCE_DIR: ${{ github.workspace }}\test-results\proto
-        run: ./prototype/p3-boundary-probes/v1-pipe-dacl.ps1 -CliExe C:\proto\bin\app\env-manager-cli.exe -ServiceExe C:\proto\bin\app\env-manager-service.exe *>&1 | Tee-Object -FilePath test-results/proto/v1-console.log
+        run: C:/proto/v1-pipe-dacl.ps1 -CliExe C:\proto\bin\app\env-manager-cli.exe -ServiceExe C:\proto\bin\app\env-manager-service.exe *>&1 | Tee-Object -FilePath test-results/proto/v1-console.log
 
       - name: 'V2 helper residue'
         if: ${{ inputs.proto_leg == 'v2-helper-residue' || inputs.proto_leg == 'all' }}
@@ -1036,7 +1041,7 @@ jobs:
         shell: pwsh
         env:
           PROTO_EVIDENCE_DIR: ${{ github.workspace }}\test-results\proto
-        run: ./prototype/p3-boundary-probes/v2-helper-residue.ps1 -CliExe C:\proto\bin\app\env-manager-cli.exe -ServiceExe C:\proto\bin\app\env-manager-service.exe -StubDir C:\proto\bin\stub -Mode '${{ inputs.proto_v2_mode }}' *>&1 | Tee-Object -FilePath test-results/proto/v2-console.log
+        run: C:/proto/v2-helper-residue.ps1 -CliExe C:\proto\bin\app\env-manager-cli.exe -ServiceExe C:\proto\bin\app\env-manager-service.exe -StubDir C:\proto\bin\stub -Mode '${{ inputs.proto_v2_mode }}' *>&1 | Tee-Object -FilePath test-results/proto/v2-console.log
 
       - name: 'V3 rotate timing'
         if: ${{ inputs.proto_leg == 'v3-rotate-timing' || inputs.proto_leg == 'all' }}
@@ -1044,7 +1049,7 @@ jobs:
         shell: pwsh
         env:
           PROTO_EVIDENCE_DIR: ${{ github.workspace }}\test-results\proto
-        run: ./prototype/p3-boundary-probes/v3-rotate-timing.ps1 -CliExe C:\proto\bin\app\env-manager-cli.exe -ServiceExe C:\proto\bin\app\env-manager-service.exe -StubDir C:\proto\bin\stub *>&1 | Tee-Object -FilePath test-results/proto/v3-console.log
+        run: C:/proto/v3-rotate-timing.ps1 -CliExe C:\proto\bin\app\env-manager-cli.exe -ServiceExe C:\proto\bin\app\env-manager-service.exe -StubDir C:\proto\bin\stub *>&1 | Tee-Object -FilePath test-results/proto/v3-console.log
 
       - name: Evidence presence gate
         shell: pwsh
