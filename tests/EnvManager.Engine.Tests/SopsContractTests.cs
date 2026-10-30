@@ -56,18 +56,18 @@ public sealed class SopsContractTests : SecretProviderContractTests
         /// </summary>
         internal const string RequiredEnvVar = "EM_L1_SOPS";
 
+        // Same "1" spelling EM_L1_MATRIX's sibling EM_L1_STRICT accepts.
         private static bool Required =>
-            string.Equals(Environment.GetEnvironmentVariable(RequiredEnvVar), "1", StringComparison.OrdinalIgnoreCase) ||
-            string.Equals(Environment.GetEnvironmentVariable(RequiredEnvVar), "true", StringComparison.OrdinalIgnoreCase);
+            string.Equals(Environment.GetEnvironmentVariable(RequiredEnvVar), "1", StringComparison.Ordinal);
 
-        // One exit for every "cannot run" path. The wording leads with NOT RUN so the
-        // skip reason cannot be read as a pass in a log or a TRX.
+        // One exit for every "cannot run" path. Both wordings lead with NOT RUN so the
+        // reason cannot be read as a pass in a log or a TRX; the required form says it
+        // failed, because on a required lane it is a failure, not a skip.
         private static Exception NotRun(string reason)
         {
-            var text = "sops round trip NOT RUN (skipped, not a pass): " + reason;
             return Required
-                ? new InvalidOperationException(text + $" - {RequiredEnvVar}=1 makes this test required on this lane")
-                : new Xunit.SkipException(text);
+                ? new InvalidOperationException($"sops round trip NOT RUN and REQUIRED on this lane ({RequiredEnvVar}=1), so this is a failure: " + reason)
+                : new Xunit.SkipException("sops round trip NOT RUN (skipped, not a pass): " + reason);
         }
 
         internal static SopsScope Install()

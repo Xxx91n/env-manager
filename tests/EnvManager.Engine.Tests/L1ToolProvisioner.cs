@@ -104,11 +104,11 @@ internal static class L1ToolProvisioner
 
             if (sopsHost is null)
             {
-                if (!allowDownload) return null;
-                // the release publishes sops-v<ver>.amd64.exe for Windows next to the
-                // linux.amd64 build
-                var sopsAsset = IsWindows ? $"sops-v{SopsVersion}.amd64.exe" : $"sops-v{SopsVersion}.linux.amd64";
-                Download($"https://github.com/getsops/sops/releases/download/v{SopsVersion}/{sopsAsset}", sopsPath);
+                // Windows hosts take sops from PATH: CI installs the pinned, SHA-256
+                // checked binary with scripts/install-sops-age.ps1 before the tests run;
+                // locally, winget/scoop. This in-test download stays Linux-only.
+                if (IsWindows || !allowDownload) return null;
+                Download($"https://github.com/getsops/sops/releases/download/v{SopsVersion}/sops-v{SopsVersion}.linux.amd64", sopsPath);
                 ChmodExecutable(sopsPath);
             }
 

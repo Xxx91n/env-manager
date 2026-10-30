@@ -14,7 +14,8 @@
 # binary that is already on PATH when the test process starts is guaranteed to be the
 # one the provider runs.
 #
-# Versions match L1ToolProvisioner (SopsVersion / AgeVersion). Every download is checked
+# Versions match L1ToolProvisioner (SopsVersion / AgeVersion; SopsToolPinTests fails when
+# they drift). Every download is checked
 # against a pinned SHA-256 before it is made executable: a mismatch fails the step, and
 # a failed step fails the job.
 [CmdletBinding()]
