@@ -65,13 +65,21 @@ jobs:
         shell: pwsh
         run: |
           $bin = 'C:\ProgramData\EnvManagerPipeProbe\bin'
+          $evidence = Join-Path $PWD 'test-results/pipe-dacl'
           New-Item -ItemType Directory -Force -Path $bin | Out-Null
+          # The evidence directory exists before the first build: a build failure would
+          # otherwise leave the upload step with nothing to collect, and its
+          # if-no-files-found: error would report "no files" instead of the build error.
+          New-Item -ItemType Directory -Force -Path $evidence | Out-Null
+          $buildLog = Join-Path $evidence 'build.log'
           # Self-contained: a LocalSystem service child must not depend on where
           # setup-dotnet installed the runtime.
-          dotnet publish env-manager.csproj -c Release -r win-x64 --self-contained true -o $bin
-          if ($LASTEXITCODE -ne 0) { throw 'CLI publish failed' }
+          dotnet publish env-manager.csproj -c Release -r win-x64 --self-contained true -o $bin *>&1 |
+            Tee-Object -FilePath $buildLog
+          $dotnetExit = $LASTEXITCODE
+          if ($dotnetExit -ne 0) { throw 'CLI publish failed' }
           Push-Location service
-          cargo build --release --locked
+          cargo build --release --locked *>&1 | Tee-Object -FilePath $buildLog -Append
           $cargoExit = $LASTEXITCODE
           Pop-Location
           if ($cargoExit -ne 0) { throw 'service build failed' }
