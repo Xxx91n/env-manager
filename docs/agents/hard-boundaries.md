@@ -33,6 +33,7 @@ Invariants a change must not violate; where a test pins one, that check is the a
 
 - Rust IPC: command whitelist, max 64 args, max 32767 chars per arg, NUL and control characters rejected.
 - External provider processes get a fixed timeout, drained pipes before the wait, and a kill on timeout.
+- Both named pipes are created with the declared descriptor in `service/src/ipc.rs` (`BA`/`SY` full access, `OW` generic-all), handed to `CreateNamedPipeW` as `lpSecurityAttributes`. Never create a pipe with the default descriptor and never retune a DACL after creation: `SetNamedSecurityInfoW` by name answers `87 ERROR_INVALID_PARAMETER` for a named pipe, and a per-instance post-creation change takes the listener down. Widening or narrowing the descriptor changes who may connect at all, so such a change is re-verified by the manual `Pipe DACL Observation` workflow, and its run id belongs in the PR description.
 
 ## Service control (SCM)
 

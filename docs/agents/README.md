@@ -5,7 +5,7 @@ that read from `docs/agents/` per the grill setup-matt-pocock-skills convention.
 
 - `issue-tracker.md` — where issues live, how to interact with them, triage labels
 - `domain.md` — glossary convention and how to consume it
-- `hard-boundaries.md` — invariants a change must not violate (58 lines)
+- `hard-boundaries.md` — invariants a change must not violate
 
 These files are **not user documentation**. They serve agent workflows (triage,
 wayfinding, domain-modeling, code safety) that need structured metadata about the repo.

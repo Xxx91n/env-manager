@@ -1,0 +1,121 @@
+name: Pipe DACL Observation
+
+# Manual-only evidence job for the service named-pipe DACL.
+#
+# Why this is not on the PR path: the question it answers - "who may connect to
+# \\.\pipe\EnvManager.Service while the service runs as LocalSystem" - can only be
+# answered by a real SCM service plus a real second identity. The job registers a
+# service, creates a local user and needs administrator rights on the runner. That is
+# fine on a disposable windows-latest VM and wrong as a per-PR gate.
+#
+# It is the effect layer of the pipe-security change. The unit layer is
+# `pipe_security_tests` in service/src/ipc.rs (part of `cargo test`), which pins that a
+# created instance carries the declared descriptor. This job proves the same claim from
+# outside the process and adds the identity matrix:
+#   - both pipes carry the declared SDDL, exported through a handle with SE_KERNEL_OBJECT
+#     (the by-name API answers 87 for a named pipe, and that measurement is in the log);
+#   - the CLI gateway and the GUI watchdog shape still get a pong;
+#   - a non-administrator bare open is refused err=5;
+#   - a second --mode=service process does not take the first instance over.
+#
+# Usage: Actions -> Pipe DACL Observation -> Run workflow. The artifact carries the JSONL
+# evidence, the summary and the service log; record the run id where the change is
+# reviewed.
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: env-manager-pipe-dacl-observation
+  cancel-in-progress: true
+
+jobs:
+  observe:
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # This job runs third-party build code (cargo build.rs, proc-macros, MSBuild
+          # targets) and no later step needs git credentials, so the token does not stay
+          # in .git/config for the rest of the job.
+          persist-credentials: false
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68
+        with:
+          dotnet-version: '10.0.x'
+
+      - uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          workspaces: |
+            service -> target
+          save-if: false
+
+      # Both binaries are staged outside the workspace on purpose: the probe hands the
+      # CLI to a standard-user logon, and the runner's D:\a workspace is not readable by
+      # that account. They land in <scratch>\bin, which the probe grants Users
+      # ReadAndExecute on; the secondary identity's own output goes to <scratch>\work
+      # (Users: Modify), so it never holds write access to the binary it runs.
+      - name: Stage binaries
+        shell: pwsh
+        run: |
+          $bin = 'C:\ProgramData\EnvManagerPipeProbe\bin'
+          $evidence = Join-Path $PWD 'test-results/pipe-dacl'
+          New-Item -ItemType Directory -Force -Path $bin | Out-Null
+          # The evidence directory exists before the first build: a build failure would
+          # otherwise leave the upload step with nothing to collect, and its
+          # if-no-files-found: error would report "no files" instead of the build error.
+          New-Item -ItemType Directory -Force -Path $evidence | Out-Null
+          $buildLog = Join-Path $evidence 'build.log'
+          # Self-contained: a LocalSystem service child must not depend on where
+          # setup-dotnet installed the runtime.
+          dotnet publish env-manager.csproj -c Release -r win-x64 --self-contained true -o $bin *>&1 |
+            Tee-Object -FilePath $buildLog
+          $dotnetExit = $LASTEXITCODE
+          if ($dotnetExit -ne 0) { throw 'CLI publish failed' }
+          Push-Location service
+          cargo build --release --locked *>&1 | Tee-Object -FilePath $buildLog -Append
+          $cargoExit = $LASTEXITCODE
+          Pop-Location
+          if ($cargoExit -ne 0) { throw 'service build failed' }
+          Copy-Item service\target\x86_64-pc-windows-msvc\release\env-manager-service.exe $bin -Force
+          foreach ($p in @("$bin\env-manager-cli.exe", "$bin\env-manager-service.exe")) {
+            if (-not (Test-Path $p)) { throw "missing $p" }
+            Write-Host ("staged: {0} {1} bytes" -f $p, (Get-Item $p).Length)
+          }
+
+      - name: Probe the pipe DACL
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path test-results/pipe-dacl | Out-Null
+          ./scripts/probe-pipe-dacl.ps1 `
+            -CliExe 'C:\ProgramData\EnvManagerPipeProbe\bin\env-manager-cli.exe' `
+            -ServiceExe 'C:\ProgramData\EnvManagerPipeProbe\bin\env-manager-service.exe' `
+            -EvidenceDir (Join-Path $PWD 'test-results/pipe-dacl') *>&1 |
+            Tee-Object -FilePath test-results/pipe-dacl/console.log
+          exit $LASTEXITCODE
+
+      # The service writes to %ProgramData%\EnvManager; keeping the log in the artifact is
+      # what makes a failed leg diagnosable without a second run.
+      - name: Collect the service log
+        if: always()
+        shell: pwsh
+        run: |
+          $dst = 'test-results/pipe-dacl'
+          New-Item -ItemType Directory -Force -Path $dst | Out-Null
+          $logs = @(Get-ChildItem -Path 'C:\ProgramData\EnvManager' -Filter 'env-manager-service.log*' -File -ErrorAction SilentlyContinue)
+          foreach ($log in $logs) { Copy-Item $log.FullName (Join-Path $dst $log.Name) -Force }
+          Write-Host ("collected {0} service log file(s)" -f $logs.Count)
+
+      - name: Upload evidence
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: pipe-dacl-observation
+          path: test-results/pipe-dacl/
+          if-no-files-found: error
