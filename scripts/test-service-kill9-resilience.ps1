@@ -122,7 +122,11 @@ try {
         Log-Step "pre-existing secretMount.json backed up to $backupFile"
     }
     New-Item -ItemType Directory -Force -Path $mountDir | Out-Null
-    @(
+    # -InputObject, not a pipe: piping a one-element array unwraps it, so the service - which
+    # deserializes `Vec<SecretMount>` - would see an object, fail to parse, and answer
+    # "mount not found". Before the rotate step below, nothing in this harness read the seed
+    # back, so a malformed fixture looked like a passing one.
+    ConvertTo-Json -InputObject @(
         @{
             id = "test-mount-001"
             provider = "credential-manager"
@@ -133,13 +137,19 @@ try {
             createdAt = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
             schemaVersion = 1
         }
-    ) | ConvertTo-Json -Depth 10 | Set-Content -Path $mountFile -Encoding UTF8
+    ) -Depth 10 | Set-Content -Path $mountFile -Encoding UTF8
     Assert-True "secretMount.json seeded" (Test-Path $mountFile)
     Assert-True "seed contains test-mount-001" ((Get-Content $mountFile -Raw) -match "test-mount-001")
 
     # ---- steady state ----
     $service = Start-ServiceProc "pre-kill"
     Assert-True "service answers ping within ${StartTimeoutSec}s of start" (Wait-ForPing $StartTimeoutSec)
+
+    # The seed is only a fixture if the service can read it; ask the service before relying
+    # on it, so a shape mistake fails here with the real reason instead of downstream as
+    # "mount not found".
+    $healthJson = (& $CliExe service health 2>$null | Out-String)
+    Assert-True "service health sees exactly the seeded mount (got: $($healthJson.Trim()))" ($healthJson -match '"total":\s*1')
 
     # ---- Background-mode rotate (#164) ----
     # The GUI's rotate path, and the observation that separates Background from Service
