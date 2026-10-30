@@ -4,6 +4,8 @@
 #
 # Flow (steady-state -> inject -> detect -> recover -> steady-state):
 #   seed secretMount.json -> start `env-manager-service --mode=background` ->
+#   `service ping` OK -> `service rotate <mount>` under the session write lock
+#   (the GUI's own rotate path, #164) ->
 #   `service ping` OK -> taskkill /F (TerminateProcess = kill -9 equivalent) ->
 #   liveness probe detects death -> harness restarts the process (playing the
 #   production watchdog role; SCM auto-recovery stays out of scope here because this
@@ -138,6 +140,38 @@ try {
     # ---- steady state ----
     $service = Start-ServiceProc "pre-kill"
     Assert-True "service answers ping within ${StartTimeoutSec}s of start" (Wait-ForPing $StartTimeoutSec)
+
+    # ---- Background-mode rotate (#164) ----
+    # This is the path the GUI's rotate takes, and the one observation that separates
+    # Background from Service mode: the service runs in the caller's session here, so the
+    # CLI child it delegates to shares the `Local\` write-lock namespace with the gateway
+    # that asked for the rotate. While the gateway classified `service` as a write it took
+    # that mutex at its own process entry, the delegated child blocked on it, and the call
+    # came back after the full 30 s budget with "Another Env Manager write operation is
+    # still running" - the same code rotating in 7.0 s in Service mode, where the child
+    # lands in session 0 and never shares the namespace. All three assertions below fail on
+    # that behaviour and pass on the fixed one; the timing bound sits under the budget so a
+    # stall cannot hide behind a mere wording change.
+    $rotateWatch = [System.Diagnostics.Stopwatch]::StartNew()
+    # A failing rotate explains itself on stderr ("Error: ..."); this harness has to read
+    # that text, so the capture runs under 'Continue' - same reason test-all.ps1 keeps
+    # 'Continue' for native tools, where 'Stop' turns the first stderr line into a
+    # terminating error and destroys the evidence.
+    $rotateEap = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    try {
+        $rotateOut = (& $CliExe service rotate test-mount-001 2>&1 | Out-String)
+        $rotateExit = $LASTEXITCODE
+    }
+    finally {
+        $ErrorActionPreference = $rotateEap
+    }
+    $rotateWatch.Stop()
+    $rotateSeconds = $rotateWatch.Elapsed.TotalSeconds
+    Log-Step ("service rotate exit={0} in {1:N1}s: {2}" -f $rotateExit, $rotateSeconds, $rotateOut.Trim())
+    Assert-True ("Background rotate returned in {0:N1}s, inside the 30 s mutex budget" -f $rotateSeconds) ($rotateSeconds -lt 20)
+    Assert-True "Background rotate reported no write-lock contention" (-not ($rotateOut -match 'Another Env Manager write operation is still running'))
+    Assert-True "Background rotate succeeded (exit 0; the delegated CLI must be resolvable next to the service or in %LOCALAPPDATA%\EnvManager)" ($rotateExit -eq 0)
 
     # ---- inject: kill -9 (TerminateProcess, no cleanup handlers) ----
     $killTime = Get-Date

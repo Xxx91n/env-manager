@@ -906,6 +906,19 @@ jobs:
         working-directory: service
         run: cargo build --release --locked
 
+      # The service resolves the CLI it delegates to (find_cli_exe in
+      # service/src/reconcile.rs: next to its own exe, else %LOCALAPPDATA%\EnvManager),
+      # and the rotate step added for #164 only means something if that child can
+      # actually start. Stage the built CLI where the second probe looks; the runner
+      # VM is disposable, so this writes nothing a user owns.
+      - name: Stage CLI for service delegation
+        shell: pwsh
+        run: |
+          $dst = Join-Path $env:LOCALAPPDATA 'EnvManager'
+          New-Item -ItemType Directory -Force -Path $dst | Out-Null
+          Copy-Item -Path 'bin\Release\net10.0-windows\*' -Destination $dst -Recurse -Force
+          Write-Host "staged CLI for service delegation: $dst"
+
       - name: kill -9 resilience E2E
         shell: pwsh
         run: |

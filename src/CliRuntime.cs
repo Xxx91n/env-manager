@@ -277,6 +277,22 @@ Commands:
         if (args.Length == 0) return false;
         string command = args[0].ToLowerInvariant();
         if (command is "list" or "get" or "backup" or "diff" or "validate" or "agents" or "help" or "expand") return false;
+        // `service` is a named-pipe forwarder: it opens a pipe, writes one request line and
+        // reads one response line (ServiceCommand.RunServiceCommand). No registry value is
+        // written in this process, so the session mutex taken here protected nothing - and
+        // cost the whole feature. In Background mode the service runs in the caller's
+        // session, so the CLI child it spawns for a rotate lands in the same `Local\`
+        // namespace and blocked on this mutex until the 30 s budget expired: every rotate
+        // answered "Another Env Manager write operation is still running", while the same
+        // code succeeded in Service mode, whose session-0 child never shares this namespace
+        // (#164). The three-lock invariant is intact where the write really happens - the
+        // delegated child runs `profile secret-provider rotate`, classifies as write, and
+        // takes mutex + CLI_RWLOCK + writeChain in its own process, so a concurrent direct
+        // writer still serializes against it. Rejected alternatives: holding the mutex only
+        // around the IPC call re-creates the deadlock (the child needs the lock while the
+        // gateway waits for that same child), and handing the child an inherited holder
+        // identity is a bypass - the actual writer would run unmutexed against a `set`.
+        if (command == "service") return false;
         if (command == "history") return args.Length > 1 && args[1].Equals("undo", StringComparison.OrdinalIgnoreCase);
         if (command == "bulk") return args.Length > 1 && args[1].Equals("import", StringComparison.OrdinalIgnoreCase) && !args.Contains("--dry-run");
         if (command == "profile") return args.Length < 2 || !new[] { "list", "show", "status", "preview", "export", "help" }.Contains(args[1], StringComparer.OrdinalIgnoreCase);
@@ -292,7 +308,10 @@ Commands:
         return IsWriteInvocation(args!);
     }
 
-    static Mutex? AcquireMutationLock(string[] args)
+    // internal rather than private for the same reason as IsWriteInvocationForFuzz: the
+    // xUnit lane measures the decision this returns (mutex or null) instead of restating
+    // the classification table it is derived from (#164).
+    internal static Mutex? AcquireMutationLock(string[] args)
     {
         if (!IsWriteInvocation(args)) return null;
         var mutex = new Mutex(false, "Local\\EnvManager.RegistryMutation");
