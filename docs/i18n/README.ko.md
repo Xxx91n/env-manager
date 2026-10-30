@@ -71,6 +71,30 @@ Env Manager는 인간뿐 아니라 LLM 에이전트가 운영하도록 설계되
 ## Security
 > 현재 빌드는 코드 서명되지 않았습니다. Windows SmartScreen이 첫 실행 시 인식할 수 없는 앱 경고를 표시할 수 있습니다 — [추가 정보]를 클릭한 다음 [실행]을 클릭하세요. SignPath Foundation을 통해 무료 오픈소스 코드 서명을 신청했습니다. 승인되면 모든 릴리스 아티팩트(MSI + EXE)가 서명됩니다.
 보호된 변수와 PATH 항목은 삭제 전에 비활성화되며, 복원 시 레지스트리 값 종류를 정확히 검증합니다. 시크릿 값은 공급자별 메커니즘으로 암호화됩니다 — 평문은 디스크나 로그에 절대 남지 않습니다. 명명된 파이프 IPC는 안티 스쿼팅 플래그와 입력 검증(인수 최대 64개, 32767자 상한, null 바이트 거부)을 사용합니다.
+
+### 평문이 존재할 수 있는 곳 (시크릿 경계 표)
+
+| 싱크 | 평문이 남는가 | 수명 | 정리 | 근거 |
+|---|---|---|---|---|
+| `profiles.json` / `secretMount.json` | secret 명령에서는 남지 않음 — 봉투 `{provider, version, createdAt, ciphertext, targetName}` 또는 `mount:<id>` 참조만 저장. 범용 `add-var`/`edit-var` 명령은 마커를 우회함 ([평문 수명 주기](../../docs/architecture.md#v070-dpapi-secrets-runtime) 참조) | 시크릿이 제거될 때까지 | `profile remove-secret`이 봉투와 공급자 측 상태를 삭제 | 하드 경계; `plaintext-never-in-envelope` 계약 단언 |
+| dpapi-current-user | 남지 않음 — DPAPI `CryptProtectData`, CurrentUser 범위 | 봉투 안 | 봉투와 함께 | 하드 경계 (v0.7.0) |
+| credential-manager | 남지 않음 — CredMan blob 자체가 저장 전에 DPAPI로 암호화됨 | 공급자 `Delete`까지 | remove-secret 시 `Delete` | [공급자 가이드](../../docs/secret-providers-guide.md) |
+| powershell-secretmanagement | SecretStore 보관소 파일은 암호화된 상태 유지 — 단, 호출마다 평문이 `pwsh -EncodedCommand` 인수(base64 스크립트)를 거쳐 감 | pwsh 프로세스 수명; 보관소 항목은 제거될 때까지 | 인수는 프로세스와 함께 소멸; 보관소 항목은 remove-secret 시 삭제 | 하드 경계 (v0.7.4) |
+| vault-kv2 · azure-keyvault · aws-secretsmanager · 1password | 로컬 평문 없음 — 프로필은 경로/시크릿 ID 참조만 보관하고 시크릿은 원격 백엔드에 남음 | 백엔드 측 운영 정책 | 공급자 `Delete`; `secret-provider rotate`로 재암호화 | [공급자 가이드](../../docs/secret-providers-guide.md) |
+| sops | 봉투에는 암호문만 — **추가로** 암호화/복호화 중 `%TEMP%\env-manager-sops-*` 아래에 평문 `secret.json` / `secret.dec.json`이 생김 | 호출당 몇 초 | 임시 디렉터리를 최선 노력으로 `Directory.Delete` — 충돌, 또는 CLI가 `finally`에 이르기 전에 종료시키는 서비스 중지로 남겨질 수 있음. 디렉터리는 생성 시부터 소유자 전용(상속 해제; 현재 ID, SYSTEM, Administrators)이므로 남은 파일은 이 ID들만 읽을 수 있음 — 단, 그 DACL 적용에 실패하면 상속된 `%TEMP%` ACL로 되돌아감 | 하드 경계 (v0.7.11); `SopsProvider`, `SecretTempDirectory` |
+| 실행 프로세스 메모리 (`env-manager-cli`) | 남음 — 복호화된 바이트가 실행 프로세스에 잠시 존재 | 밀리초 단위, 주입/reveal 완료까지 | `SecretString`이 Dispose 시 `char[]`를 0으로 지움 — **최선 노력**: GC 복사본과 string 중간값은 더 오래 남을 수 있음 | `SecretString` 제로화; [canary 무유출 그물](../../docs/architecture.md#canary-zero-leak-assertion-net-and-goldensnapshot-layers) |
+| 실행된 자식 프로세스의 환경 블록 | 남음 — 주입된 환경 변수는 자식 프로세스 안에서 평문 | 자식 프로세스 수명 | 불가능 — OS 설계상 환경 블록은 같은 사용자가 읽을 수 있음 | Launch 프로필 설계 |
+| `profile reveal-secret` 표준 출력 | 남음 — **설계상 의도됨**; 평문 출력 경로 두 가지 중 하나 (`profile reveal-secret`, `profile show --reveal`) | 터미널 스크롤백을 지울 때까지 | 없음 — 사용자가 직접 실행 | 하드 경계; canary 그물은 이 싱크들을 의도적으로 건너뜀 |
+| 생존 키트 임시 파일 (`envmanager-kit-*.json`, `mount-survival-kit.tmp.json`) | 남음 — 키트 조립 중 잠깐 평문 임시 파일이 생김 | 몇 초 | 암호화 후 최선 노력으로 삭제 | `AuditLedgerMigration`; `service/src/audit_ledger.rs` |
+| `audit-ledger.jsonl` | 남지 않음 — 변수 이름 + `<redacted>`/`<encrypted>` 마커만; CLI 측 항목은 추가로 AES-256-GCM 저장 시 암호화 (DEK는 DPAPI로 래핑) | 추가 전용, 100MB 로테이션 | 로테이션 | 하드 경계 (v0.9.13); `AuditCrypto` 정적 암호화 |
+| `export-state` 파일 | 남지 않음 — 이중 계층: AES-256-GCM 페이로드 + DPAPI로 래핑한 DEK + HMAC-SHA256 | 사용자가 파일을 삭제할 때까지 | 사용자 관리 | `AuditCrypto` (v0.9.13) |
+| `logs/env-manager.log` / stderr | 설계상 남지 않음 — 예외 텍스트는 먼저 22개 시크릿 패턴으로 정리됨; **최선 노력** 허용 목록: 인식되지 않은 시크릿 형식은 여전히 새어 나갈 수 있으며 512자 절단으로 범위를 제한 | 로그 보존 기간 | — | `ScrubExceptionMessage` 허용 목록; `CanaryRedactionTests` + 7개 싱크 canary 그물 |
+| GUI (WebView2) / Rust 서비스 | 남지 않음 — GUI는 `<encrypted>` 자리표시자만 렌더링하고 reveal 표시가 없음; 서비스는 값을 저장하지 않음 | — | — | 아키텍처 시크릿 경계 |
+| Windows 레지스트리 | secret 명령에서는 남지 않음 — Launch 프로필은 레지스트리에 쓸 수 없고 apply가 거부함; 범용 명령의 이름 변경 허점은 도달할 수 있음 ([평문 수명 주기](../../docs/architecture.md#v070-dpapi-secrets-runtime) 참조) | — | — | 하드 경계; `launch-env-injection.Tests.ps1` 불변식 |
+
+이 표는 사용자용 요약입니다. 범용 명령의 허점을 포함한 표면별 공식 허용 목록은 `docs/architecture.md`의 Plaintext lifecycle 절입니다.
+
+메모리 제로화와 로그 정리는 최선 노력의 위생 조치이지 보장이 아닙니다 — Microsoft가 `SecureString`에 대해 문서화한 것과 같은 주의 사항입니다(불변 string, GC 재배치, interop 복사본). 검증할 수 있는 주장은 테스트로 뒷받침합니다: `tests/canary-redaction.Tests.ps1`은 7개 출력 싱크에서 심어 둔 canary를 검사하고, 공유 계약 스위트는 8개 공급자 모두에 대해 `plaintext-never-in-envelope`를 단언합니다.
 ## Install
 ### MSI 설치 관리자
 GitHub Releases에서 MSI를 다운로드하여 실행하세요. 시작 메뉴 바로 가기가 자동으로 생성됩니다. x64, x86, ARM64 지원.

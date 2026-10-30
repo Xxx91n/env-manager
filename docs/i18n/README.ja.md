@@ -71,6 +71,30 @@ Env Manager は人間だけでなく LLM エージェントによる運用も想
 ## Security
 > 現在のビルドはコード署名されていません。初回起動時に Windows SmartScreen が「認識されていないアプリ」の警告を表示する場合があります — [詳細情報] をクリックしてから [実行] を選択してください。無料のオープンソース向けコード署名を SignPath Foundation 経由で申請済みです。承認され次第、すべてのリリース成果物 (MSI + EXE) が署名されます。
 保護された変数と PATH エントリは削除前に無効化され、復元時にはレジストリの値の型を厳密に検証します。シークレット値はプロバイダー固有の仕組みで暗号化されます — 平文がディスクやログに残ることはありません。名前付きパイプ IPC はアンチスクワッティングフラグと入力検証 (引数最大 64、32767 文字上限、null バイト拒否) を採用しています。
+
+### 平文が存在しうる場所（シークレット境界表）
+
+| 出力先（sink） | 平文が残るか | 存続期間 | クリーンアップ | 根拠 |
+|---|---|---|---|---|
+| `profiles.json` / `secretMount.json` | secret 系コマンドでは残らない — エンベロープ `{provider, version, createdAt, ciphertext, targetName}` または `mount:<id>` 参照のみ。汎用の `add-var`/`edit-var` はマーカーを迂回する（[平文のライフサイクル](../../docs/architecture.md#v070-dpapi-secrets-runtime)を参照） | シークレットが削除されるまで | `profile remove-secret` がエンベロープとプロバイダー側の状態を削除 | ハード境界。`plaintext-never-in-envelope` 契約アサーション |
+| dpapi-current-user | 残らない — DPAPI `CryptProtectData`、CurrentUser スコープ | エンベロープ内 | エンベロープとともに | ハード境界（v0.7.0） |
+| credential-manager | 残らない — CredMan の blob 自体が永続化前に DPAPI で暗号化される | プロバイダーの `Delete` まで | remove-secret 時に `Delete` | [プロバイダーガイド](../../docs/secret-providers-guide.md) |
+| powershell-secretmanagement | SecretStore の保管庫ファイルは暗号化されたまま — ただし呼び出しごとに平文が `pwsh -EncodedCommand` 引数（base64 スクリプト）を経由する | pwsh プロセスの存続期間。保管庫エントリは削除まで | 引数はプロセスとともに消滅。保管庫エントリは remove-secret で削除 | ハード境界（v0.7.4） |
+| vault-kv2 · azure-keyvault · aws-secretsmanager · 1password | ローカルに平文なし — プロファイルはパス/シークレット ID の参照のみを保持し、シークレットはリモートのバックエンドに留まる | バックエンド側の運用ポリシー | プロバイダーの `Delete`。`secret-provider rotate` で再暗号化 | [プロバイダーガイド](../../docs/secret-providers-guide.md) |
+| sops | エンベロープは暗号文のみ — **加えて**暗号化/復号中は `%TEMP%\env-manager-sops-*` 配下に平文の `secret.json` / `secret.dec.json` が置かれる | 呼び出しごとに数秒 | 一時ディレクトリをベストエフォートで `Directory.Delete` — クラッシュや、CLI が `finally` に達する前に終了させるサービス停止で取り残されうる。ディレクトリは作成時から所有者のみ（継承オフ。現在の ID、SYSTEM、Administrators）なので、残留物を読めるのはこれらの ID だけ — ただしその DACL の設定に失敗した場合は、継承された `%TEMP%` の ACL に戻る | ハード境界（v0.7.11）。`SopsProvider`、`SecretTempDirectory` |
+| 起動元プロセスのメモリ（`env-manager-cli`） | 残る — 復号されたバイトが起動元プロセスに一時的に存在する | ミリ秒単位。注入/reveal の完了まで | `SecretString` が Dispose 時に `char[]` をゼロ化 — **ベストエフォート**：GC のコピーや string の中間値はそれより長く残りうる | `SecretString` のゼロ化。[canary ゼロリーク網](../../docs/architecture.md#canary-zero-leak-assertion-net-and-goldensnapshot-layers) |
+| 起動された子プロセスの環境ブロック | 残る — 注入された環境変数は子プロセス内で平文 | 子プロセスの存続期間 | 不可能 — OS の設計上、環境ブロックは同一ユーザーから読める | Launch プロファイルの設計 |
+| `profile reveal-secret` の標準出力 | 残る — **設計どおり**。平文を出力する 2 つの経路の 1 つ（`profile reveal-secret`、`profile show --reveal`） | ターミナルのスクロールバックが消去されるまで | なし — ユーザーが明示的に実行 | ハード境界。canary 網はこれらの sink を意図的にスキャンしない |
+| サバイバルキットの一時ファイル（`envmanager-kit-*.json`、`mount-survival-kit.tmp.json`） | 残る — キット組み立て中に短時間の平文一時ファイル | 数秒 | 暗号化後にベストエフォートで削除 | `AuditLedgerMigration`。`service/src/audit_ledger.rs` |
+| `audit-ledger.jsonl` | 残らない — 変数名と `<redacted>`/`<encrypted>` マーカーのみ。CLI 側のエントリはさらに AES-256-GCM で保存時暗号化（DEK は DPAPI でラップ） | 追記専用、100MB でローテーション | ローテーション | ハード境界（v0.9.13）。`AuditCrypto` 静的暗号化 |
+| `export-state` ファイル | 残らない — 二重構造：AES-256-GCM ペイロード + DPAPI でラップした DEK + HMAC-SHA256 | ユーザーがファイルを削除するまで | ユーザー管理 | `AuditCrypto`（v0.9.13） |
+| `logs/env-manager.log` / stderr | 設計上は残らない — 例外テキストは先に 22 種のシークレットパターンで除去される。**ベストエフォート**の許可リスト：未知のシークレット形式は漏れうるが、512 文字の切り詰めで影響範囲を制限 | ログの保持期間 | — | `ScrubExceptionMessage` 許可リスト。`CanaryRedactionTests` + 7 sink の canary 網 |
+| GUI（WebView2）/ Rust サービス | 残らない — GUI は `<encrypted>` プレースホルダーのみを表示し reveal 表示を持たない。サービスは値を永続化しない | — | — | アーキテクチャのシークレット境界 |
+| Windows レジストリ | secret 系コマンドでは残らない — Launch プロファイルはレジストリに書き込めず apply も拒否する。汎用コマンドの名前変更の抜け穴は到達しうる（[平文のライフサイクル](../../docs/architecture.md#v070-dpapi-secrets-runtime)を参照） | — | — | ハード境界。`launch-env-injection.Tests.ps1` 不変条件 |
+
+この表はユーザー向けの要約です。汎用コマンドの抜け穴を含む、サーフェスごとの正式な許可リストは `docs/architecture.md` の Plaintext lifecycle 節です。
+
+メモリのゼロ化とログの除去はベストエフォートの衛生対策であり保証ではありません — Microsoft が `SecureString` について記している注意点（不変の string、GC による再配置、interop のコピー）と同じです。検証できる主張はテストで裏付けています：`tests/canary-redaction.Tests.ps1` は 7 つの出力 sink に仕込んだ canary をスキャンし、共有契約スイートは 8 つすべてのプロバイダーで `plaintext-never-in-envelope` を検証します。
 ## Install
 ### MSI インストーラー
 GitHub Releases から MSI をダウンロードして実行してください。スタートメニューのショートカットが自動的に作成されます。x64、x86、ARM64 に対応。
