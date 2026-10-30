@@ -4,6 +4,8 @@
 #
 # Flow (steady-state -> inject -> detect -> recover -> steady-state):
 #   seed secretMount.json -> start `env-manager-service --mode=background` ->
+#   `service ping` OK -> `service rotate <mount>` through the GUI's own pipe path, with
+#   the session write lock now held by the delegated child instead of the gateway (#164) ->
 #   `service ping` OK -> taskkill /F (TerminateProcess = kill -9 equivalent) ->
 #   liveness probe detects death -> harness restarts the process (playing the
 #   production watchdog role; SCM auto-recovery stays out of scope here because this
@@ -120,7 +122,11 @@ try {
         Log-Step "pre-existing secretMount.json backed up to $backupFile"
     }
     New-Item -ItemType Directory -Force -Path $mountDir | Out-Null
-    @(
+    # -InputObject, not a pipe: piping a one-element array unwraps it, so the service - which
+    # deserializes `Vec<SecretMount>` - would see an object, fail to parse, and answer
+    # "mount not found". Before the rotate step below, nothing in this harness read the seed
+    # back, so a malformed fixture looked like a passing one.
+    ConvertTo-Json -InputObject @(
         @{
             id = "test-mount-001"
             provider = "credential-manager"
@@ -131,13 +137,70 @@ try {
             createdAt = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
             schemaVersion = 1
         }
-    ) | ConvertTo-Json -Depth 10 | Set-Content -Path $mountFile -Encoding UTF8
+    ) -Depth 10 | Set-Content -Path $mountFile -Encoding UTF8
     Assert-True "secretMount.json seeded" (Test-Path $mountFile)
     Assert-True "seed contains test-mount-001" ((Get-Content $mountFile -Raw) -match "test-mount-001")
 
     # ---- steady state ----
     $service = Start-ServiceProc "pre-kill"
     Assert-True "service answers ping within ${StartTimeoutSec}s of start" (Wait-ForPing $StartTimeoutSec)
+
+    # The seed is only a fixture if the service can read it; ask the service before relying
+    # on it, so a shape mistake fails here with the real reason instead of downstream as
+    # "mount not found".
+    # Parse rather than pattern-match: `-match '"total":\s*1'` also accepts "total": 10, so it
+    # would pass with more mounts than the fixture seeded.
+    $health = (& $CliExe service health 2>$null | Out-String) | ConvertFrom-Json
+    Assert-True "service health reports ok" ($health.ok -eq $true)
+    Assert-True ("service health sees exactly the seeded mount (got total={0})" -f $health.data.total) ($health.data.total -eq 1)
+
+    # ---- Background-mode rotate (#164) ----
+    # The GUI's rotate path, and the observation that separates Background from Service
+    # mode: here the service runs in the caller's session, so the CLI child it delegates to
+    # shares the `Local\` write-lock namespace with the gateway that asked for the rotate;
+    # in Service mode that child lands in session 0. While the gateway classified `service`
+    # as a write it took that mutex at its own entry, the delegate blocked on it, and the
+    # call returned after the full 30 s budget with "Another Env Manager write operation is
+    # still running" - the same rotate taking 7.0 s in Service mode. Rationale:
+    # src/CliRuntime.cs, IsWriteInvocation.
+    #
+    # Deliberately NOT asserted: how many secrets this rotates. The fixture mount is not
+    # referenced by any profile, so `RotateAll` reports 0/0, and pinning a count would
+    # freeze the separate "each provider unit silently skips one secret" defect into an
+    # expectation. What this step owes is that the delegated child actually ran: the
+    # summary line it prints is the presence check, the budget is the timing check, and the
+    # contention text is the exact regression the ticket names.
+    $rotateWatch = [System.Diagnostics.Stopwatch]::StartNew()
+    # A failing rotate explains itself on stderr ("Error: ..."); this harness has to read
+    # that text, so the capture runs under 'Continue' - same reason test-all.ps1 keeps
+    # 'Continue' for native tools, where 'Stop' turns the first stderr line into a
+    # terminating error and destroys the evidence.
+    $rotateEap = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    try {
+        $rotateOut = (& $CliExe service rotate test-mount-001 2>&1 | Out-String)
+        $rotateExit = $LASTEXITCODE
+    }
+    finally {
+        $ErrorActionPreference = $rotateEap
+    }
+    $rotateWatch.Stop()
+    $rotateSeconds = $rotateWatch.Elapsed.TotalSeconds
+    Log-Step ("service rotate exit={0} in {1:N1}s: {2}" -f $rotateExit, $rotateSeconds, $rotateOut.Trim())
+    Assert-True ("Background rotate returned in {0:N1}s, inside the 30 s mutex budget" -f $rotateSeconds) ($rotateSeconds -lt 20)
+    Assert-True "Background rotate reported no write-lock contention" (-not ($rotateOut -match 'Another Env Manager write operation is still running'))
+    Assert-True "Background rotate succeeded (exit 0)" ($rotateExit -eq 0)
+    # Presence, not absence: the delegated CLI prints this line whenever it runs, so it
+    # fails if the service never reached its child - which exit 0 alone cannot tell apart
+    # from a rotate that was never attempted.
+    Assert-True "service rotate response carries the delegated CLI's rotation summary" ($rotateOut -match 'Rotation complete')
+    # The service stamps the mount and saves it before it answers, so this is the
+    # end-to-end half: the summary above only proves the delegate was reached and ran.
+    # Capture the stamp itself here, because the post-restart check compares this exact
+    # value - presence alone would let a changed stamp pass as "survived".
+    $rotateMatch = [regex]::Match((Get-Content $mountFile -Raw), '"lastRotatedAt"\s*:\s*"([^"]+)"')
+    Assert-True "service recorded a rotation stamp on the mount" $rotateMatch.Success
+    $rotateStamp = $rotateMatch.Groups[1].Value
 
     # ---- inject: kill -9 (TerminateProcess, no cleanup handlers) ----
     $killTime = Get-Date
@@ -159,6 +222,14 @@ try {
     # ---- steady-state re-check ----
     Assert-True "secretMount.json persisted across kill+restart" (Test-Path $mountFile)
     Assert-True "test-mount-001 survived" ((Get-Content $mountFile -Raw) -match "test-mount-001")
+    # Existence and identity are not enough: the rotate above wrote a stamp, and a restart
+    # that dropped, blanked or changed it would still pass those two. Compare the exact value
+    # captured before the kill, read from the raw text rather than through ConvertFrom-Json,
+    # which turns ISO-8601 strings into DateTime. The fixture seeds exactly one mount, so the
+    # key cannot belong to a different entry.
+    $restartMatch = [regex]::Match((Get-Content $mountFile -Raw), '"lastRotatedAt"\s*:\s*"([^"]+)"')
+    Assert-True ("rotation stamp survived kill+restart (before: '{0}', after: '{1}')" -f $rotateStamp, $restartMatch.Groups[1].Value) (
+        $restartMatch.Success -and $restartMatch.Groups[1].Value -ceq $rotateStamp)
     $health = & $CliExe service health 2>$null
     Assert-True "service health endpoint reachable after restart" ("$health" -match '"ok":\s*true')
 

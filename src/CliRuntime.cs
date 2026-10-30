@@ -280,6 +280,39 @@ Commands:
         if (args.Length == 0) return false;
         string command = args[0].ToLowerInvariant();
         if (command is "list" or "get" or "backup" or "diff" or "validate" or "agents" or "help" or "expand") return false;
+        // `service` is a named-pipe forwarder: it opens a pipe, writes one request line and
+        // reads one response line (ServiceCommand.RunServiceCommand), so no registry value is
+        // written in this process and this mutex must not be taken here at all. Two reasons,
+        // both of them the same defect seen from different verbs:
+        //   - rotate delegates to a CLI child that is the writer and classifies as write, so
+        //     it takes this mutex itself. A gateway that took it first deadlocked its own
+        //     delegate: in Background mode the service runs in the caller's session, the
+        //     child therefore shares this `Local\` namespace, and every rotate answered
+        //     "Another Env Manager write operation is still running" after the full 30 s
+        //     budget - while the same code took 7 s in Service mode, whose session-0 child
+        //     never shares the namespace (#164).
+        //   - refresh mutates state inside the service, under that service's own reconcile
+        //     lock. Holding this mutex across the IPC round-trip re-creates the deadlock from
+        //     the other side: rotate_mount holds the reconcile lock across its delegated
+        //     child, the child wants this mutex, and the refresh request wants the reconcile
+        //     lock - so the child times out behind a sibling request. That is why `refresh` is
+        //     not exempted "because it writes": the writer of secretMount.json is the service,
+        //     and its serializer is the reconcile lock, not a lock any gateway process can
+        //     take without joining that cycle. A terminal CLI writing the same file from
+        //     outside the service stays unserialized - the gap Service mode has always had,
+        //     and a narrower exposure than a guaranteed 30 s rotate failure.
+        // The remaining verbs only read or write nothing, so no verb needs the lock. What the
+        // gateway therefore guarantees is narrower and checkable: it never holds a write lock
+        // while waiting for work it caused to run.
+        // Rejected alternatives: holding the mutex only around the IPC call re-creates the
+        // deadlock (the child needs the lock while the gateway waits for that same child),
+        // and handing the child an inherited holder identity is a bypass - the actual writer
+        // would run unmutexed against a `set`.
+        // No GUI-side change is needed to match: main.rs is_read_only keeps refresh, rotate,
+        // reload and shutdown on the write side of CLI_RWLOCK, which serializes the shell's
+        // own submissions and never contended with the service's child (the service spawns
+        // it, not the shell).
+        if (command == "service") return false;
         if (command == "history") return args.Length > 1 && args[1].Equals("undo", StringComparison.OrdinalIgnoreCase);
         if (command == "bulk") return args.Length > 1 && args[1].Equals("import", StringComparison.OrdinalIgnoreCase) && !args.Contains("--dry-run");
         if (command == "profile") return args.Length < 2 || !new[] { "list", "show", "status", "preview", "export", "help" }.Contains(args[1], StringComparer.OrdinalIgnoreCase);
@@ -295,10 +328,17 @@ Commands:
         return IsWriteInvocation(args!);
     }
 
-    static Mutex? AcquireMutationLock(string[] args)
+    // Single source of truth for the cross-process write lock: the name is spelled once, so a
+    // rename cannot leave another site asserting on a stale one (#164).
+    internal const string MutationMutexName = @"Local\EnvManager.RegistryMutation";
+
+    // internal rather than private for the same reason as IsWriteInvocationForFuzz: the
+    // xUnit lane asks this - not the classifier - what the gateway acquires, so a change that
+    // keeps the table right while acquiring a lock anyway still fails (#164).
+    internal static Mutex? AcquireMutationLock(string[] args)
     {
         if (!IsWriteInvocation(args)) return null;
-        var mutex = new Mutex(false, "Local\\EnvManager.RegistryMutation");
+        var mutex = new Mutex(false, MutationMutexName);
         try
         {
             if (!mutex.WaitOne(TimeSpan.FromSeconds(30)))
