@@ -277,30 +277,38 @@ Commands:
         if (args.Length == 0) return false;
         string command = args[0].ToLowerInvariant();
         if (command is "list" or "get" or "backup" or "diff" or "validate" or "agents" or "help" or "expand") return false;
-        // `service` is a named-pipe forwarder - all seven verbs (ping/status/health/refresh/
-        // rotate/reload/shutdown) open a pipe, write one request line and read one response
-        // line in ServiceCommand.RunServiceCommand. No registry value is written in this
-        // process, so the session mutex taken here protected nothing - and cost the whole
-        // feature. In Background mode the service runs in the caller's session, so the CLI
-        // child it spawns for a rotate lands in the same `Local\` namespace and blocked on
-        // this mutex until the 30 s budget expired: every rotate answered "Another Env
-        // Manager write operation is still running", while the same code succeeded in
-        // Service mode, whose session-0 child never shares this namespace (#164).
-        // What each verb loses by this is nothing: `rotate` delegates to a child that
-        // classifies as write and takes this mutex in its own process, so a direct `set`
-        // still serializes against the rotation; `refresh`/`reload`/`shutdown` mutate state
-        // inside the single service process, under its own reconcile lock and atomic mount
-        // writes, so the gateway's mutex was never their serializer either. CLI_RWLOCK and
-        // writeChain stay with the GUI layers that issued the call, as before - a
-        // GUI-issued rotate is still covered end to end. No GUI-side change is needed to
-        // match: main.rs's is_read_only keeps the mutating `service` verbs on the write side
-        // of CLI_RWLOCK, which serializes the shell's own submissions and never contended
-        // with the service's child (the child is spawned by the service, not by the shell).
+        // `service` is a named-pipe forwarder: it opens a pipe, writes one request line and
+        // reads one response line (ServiceCommand.RunServiceCommand), so this process never
+        // writes the registry. It is split per verb, because only `rotate` delegates to a
+        // CLI child and only that delegation collided with this mutex:
+        //   - rotate: the child it spawns classifies as write and takes this mutex itself,
+        //     so a gateway that held it first deadlocked its own delegate. In Background
+        //     mode the service runs in the caller's session, so the child shared this
+        //     `Local\` namespace and every rotate answered "Another Env Manager write
+        //     operation is still running" after the full 30 s budget, while the same code
+        //     took 7 s in Service mode, whose session-0 child never shares the namespace
+        //     (#164). The write is still locked, just by the process that performs it.
+        //   - ping / status / health: probes. They write nothing, and the Rust shell
+        //     already treats them as reads (main.rs is_read_only), so a health poll must
+        //     not queue behind a rotate's budget.
+        //   - refresh / reload / shutdown: no child, so no deadlock; these keep the mutex,
+        //     because rewriting secretMount.json is a cross-process write (a rotate child
+        //     writes the same file under this lock) and this gateway is the only party
+        //     that can serialize it against another session's CLI.
         // Rejected alternatives: holding the mutex only around the IPC call re-creates the
         // deadlock (the child needs the lock while the gateway waits for that same child),
         // and handing the child an inherited holder identity is a bypass - the actual
         // writer would run unmutexed against a `set`.
-        if (command == "service") return false;
+        // No GUI-side change is needed to match: main.rs is_read_only keeps refresh, rotate,
+        // reload and shutdown on the write side of CLI_RWLOCK, which serializes the shell's
+        // own submissions and never contended with the service's child (the service spawns
+        // it, not the shell).
+        if (command == "service")
+        {
+            string serviceVerb = args.Length > 1 ? args[1].ToLowerInvariant() : "";
+            if (serviceVerb is "rotate" or "ping" or "status" or "health") return false;
+            return true;
+        }
         if (command == "history") return args.Length > 1 && args[1].Equals("undo", StringComparison.OrdinalIgnoreCase);
         if (command == "bulk") return args.Length > 1 && args[1].Equals("import", StringComparison.OrdinalIgnoreCase) && !args.Contains("--dry-run");
         if (command == "profile") return args.Length < 2 || !new[] { "list", "show", "status", "preview", "export", "help" }.Contains(args[1], StringComparer.OrdinalIgnoreCase);
@@ -316,13 +324,18 @@ Commands:
         return IsWriteInvocation(args!);
     }
 
+    // Single source of truth for the cross-process write lock. The xUnit lane opens this
+    // same name to prove what the gateway does and does not hold, so a rename here must not
+    // leave a test asserting on a stale literal (#164).
+    internal const string MutationMutexName = @"Local\EnvManager.RegistryMutation";
+
     // internal rather than private for the same reason as IsWriteInvocationForFuzz: the
     // xUnit lane measures the decision this returns (mutex or null) instead of restating
     // the classification table it is derived from (#164).
     internal static Mutex? AcquireMutationLock(string[] args)
     {
         if (!IsWriteInvocation(args)) return null;
-        var mutex = new Mutex(false, "Local\\EnvManager.RegistryMutation");
+        var mutex = new Mutex(false, MutationMutexName);
         try
         {
             if (!mutex.WaitOne(TimeSpan.FromSeconds(30)))

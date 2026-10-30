@@ -15,13 +15,15 @@ namespace EnvManager.Engine.Tests;
 /// between the two modes once the namespace is shared. Mutex ownership is tracked per
 /// thread, so a second thread stands in for the second process without spawning one.
 /// The class joins CliSnapshotSerial for the same reason the other process-global cases do:
-/// it asserts on a machine-wide kernel object, so it must not share the parallel pool with
+/// it asserts on a session-wide kernel object, so it must not share the parallel pool with
 /// anything that could take the same lock.
 /// </summary>
 [Collection("CliSnapshotSerial")]
 public class ServiceGatewayLockTests
 {
-    const string MutexName = @"Local\EnvManager.RegistryMutation";
+    // Shared with the production classifier: a rename there must not leave this file
+    // asserting on a stale literal.
+    static string MutexName => Program.MutationMutexName;
 
     // The gateway's own budget is 30 s; a probe well below it separates "ran" from
     // "waited out the budget" without making the suite slow. 3 s leaves room for thread
@@ -32,24 +34,39 @@ public class ServiceGatewayLockTests
     // box; only the probe's budget carries an assertion.
     static readonly TimeSpan HolderBudget = TimeSpan.FromSeconds(30);
 
-    // ---- classification: the gateway forwards, the write verbs write ----
+    // ---- classification: which `service` verbs hold the gateway mutex ----
 
-    public static IEnumerable<object[]> ServiceArgv() => new[]
+    public static IEnumerable<object[]> LockFreeServiceArgv() => new[]
     {
+        // The one verb whose delegate needs the mutex the gateway used to hold.
         new object[] { new[] { "service", "rotate", "vault-team" } },
-        new object[] { new[] { "service", "refresh", "vault-team" } },
-        new object[] { new[] { "service", "reload" } },
-        new object[] { new[] { "service", "shutdown" } },
+        // Probes write nothing and must not queue behind a rotate's budget.
         new object[] { new[] { "service", "status" } },
         new object[] { new[] { "service", "ping" } },
         new object[] { new[] { "service", "health" } },
     };
 
     [Theory]
-    [MemberData(nameof(ServiceArgv))]
-    public void ServiceVerb_IsNeverAWriteInvocation(string[] argv)
+    [MemberData(nameof(LockFreeServiceArgv))]
+    public void ServiceVerb_TakesNoGatewayLock(string[] argv)
     {
         Assert.False(Program.IsWriteInvocationForFuzz(argv));
+    }
+
+    public static IEnumerable<object[]> LockHoldingServiceArgv() => new[]
+    {
+        // No child, no deadlock: these keep the mutex, which is the only cross-process
+        // serializer for the secretMount.json rewrite they trigger.
+        new object[] { new[] { "service", "refresh", "vault-team" } },
+        new object[] { new[] { "service", "reload" } },
+        new object[] { new[] { "service", "shutdown" } },
+    };
+
+    [Theory]
+    [MemberData(nameof(LockHoldingServiceArgv))]
+    public void ServiceVerb_StillTakesTheGatewayLock(string[] argv)
+    {
+        Assert.True(Program.IsWriteInvocationForFuzz(argv));
     }
 
     public static IEnumerable<object[]> WriteArgv() => new[]
@@ -98,10 +115,20 @@ public class ServiceGatewayLockTests
     public void HeldSessionLock_WouldBlockThatSameDelegate()
     {
         // Falsification of the pre-fix behaviour: with the gateway sitting on the mutex -
-        // which is what Main did while it classified `service` as a write - the delegate
-        // cannot proceed. Keeps the test above from passing vacuously.
+        // which is what Main did while it classified every `service` verb as a write - the
+        // delegate cannot proceed. Keeps the test above from passing vacuously.
         using var holder = new Mutex(false, MutexName);
-        Assert.True(holder.WaitOne(HolderBudget), "could not take the session mutex as the gateway would");
+        bool owned = false;
+        try
+        {
+            owned = holder.WaitOne(HolderBudget);
+        }
+        catch (AbandonedMutexException)
+        {
+            // A previous holder died inside the budget; ownership is granted all the same.
+            owned = true;
+        }
+        Assert.True(owned, "could not take the session mutex as the gateway would");
         try
         {
             Assert.False(TryAcquireFromOtherThread(),
@@ -110,6 +137,25 @@ public class ServiceGatewayLockTests
         finally
         {
             holder.ReleaseMutex();
+        }
+    }
+
+    [Fact]
+    public void ServiceRefresh_StillTakesTheSessionLock()
+    {
+        // refresh has no delegate to deadlock against, and it is the reason the mutex stays:
+        // the service rewrites secretMount.json, a file another session's CLI can also
+        // write, and this gateway is the only party that can serialize the two.
+        Mutex? gateway = Program.AcquireMutationLock(new[] { "service", "refresh", "vault-team" });
+        try
+        {
+            Assert.NotNull(gateway);
+            Assert.False(TryAcquireFromOtherThread(),
+                "a concurrent CLI writer must still wait behind a service refresh");
+        }
+        finally
+        {
+            Release(gateway);
         }
     }
 

@@ -181,6 +181,9 @@ try {
     # fails if the service never reached its child - which exit 0 alone cannot tell apart
     # from a rotate that was never attempted.
     Assert-True "service rotate response carries the delegated CLI's rotation summary" ($rotateOut -match 'Rotation complete')
+    # The service stamps the mount and saves it before it answers, so this is the
+    # end-to-end half: the summary above only proves the delegate was reached and ran.
+    Assert-True "service recorded a rotation stamp on the mount" ((Get-Content $mountFile -Raw) -match 'lastRotatedAt')
 
     # ---- inject: kill -9 (TerminateProcess, no cleanup handlers) ----
     $killTime = Get-Date
