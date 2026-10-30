@@ -22,6 +22,7 @@ mod cert_bootstrap;
 mod audit_ledger;
 mod redaction;
 mod process_guard;
+mod job_object;
 mod scm;
 #[cfg(test)]
 mod resilience_tests;
