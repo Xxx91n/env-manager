@@ -8,6 +8,11 @@
 // The assertions are structural on purpose: expected SIDs are derived from the current
 // identity and the well-known SID types, never from SID text, so the test passes on a
 // localized Windows as well as an English one.
+//
+// The two tests below cover the success path only. The second half of the boundary - what
+// happens when the DACL is rejected - is driven through SecretTempDirectory's seam
+// overload further down, because nothing on a normal machine can make an owner-only DACL
+// fail on demand.
 
 using System;
 using System.Collections.Generic;
@@ -76,6 +81,125 @@ public sealed class SecretTempDirectoryAclTests
         finally
         {
             Delete(directory.FullName);
+        }
+    }
+
+    // ---- the failure branch: the DACL is rejected ----
+    //
+    // These drive SecretTempDirectory's seam overload instead of SopsProvider: the
+    // provider's create point is SecretTempDirectory.Create(Name).FullName, so the
+    // directory asserted on here is the one Encrypt/Decrypt would have received, and
+    // reaching it through Encrypt/Decrypt would need the sops binary - a provider stub is
+    // #181's, not this ticket's.
+
+    [Fact]
+    public void Create_DaclRejected_FallsBackToAUsableDirectoryUnderTheInheritedAcl()
+    {
+        string? requestedPath = null;
+        var recorded = new List<string>();
+
+        // Stands in for the create call that carries the DACL: it fails the way a rejected
+        // security descriptor fails, before the directory exists. Everything after it is
+        // the real production fallback.
+        DirectoryInfo directory = SecretTempDirectory.Create(
+            "sops",
+            (path, _) =>
+            {
+                requestedPath = path;
+                throw new UnauthorizedAccessException("the DACL was rejected");
+            },
+            recorded.Add);
+        try
+        {
+            Assert.Equal(requestedPath!, directory.FullName);
+            Assert.True(Directory.Exists(directory.FullName),
+                "a rejected DACL must still hand the provider a directory that exists");
+
+            // Usable, because the provider puts plaintext in it: the fallback has to take a
+            // file and hand it back.
+            string plainFile = Path.Combine(directory.FullName, "secret.json");
+            File.WriteAllText(plainFile, "{\"value\":\"probe\"}");
+            Assert.Equal("{\"value\":\"probe\"}", File.ReadAllText(plainFile));
+
+            // And inherited, i.e. whatever %TEMP% grants: the fallback is the degradation
+            // #178 documented, not a second attempt at the owner-only DACL.
+            Assert.False(directory.GetAccessControl().AreAccessRulesProtected,
+                "the fallback directory must not be protected - protection was what the failed call was for");
+            Assert.Single(recorded);
+        }
+        finally
+        {
+            Delete(directory.FullName);
+        }
+    }
+
+    [Fact]
+    public void Create_DaclRejected_RecordsTheDegradationAfterTheScrubber()
+    {
+        string? requestedPath = null;
+        var recorded = new List<string>();
+        // A bearer token in the failure text: whatever the boundary leaves behind has to
+        // come out the other side of Program.ScrubExceptionMessage.
+        const string token = "0123456789ABCDEF";
+
+        DirectoryInfo directory = SecretTempDirectory.Create(
+            "sops",
+            (path, _) =>
+            {
+                requestedPath = path;
+                throw new UnauthorizedAccessException("Bearer " + token);
+            },
+            recorded.Add);
+        try
+        {
+            Assert.Single(recorded);
+            string line = recorded[0];
+            Assert.Contains("ACL restriction failed", line);
+            // The recorded line names the directory it could not restrict.
+            Assert.Contains(requestedPath!, line);
+            // Scrubbed: the mask is there and the secret behind it is not.
+            Assert.Contains("<redacted>", line);
+            Assert.DoesNotContain(token, line);
+        }
+        finally
+        {
+            Delete(directory.FullName);
+        }
+    }
+
+    [Fact]
+    public void Create_DirectoryCannotBeCreated_PropagatesTheFailure()
+    {
+        string? requestedPath = null;
+        var recorded = new List<string>();
+
+        // Occupy the generated path with a file so the fallback cannot create the directory
+        // either: Directory.CreateDirectory reports "a file already has this name" as an
+        // IOException. This is the one case the fallback must not absorb - no temp
+        // directory means no sops.
+        try
+        {
+            Assert.Throws<IOException>(() =>
+            {
+                SecretTempDirectory.Create(
+                    "sops",
+                    (path, _) =>
+                    {
+                        requestedPath = path;
+                        File.WriteAllText(path, "occupies the name the directory needs");
+                        throw new UnauthorizedAccessException("the DACL was rejected");
+                    },
+                    recorded.Add);
+            });
+
+            // Recorded before the failure escapes: the line documents the degradation, it
+            // does not replace the exception.
+            Assert.Single(recorded);
+            Assert.False(Directory.Exists(requestedPath!));
+        }
+        finally
+        {
+            if (requestedPath != null && File.Exists(requestedPath)) File.Delete(requestedPath);
         }
     }
 
