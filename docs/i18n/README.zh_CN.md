@@ -274,7 +274,6 @@ env-manager-cli.exe audit verify --strict
 
 - **运行模式**：Service（SCM 管理，开机启动）、Background（用户启动）、Cli（一次性网关）
 - **协调循环**：300s 周期全量扫描，幂等逐项处理，30s 首次延迟
-- **证书引导**（Phase D）：Vault AppRole 和 Azure SP 证书认证，消除长期令牌
 - **审计账本**（Phase E）：追加式哈希链 `audit-ledger.jsonl`，100MB 轮转，防篡改
 - **IPC**：防劫持管道标志，65536 字节请求上限，换行分隔 JSON 协议
 

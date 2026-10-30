@@ -224,7 +224,6 @@ See [docs/secret-providers-guide.md](docs/secret-providers-guide.md) for per-pro
 
 - **RuntimeMode**: Service (SCM-managed, machine boot), Background (user-launched), Cli (one-shot gateway)
 - **Reconcile loop**: 300s periodic full-scan, idempotent per-item handler, 30s first-tick delay
-- **Cert bootstrap**: Vault AppRole and Azure SP certificate-based auth eliminates long-lived tokens
 - **Audit ledger**: append-only hash-chained `audit-ledger.jsonl` with 100MB rotation and tamper detection
 - **IPC**: anti-squatting pipe flag, 65536-byte request cap, newline-delimited JSON protocol
 - **Watchdog**: two-layer recovery — SCM auto-restart (Service mode) + GUI 30s ping watchdog (Background mode)

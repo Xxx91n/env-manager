@@ -152,7 +152,7 @@ partial class Program
     /// <summary>
     /// Audit ledger commands.
     /// "audit encrypt-file --input <path> --output <path>": DPAPI-encrypts a file
-    /// (used by the service's export_survival_kit to create machine+user-bound archives).
+    /// (machine+user-bound, user-invoked — the service holds no subprocess path into it).
     /// "audit list": lists audit ledger events (read-only).
     /// </summary>
     internal static string BuildHelpText()

@@ -8,7 +8,7 @@ This is the single-page distillation of the design review session (2026-08-02). 
 |---|---|---|
 | v0.8.0 | A | SecretMount schema v2 + one-shot migration + C# fsync + new fields nullable (refreshPolicy, refreshIntervalSeconds, bootstrapCertThumbprint). audit.json unchanged. |
 | v0.9.0 | B+C merged | env-manager-service.exe Rust binary, NT SERVICE\EnvManagerService, Named Pipe IPC, CLI service gateway subcommand, periodic full-scan reconcile, GUI as control panel, three-level capability whitelist. |
-| v0.9.5 | D | Cert bootstrap: Vault AppRole/client cert, Azure SP cert. AWS Roles Anywhere documented but deferred. Env-var fallback retained. |
+| v0.9.5 | D | Cert bootstrap: Vault AppRole/client cert, Azure SP cert — **removed before it was ever wired** (no caller, and its blocking `powershell` subprocess sat outside the stop-convergence contract). AWS Roles Anywhere documented but deferred. Env-var fallback retained. |
 | v1.0.0 | E | Unified audit-ledger.jsonl (append-only, hash-chained, 100MB rotation), Mount survival kit export, GUI recover-from-ledger, audit.json retired after migration. |
 
 ## Binding decisions
@@ -20,10 +20,10 @@ This is the single-page distillation of the design review session (2026-08-02). 
 5. **Reconcile loop (A8)**: `tokio::time::interval(300s)` periodic full-scan. Idempotent per-item handler: read observed, fetch desired, write only if diff. Crash resume on next start by reading file state. No SQLite queue, no file watcher, no WAL.
 6. **Service identity (A8)**: `NT SERVICE\EnvManagerService` virtual service account. Per-service SID ACL on `%ProgramData%\EnvManager\secretMount.json` (machine-level mounts) and the audit ledger. User-bound mounts (DPAPI/CredMan/pwsh SecretStore) stay in `%LOCALAPPDATA%\EnvManager\` and are NEVER touched by the service.
 7. **Provider refresh feasibility (A8)**: Vault KV2 / SOPS / Azure SP-env / 1Password service-account-token / AWS SigV4 are Periodic-capable. DPAPI / Credential Manager / PowerShell SecretStore are NOT — GUI refuses to set them to Periodic with i18n error pointing to `docs/secret-providers-guide.md`.
-8. **Cert bootstrap (A9)**: Vault via AppRole or TLS client cert; Azure via SP cert auth; cert stored `Cert:\LocalMachine\My` with non-exportable private key ACL'd to per-service SID. AWS Roles Anywhere documented, deferred. GUI is one-time interactive enroll (no per-launch Windows Hello).
+8. **Cert bootstrap (A9) — superseded**: the plan was Vault via AppRole or TLS client cert, Azure via SP cert auth, the cert stored `Cert:\LocalMachine\My` with a non-exportable private key ACL'd to the per-service SID, and a one-time interactive enroll in the GUI (no per-launch Windows Hello); AWS Roles Anywhere stayed documented and deferred. The module was deleted before it was ever called. Wiring it would have made three cloud credential bootstraps part of the supported service interface with no product trigger, and its blocking `powershell` call bypassed stop convergence. No service-side credential bootstrap exists, and no enroll UI was ever built.
 9. **Audit ledger (A10)**: `audit-ledger.jsonl` append-only, hash-chained (sha256(prev||cur)), GUID eventId (concurrent writes safe), 100MB rotation via atomic rename. Tamper detection on parse.
 10. **Drop wrap-key escrow (A10)**: replaced by cloud-provider-native re-enroll + Mount survival kit export (AES-GCM encrypted archive, NOT plaintext) + GUI recover-from-ledger UX. No central escrow authority.
-11. **Drop passkey/Windows Hello identity layer (A9)**: session 0 service cannot surface biometric UI. Cert auth covers the static-credential-elimination goal.
+11. **Drop passkey/Windows Hello identity layer (A9)**: session 0 service cannot surface biometric UI. Cert auth was the planned cover for the static-credential-elimination goal, and that module was itself deleted before it was wired (item 8) — the goal has no service-side implementation today.
 
 ## Release-gate risk matrix (11 domains)
 
