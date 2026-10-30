@@ -20,7 +20,7 @@ The Rust layer (`main.rs`) exposes two Tauri commands:
 Both pipes - `\\.\pipe\EnvManager.Service` and `\\.\pipe\EnvManager.Background` - are created with one declared descriptor in `service/src/ipc.rs` (`D:(A;;FA;;;BA)(A;;FA;;;SY)(A;;GA;;;OW)`), passed as `lpSecurityAttributes` to `CreateNamedPipeW`. The DACL therefore exists from the first instant of the instance instead of being applied to it afterwards:
 
 - `BA` (Built-in Administrators) and `SY` (LOCAL SYSTEM) get `FILE_ALL_ACCESS`;
-- `OW` (OWNER RIGHTS) gets `GENERIC_ALL` - the identity that created the instance, i.e. the elevated user for the Service pipe and the launching user for the Background pipe.
+- `OW` (OWNER RIGHTS) gets `GENERIC_ALL` - the identity that created the instance: LOCAL SYSTEM for the Service pipe (the installer sets no `Account=`, so the SCM runs it as LocalSystem, which makes this ACE redundant with `SY` there) and the launching user for the Background pipe, which is the case it exists for.
 
 Two post-creation routes were measured and are wrong for a named pipe. `SetNamedSecurityInfoW` by name answers `87 ERROR_INVALID_PARAMETER`, so the "apply the declared DACL after create" helper this repository used to carry never had an effect and wiring it up would have changed nothing. Setting the DACL on each instance through a handle re-opens the instance the accept loop just created and takes the listener down: every later client gets `ERROR_FILE_NOT_FOUND`, sometimes `ERROR_PIPE_BUSY`. Without security attributes the kernel derived `D:(A;;FA;;;SY)(A;;FA;;;BA)(A;;FA;;;BA)(A;;FR;;;WD)(A;;FR;;;AN)` from the service token - Everyone and Anonymous readable, which is the state this descriptor replaces.
 

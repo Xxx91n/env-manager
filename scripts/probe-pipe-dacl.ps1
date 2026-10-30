@@ -20,7 +20,7 @@
 # Exit code: 0 = every asserted property held, 1 = at least one did not. The JSONL
 # evidence and the summary are written either way.
 #
-# The low-privilege raw open runs this same file in -ClientProbe mode under the secondary
+# The low-privilege raw open runs this same file in -ProbePipe mode under the secondary
 # identity. Same code, different identity: a separate probe script would be a second
 # implementation of the measurement it is meant to corroborate.
 
@@ -31,8 +31,8 @@ param(
     [string]$ServiceName = 'EnvManagerService',
     [string]$ScratchRoot = (Join-Path $env:ProgramData 'EnvManagerPipeProbe'),
     [string]$DeclaredSddl = 'D:(A;;FA;;;BA)(A;;FA;;;SY)(A;;GA;;;OW)',
-    [string]$ClientProbe,
-    [string]$ClientProbeOut
+    [string]$ProbePipe,
+    [string]$ProbeResultPath
 )
 
 $ErrorActionPreference = 'Stop'
@@ -42,6 +42,12 @@ $script:Checks = New-Object System.Collections.Generic.List[object]
 # True only after this run registered the SCM service itself, so cleanup can never
 # delete a registration it did not create.
 $script:CreatedService = $false
+# Binaries and the probe copy live in <ScratchRoot>\bin (Users: ReadAndExecute);
+# everything the secondary identity writes - its wrapper and its output files - lives in
+# <ScratchRoot>\work (Users: Modify). Two directories so the account that runs the probe
+# never holds write access to anything it executes.
+$script:WorkDir = Join-Path $ScratchRoot 'work'
+$script:BinDir = Join-Path $ScratchRoot 'bin'
 
 # --- native access ------------------------------------------------------------
 
@@ -214,9 +220,7 @@ function Invoke-Captured {
     $outTask = $p.StandardOutput.ReadToEndAsync()
     $errTask = $p.StandardError.ReadToEndAsync()
     $exited = $p.WaitForExit($TimeoutSec * 1000)
-    if (-not $exited) {
-        try { $null = $p.Kill($true) } catch { Write-Host ("kill after timeout failed: " + $_.Exception.Message) }
-    }
+    if (-not $exited) { Stop-ProcessTree -Process $p }
     $p.WaitForExit()
     $sw.Stop()
     $code = -1
@@ -228,6 +232,19 @@ function Invoke-Captured {
         DurMs    = $sw.ElapsedMilliseconds
         TimedOut = -not $exited
     }
+}
+
+# Process.Kill([bool]) only exists on .NET Core; Windows PowerShell 5.1 - the host the
+# secondary-identity cells run under - has the parameterless overload only. Probing the
+# method keeps one script valid on both instead of silently losing the kill.
+function Stop-ProcessTree {
+    param([System.Diagnostics.Process]$Process)
+    if (-not $Process) { return }
+    try {
+        $treeKill = $Process.GetType().GetMethod('Kill', [type[]]@([bool]))
+        if ($treeKill) { $Process.Kill($true) } else { $Process.Kill() }
+    }
+    catch { Write-Host ("kill failed: " + $_.Exception.Message) }
 }
 
 # --- pipe observation --------------------------------------------------------
@@ -369,8 +386,9 @@ function Grant-ScratchAccess {
     param([string]$Path, [string]$Access = 'Modify')
     if (-not (Test-Path -LiteralPath $Path)) { return }
     # The secondary identity has to read the staged binaries and write its own output.
-    # Scratch gets Modify; a binary directory only needs ReadAndExecute, so the probe
-    # never hands a standard user write access to an executable it is about to run.
+    # The two directories carry different rights on purpose: <ScratchRoot> (and bin/ under
+    # it) is readable, <ScratchRoot>\work is writable, so the account that runs the probe
+    # never holds write access to anything it executes.
     $acl = Get-Acl -LiteralPath $Path
     $rule = New-Object System.Security.AccessControl.FileSystemAccessRule('Users', $Access, 'ContainerInherit,ObjectInherit', 'None', 'Allow')
     $acl.SetAccessRule($rule)
@@ -378,21 +396,37 @@ function Grant-ScratchAccess {
     Write-Evidence -Key ("acl.users-{0}[{1}]" -f $Access, $Path) -Value 'applied'
 }
 
+function New-LowUserCommandFile {
+    param([string]$Line, [string]$OutFile)
+    # cmd.exe cannot execute a .ps1, and Start-Process -Credential cannot redirect output
+    # (redirection needs UseShellExecute = false, which -Credential rejects), so the child
+    # runs through a generated batch file and writes into the work directory.
+    $bat = Join-Path $script:WorkDir ('run-low-' + [guid]::NewGuid().ToString('N').Substring(0, 8) + '.bat')
+    $body = "chdir /d `"$script:WorkDir`"`r`n$Line > `"$OutFile`" 2>&1`r`necho LOW_EXIT=%ERRORLEVEL% >> `"$OutFile`""
+    [System.IO.File]::WriteAllText($bat, $body, [System.Text.Encoding]::ASCII)
+    return $bat
+}
+
 function Invoke-AsLowUser {
     param([pscustomobject]$As, [string]$Exe, [string[]]$Arguments = @(), [int]$TimeoutSec = 120)
-    $out = Join-Path $ScratchRoot ('low-' + [guid]::NewGuid().ToString('N').Substring(0, 8) + '.txt')
-    $line = ConvertTo-ArgLine -Exe $Exe -Arguments $Arguments
-    $bat = Join-Path $ScratchRoot ('run-low-' + [guid]::NewGuid().ToString('N').Substring(0, 8) + '.bat')
-    $body = "chdir /d `"$ScratchRoot`"`r`n$line > `"$out`" 2>&1`r`necho LOW_EXIT=%ERRORLEVEL% >> `"$out`""
-    [System.IO.File]::WriteAllText($bat, $body, [System.Text.Encoding]::ASCII)
+    $out = Join-Path $script:WorkDir ('low-' + [guid]::NewGuid().ToString('N').Substring(0, 8) + '.txt')
+    $bat = New-LowUserCommandFile -Line (ConvertTo-ArgLine -Exe $Exe -Arguments $Arguments) -OutFile $out
     # -NoNewWindow cannot be combined with -Credential, so the window exists and is hidden.
     $proc = Start-Process -FilePath 'cmd.exe' -ArgumentList @('/c', $bat) -Credential $As.Credential -WindowStyle Hidden -PassThru
-    if (-not $proc.WaitForExit($TimeoutSec * 1000)) {
-        try { $null = $proc.Kill($true) } catch { Write-Host ("kill failed: " + $_.Exception.Message) }
-    }
+    if (-not $proc.WaitForExit($TimeoutSec * 1000)) { Stop-ProcessTree -Process $proc }
     Start-Sleep -Milliseconds 400
     $text = if (Test-Path $out) { [System.IO.File]::ReadAllText($out) } else { '(no output file: the process produced none)' }
     return $text
+}
+
+# Same identity, but the child keeps running (Background mode serves until killed), so
+# there is nothing to wait for. Cleanup kills it by image name.
+function Start-AsLowUser {
+    param([pscustomobject]$As, [string]$Exe, [string[]]$Arguments = @())
+    $out = Join-Path $script:WorkDir ('low-bg-' + [guid]::NewGuid().ToString('N').Substring(0, 8) + '.txt')
+    $bat = New-LowUserCommandFile -Line (ConvertTo-ArgLine -Exe $Exe -Arguments $Arguments) -OutFile $out
+    Write-Evidence -Key 'lowuser.background_launch' -Value ("{0} {1} => {2}" -f $Exe, (ConvertTo-ArgList -Arguments $Arguments), $bat)
+    return Start-Process -FilePath 'cmd.exe' -ArgumentList @('/c', $bat) -Credential $As.Credential -WindowStyle Hidden -PassThru
 }
 
 # --- client mode -------------------------------------------------------------
@@ -401,17 +435,17 @@ function Invoke-AsLowUser {
 # check that the CLI cannot report (it maps every UnauthorizedAccessException to
 # "Access denied (requires elevation)", which says nothing about the DACL).
 function Invoke-ClientProbeMode {
-    param([string]$Pipe, [string]$OutFile)
+    param([string]$Pipe, [string]$ResultPath)
     Initialize-ProbeType
     $path = if ($Pipe -like '\\.\pipe\*') { $Pipe } else { '\\.\pipe\' + $Pipe }
     $result = [PipeProbe]::TryOpen($path, 0x120000)
     $line = ('identity={0} pipe={1} => {2}' -f [System.Security.Principal.WindowsIdentity]::GetCurrent().Name, $path, $result)
-    if ($OutFile) { Set-Content -LiteralPath $OutFile -Value $line -Encoding ASCII }
+    if ($ResultPath) { Set-Content -LiteralPath $ResultPath -Value $line -Encoding ASCII }
     else { Write-Host $line }
 }
 
-if ($ClientProbe) {
-    Invoke-ClientProbeMode -Pipe $ClientProbe -OutFile $ClientProbeOut
+if ($ProbePipe) {
+    Invoke-ClientProbeMode -Pipe $ProbePipe -ResultPath $ProbeResultPath
     exit 0
 }
 
@@ -425,12 +459,14 @@ if (-not (Test-Path -LiteralPath $ServiceExe)) { throw "missing service binary: 
 
 New-Item -ItemType Directory -Force -Path $EvidenceDir | Out-Null
 New-Item -ItemType Directory -Force -Path $ScratchRoot | Out-Null
+New-Item -ItemType Directory -Force -Path $script:BinDir | Out-Null
+New-Item -ItemType Directory -Force -Path $script:WorkDir | Out-Null
 $script:EvidencePath = Join-Path $EvidenceDir 'evidence-pipe-dacl.jsonl'
 Set-Content -LiteralPath $script:EvidencePath -Value '' -Encoding utf8
 
 $lowUser = $null
 $backgroundProc = $null
-$probeCopy = Join-Path $ScratchRoot 'probe-pipe-dacl.ps1'
+$probeCopy = Join-Path $script:BinDir 'probe-pipe-dacl.ps1'
 Copy-Item -LiteralPath $PSCommandPath -Destination $probeCopy -Force
 
 try {
@@ -447,7 +483,8 @@ try {
     # evidence, so it is recorded and the matrix marks the cells as skipped.
     try {
         $lowUser = New-LowUser
-        Grant-ScratchAccess -Path $ScratchRoot -Access 'Modify'
+        Grant-ScratchAccess -Path $ScratchRoot -Access 'ReadAndExecute'
+        Grant-ScratchAccess -Path $script:WorkDir -Access 'Modify'
         foreach ($dir in @((Split-Path -Parent $CliExe), (Split-Path -Parent $ServiceExe))) {
             Grant-ScratchAccess -Path $dir -Access 'ReadAndExecute'
         }
@@ -479,10 +516,10 @@ try {
     # (3) Non-privileged identities: the CLI (what a user would see) and the bare open
     # (what the DACL actually answers). Only the second one is an assertion.
     if ($lowUser) {
-        $lowOut = Join-Path $ScratchRoot ('lowprobe-' + [guid]::NewGuid().ToString('N').Substring(0, 8) + '.txt')
+        $lowOut = Join-Path $script:WorkDir ('lowprobe-' + [guid]::NewGuid().ToString('N').Substring(0, 8) + '.txt')
         $lowProbe = Invoke-AsLowUser -As $lowUser -Exe 'powershell.exe' -Arguments @(
             '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $probeCopy,
-            '-ClientProbe', $script:PipeService, '-ClientProbeOut', $lowOut
+            '-ProbePipe', $script:PipeService, '-ProbeResultPath', $lowOut
         )
         $lowText = if (Test-Path $lowOut) { (Get-Content -LiteralPath $lowOut -Raw).Trim() } else { '(no result file) ' + $lowProbe }
         Write-Evidence -Key 'client.low_bare_open' -Value $lowText -Note 'err=5 is the access check refusing the token, before any request is parsed'
@@ -512,23 +549,49 @@ try {
     $afterStop = [PipeProbe]::TryOpen('\\.\pipe\' + $script:PipeService, 0x120000)
     Write-Evidence -Key 'service.after_stop_open' -Value $afterStop -Note 'the pipe must be gone once the service stops'
 
-    # (5) Background mode: the same descriptor, an owner that is not LocalSystem.
-    $backgroundProc = Start-Process -FilePath $ServiceExe -ArgumentList '--mode=background' -PassThru -WindowStyle Hidden
+    # (5) Background mode. Started by the secondary identity when there is one, because
+    # the OW ACE exists for exactly that case: this pipe's owner is whoever launched it,
+    # and the GUI's watchdog and rotate traffic use this pipe, not the Service one. The
+    # administrator-launched fallback still proves the descriptor, but not the owner ACE.
+    $backgroundOwner = 'administrator'
+    if ($lowUser) {
+        $backgroundProc = Start-AsLowUser -As $lowUser -Exe $ServiceExe -Arguments @('--mode=background')
+        $backgroundOwner = $lowUser.Name
+    }
+    else {
+        $backgroundProc = Start-Process -FilePath $ServiceExe -ArgumentList '--mode=background' -PassThru -WindowStyle Hidden
+    }
     $bgAnswer = Wait-PipePing -Pipe $script:PipeBackground -TimeoutSec 30
+    Write-Evidence -Key 'background.launching_identity' -Value $backgroundOwner -Note 'the OW ACE resolves to this identity'
     Write-Evidence -Key 'background.first_ping' -Value $bgAnswer
     $backgroundSddl = Get-PipeDacl -Pipe $script:PipeBackground -Label 'background'
     Assert-DeclaredDacl -Label 'background' -Sddl $backgroundSddl
     $bgWatchdog = Connect-PipePing -Pipe $script:PipeBackground
     Add-Check -Name 'background.watchdog' -Ok ($bgWatchdog.Connected -and ($bgWatchdog.Response -match '"ok":\s*true')) -Detail ("resp={0}" -f $bgWatchdog.Response)
+
+    # The owner ACE is only worth its line if the non-elevated owner really gets through,
+    # and the GUI reaches this pipe as that user.
+    if ($lowUser) {
+        $bgOut = Join-Path $script:WorkDir ('lowbg-' + [guid]::NewGuid().ToString('N').Substring(0, 8) + '.txt')
+        $null = Invoke-AsLowUser -As $lowUser -Exe 'powershell.exe' -Arguments @(
+            '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $probeCopy,
+            '-ProbePipe', $script:PipeBackground, '-ProbeResultPath', $bgOut
+        )
+        $bgText = if (Test-Path $bgOut) { (Get-Content -LiteralPath $bgOut -Raw).Trim() } else { '(no result file)' }
+        Write-Evidence -Key 'client.low_bare_open[background]' -Value $bgText -Note 'the owner ACE is what must make this OPENED ok'
+        Add-Check -Name 'client.low_bare_open[background]' -Ok ($bgText -match 'OPENED ok') -Detail $bgText
+
+        $bgLowCli = Invoke-AsLowUser -As $lowUser -Exe $CliExe -Arguments @('service', 'ping')
+        Write-Evidence -Key 'client.low_cli_gateway[background]' -Value $bgLowCli
+        Add-Check -Name 'client.low_cli_gateway[background]' -Ok ($bgLowCli -match 'pong') -Detail (($bgLowCli -replace '\s+', ' '))
+    }
 }
 catch {
     Write-Evidence -Key 'FATAL' -Value ($_.Exception.Message + ' @ ' + $_.InvocationInfo.PositionMessage)
     Add-Check -Name 'probe.completed' -Ok $false -Detail $_.Exception.Message
 }
 finally {
-    if ($backgroundProc -and -not $backgroundProc.HasExited) {
-        try { $null = $backgroundProc.Kill($true) } catch { Write-Host ("background kill failed: " + $_.Exception.Message) }
-    }
+    if ($backgroundProc -and -not $backgroundProc.HasExited) { Stop-ProcessTree -Process $backgroundProc }
     $null = Invoke-Captured -Exe 'taskkill.exe' -Arguments @('/F', '/IM', 'env-manager-service.exe') -TimeoutSec 30
     $null = Invoke-Captured -Exe 'taskkill.exe' -Arguments @('/F', '/IM', 'env-manager-cli.exe') -TimeoutSec 30
     Remove-ProbeService -Name $ServiceName

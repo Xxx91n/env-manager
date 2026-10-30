@@ -53,7 +53,9 @@ jobs:
 
       # Both binaries are staged outside the workspace on purpose: the probe hands the
       # CLI to a standard-user logon, and the runner's D:\a workspace is not readable by
-      # that account.
+      # that account. They land in <scratch>\bin, which the probe grants Users
+      # ReadAndExecute on; the secondary identity's own output goes to <scratch>\work
+      # (Users: Modify), so it never holds write access to the binary it runs.
       - name: Stage binaries
         shell: pwsh
         run: |
