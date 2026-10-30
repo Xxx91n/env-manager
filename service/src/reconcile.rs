@@ -17,7 +17,7 @@ use std::process::Stdio; // piped stdout/stderr on the CLI child (tokio takes st
 use tokio::sync::Mutex; // Phase 4C: TOCTOU protection
 
 use crate::job_object::KillOnCloseJob; // kill-on-close tree containment for the CLI child
-use crate::sops_scratch::{SopsScratch, SCRATCH_ENV}; // service-owned sops plaintext root (#177)
+use crate::sops_scratch::{SopsScratch, SCRATCH_ENV}; // service-owned sops working root (#177)
 
 /// `CREATE_NO_WINDOW`: the service has no console, and without the flag the CLI child
 /// would flash a window on the interactive desktop. Passed to tokio's own
@@ -375,7 +375,7 @@ pub(crate) enum ChildOutcome {
 /// stop. `Command` offers no create-suspended spawn, so the window cannot be closed from
 /// here; it is recorded instead of promised away.
 ///
-/// The plaintext sops writes does not outlive the delegation either (#177): the root the
+/// The value sops writes to disk does not outlive the delegation either (#177): the root the
 /// CLI puts its sops working directories in is created here, handed over through
 /// `SCRATCH_ENV`, and deleted once the outcome above is known - including the interrupted
 /// case, where the CLI's own `finally` never runs, because the process doing the delete is
@@ -488,7 +488,7 @@ async fn spawn_cli_child(
             let stderr = read_stderr.await.unwrap_or_default();
             // A child that exits 0 and still wrote to stderr is where the provider's own
             // fallback warning lands (`SopsProvider.CreateWorkingDirectory`): the rotation
-            // is fine, but its sops plaintext may sit outside the scratch root this call
+            // is fine, but the file sops wrote may sit outside the scratch root this call
             // reclaims, so the line cannot be dropped on the success path. sops writes
             // nothing to stderr on a normal encrypt/decrypt (measured on 3.7.3 and 3.13.3),
             // so this is not a per-rotation line. Through `redaction::scrub_message` before
