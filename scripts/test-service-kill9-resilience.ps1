@@ -196,7 +196,11 @@ try {
     Assert-True "service rotate response carries the delegated CLI's rotation summary" ($rotateOut -match 'Rotation complete')
     # The service stamps the mount and saves it before it answers, so this is the
     # end-to-end half: the summary above only proves the delegate was reached and ran.
-    Assert-True "service recorded a rotation stamp on the mount" ((Get-Content $mountFile -Raw) -match 'lastRotatedAt')
+    # Capture the stamp itself here, because the post-restart check compares this exact
+    # value - presence alone would let a changed stamp pass as "survived".
+    $rotateMatch = [regex]::Match((Get-Content $mountFile -Raw), '"lastRotatedAt"\s*:\s*"([^"]+)"')
+    Assert-True "service recorded a rotation stamp on the mount" $rotateMatch.Success
+    $rotateStamp = $rotateMatch.Groups[1].Value
 
     # ---- inject: kill -9 (TerminateProcess, no cleanup handlers) ----
     $killTime = Get-Date
@@ -219,13 +223,13 @@ try {
     Assert-True "secretMount.json persisted across kill+restart" (Test-Path $mountFile)
     Assert-True "test-mount-001 survived" ((Get-Content $mountFile -Raw) -match "test-mount-001")
     # Existence and identity are not enough: the rotate above wrote a stamp, and a restart
-    # that dropped or blanked it would still pass those two. Assert on the raw text rather
-    # than through ConvertFrom-Json, which turns ISO-8601 strings into DateTime - a stamp with
-    # three or six fractional digits would come back culture-formatted and fail this shape
-    # check on perfectly healthy data. The fixture seeds exactly one mount, so the key cannot
-    # belong to a different entry.
-    $mountText = Get-Content $mountFile -Raw
-    Assert-True "rotation stamp survived kill+restart" ($mountText -match '"lastRotatedAt"\s*:\s*"\d{4}-\d{2}-\d{2}T\d{2}:')
+    # that dropped, blanked or changed it would still pass those two. Compare the exact value
+    # captured before the kill, read from the raw text rather than through ConvertFrom-Json,
+    # which turns ISO-8601 strings into DateTime. The fixture seeds exactly one mount, so the
+    # key cannot belong to a different entry.
+    $restartMatch = [regex]::Match((Get-Content $mountFile -Raw), '"lastRotatedAt"\s*:\s*"([^"]+)"')
+    Assert-True ("rotation stamp survived kill+restart (before: '{0}', after: '{1}')" -f $rotateStamp, $restartMatch.Groups[1].Value) (
+        $restartMatch.Success -and $restartMatch.Groups[1].Value -ceq $rotateStamp)
     $health = & $CliExe service health 2>$null
     Assert-True "service health endpoint reachable after restart" ("$health" -match '"ok":\s*true')
 
