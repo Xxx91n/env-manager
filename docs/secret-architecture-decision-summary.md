@@ -32,11 +32,11 @@ Detailed failure modes + regression tests for each domain are tracked as release
 1. Windows service lifecycle (SCM timeout, boot ordering, stop-during-reconcile)
 2. Named pipe IPC security (DACL, impersonation, squatting, stale connection)
 3. Periodic reconcile loop (lease TTL < tick, 429 throttle, clock skew, thundering herd, partial tick)
-4. Certificate lifecycle (expiry, ACL reset by GPO, Mimikatz CNG export, Windows-upgrade loss)
+4. Certificate lifecycle (expiry, ACL reset by GPO, Mimikatz CNG export, Windows-upgrade loss) — **historical**: the only certificate holder was the deleted bootstrap; nothing in the product stores a service certificate today.
 5. Audit ledger tamper-resistance (hash-chain, unauthorized actor, rollover race, replay)
 6. Schema migration (crash orphan, rollback script completeness, service race, per-user)
 7. Existing codebase regressions (DPAPI `_EnvManager_disabled` orphan, mutex vs write_atomic race, frontend cache staleness)
-8. Cert-enroll cancellation mid-flight (3 sub-states, temp dir cleanup, cloud revoke path)
+8. Cert-enroll cancellation mid-flight (3 sub-states, temp dir cleanup, cloud revoke path) — **historical**: the enroll flow this guards was never built, and the module was deleted before it was wired.
 9. MSI major-upgrade outage (child survives, schema mismatch, mid-write profiles.json)
 10. Memory pressure / startup timeout (SCM event 7009/7000, OOM-by-mount skipping, deferred cold-start full scan)
 11. IPC endpoint name (Global\\pipe\ scope, RDP per-session CLI routing, machine rename no-op, locale no-op)
