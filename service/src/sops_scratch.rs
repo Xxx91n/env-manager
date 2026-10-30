@@ -44,6 +44,14 @@ const ROOT_PREFIX: &str = "env-manager-rotate-scratch-";
 /// still own the plaintext file for a moment after the stop path returns. Five 200ms
 /// attempts stay inside `crate::SHUTDOWN_DRAIN`, the window the stop path shares with
 /// terminate-and-reap.
+///
+/// Why not the five-second helper budget `service/src/rotate_stop_tests.rs` measures: that
+/// budget is process *liveness* (`tasklist`), and a terminated process releases its handles
+/// at termination, so what is worth retrying is the asynchronous gap between "kill
+/// requested" and "process terminated" - not the whole five seconds. Polling the job for
+/// zero members first would spend the same budget waiting and leave less for the delete. A
+/// helper that still holds a handle past these attempts is what the error line below exists
+/// for.
 const RECLAIM_ATTEMPTS: u32 = 5;
 const RECLAIM_BACKOFF: Duration = Duration::from_millis(200);
 

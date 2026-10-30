@@ -1,6 +1,7 @@
 // SopsScratchDirectoryTests.cs - the service-owned sops working directory (#177)
 // License: Apache-2.0
 
+using EnvManager.Secrets.Core;
 using EnvManager.Secrets.Providers;
 
 using Xunit;
@@ -49,7 +50,7 @@ public sealed class SopsScratchDirectoryTests : IDisposable
     {
         Environment.SetEnvironmentVariable(ScratchRootVariable, _scratchRoot);
 
-        string dir = SopsProvider.CreateWorkingDirectory("encrypt");
+        string dir = SopsProvider.CreateWorkingDirectory(SecretProviderErrors.OpEncrypt);
         try
         {
             AssertDirectlyUnder(_scratchRoot, dir);
@@ -74,7 +75,7 @@ public sealed class SopsScratchDirectoryTests : IDisposable
         {
             Console.SetError(captured);
             Environment.SetEnvironmentVariable(ScratchRootVariable, null);
-            dir = SopsProvider.CreateWorkingDirectory("decrypt");
+            dir = SopsProvider.CreateWorkingDirectory(SecretProviderErrors.OpDecrypt);
         }
         finally
         {
@@ -118,7 +119,7 @@ public sealed class SopsScratchDirectoryTests : IDisposable
         {
             Console.SetError(captured);
             Environment.SetEnvironmentVariable(ScratchRootVariable, unusable);
-            dir = SopsProvider.CreateWorkingDirectory("encrypt");
+            dir = SopsProvider.CreateWorkingDirectory(SecretProviderErrors.OpEncrypt);
         }
         finally
         {
