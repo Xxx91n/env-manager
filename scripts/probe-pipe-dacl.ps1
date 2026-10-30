@@ -1,0 +1,558 @@
+# probe-pipe-dacl.ps1 - effect-level evidence for the service named-pipe DACL.
+#
+# Why this is a dispatch-only CI job and not a test: "who may connect to
+# \\.\pipe\EnvManager.Service" is a property of a real LocalSystem service and a real
+# second identity. No unit seam can produce either, and faking them would pin an
+# assumption instead of the behaviour. The job that calls this script
+# (.github/workflows/pipe-dacl-observation.yml) is manual-only, so it never sits on the
+# PR path; its run id and its uploaded artifact are the evidence.
+#
+# What it asserts (the behavioural half of the acceptance criteria):
+#   1. both pipes carry the declared SDDL, read through a handle with SE_KERNEL_OBJECT -
+#      the by-name API answers 87 ERROR_INVALID_PARAMETER for a named pipe, so it cannot
+#      be the route (that measurement is recorded too, as the reason);
+#   2. the two shipped client shapes still work against the Service pipe: the CLI
+#      gateway (`service ping --service-pipe`) and the GUI watchdog's raw
+#      NamedPipeClientStream ping;
+#   3. a non-administrator identity is refused at the first CreateFile with err=5, and a
+#      second --mode=service process cannot take the first instance over.
+#
+# Exit code: 0 = every asserted property held, 1 = at least one did not. The JSONL
+# evidence and the summary are written either way.
+#
+# The low-privilege raw open runs this same file in -ClientProbe mode under the secondary
+# identity. Same code, different identity: a separate probe script would be a second
+# implementation of the measurement it is meant to corroborate.
+
+param(
+    [string]$CliExe,
+    [string]$ServiceExe,
+    [string]$EvidenceDir = (Join-Path (Get-Location) 'test-results/pipe-dacl'),
+    [string]$ServiceName = 'EnvManagerService',
+    [string]$ScratchRoot = (Join-Path $env:ProgramData 'EnvManagerPipeProbe'),
+    [string]$DeclaredSddl = 'D:(A;;FA;;;BA)(A;;FA;;;SY)(A;;GA;;;OW)',
+    [string]$ClientProbe,
+    [string]$ClientProbeOut
+)
+
+$ErrorActionPreference = 'Stop'
+$script:PipeService = 'EnvManager.Service'
+$script:PipeBackground = 'EnvManager.Background'
+$script:Checks = New-Object System.Collections.Generic.List[object]
+# True only after this run registered the SCM service itself, so cleanup can never
+# delete a registration it did not create.
+$script:CreatedService = $false
+
+# --- native access ------------------------------------------------------------
+
+$script:ProbeNativeSource = @'
+using System;
+using System.Runtime.InteropServices;
+
+public static class PipeProbe
+{
+    public const uint DACL_SECURITY_INFORMATION = 0x4;
+    public const uint OWNER_SECURITY_INFORMATION = 0x1;
+    public const uint GROUP_SECURITY_INFORMATION = 0x2;
+    public const uint SDDL_REVISION_1 = 1;
+    public const uint SE_KERNEL_OBJECT = 6;
+    public const uint SE_FILE_OBJECT = 1;
+    public const uint READ_CONTROL = 0x00020000;
+    public const uint FILE_SHARE_BOTH = 3;
+    public const uint OPEN_EXISTING = 3;
+    public static readonly IntPtr INVALID_HANDLE_VALUE = new IntPtr(-1);
+
+    [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    public static extern IntPtr CreateFileW(string name, uint access, uint share, IntPtr sa, uint creation, uint flags, IntPtr template);
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    public static extern bool CloseHandle(IntPtr h);
+
+    [DllImport("advapi32.dll", SetLastError = true)]
+    public static extern uint GetSecurityInfo(IntPtr handle, uint objectType, uint si,
+        out IntPtr owner, out IntPtr group, out IntPtr dacl, out IntPtr sacl, out IntPtr sd);
+
+    [DllImport("advapi32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    public static extern uint GetNamedSecurityInfoW(string name, uint objectType, uint si,
+        out IntPtr owner, out IntPtr group, out IntPtr dacl, out IntPtr sacl, out IntPtr sd);
+
+    [DllImport("advapi32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    public static extern bool ConvertSecurityDescriptorToStringSecurityDescriptorW(
+        IntPtr sd, uint revision, uint si, out IntPtr sddl, out uint chars);
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    public static extern IntPtr LocalFree(IntPtr h);
+
+    public static string Describe(int err)
+    {
+        switch (err)
+        {
+            case 2: return " ERROR_FILE_NOT_FOUND(no instance listening)";
+            case 5: return " ERROR_ACCESS_DENIED(the DACL refused this token)";
+            case 87: return " ERROR_INVALID_PARAMETER";
+            case 109: return " ERROR_PIPE_NOT_CONNECTED";
+            case 231: return " ERROR_PIPE_BUSY(no free instance)";
+            default: return "";
+        }
+    }
+
+    // The DACL of a live instance, read the only way that works for a named pipe.
+    public static string DaclByHandle(string name)
+    {
+        IntPtr h = CreateFileW(name, READ_CONTROL, FILE_SHARE_BOTH, IntPtr.Zero, OPEN_EXISTING, 0, IntPtr.Zero);
+        if (h == INVALID_HANDLE_VALUE)
+        {
+            int openErr = Marshal.GetLastWin32Error();
+            return "OPEN-READ-CONTROL-ERR=" + openErr + Describe(openErr);
+        }
+        try
+        {
+            IntPtr owner, group, dacl, sacl, sd;
+            uint rc = GetSecurityInfo(h, SE_KERNEL_OBJECT, DACL_SECURITY_INFORMATION,
+                out owner, out group, out dacl, out sacl, out sd);
+            if (rc != 0) { return "GET-SECURITY-INFO-ERR=" + rc + Describe((int)rc); }
+            try
+            {
+                IntPtr text;
+                uint chars;
+                if (!ConvertSecurityDescriptorToStringSecurityDescriptorW(sd, SDDL_REVISION_1, DACL_SECURITY_INFORMATION, out text, out chars))
+                {
+                    int convErr = Marshal.GetLastWin32Error();
+                    return "CONVERT-ERR=" + convErr + Describe(convErr);
+                }
+                try { return Marshal.PtrToStringUni(text); }
+                finally { LocalFree(text); }
+            }
+            finally { LocalFree(sd); }
+        }
+        finally { CloseHandle(h); }
+    }
+
+    // The route the deleted helper used. Kept as a measurement, not as a fallback.
+    public static string DaclByName(string name)
+    {
+        IntPtr owner, group, dacl, sacl, sd;
+        uint rc = GetNamedSecurityInfoW(name, SE_FILE_OBJECT, DACL_SECURITY_INFORMATION,
+            out owner, out group, out dacl, out sacl, out sd);
+        if (rc != 0) { return "GET-NAMED-SEC-INFO-ERR=" + rc + Describe((int)rc); }
+        LocalFree(sd);
+        return "GET-NAMED-SEC-INFO-OK(by name worked, contrary to the recorded measurement)";
+    }
+
+    // A bare access check: no CLI, no retry, no envelope. 0x120000 = GENERIC_READ|GENERIC_WRITE.
+    public static string TryOpen(string name, uint access)
+    {
+        IntPtr h = CreateFileW(name, access, FILE_SHARE_BOTH, IntPtr.Zero, OPEN_EXISTING, 0, IntPtr.Zero);
+        if (h == INVALID_HANDLE_VALUE)
+        {
+            int err = Marshal.GetLastWin32Error();
+            return "REFUSED err=" + err + Describe(err);
+        }
+        CloseHandle(h);
+        return "OPENED ok";
+    }
+}
+'@
+
+function Initialize-ProbeType {
+    if (-not ('PipeProbe' -as [type])) {
+        Add-Type -TypeDefinition $script:ProbeNativeSource -Language CSharp -ErrorAction Stop | Out-Null
+    }
+}
+
+# --- evidence ----------------------------------------------------------------
+
+function Write-Evidence {
+    param([string]$Key, [AllowNull()][object]$Value, [string]$Note = '')
+    $text = ($Value | Out-String).Trim() -replace "`r", ''
+    $record = [ordered]@{
+        ts    = (Get-Date).ToString('o')
+        key   = $Key
+        value = $text
+        note  = $Note
+    }
+    Add-Content -Path $script:EvidencePath -Value ($record | ConvertTo-Json -Compress -Depth 6) -Encoding utf8
+    $flat = ($text -replace '\s+', ' ')
+    if ($flat.Length -gt 600) { $flat = $flat.Substring(0, 600) + '...' }
+    Write-Host ("[EVID] {0} = {1}" -f $Key, $flat)
+}
+
+function Add-Check {
+    param([string]$Name, [bool]$Ok, [string]$Detail = '')
+    $script:Checks.Add([pscustomobject]@{ Name = $Name; Ok = $Ok; Detail = $Detail })
+    $verdict = if ($Ok) { 'PASS' } else { 'FAIL' }
+    Write-Host ("[{0}] {1} {2}" -f $verdict, $Name, $Detail)
+}
+
+# --- process helpers ---------------------------------------------------------
+
+function ConvertTo-ArgList {
+    param([string[]]$Arguments)
+    $parts = @()
+    foreach ($a in $Arguments) {
+        if ($a -match '[\s"]') { $parts += '"' + ($a -replace '"', '\"') + '"' } else { $parts += $a }
+    }
+    return ($parts -join ' ')
+}
+
+function ConvertTo-ArgLine {
+    param([string]$Exe, [string[]]$Arguments)
+    return ('"' + $Exe + '" ' + (ConvertTo-ArgList -Arguments $Arguments)).Trim()
+}
+
+function Invoke-Captured {
+    param([string]$Exe, [string[]]$Arguments = @(), [int]$TimeoutSec = 60)
+    $psi = New-Object System.Diagnostics.ProcessStartInfo
+    $psi.FileName = $Exe
+    $psi.Arguments = ConvertTo-ArgList -Arguments $Arguments
+    $psi.UseShellExecute = $false
+    $psi.RedirectStandardOutput = $true
+    $psi.RedirectStandardError = $true
+    $psi.CreateNoWindow = $true
+    $sw = [System.Diagnostics.Stopwatch]::StartNew()
+    $p = [System.Diagnostics.Process]::Start($psi)
+    $outTask = $p.StandardOutput.ReadToEndAsync()
+    $errTask = $p.StandardError.ReadToEndAsync()
+    $exited = $p.WaitForExit($TimeoutSec * 1000)
+    if (-not $exited) {
+        try { $null = $p.Kill($true) } catch { Write-Host ("kill after timeout failed: " + $_.Exception.Message) }
+    }
+    $p.WaitForExit()
+    $sw.Stop()
+    $code = -1
+    if ($exited) { $code = $p.ExitCode }
+    return [pscustomobject]@{
+        Code     = $code
+        StdOut   = $outTask.Result.Trim()
+        StdErr   = $errTask.Result.Trim()
+        DurMs    = $sw.ElapsedMilliseconds
+        TimedOut = -not $exited
+    }
+}
+
+# --- pipe observation --------------------------------------------------------
+
+function Connect-PipePing {
+    param([string]$Pipe, [string]$Request = '{"method":"ping"}', [int]$TimeoutMs = 5000)
+    $client = $null
+    try {
+        $client = New-Object System.IO.Pipes.NamedPipeClientStream('.', $Pipe, [System.IO.Pipes.PipeDirection]::InOut)
+        $client.Connect($TimeoutMs)
+        # No BOM preamble: the service parses the first byte and a BOM turns the request
+        # into "invalid request: expected value at line 1 column 1".
+        $writer = New-Object System.IO.StreamWriter($client, (New-Object System.Text.UTF8Encoding($false)), 1024, $true)
+        $writer.WriteLine($Request)
+        $writer.Flush()
+        $reader = New-Object System.IO.StreamReader($client, [System.Text.Encoding]::UTF8, $false, 1024, $true)
+        return [pscustomobject]@{ Connected = $true; Response = $reader.ReadLine(); Error = '' }
+    }
+    catch {
+        return [pscustomobject]@{ Connected = $false; Response = ''; Error = ('{0}: {1}' -f $_.Exception.GetType().Name, $_.Exception.Message) }
+    }
+    finally {
+        if ($client) { try { $client.Dispose() } catch { Write-Host ("dispose failed: " + $_.Exception.Message) } }
+    }
+}
+
+function Wait-PipePing {
+    param([string]$Pipe, [int]$TimeoutSec = 30)
+    $deadline = (Get-Date).AddSeconds($TimeoutSec)
+    while ((Get-Date) -lt $deadline) {
+        $probe = Connect-PipePing -Pipe $Pipe -TimeoutMs 1500
+        if ($probe.Connected) { return $probe.Response }
+        Start-Sleep -Milliseconds 400
+    }
+    return '(never answered)'
+}
+
+function Get-PipeDacl {
+    param([string]$Pipe, [string]$Label)
+    Initialize-ProbeType
+    $path = '\\.\pipe\' + $Pipe
+    $byHandle = [PipeProbe]::DaclByHandle($path)
+    $byName = [PipeProbe]::DaclByName($path)
+    Write-Evidence -Key ("sddl.byHandle[{0}]" -f $Label) -Value ("{0} => {1}" -f $path, $byHandle) -Note 'handle + SE_KERNEL_OBJECT: the route the pipe tools use'
+    Write-Evidence -Key ("sddl.byName[{0}]" -f $Label) -Value ("{0} => {1}" -f $path, $byName) -Note 'the route the deleted helper used; 87 is why it could never take effect'
+    return $byHandle
+}
+
+# The declared DACL is asserted as a set of ACEs, not as one string: Windows may order
+# equal-privilege ACEs itself, and a reordering is not a widening.
+function Get-AceSet {
+    param([string]$Sddl)
+    return @([regex]::Matches($Sddl, '\((?:A|D);[^)]*\)') | ForEach-Object { $_.Value } | Sort-Object)
+}
+
+function Assert-DeclaredDacl {
+    param([string]$Label, [string]$Sddl)
+    $expected = Get-AceSet -Sddl $DeclaredSddl
+    $actual = Get-AceSet -Sddl $Sddl
+    # An unreadable DACL yields no ACEs at all; without the count guard two empty sets
+    # would compare equal and the check would pass on a failed read.
+    $same = ($expected.Count -gt 0) -and ($actual.Count -eq $expected.Count) -and (-not (Compare-Object -ReferenceObject $expected -DifferenceObject $actual))
+    Add-Check -Name ("sddl[{0}]" -f $Label) -Ok $same -Detail ("declared={0} actual={1}" -f ($expected -join ''), ($actual -join ''))
+}
+
+# --- SCM service -------------------------------------------------------------
+
+function Test-ServicePresent {
+    param([string]$Name)
+    return [bool](Get-Service -Name $Name -ErrorAction SilentlyContinue)
+}
+
+function New-ProbeService {
+    param([string]$BinPath, [string]$Name, [string]$ServiceArgs = '--mode=service')
+    if (Test-ServicePresent -Name $Name) {
+        throw "refusing to run: service '$Name' already exists on this machine (a real install would be disturbed)."
+    }
+    # sc.exe wants 'binPath=' and its value as separate argv tokens; the inner quotes
+    # survive CommandLineToArgvW so ImagePath becomes "<exe>" --mode=service.
+    $imagePath = '"' + $BinPath + '" ' + $ServiceArgs
+    $created = Invoke-Captured -Exe 'sc.exe' -Arguments @('create', $Name, 'binPath=', $imagePath, 'start=', 'demand', 'obj=', 'LocalSystem', 'type=', 'own') -TimeoutSec 30
+    Write-Evidence -Key 'service.create' -Value ("exit={0} out={1} err={2}" -f $created.Code, $created.StdOut, $created.StdErr)
+    if ($created.Code -ne 0) { throw ("sc create failed: " + $created.StdErr) }
+    $script:CreatedService = $true
+    $qc = Invoke-Captured -Exe 'sc.exe' -Arguments @('qc', $Name) -TimeoutSec 20
+    Write-Evidence -Key 'service.qc' -Value $qc.StdOut -Note 'SERVICE_START_NAME must be LocalSystem for this probe to mean anything'
+}
+
+function Start-ProbeService {
+    param([string]$Name, [int]$TimeoutSec = 60)
+    $started = Invoke-Captured -Exe 'sc.exe' -Arguments @('start', $Name) -TimeoutSec 60
+    Write-Evidence -Key 'service.start' -Value ("exit={0} out={1} err={2}" -f $started.Code, $started.StdOut, $started.StdErr)
+    $deadline = (Get-Date).AddSeconds($TimeoutSec)
+    while ((Get-Date) -lt $deadline) {
+        $service = Get-Service -Name $Name -ErrorAction SilentlyContinue
+        if ($service -and $service.Status -eq 'Running') { return 'Running' }
+        Start-Sleep -Milliseconds 400
+    }
+    return 'not-Running'
+}
+
+function Remove-ProbeService {
+    param([string]$Name)
+    # Only ever removes a service this run created: a pre-existing registration belongs to
+    # a real install, and New-ProbeService refuses to start in that case.
+    if (-not $script:CreatedService) { return }
+    $script:CreatedService = $false
+    if (-not (Test-ServicePresent -Name $Name)) { return }
+    $null = Invoke-Captured -Exe 'sc.exe' -Arguments @('stop', $Name) -TimeoutSec 60
+    Start-Sleep -Milliseconds 800
+    $deleted = Invoke-Captured -Exe 'sc.exe' -Arguments @('delete', $Name) -TimeoutSec 30
+    Write-Evidence -Key 'service.delete' -Value ("exit={0} {1}" -f $deleted.Code, $deleted.StdOut)
+}
+
+# --- secondary identity ------------------------------------------------------
+
+function New-LowUser {
+    param([string]$Name = 'em-pipe-low')
+    if (Get-LocalUser -Name $Name -ErrorAction SilentlyContinue) { Remove-LowUser -Name $Name }
+    $password = 'Pp' + [guid]::NewGuid().ToString('N').Substring(0, 16) + 'x!'
+    $secure = ConvertTo-SecureString $password -AsPlainText -Force
+    $null = New-LocalUser -Name $Name -Password $secure -PasswordNeverExpires -AccountNeverExpires -ErrorAction Stop
+    $null = Add-LocalGroupMember -Group 'Users' -Member $Name -ErrorAction SilentlyContinue
+    try { $null = Remove-LocalGroupMember -Group 'Administrators' -Member $Name -ErrorAction SilentlyContinue }
+    catch { Write-Host ("not an administrator to begin with: " + $_.Exception.Message) }
+    Write-Evidence -Key 'lowuser.created' -Value ($Name + ' : member of Users only')
+    return [pscustomobject]@{ Name = $Name; Credential = (New-Object System.Management.Automation.PSCredential($Name, $secure)) }
+}
+
+function Remove-LowUser {
+    param([string]$Name = 'em-pipe-low')
+    if (Get-LocalUser -Name $Name -ErrorAction SilentlyContinue) {
+        $null = Remove-LocalUser -Name $Name -ErrorAction SilentlyContinue
+        Write-Evidence -Key 'lowuser.removed' -Value $Name
+    }
+}
+
+function Grant-ScratchAccess {
+    param([string]$Path, [string]$Access = 'Modify')
+    if (-not (Test-Path -LiteralPath $Path)) { return }
+    # The secondary identity has to read the staged binaries and write its own output.
+    # Scratch gets Modify; a binary directory only needs ReadAndExecute, so the probe
+    # never hands a standard user write access to an executable it is about to run.
+    $acl = Get-Acl -LiteralPath $Path
+    $rule = New-Object System.Security.AccessControl.FileSystemAccessRule('Users', $Access, 'ContainerInherit,ObjectInherit', 'None', 'Allow')
+    $acl.SetAccessRule($rule)
+    Set-Acl -LiteralPath $Path -AclObject $acl
+    Write-Evidence -Key ("acl.users-{0}[{1}]" -f $Access, $Path) -Value 'applied'
+}
+
+function Invoke-AsLowUser {
+    param([pscustomobject]$As, [string]$Exe, [string[]]$Arguments = @(), [int]$TimeoutSec = 120)
+    $out = Join-Path $ScratchRoot ('low-' + [guid]::NewGuid().ToString('N').Substring(0, 8) + '.txt')
+    $line = ConvertTo-ArgLine -Exe $Exe -Arguments $Arguments
+    $bat = Join-Path $ScratchRoot ('run-low-' + [guid]::NewGuid().ToString('N').Substring(0, 8) + '.bat')
+    $body = "chdir /d `"$ScratchRoot`"`r`n$line > `"$out`" 2>&1`r`necho LOW_EXIT=%ERRORLEVEL% >> `"$out`""
+    [System.IO.File]::WriteAllText($bat, $body, [System.Text.Encoding]::ASCII)
+    # -NoNewWindow cannot be combined with -Credential, so the window exists and is hidden.
+    $proc = Start-Process -FilePath 'cmd.exe' -ArgumentList @('/c', $bat) -Credential $As.Credential -WindowStyle Hidden -PassThru
+    if (-not $proc.WaitForExit($TimeoutSec * 1000)) {
+        try { $null = $proc.Kill($true) } catch { Write-Host ("kill failed: " + $_.Exception.Message) }
+    }
+    Start-Sleep -Milliseconds 400
+    $text = if (Test-Path $out) { [System.IO.File]::ReadAllText($out) } else { '(no output file: the process produced none)' }
+    return $text
+}
+
+# --- client mode -------------------------------------------------------------
+
+# Runs under the secondary identity. One measurement, no orchestration: the raw access
+# check that the CLI cannot report (it maps every UnauthorizedAccessException to
+# "Access denied (requires elevation)", which says nothing about the DACL).
+function Invoke-ClientProbeMode {
+    param([string]$Pipe, [string]$OutFile)
+    Initialize-ProbeType
+    $path = if ($Pipe -like '\\.\pipe\*') { $Pipe } else { '\\.\pipe\' + $Pipe }
+    $result = [PipeProbe]::TryOpen($path, 0x120000)
+    $line = ('identity={0} pipe={1} => {2}' -f [System.Security.Principal.WindowsIdentity]::GetCurrent().Name, $path, $result)
+    if ($OutFile) { Set-Content -LiteralPath $OutFile -Value $line -Encoding ASCII }
+    else { Write-Host $line }
+}
+
+if ($ClientProbe) {
+    Invoke-ClientProbeMode -Pipe $ClientProbe -OutFile $ClientProbeOut
+    exit 0
+}
+
+# --- main --------------------------------------------------------------------
+
+if (-not $CliExe -or -not $ServiceExe) {
+    throw 'usage: probe-pipe-dacl.ps1 -CliExe <env-manager-cli.exe> -ServiceExe <env-manager-service.exe>'
+}
+if (-not (Test-Path -LiteralPath $CliExe)) { throw "missing CLI: $CliExe" }
+if (-not (Test-Path -LiteralPath $ServiceExe)) { throw "missing service binary: $ServiceExe" }
+
+New-Item -ItemType Directory -Force -Path $EvidenceDir | Out-Null
+New-Item -ItemType Directory -Force -Path $ScratchRoot | Out-Null
+$script:EvidencePath = Join-Path $EvidenceDir 'evidence-pipe-dacl.jsonl'
+Set-Content -LiteralPath $script:EvidencePath -Value '' -Encoding utf8
+
+$lowUser = $null
+$backgroundProc = $null
+$probeCopy = Join-Path $ScratchRoot 'probe-pipe-dacl.ps1'
+Copy-Item -LiteralPath $PSCommandPath -Destination $probeCopy -Force
+
+try {
+    Initialize-ProbeType
+    Write-Evidence -Key 'target.cliexe' -Value $CliExe
+    Write-Evidence -Key 'target.serviceexe' -Value $ServiceExe
+    Write-Evidence -Key 'target.declared_sddl' -Value $DeclaredSddl -Note 'the constant service/src/ipc.rs hands to CreateNamedPipeW'
+    Write-Evidence -Key 'host.os' -Value ([System.Environment]::OSVersion.VersionString)
+    Write-Evidence -Key 'host.user' -Value ([System.Security.Principal.WindowsIdentity]::GetCurrent().Name)
+    $groups = Invoke-Captured -Exe 'whoami.exe' -Arguments @('/groups') -TimeoutSec 30
+    Write-Evidence -Key 'host.whoami_groups' -Value $groups.StdOut -Note 'Administrators must be Enabled (not deny-only) for the BA ACE to grant'
+
+    # The secondary identity is prepared first: a failure here must not cost the SDDL
+    # evidence, so it is recorded and the matrix marks the cells as skipped.
+    try {
+        $lowUser = New-LowUser
+        Grant-ScratchAccess -Path $ScratchRoot -Access 'Modify'
+        foreach ($dir in @((Split-Path -Parent $CliExe), (Split-Path -Parent $ServiceExe))) {
+            Grant-ScratchAccess -Path $dir -Access 'ReadAndExecute'
+        }
+    }
+    catch {
+        Write-Evidence -Key 'lowuser.failed' -Value $_.Exception.Message
+        $lowUser = $null
+    }
+
+    # (1) Service mode: the pipe that was never verified before.
+    New-ProbeService -BinPath $ServiceExe -Name $ServiceName
+    $state = Start-ProbeService -Name $ServiceName
+    Write-Evidence -Key 'service.state' -Value $state
+    $firstAnswer = Wait-PipePing -Pipe $script:PipeService -TimeoutSec 30
+    Write-Evidence -Key 'service.first_ping' -Value $firstAnswer
+
+    $serviceSddl = Get-PipeDacl -Pipe $script:PipeService -Label 'service'
+    Assert-DeclaredDacl -Label 'service' -Sddl $serviceSddl
+
+    # (2) The two shipped client shapes, unchanged, against the tightened pipe.
+    $cli = Invoke-Captured -Exe $CliExe -Arguments @('service', 'ping', '--service-pipe') -TimeoutSec 60
+    Write-Evidence -Key 'client.cli_gateway' -Value ("exit={0} dur={1}ms out={2} err={3}" -f $cli.Code, $cli.DurMs, $cli.StdOut, $cli.StdErr)
+    Add-Check -Name 'client.cli_gateway' -Ok (($cli.Code -eq 0) -and ($cli.StdOut -match 'pong')) -Detail ("exit={0} out={1}" -f $cli.Code, $cli.StdOut)
+
+    $watchdog = Connect-PipePing -Pipe $script:PipeService
+    Write-Evidence -Key 'client.watchdog' -Value ("connected={0} resp={1} err={2}" -f $watchdog.Connected, $watchdog.Response, $watchdog.Error)
+    Add-Check -Name 'client.watchdog' -Ok (($watchdog.Connected) -and ($watchdog.Response -match '"ok":\s*true')) -Detail ("resp={0}" -f $watchdog.Response)
+
+    # (3) Non-privileged identities: the CLI (what a user would see) and the bare open
+    # (what the DACL actually answers). Only the second one is an assertion.
+    if ($lowUser) {
+        $lowOut = Join-Path $ScratchRoot ('lowprobe-' + [guid]::NewGuid().ToString('N').Substring(0, 8) + '.txt')
+        $lowProbe = Invoke-AsLowUser -As $lowUser -Exe 'powershell.exe' -Arguments @(
+            '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $probeCopy,
+            '-ClientProbe', $script:PipeService, '-ClientProbeOut', $lowOut
+        )
+        $lowText = if (Test-Path $lowOut) { (Get-Content -LiteralPath $lowOut -Raw).Trim() } else { '(no result file) ' + $lowProbe }
+        Write-Evidence -Key 'client.low_bare_open' -Value $lowText -Note 'err=5 is the access check refusing the token, before any request is parsed'
+        Add-Check -Name 'client.low_bare_open' -Ok ($lowText -match 'err=5\b') -Detail $lowText
+
+        $lowCli = Invoke-AsLowUser -As $lowUser -Exe $CliExe -Arguments @('service', 'ping', '--service-pipe')
+        Write-Evidence -Key 'client.low_cli_gateway' -Value $lowCli -Note 'recorded, not asserted: the CLI maps a refused connect to its own elevation hint'
+    }
+    else {
+        Write-Evidence -Key 'client.low_bare_open' -Value 'SKIPPED: no secondary identity' -Note 'the err=5 assertion did not run'
+        Add-Check -Name 'client.low_bare_open' -Ok $false -Detail 'skipped: no secondary identity, so the refusal is unproven'
+    }
+
+    # (4) Anti-squatting with an SD in play: a console launch of --mode=service is not
+    # SCM-initiated, so it falls through to the same run_server body and must lose the
+    # name to the running service. Its exit code is not the assertion - a failed listener
+    # is logged and the process returns 0 by design - so the assertions are "it did not
+    # stay serving" (no timeout) and "the first instance still answers".
+    $squatter = Invoke-Captured -Exe $ServiceExe -Arguments @('--mode=service') -TimeoutSec 45
+    Write-Evidence -Key 'antisquat.second_process' -Value ("exit={0} timedOut={1} dur={2}ms out={3} err={4}" -f $squatter.Code, $squatter.TimedOut, $squatter.DurMs, $squatter.StdOut, $squatter.StdErr)
+    Add-Check -Name 'antisquat.second_process_exits' -Ok (-not $squatter.TimedOut) -Detail ("exit={0} dur={1}ms" -f $squatter.Code, $squatter.DurMs)
+
+    $serviceAlive = Connect-PipePing -Pipe $script:PipeService
+    Add-Check -Name 'antisquat.first_instance_survives' -Ok ($serviceAlive.Connected -and ($serviceAlive.Response -match '"ok":\s*true')) -Detail ("resp={0}" -f $serviceAlive.Response)
+
+    Remove-ProbeService -Name $ServiceName
+    $afterStop = [PipeProbe]::TryOpen('\\.\pipe\' + $script:PipeService, 0x120000)
+    Write-Evidence -Key 'service.after_stop_open' -Value $afterStop -Note 'the pipe must be gone once the service stops'
+
+    # (5) Background mode: the same descriptor, an owner that is not LocalSystem.
+    $backgroundProc = Start-Process -FilePath $ServiceExe -ArgumentList '--mode=background' -PassThru -WindowStyle Hidden
+    $bgAnswer = Wait-PipePing -Pipe $script:PipeBackground -TimeoutSec 30
+    Write-Evidence -Key 'background.first_ping' -Value $bgAnswer
+    $backgroundSddl = Get-PipeDacl -Pipe $script:PipeBackground -Label 'background'
+    Assert-DeclaredDacl -Label 'background' -Sddl $backgroundSddl
+    $bgWatchdog = Connect-PipePing -Pipe $script:PipeBackground
+    Add-Check -Name 'background.watchdog' -Ok ($bgWatchdog.Connected -and ($bgWatchdog.Response -match '"ok":\s*true')) -Detail ("resp={0}" -f $bgWatchdog.Response)
+}
+catch {
+    Write-Evidence -Key 'FATAL' -Value ($_.Exception.Message + ' @ ' + $_.InvocationInfo.PositionMessage)
+    Add-Check -Name 'probe.completed' -Ok $false -Detail $_.Exception.Message
+}
+finally {
+    if ($backgroundProc -and -not $backgroundProc.HasExited) {
+        try { $null = $backgroundProc.Kill($true) } catch { Write-Host ("background kill failed: " + $_.Exception.Message) }
+    }
+    $null = Invoke-Captured -Exe 'taskkill.exe' -Arguments @('/F', '/IM', 'env-manager-service.exe') -TimeoutSec 30
+    $null = Invoke-Captured -Exe 'taskkill.exe' -Arguments @('/F', '/IM', 'env-manager-cli.exe') -TimeoutSec 30
+    Remove-ProbeService -Name $ServiceName
+    Remove-LowUser
+
+    $failed = @($script:Checks | Where-Object { -not $_.Ok })
+    $summary = @(
+        '# Pipe DACL observation',
+        '',
+        ('- declared SDDL: {0}' -f $DeclaredSddl),
+        ('- checks: {0} passed, {1} failed' -f ($script:Checks.Count - $failed.Count), $failed.Count),
+        ''
+    )
+    foreach ($check in $script:Checks) {
+        $verdict = 'FAIL'
+        if ($check.Ok) { $verdict = 'PASS' }
+        $summary += ('- [{0}] {1} - {2}' -f $verdict, $check.Name, $check.Detail)
+    }
+    $summary | Set-Content -LiteralPath (Join-Path $EvidenceDir 'summary-pipe-dacl.md') -Encoding utf8
+
+    if ($failed.Count -gt 0) {
+        Write-Host ("FAIL: {0} of {1} pipe DACL checks did not hold" -f $failed.Count, $script:Checks.Count)
+        exit 1
+    }
+    Write-Host ("PASS: all {0} pipe DACL checks held" -f $script:Checks.Count)
+    exit 0
+}
