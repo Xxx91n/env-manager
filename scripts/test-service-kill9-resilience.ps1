@@ -148,8 +148,11 @@ try {
     # The seed is only a fixture if the service can read it; ask the service before relying
     # on it, so a shape mistake fails here with the real reason instead of downstream as
     # "mount not found".
-    $healthJson = (& $CliExe service health 2>$null | Out-String)
-    Assert-True "service health sees exactly the seeded mount (got: $($healthJson.Trim()))" ($healthJson -match '"total":\s*1')
+    # Parse rather than pattern-match: `-match '"total":\s*1'` also accepts "total": 10, so it
+    # would pass with more mounts than the fixture seeded.
+    $health = (& $CliExe service health 2>$null | Out-String) | ConvertFrom-Json
+    Assert-True "service health reports ok" ($health.ok -eq $true)
+    Assert-True ("service health sees exactly the seeded mount (got total={0})" -f $health.data.total) ($health.data.total -eq 1)
 
     # ---- Background-mode rotate (#164) ----
     # The GUI's rotate path, and the observation that separates Background from Service
