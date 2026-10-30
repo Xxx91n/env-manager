@@ -46,7 +46,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
-- sops 明文临时目录由服务拥有并回收：停服务打断 rotate 不再在服务身份的 `%TEMP%` 下遗留 `env-manager-sops-*`；回退与删除失败都留痕，不再有无声遗留（#177）
+- sops 明文临时目录由服务拥有并回收：停服务打断 rotate 后，服务在被终止的 helper 释放句柄的窗口内删除整棵临时目录树（有限重试），不再无声遗留 `env-manager-sops-*`；回退与删除失败均留痕（#177）
 
 ## [0.12.0] - 2026-09-09
 

@@ -329,3 +329,38 @@ async fn reclaim_logs_when_the_tree_cannot_be_removed() {
     drop(guard);
     let _ = std::fs::remove_dir_all(&root);
 }
+
+/// The other half of the retry story: a delete that only failed because a helper was still
+/// winding down must succeed within the budget, not be reported as a leftover. The holder
+/// lets go shortly after the first attempts, which is the shape of a killed helper that
+/// terminates a fraction of a second after the job handle closes.
+#[tokio::test(flavor = "current_thread")]
+async fn reclaim_succeeds_once_the_holder_lets_go() {
+    use std::os::windows::fs::OpenOptionsExt;
+
+    let scratch = SopsScratch::create().expect("a scratch root must be creatable in %TEMP%");
+    let root = scratch.path().to_path_buf();
+    let file = root.join("secret.json");
+    std::fs::write(&file, "{\"value\":\"probe\"}").expect("write the plaintext fixture");
+
+    let held = std::fs::OpenOptions::new()
+        .read(true)
+        .share_mode(0)
+        .open(&file)
+        .expect("hold the plaintext file open without sharing");
+
+    // 100ms lands after the first delete attempt and long before the budget runs out; if a
+    // loaded runner delays it past the first attempt anyway, the assertion below still
+    // measures the property it is about.
+    std::thread::spawn(move || {
+        std::thread::sleep(Duration::from_millis(100));
+        drop(held);
+    });
+
+    scratch.reclaim().await;
+    assert!(
+        !root.exists(),
+        "a holder that releases within the retry budget must not leave the root behind: {}",
+        root.display()
+    );
+}

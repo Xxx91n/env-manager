@@ -24,6 +24,11 @@ use crate::sops_scratch::{SopsScratch, SCRATCH_ENV}; // service-owned sops plain
 /// `Command::creation_flags`, so no `CommandExt` import is needed here.
 const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 
+/// How long the stop path waits for the killed child's stderr before giving up on it.
+/// Long enough for a pipe that closes the moment its writer is reaped, short enough that a
+/// helper holding the handle open cannot extend the stop.
+const STDERR_DRAIN_ON_STOP: Duration = Duration::from_millis(200);
+
 /// The CLI argv a rotation delegates to. Rotation is not a circular dependency: it is a
 /// one-shot write of profiles.json, not an IPC back into the service. `--json` is absent
 /// because CLI rotate does not support it (it exits non-zero).
@@ -491,8 +496,9 @@ async fn spawn_cli_child(
             // source, but a helper's own stderr is not this crate's to vouch for - and the
             // scrub caps the length, so one rotation cannot become a page of log. The level
             // is info because the default filter records it and a chatty provider must not
-            // read as a failure.
-            if !stderr.is_empty() {
+            // read as a failure. A failing child is left out of this: its stderr is already
+            // the substance of the error the client gets.
+            if status.success() && !stderr.is_empty() {
                 tracing::info!(
                     "delegated CLI wrote to stderr on success: {}",
                     crate::redaction::scrub_message(&stderr)
@@ -516,7 +522,27 @@ async fn spawn_cli_child(
                 .await
                 .map_err(|e| format!("failed to terminate the CLI rotate child: {}", e))?;
             read_stdout.abort();
-            read_stderr.abort();
+            // stderr is drained instead of aborted: the provider's fallback warning is
+            // written before it does any work, so aborting would erase the one line that
+            // explains why the reclaim this call is about to run may find nothing to
+            // delete. Bounded, because the stop path must not depend on a pipe reaching
+            // EOF - even though it does, since the child is reaped above and provider
+            // helpers redirect their own std handles (`src/Secrets/Providers/`).
+            let mut stderr_reader = read_stderr;
+            let stderr = match tokio::time::timeout(STDERR_DRAIN_ON_STOP, &mut stderr_reader).await
+            {
+                Ok(Ok(text)) => text,
+                _ => {
+                    stderr_reader.abort();
+                    String::new()
+                }
+            };
+            if !stderr.is_empty() {
+                tracing::info!(
+                    "delegated CLI wrote to stderr before the stop: {}",
+                    crate::redaction::scrub_message(&stderr)
+                );
+            }
             // The job handle drops as this function returns, which is where the helper
             // tree dies (#160): the CLI is already reaped, so nothing left in the job can
             // still be serving this rotation. Both happen inside the stop budget - closing
