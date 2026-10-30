@@ -218,6 +218,14 @@ try {
     # ---- steady-state re-check ----
     Assert-True "secretMount.json persisted across kill+restart" (Test-Path $mountFile)
     Assert-True "test-mount-001 survived" ((Get-Content $mountFile -Raw) -match "test-mount-001")
+    # Existence and identity are not enough: the rotate above wrote a stamp, and a restart
+    # that dropped or blanked it would still pass those two. Re-read the file and require a
+    # timestamp-shaped value - an ISO-8601 prefix, which is what the service writes, without
+    # dragging culture-sensitive parsing into the assertion.
+    $persisted = @(Get-Content $mountFile -Raw | ConvertFrom-Json) |
+        Where-Object { $_.id -eq "test-mount-001" } | Select-Object -First 1
+    Assert-True ("rotation stamp survived kill+restart (got: '{0}')" -f $persisted.lastRotatedAt) (
+        $null -ne $persisted -and ([string]$persisted.lastRotatedAt) -match '^\d{4}-\d{2}-\d{2}T\d{2}:')
     $health = & $CliExe service health 2>$null
     Assert-True "service health endpoint reachable after restart" ("$health" -match '"ok":\s*true')
 
