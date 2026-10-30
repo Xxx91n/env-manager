@@ -364,3 +364,44 @@ async fn reclaim_succeeds_once_the_holder_lets_go() {
         root.display()
     );
 }
+
+/// Dropping without reclaiming is the abandoned-future path - a connection handler killed
+/// while `reclaim` waits out a helper. `Drop` has to make its own attempt and leave a trace
+/// when that fails too, or the tree is lost in silence again.
+#[test]
+fn drop_logs_when_the_last_attempt_also_fails() {
+    use std::os::windows::fs::OpenOptionsExt;
+
+    let scratch = SopsScratch::create().expect("a scratch root must be creatable in %TEMP%");
+    let root = scratch.path().to_path_buf();
+    let file = root.join("secret.json");
+    std::fs::write(&file, "{\"value\":\"probe\"}").expect("write the plaintext fixture");
+
+    let held = std::fs::OpenOptions::new()
+        .read(true)
+        .share_mode(0)
+        .open(&file)
+        .expect("hold the plaintext file open without sharing");
+
+    let sink = LogSink(Arc::new(Mutex::new(Vec::new())));
+    let guard = tracing::subscriber::set_default(
+        tracing_subscriber::fmt()
+            .with_writer(sink.clone())
+            .with_ansi(false)
+            .finish(),
+    );
+
+    // No `reclaim` call at all: the shape of a future dropped before one could finish.
+    drop(scratch);
+
+    let captured = String::from_utf8_lossy(&sink.0.lock().expect("the log sink lock")).to_string();
+    assert!(
+        captured.contains("was left behind"),
+        "a scratch root that cannot be deleted on drop must leave a trace, never a silent \
+         leftover; got: {captured}"
+    );
+
+    drop(held);
+    drop(guard);
+    let _ = std::fs::remove_dir_all(&root);
+}

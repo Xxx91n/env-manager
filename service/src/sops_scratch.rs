@@ -96,13 +96,18 @@ impl SopsScratch {
     ///
     /// Every failure that survives the budget is logged at error level: the ticket's
     /// "删除失败必须留痕" is this line, because a silent leftover is exactly the defect the
-    /// directory is meant to remove.
+    /// directory is meant to remove. `reclaimed` is only set once the tree is gone or the
+    /// failure has been logged - never at the top of the loop, or a future dropped during a
+    /// retry delay would skip `Drop`'s last attempt and leave the tree in silence.
     pub(crate) async fn reclaim(mut self) {
-        self.reclaimed = true;
         for attempt in 1..=RECLAIM_ATTEMPTS {
             match remove_tree(&self.root) {
-                Ok(()) => return,
+                Ok(()) => {
+                    self.reclaimed = true;
+                    return;
+                }
                 Err(err) if attempt == RECLAIM_ATTEMPTS => {
+                    self.reclaimed = true;
                     tracing::error!(
                         "sops scratch root {} could not be removed after {} attempts, plaintext may remain on disk: {}",
                         self.root.display(),
