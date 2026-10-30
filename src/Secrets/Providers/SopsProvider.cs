@@ -40,15 +40,14 @@ internal sealed class SopsProvider : ISecretProvider
 
     private static readonly string SOPS_BINARY = FindSopsBinary();
 
-    // Single creation point for the plaintext temp directory (#178). Both Encrypt and
-    // Decrypt go through it so neither can inherit %TEMP%'s ACL by accident: on a host
-    // whose TEMP is C:\Windows\Temp the inherited ACE grants BUILTIN\Users read, and this
-    // directory is where the plaintext lands. SecretTempDirectory applies the owner-only
-    // DACL at creation; a failed restriction is logged and the provider keeps working.
-    // The literal must stay equal to Name: it is what the documented
-    // %TEMP%\env-manager-sops-<guid> path is built from.
-    private static string CreatePlaintextTempDirectory()
-        => SecretTempDirectory.Create("sops").FullName;
+    // Single creation point for the plaintext temp directory. Both Encrypt and Decrypt go
+    // through it so neither can inherit %TEMP%'s ACL by accident: on a host whose TEMP is
+    // C:\Windows\Temp the inherited ACE grants BUILTIN\Users read, and this directory is
+    // where the plaintext lands. SecretTempDirectory applies the owner-only DACL in the
+    // same call that creates the directory; a DACL that cannot be applied is logged and
+    // the provider keeps working, while a directory that cannot be created still throws.
+    private string CreatePlaintextTempDirectory()
+        => SecretTempDirectory.Create(Name).FullName;
 
     // Budget for the `sops --version` availability probe. Measured on a warm Windows
     // host: 2.1-2.9s wall clock per start (antivirus scans the resolved binary), and it

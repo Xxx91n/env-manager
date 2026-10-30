@@ -25,17 +25,17 @@ namespace EnvManager.Secrets.Core;
 
 /// <summary>
 /// Creates the temp directory a provider needs for file-in/file-out plaintext handoff and
-/// restricts it: inheritance off, and only the current identity (SYSTEM for the service,
-/// the invoking user for the CLI), SYSTEM and BUILTIN\Administrators granted. The grant is
-/// inheritable, so files created inside inherit the same three ACEs instead of an empty
-/// DACL.
+/// restricts it in the same call that creates it: inheritance off, and only the current
+/// identity (SYSTEM for the service, the invoking user for the CLI), SYSTEM and
+/// BUILTIN\Administrators granted. The grant is inheritable, so files created inside
+/// inherit the same three ACEs instead of an empty DACL.
 /// </summary>
 /// <remarks>
-/// The directory exists with its inherited ACL for the two statements it takes to write
-/// the DACL. Nothing the provider does observes that window - the provider helper (sops)
-/// is started afterwards - and closing it entirely would mean creating the directory with
-/// a security descriptor in the same call, which the managed API surface this project
-/// already uses (GetAccessControl / SetAccessControl on a FileSystemInfo) does not offer.
+/// <c>Directory.CreateDirectory(string, DirectorySecurity)</c> does not exist on this
+/// target framework, so the security descriptor goes in through
+/// <c>FileSystemAclExtensions.CreateDirectory(DirectorySecurity, string)</c> - the
+/// overload passes it as <c>SECURITY_ATTRIBUTES</c>, which means the directory never
+/// exists with the inherited ACL, not even for one statement.
 /// </remarks>
 internal static class SecretTempDirectory
 {
@@ -44,48 +44,56 @@ internal static class SecretTempDirectory
     private const string Prefix = "env-manager-";
 
     /// <summary>
-    /// Creates <c>%TEMP%\env-manager-&lt;provider&gt;-&lt;guid&gt;</c> and applies the
-    /// owner-only DACL. Never throws because of the ACL: a failed restriction leaves the
-    /// directory with the inherited ACL it would have had before this helper existed, and
-    /// the failure is recorded on the debug channel (same best-effort contract as
-    /// <c>Program.SetFileAclRestricted</c> for the audit file).
+    /// Creates <c>%TEMP%\env-manager-&lt;provider&gt;-&lt;guid&gt;</c> with the owner-only
+    /// DACL already applied. A DACL that cannot be applied is best-effort - the caller
+    /// gets the directory on the inherited <c>%TEMP%</c> ACL it would have had before this
+    /// boundary existed, and the failure is recorded on the same debug channel
+    /// <c>SetFileAclRestricted</c> uses for the audit file. A directory that cannot be
+    /// created at all still throws: the provider cannot work without it.
     /// </summary>
     internal static DirectoryInfo Create(string provider)
     {
         string path = Path.Combine(Path.GetTempPath(), Prefix + provider + "-" + Guid.NewGuid().ToString("N"));
-        DirectoryInfo directory = Directory.CreateDirectory(path);
-        RestrictToOwner(directory);
-        return directory;
-    }
 
-    private static void RestrictToOwner(DirectoryInfo directory)
-    {
         try
         {
-            DirectorySecurity security = directory.GetAccessControl();
-            // Inheritance off, inherited ACEs not copied: the DACL ends up holding only
-            // the rules added below, whatever %TEMP% granted.
-            security.SetAccessRuleProtection(isProtected: true, preserveInheritance: false);
-
-            foreach (IdentityReference identity in AllowedIdentities())
-            {
-                security.AddAccessRule(new FileSystemAccessRule(
-                    identity,
-                    FileSystemRights.FullControl,
-                    // Inheritable on purpose: secret.json / secret.dec.json are created
-                    // inside this directory, and a non-inheritable ACE would leave them
-                    // with an empty DACL - which denies everyone, sops included.
-                    InheritanceFlags.ContainerInherit | InheritanceFlags.ObjectInherit,
-                    PropagationFlags.None,
-                    AccessControlType.Allow));
-            }
-
-            directory.SetAccessControl(security);
+            return OwnerOnlyDacl().CreateDirectory(path);
         }
         catch (Exception ex)
         {
-            Program.DebugLog($"ACL restriction failed for {directory.FullName}: {ex.Message}");
+            // Both failures land here. A directory on disk means the create succeeded and
+            // only the DACL write failed; nothing on disk means creation itself failed and
+            // that is not ours to swallow.
+            if (!Directory.Exists(path)) throw;
+
+            Program.DebugLog(Program.ScrubExceptionMessage($"ACL restriction failed for {path}: {ex.Message}"));
+            return new DirectoryInfo(path);
         }
+    }
+
+    private static DirectorySecurity OwnerOnlyDacl()
+    {
+        var security = new DirectorySecurity();
+        // Rules first, protection second: adding a rule is what materialises a present
+        // DACL, and only a present DACL can be marked protected. The other order risks
+        // handing CreateDirectory a security descriptor with a null DACL, which grants
+        // everyone full control.
+        foreach (IdentityReference identity in AllowedIdentities())
+        {
+            security.AddAccessRule(new FileSystemAccessRule(
+                identity,
+                FileSystemRights.FullControl,
+                // Inheritable on purpose: secret.json / secret.dec.json are created
+                // inside this directory, and a non-inheritable ACE would leave them with
+                // an empty DACL - which denies everyone, sops included.
+                InheritanceFlags.ContainerInherit | InheritanceFlags.ObjectInherit,
+                PropagationFlags.None,
+                AccessControlType.Allow));
+        }
+        // Inheritance off, inherited ACEs not copied: the DACL holds only the rules above,
+        // whatever %TEMP% grants.
+        security.SetAccessRuleProtection(isProtected: true, preserveInheritance: false);
+        return security;
     }
 
     /// <summary>
