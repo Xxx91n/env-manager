@@ -541,7 +541,7 @@ Two golden layers lock output contracts; both files are source-controlled, so an
 
 ## Test Mental Model Portfolio (paradigm → target → tool → CI tier)
 
-The test layers in this document are not a pyramid with a single narrative; they are a **composition** chosen to defend the engine against qualitatively different defect classes. Round-5 mental-model research (round5-mental-models notes, Q1 outdated-item 3 - architecture-recovery process archive) explicitly retires "the pyramid as the sole testing narrative" (Ham Vocke; Martin Fowler 2018 treats it as a heuristic, not doctrine). Twenty-seven paradigms now coexist; each must earn its row by naming what defect class it catches, where it lives in the repo, what tool runs it, and at which CI tier it executes. The table below is the source of truth for that ledger -- every existing section ("IPC Schema Contract", "Service Resilience Fault Injection", "Secret Provider Contract Test Suite (L0/L1/L2 layering)", "Canary Zero-Leak Assertion Net and Golden/Snapshot Layers", "Secret Provider L1 Emulator Matrix", and the per-paradigm AGENTS.md paragraphs) cross-references this portfolio.
+The test layers in this document are not a pyramid with a single narrative; they are a **composition** chosen to defend the engine against qualitatively different defect classes. Round-5 mental-model research (round5-mental-models notes, Q1 outdated-item 3 - architecture-recovery process archive) explicitly retires "the pyramid as the sole testing narrative" (Ham Vocke; Martin Fowler 2018 treats it as a heuristic, not doctrine). Twenty-seven paradigms now coexist; each must earn its row by naming what defect class it catches, where it lives in the repo, what tool runs it, and at which CI tier it executes. The table below is the source of truth for that ledger -- every existing section ("IPC Schema Contract", "Service Resilience Fault Injection", "Secret Provider Contract Test Suite (L0/L1/L2 layering)", "Canary Zero-Leak Assertion Net and Golden/Snapshot Layers", "Secret Provider L1 Emulator Matrix") cross-references this portfolio.
 
 ### Portfolio mapping table (paradigm → target → tool → CI tier)
 
@@ -588,7 +588,7 @@ The test layers in this document are not a pyramid with a single narrative; they
 
 ### Composition governance -- adding a new paradigm
 
-Every new test style that wants to land in this repo must (a) name which defect class it catches that the existing 27 do not, (b) name its target module/file, (c) pick a tool already in this list (or justify a new one), and (d) pick the CI tier that matches its risk-vs-cost trade-off. Adding a row requires updating this section and the AGENTS.md Testing paragraph in the same commit; rounds of `reports/NN-*.md` provide evidence. Pluggability rule: any row that fails three PR cycles in a row (red or flake pattern) is demoted from the table with rationale -- preventing paradigm inflation is the explicit purpose of this ledger (round-5 Q4 item 5).
+Every new test style that wants to land in this repo must (a) name which defect class it catches that the existing 27 do not, (b) name its target module/file, (c) pick a tool already in this list (or justify a new one), and (d) pick the CI tier that matches its risk-vs-cost trade-off. Adding a row updates this section in the same commit; rounds of `reports/NN-*.md` provide evidence. Pluggability rule: any row that fails three PR cycles in a row (red or flake pattern) is demoted from the table with rationale -- preventing paradigm inflation is the explicit purpose of this ledger (round-5 Q4 item 5).
 
 ### Cross-references
 
@@ -596,7 +596,7 @@ Every new test style that wants to land in this repo must (a) name which defect 
 - Service watchdog/SCM recovery: see "Service Resilience Fault Injection (watchdog/SCM recovery)" above.
 - Secret provider layering (L0/L1/L2): see "Secret Provider Contract Test Suite (L0/L1/L2 layering)" and "Secret Provider L1 Emulator Matrix".
 - Canary zero-leak + golden/snapshot: see "Canary Zero-Leak Assertion Net and Golden/Snapshot Layers".
-- AGENTS.md Testing paragraphs (#1, #3, #5-27) match this table row-for-row; only the portfolio-narrative paragraph (this section) lives in architecture.md because the table is the source of truth.
+- AGENTS.md carries the run/build/test commands, the hard boundaries and the agent skills; it has no per-paradigm Testing section, so this table is the only place the portfolio is recorded and a new row lands here only.
 
 
 ## Secret Provider L1 Emulator Matrix

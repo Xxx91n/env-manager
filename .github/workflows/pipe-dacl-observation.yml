@@ -38,6 +38,11 @@ jobs:
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # This job runs third-party build code (cargo build.rs, proc-macros, MSBuild
+          # targets) and no later step needs git credentials, so the token does not stay
+          # in .git/config for the rest of the job.
+          persist-credentials: false
 
       - name: Setup .NET
         uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68
