@@ -277,21 +277,27 @@ Commands:
         if (args.Length == 0) return false;
         string command = args[0].ToLowerInvariant();
         if (command is "list" or "get" or "backup" or "diff" or "validate" or "agents" or "help" or "expand") return false;
-        // `service` is a named-pipe forwarder: it opens a pipe, writes one request line and
-        // reads one response line (ServiceCommand.RunServiceCommand). No registry value is
-        // written in this process, so the session mutex taken here protected nothing - and
-        // cost the whole feature. In Background mode the service runs in the caller's
-        // session, so the CLI child it spawns for a rotate lands in the same `Local\`
-        // namespace and blocked on this mutex until the 30 s budget expired: every rotate
-        // answered "Another Env Manager write operation is still running", while the same
-        // code succeeded in Service mode, whose session-0 child never shares this namespace
-        // (#164). The three-lock invariant is intact where the write really happens - the
-        // delegated child runs `profile secret-provider rotate`, classifies as write, and
-        // takes mutex + CLI_RWLOCK + writeChain in its own process, so a concurrent direct
-        // writer still serializes against it. Rejected alternatives: holding the mutex only
-        // around the IPC call re-creates the deadlock (the child needs the lock while the
-        // gateway waits for that same child), and handing the child an inherited holder
-        // identity is a bypass - the actual writer would run unmutexed against a `set`.
+        // `service` is a named-pipe forwarder - all seven verbs (ping/status/health/refresh/
+        // rotate/reload/shutdown) open a pipe, write one request line and read one response
+        // line in ServiceCommand.RunServiceCommand. No registry value is written in this
+        // process, so the session mutex taken here protected nothing - and cost the whole
+        // feature. In Background mode the service runs in the caller's session, so the CLI
+        // child it spawns for a rotate lands in the same `Local\` namespace and blocked on
+        // this mutex until the 30 s budget expired: every rotate answered "Another Env
+        // Manager write operation is still running", while the same code succeeded in
+        // Service mode, whose session-0 child never shares this namespace (#164).
+        // The three locks still cover the write, each where it can see its own scope: the
+        // delegated child (`profile secret-provider rotate`) classifies as write and takes
+        // this mutex in its own process, while CLI_RWLOCK and writeChain stay with the GUI
+        // layers that issued the call - so a GUI-issued rotate is covered end to end and a
+        // direct `set` still serializes against it. No GUI-side change is needed to match:
+        // main.rs's is_read_only keeps the mutating `service` verbs on the write side of
+        // CLI_RWLOCK, which serializes the shell's own submissions and never contended with
+        // the service's child (the child is spawned by the service, not by the shell).
+        // Rejected alternatives: holding the mutex only around the IPC call re-creates the
+        // deadlock (the child needs the lock while the gateway waits for that same child),
+        // and handing the child an inherited holder identity is a bypass - the actual
+        // writer would run unmutexed against a `set`.
         if (command == "service") return false;
         if (command == "history") return args.Length > 1 && args[1].Equals("undo", StringComparison.OrdinalIgnoreCase);
         if (command == "bulk") return args.Length > 1 && args[1].Equals("import", StringComparison.OrdinalIgnoreCase) && !args.Contains("--dry-run");

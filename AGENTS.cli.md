@@ -199,7 +199,7 @@ Registered providers:
 
 This CLI is the backend for the Env Manager GUI (Tauri + Svelte). The GUI spawns this CLI as a subprocess via a Rust IPC layer. State protection is layered:
 
-1. **CLI mutex**: all write operations acquire the `Local\EnvManager.RegistryMutation` Windows named mutex. Concurrent CLI writes serialize on this.
+1. **CLI mutex**: all write operations acquire the `Local\EnvManager.RegistryMutation` Windows named mutex. Concurrent CLI writes serialize on this. The `service` verbs are the one deliberate exception: they are named-pipe forwarders that write no registry value, so the mutex is held by the CLI child the service delegates to rather than by the gateway process (`src/CliRuntime.cs`, #164) - a gateway that holds it deadlocks every Background-mode rotate against its own delegate.
 2. **Rust `CLI_RWLOCK`**: the IPC layer separates read concurrency from write exclusivity at the process level.
 3. **Frontend `writeChain`**: the GUI serializes write IPC calls so the user cannot race two write commands through the UI.
 

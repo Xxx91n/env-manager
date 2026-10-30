@@ -15,8 +15,12 @@ namespace EnvManager.Engine.Tests;
 /// child in session 0, where this namespace is not shared and the question never arises,
 /// so a passing Background case is strictly stronger evidence than a passing Service case.
 /// Mutex ownership is tracked per thread, so a second thread stands in for the second
-/// process without spawning one.
+/// process without spawning one. The class joins CliSnapshotSerial because it contends for
+/// the machine-global `Local\` mutex: the in-process `Program.Main` cases in that collection
+/// take the same lock while they run, and overlapping with them would turn either side into
+/// a timing artefact.
 /// </summary>
+[Collection("CliSnapshotSerial")]
 public class ServiceGatewayLockTests
 {
     const string MutexName = @"Local\EnvManager.RegistryMutation";

@@ -4,8 +4,8 @@
 #
 # Flow (steady-state -> inject -> detect -> recover -> steady-state):
 #   seed secretMount.json -> start `env-manager-service --mode=background` ->
-#   `service ping` OK -> `service rotate <mount>` under the session write lock
-#   (the GUI's own rotate path, #164) ->
+#   `service ping` OK -> `service rotate <mount>` through the GUI's own pipe path, with
+#   the session write lock now held by the delegated child instead of the gateway (#164) ->
 #   `service ping` OK -> taskkill /F (TerminateProcess = kill -9 equivalent) ->
 #   liveness probe detects death -> harness restarts the process (playing the
 #   production watchdog role; SCM auto-recovery stays out of scope here because this
@@ -152,6 +152,13 @@ try {
     # lands in session 0 and never shares the namespace. All three assertions below fail on
     # that behaviour and pass on the fixed one; the timing bound sits under the budget so a
     # stall cannot hide behind a mere wording change.
+    #
+    # Deliberately NOT asserted: how many secrets this rotates. The fixture mount is not
+    # referenced by any profile, so `RotateAll` reports 0/0 here, and pinning a count would
+    # freeze the separate "each provider unit silently skips one secret" defect into an
+    # expectation. The evidence this step owes is that the delegated child runs at all,
+    # which exit 0 plus the elapsed time and the absent contention message already carry;
+    # the summary line is logged for the record.
     $rotateWatch = [System.Diagnostics.Stopwatch]::StartNew()
     # A failing rotate explains itself on stderr ("Error: ..."); this harness has to read
     # that text, so the capture runs under 'Continue' - same reason test-all.ps1 keeps
