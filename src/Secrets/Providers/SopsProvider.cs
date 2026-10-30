@@ -40,15 +40,6 @@ internal sealed class SopsProvider : ISecretProvider
 
     private static readonly string SOPS_BINARY = FindSopsBinary();
 
-    // Single creation point for the plaintext temp directory. Both Encrypt and Decrypt go
-    // through it so neither can inherit %TEMP%'s ACL by accident: on a host whose TEMP is
-    // C:\Windows\Temp the inherited ACE grants BUILTIN\Users read, and this directory is
-    // where the plaintext lands. SecretTempDirectory applies the owner-only DACL in the
-    // same call that creates the directory; a DACL that cannot be applied is logged and
-    // the provider keeps working, while a directory that cannot be created still throws.
-    private string CreatePlaintextTempDirectory()
-        => SecretTempDirectory.Create(Name).FullName;
-
     // Budget for the `sops --version` availability probe. Measured on a warm Windows
     // host: 2.1-2.9s wall clock per start (antivirus scans the resolved binary), and it
     // overshoots 5s under concurrent load. The probe MUST NOT be stricter than the
@@ -142,9 +133,15 @@ internal sealed class SopsProvider : ISecretProvider
         }
     }
 
-    // Where this provider writes the plaintext sops needs to read or produce (#177).
+    // Single creation point for the plaintext temp directory, and the only place that
+    // decides where it lives (#177). Both Encrypt and Decrypt go through it so neither can
+    // inherit %TEMP%'s ACL by accident: on a host whose TEMP is C:\Windows\Temp the
+    // inherited ACE grants BUILTIN\Users read, and this directory is where the plaintext
+    // lands. `SecretTempDirectory` (#178) applies the owner-only DACL in the same call that
+    // creates the directory; a DACL that cannot be applied is logged and the provider keeps
+    // working, while a directory that cannot be created still throws.
     //
-    // A service-delegated rotation is handed a directory the service owns through
+    // A service-delegated rotation is handed a parent directory the service owns through
     // ENVMANAGER_SOPS_SCRATCH_DIR and deletes once the CLI child is gone: that is the only
     // shape that also covers a stop, because the CLI's own `finally` never runs when it is
     // terminated. Unset, or set to something that cannot be written, this falls back to
@@ -154,9 +151,8 @@ internal sealed class SopsProvider : ISecretProvider
     // ticket requires the fallback to leave a trace, and from in here an un-delegated call
     // and a delegation whose variable never arrived are indistinguishable.
     private const string ScratchRootEnvVar = "ENVMANAGER_SOPS_SCRATCH_DIR";
-    private const string WorkingDirectoryPrefix = "env-manager-sops-";
 
-    internal static string CreateWorkingDirectory(string operation)
+    internal string CreateWorkingDirectory(string operation)
     {
         string? scratchRoot = Environment.GetEnvironmentVariable(ScratchRootEnvVar);
         if (string.IsNullOrWhiteSpace(scratchRoot))
@@ -164,36 +160,30 @@ internal sealed class SopsProvider : ISecretProvider
             Console.Error.WriteLine("Warning: sops " + operation + " has no delegated scratch root (" +
                 ScratchRootEnvVar + " is unset); using " + Path.GetTempPath() +
                 " with a best-effort delete only");
-        }
-        else
-        {
-            string candidate = Path.Combine(scratchRoot, WorkingDirectoryPrefix + Guid.NewGuid().ToString("N"));
-            try
-            {
-                Directory.CreateDirectory(candidate);
-                return candidate;
-            }
-            catch (Exception ex) when (ex is IOException || ex is UnauthorizedAccessException
-                                       || ex is ArgumentException || ex is NotSupportedException
-                                       || ex is System.Security.SecurityException)
-            {
-                // Exception type only, never ex.Message: the type is stable text, while the
-                // message can quote whatever path segment Windows objected to.
-                Console.Error.WriteLine("Warning: sops " + operation + " scratch root '" + scratchRoot +
-                    "' is not usable (" + ex.GetType().Name + "); falling back to " + Path.GetTempPath());
-            }
+            return SecretTempDirectory.Create(Name).FullName;
         }
 
-        string fallback = Path.Combine(Path.GetTempPath(), WorkingDirectoryPrefix + Guid.NewGuid().ToString("N"));
-        Directory.CreateDirectory(fallback);
-        return fallback;
+        try
+        {
+            return SecretTempDirectory.CreateUnder(scratchRoot, Name).FullName;
+        }
+        catch (Exception ex) when (ex is IOException || ex is UnauthorizedAccessException
+                                   || ex is ArgumentException || ex is NotSupportedException
+                                   || ex is System.Security.SecurityException)
+        {
+            // Exception type only, never ex.Message: the type is stable text, while the
+            // message can quote whatever path segment Windows objected to.
+            Console.Error.WriteLine("Warning: sops " + operation + " scratch root '" + scratchRoot +
+                "' is not usable (" + ex.GetType().Name + "); falling back to " + Path.GetTempPath());
+            return SecretTempDirectory.Create(Name).FullName;
+        }
     }
 
     public string Encrypt(string plaintext, string? context = null)
     {
         EnsureSopsAvailable();
 
-        string tempDir = CreatePlaintextTempDirectory();
+        string tempDir = CreateWorkingDirectory(SecretProviderErrors.OpEncrypt);
 
         string plainFile = Path.Combine(tempDir, "secret.json");
         string encFile = Path.Combine(tempDir, "secret.enc.json");
@@ -290,7 +280,7 @@ internal sealed class SopsProvider : ISecretProvider
 
         EnsureSopsAvailable();
 
-        string tempDir = CreatePlaintextTempDirectory();
+        string tempDir = CreateWorkingDirectory(SecretProviderErrors.OpDecrypt);
 
         string encFile = Path.Combine(tempDir, "secret.enc.json");
         string plainFile = Path.Combine(tempDir, "secret.dec.json");

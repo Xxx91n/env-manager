@@ -50,7 +50,7 @@ public sealed class SopsScratchDirectoryTests : IDisposable
     {
         Environment.SetEnvironmentVariable(ScratchRootVariable, _scratchRoot);
 
-        string dir = SopsProvider.CreateWorkingDirectory(SecretProviderErrors.OpEncrypt);
+        string dir = new SopsProvider().CreateWorkingDirectory(SecretProviderErrors.OpEncrypt);
         try
         {
             AssertDirectlyUnder(_scratchRoot, dir);
@@ -75,7 +75,7 @@ public sealed class SopsScratchDirectoryTests : IDisposable
         {
             Console.SetError(captured);
             Environment.SetEnvironmentVariable(ScratchRootVariable, null);
-            dir = SopsProvider.CreateWorkingDirectory(SecretProviderErrors.OpDecrypt);
+            dir = new SopsProvider().CreateWorkingDirectory(SecretProviderErrors.OpDecrypt);
         }
         finally
         {
@@ -119,7 +119,7 @@ public sealed class SopsScratchDirectoryTests : IDisposable
         {
             Console.SetError(captured);
             Environment.SetEnvironmentVariable(ScratchRootVariable, unusable);
-            dir = SopsProvider.CreateWorkingDirectory(SecretProviderErrors.OpEncrypt);
+            dir = new SopsProvider().CreateWorkingDirectory(SecretProviderErrors.OpEncrypt);
         }
         finally
         {
