@@ -262,12 +262,15 @@ partial class Program
 
         string kitJson = JsonSerializer.Serialize(kit, JsonOptsIndented);
 
-        // Write plaintext to temp, then DPAPI-encrypt.
-        string tmpPath = Path.Combine(Path.GetTempPath(), "envmanager-kit-" + Environment.ProcessId + ".json");
-        WriteAtomicUtf8(tmpPath, kitJson);
-
+        // Write plaintext to temp, then DPAPI-encrypt. The temp file is created inside a
+        // directory that was already owner-only when it came into existence, so the plaintext
+        // is never covered by %TEMP%'s inherited ACL - not during the write, not during the
+        // WriteAtomicUtf8 rename window. SurvivalKitTempFile owns that decision.
+        (DirectoryInfo kitDirectory, string tmpPath) = SurvivalKitTempFile.Create();
         try
         {
+            WriteAtomicUtf8(tmpPath, kitJson);
+
             string encrypted = DpapiHelper.EncryptSecret(kitJson);
             WriteAtomicUtf8(outputPath, encrypted);
         }
@@ -275,6 +278,7 @@ partial class Program
         {
             // Secure delete temp plaintext
             try { File.Delete(tmpPath); } catch { }
+            SurvivalKitTempFile.Delete(kitDirectory);
         }
 
         DebugLog($"audit export-survival-kit: {events.Count} events -> {outputPath}");
