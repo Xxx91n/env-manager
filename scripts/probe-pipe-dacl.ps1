@@ -44,6 +44,9 @@ $script:Checks = New-Object System.Collections.Generic.List[object]
 $script:CreatedService = $false
 # PID of the service process this run started, for the same reason.
 $script:ServicePid = 0
+# True only after this run created the local account, so cleanup can never delete one it
+# did not create.
+$script:CreatedLowUser = $false
 # Binaries and the probe copy live in <ScratchRoot>\bin (Users: ReadAndExecute);
 # everything the secondary identity writes - its wrapper and its output files - lives in
 # <ScratchRoot>\work (Users: Modify). Two directories so the account that runs the probe
@@ -156,7 +159,9 @@ public static class PipeProbe
         return "GET-NAMED-SEC-INFO-OK(by name worked, contrary to the recorded measurement)";
     }
 
-    // A bare access check: no CLI, no retry, no envelope. 0x120000 = GENERIC_READ|GENERIC_WRITE.
+    // A bare access check: no CLI, no retry, no envelope. The mask is the caller's; the
+    // probe runs once with SYNCHRONIZE|READ_CONTROL (0x120000, below any client's request)
+    // and once with GENERIC_READ|GENERIC_WRITE (0xC0000000, what a pipe client asks for).
     public static string TryOpen(string name, uint access)
     {
         IntPtr h = CreateFileW(name, access, FILE_SHARE_BOTH, IntPtr.Zero, OPEN_EXISTING, 0, IntPtr.Zero);
@@ -420,10 +425,15 @@ function Remove-ProbeService {
 
 function New-LowUser {
     param([string]$Name = 'em-pipe-low')
-    if (Get-LocalUser -Name $Name -ErrorAction SilentlyContinue) { Remove-LowUser -Name $Name }
+    # Refuse rather than reuse: cleanup deletes this account, and an account that already
+    # existed on the machine is not this run's to remove.
+    if (Get-LocalUser -Name $Name -ErrorAction SilentlyContinue) {
+        throw "refusing to run: local account '$Name' already exists (cleanup would delete it)."
+    }
     $password = 'Pp' + [guid]::NewGuid().ToString('N').Substring(0, 16) + 'x!'
     $secure = ConvertTo-SecureString $password -AsPlainText -Force
     $null = New-LocalUser -Name $Name -Password $secure -PasswordNeverExpires -AccountNeverExpires -ErrorAction Stop
+    $script:CreatedLowUser = $true
     $null = Add-LocalGroupMember -Group 'Users' -Member $Name -ErrorAction SilentlyContinue
     try { $null = Remove-LocalGroupMember -Group 'Administrators' -Member $Name -ErrorAction SilentlyContinue }
     catch { Write-Host ("not an administrator to begin with: " + $_.Exception.Message) }
@@ -433,6 +443,9 @@ function New-LowUser {
 
 function Remove-LowUser {
     param([string]$Name = 'em-pipe-low')
+    # Same rule as the service: only what this run created is removed.
+    if (-not $script:CreatedLowUser) { return }
+    $script:CreatedLowUser = $false
     if (Get-LocalUser -Name $Name -ErrorAction SilentlyContinue) {
         $null = Remove-LocalUser -Name $Name -ErrorAction SilentlyContinue
         Write-Evidence -Key 'lowuser.removed' -Value $Name
