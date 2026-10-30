@@ -105,6 +105,12 @@ internal static class SecretTempDirectory
     // Production delegates, i.e. the two calls #178 landed: the security descriptor goes
     // in as SECURITY_ATTRIBUTES on the create call, and the degradation is recorded on the
     // --debug channel through the scrubber.
+    //
+    // Residual gap: the success-path tests pin that Create(provider) still passes
+    // CreateWithDacl - a directory carrying %TEMP%'s inherited ACL fails them - but
+    // nothing pins that it passes RecordDegradation. Swapping that one delegate for a
+    // no-op would silence every degradation with the suite still green, so the binding is
+    // covered by review rather than by a test.
     private static DirectoryInfo CreateWithDacl(string path, DirectorySecurity security)
         => security.CreateDirectory(path);
 

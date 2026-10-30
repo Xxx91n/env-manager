@@ -9,10 +9,10 @@
 // identity and the well-known SID types, never from SID text, so the test passes on a
 // localized Windows as well as an English one.
 //
-// The two tests below cover the success path only. The second half of the boundary - what
-// happens when the DACL is rejected - is driven through SecretTempDirectory's seam
-// overload further down, because nothing on a normal machine can make an owner-only DACL
-// fail on demand.
+// The two tests in the first section cover the success path only. The second half of the
+// boundary - what happens when the DACL is rejected - is driven through
+// SecretTempDirectory's seam overload in the section below, because nothing on a normal
+// machine can make an owner-only DACL fail on demand.
 
 using System;
 using System.Collections.Generic;
@@ -90,7 +90,9 @@ public sealed class SecretTempDirectoryAclTests
     // provider's create point is SecretTempDirectory.Create(Name).FullName, so the
     // directory asserted on here is the one Encrypt/Decrypt would have received, and
     // reaching it through Encrypt/Decrypt would need the sops binary - a provider stub is
-    // #181's, not this ticket's.
+    // #181's, not this ticket's. Residual gap, stated rather than implied: nothing here
+    // goes red if SopsProvider stops routing through SecretTempDirectory, so that one line
+    // of the provider stays covered by review rather than by a test.
 
     [Fact]
     public void Create_DaclRejected_FallsBackToAUsableDirectoryUnderTheInheritedAcl()
@@ -139,8 +141,11 @@ public sealed class SecretTempDirectoryAclTests
         string? requestedPath = null;
         var recorded = new List<string>();
         // A bearer token in the failure text: whatever the boundary leaves behind has to
-        // come out the other side of Program.ScrubExceptionMessage.
-        const string token = "0123456789ABCDEF";
+        // come out the other side of Program.ScrubExceptionMessage. Eight characters on
+        // purpose - that is how much the scrubber masks after a matched pattern, so a
+        // token this short leaves nothing behind and the assertion below is not just
+        // "the first half is gone".
+        const string token = "s3cr3t-1";
 
         DirectoryInfo directory = SecretTempDirectory.Create(
             "sops",
@@ -157,8 +162,8 @@ public sealed class SecretTempDirectoryAclTests
             Assert.Contains("ACL restriction failed", line);
             // The recorded line names the directory it could not restrict.
             Assert.Contains(requestedPath!, line);
-            // Scrubbed: the mask is there and the secret behind it is not.
-            Assert.Contains("<redacted>", line);
+            // Scrubbed: the mask replaced the token whole, so no part of it survives.
+            Assert.Contains("Bearer <redacted>", line);
             Assert.DoesNotContain(token, line);
         }
         finally
