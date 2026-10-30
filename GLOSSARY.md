@@ -5,11 +5,11 @@ Canonical domain vocabulary for this repository: terms plus their _Avoid_ pairs.
 ## Secrets domain
 
 **Secret Envelope**:
-The on-disk JSON container in a profile's `secretVariables` array: `provider`, `version`, `createdAt`, `ciphertext` (DPAPI base64), `targetName`. Schema v1.
+The on-disk JSON container for one secret: `provider`, `version`, `createdAt`, `ciphertext` (DPAPI base64), `targetName`. Schema v1. Holds the secret itself; a profile stores it in `Variables[].Value`, or stores a `mount:<id>` reference to the `SecretMount` that holds it.
 _Avoid_: secret blob, encrypted value, secret record
 
 **Secret Mount**:
-The schema v2 unit in `secretMount.json`, referenced by id from `profiles.secretMountRefs`; adds `refreshPolicy`, `refreshIntervalSeconds`, `lastRotatedAt`, `expiresAt` to the envelope fields. Replaces the direct `secretVariables` array.
+The schema v2 unit in `secretMount.json`, named from a profile by a `mount:<id>` reference in `Variables[].Value` (the profile keeps the secret variable name in `secretVariables`; the envelope itself never lives there); adds `refreshPolicy`, `refreshIntervalSeconds`, `lastRotatedAt`, `expiresAt` to the envelope fields.
 _Avoid_: mount point, secret reference, secret link
 
 **Mount Refresh Policy**:

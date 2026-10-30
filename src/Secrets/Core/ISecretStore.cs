@@ -16,8 +16,11 @@ internal interface ISecretStore
     string Mount(string plaintext, string? context = null);
 
     // Re-encrypt every secret across all profiles with the active provider.
+    // A stored value is either an envelope or a "mount:<id>" reference; the holder resolves
+    // the references and receives the rotated envelopes back, so the store never needs to
+    // know where an envelope lives.
     // Returns (totalSecrets, rotatedCount, failedCount).
-    (int total, int rotated, int failed) Rotate(List<ProfileData> profiles);
+    (int total, int rotated, int failed) Rotate(List<ProfileData> profiles, ISecretEnvelopeHolder envelopeHolder);
 
     // Serialize all secrets of a profile into a DPAPI-encrypted export blob.
     string Export(ProfileData profile);

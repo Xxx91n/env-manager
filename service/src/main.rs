@@ -27,6 +27,8 @@ mod scm;
 mod resilience_tests;
 #[cfg(test)]
 mod rotate_stop_tests;
+#[cfg(test)]
+mod rotate_writeback_tests;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RuntimeMode {
