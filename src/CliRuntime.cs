@@ -278,23 +278,24 @@ Commands:
         string command = args[0].ToLowerInvariant();
         if (command is "list" or "get" or "backup" or "diff" or "validate" or "agents" or "help" or "expand") return false;
         // `service` is a named-pipe forwarder: it opens a pipe, writes one request line and
-        // reads one response line (ServiceCommand.RunServiceCommand), so this process never
-        // writes the registry. It is split per verb, because only `rotate` delegates to a
-        // CLI child and only that delegation collided with this mutex:
-        //   - rotate: the child it spawns classifies as write and takes this mutex itself,
-        //     so a gateway that held it first deadlocked its own delegate. In Background
-        //     mode the service runs in the caller's session, so the child shared this
-        //     `Local\` namespace and every rotate answered "Another Env Manager write
-        //     operation is still running" after the full 30 s budget, while the same code
-        //     took 7 s in Service mode, whose session-0 child never shares the namespace
-        //     (#164). The write is still locked, just by the process that performs it.
-        //   - ping / status / health: probes. They write nothing, and the Rust shell
-        //     already treats them as reads (main.rs is_read_only), so a health poll must
-        //     not queue behind a rotate's budget.
-        //   - refresh / reload / shutdown: no child, so no deadlock; these keep the mutex,
-        //     because rewriting secretMount.json is a cross-process write (a rotate child
-        //     writes the same file under this lock) and this gateway is the only party
-        //     that can serialize it against another session's CLI.
+        // reads one response line (ServiceCommand.RunServiceCommand), so no registry value is
+        // written in this process. What varies per verb follows from who performs the write:
+        //   - rotate delegates to a CLI child, and that child is the writer - it classifies
+        //     as write and takes this mutex itself. A gateway that took it first deadlocked
+        //     its own delegate: in Background mode the service runs in the caller's session,
+        //     so the child shares this `Local\` namespace and every rotate answered "Another
+        //     Env Manager write operation is still running" after the full 30 s budget,
+        //     while the same code took 7 s in Service mode, whose session-0 child never
+        //     shares the namespace (#164).
+        //   - ping / status / health / reload / shutdown have no delegate and write no mount
+        //     state, so a gateway lock would only queue them behind someone else's write: a
+        //     health poll, or the stop request #153 taught us to deliver promptly, would
+        //     wait out a rotate's budget for nothing.
+        //   - refresh keeps the lock. It is the one verb whose service-side write
+        //     (secretMount.json) a same-session CLI can also perform - a terminal
+        //     `profile secret-provider rotate` writes that file - and it spawns no child, so
+        //     the lock cannot deadlock. This mutex is session-scoped, so it serializes
+        //     same-session writers only, which is all it ever did.
         // Rejected alternatives: holding the mutex only around the IPC call re-creates the
         // deadlock (the child needs the lock while the gateway waits for that same child),
         // and handing the child an inherited holder identity is a bypass - the actual
@@ -306,7 +307,7 @@ Commands:
         if (command == "service")
         {
             string serviceVerb = args.Length > 1 ? args[1].ToLowerInvariant() : "";
-            if (serviceVerb is "rotate" or "ping" or "status" or "health") return false;
+            if (serviceVerb is "rotate" or "ping" or "status" or "health" or "reload" or "shutdown") return false;
             return true;
         }
         if (command == "history") return args.Length > 1 && args[1].Equals("undo", StringComparison.OrdinalIgnoreCase);

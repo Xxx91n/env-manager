@@ -40,10 +40,13 @@ public class ServiceGatewayLockTests
     {
         // The one verb whose delegate needs the mutex the gateway used to hold.
         new object[] { new[] { "service", "rotate", "vault-team" } },
-        // Probes write nothing and must not queue behind a rotate's budget.
+        // No delegate and no mount write: a gateway lock would only queue these behind
+        // someone else's write, so a health poll or a stop would wait out a rotate.
         new object[] { new[] { "service", "status" } },
         new object[] { new[] { "service", "ping" } },
         new object[] { new[] { "service", "health" } },
+        new object[] { new[] { "service", "reload" } },
+        new object[] { new[] { "service", "shutdown" } },
     };
 
     [Theory]
@@ -55,11 +58,9 @@ public class ServiceGatewayLockTests
 
     public static IEnumerable<object[]> LockHoldingServiceArgv() => new[]
     {
-        // No child, no deadlock: these keep the mutex, which is the only cross-process
-        // serializer for the secretMount.json rewrite they trigger.
+        // The only verb whose service-side write a same-session CLI can also perform, and
+        // it spawns no child, so holding the lock cannot deadlock it.
         new object[] { new[] { "service", "refresh", "vault-team" } },
-        new object[] { new[] { "service", "reload" } },
-        new object[] { new[] { "service", "shutdown" } },
     };
 
     [Theory]
@@ -144,8 +145,9 @@ public class ServiceGatewayLockTests
     public void ServiceRefresh_StillTakesTheSessionLock()
     {
         // refresh has no delegate to deadlock against, and it is the reason the mutex stays:
-        // the service rewrites secretMount.json, a file another session's CLI can also
-        // write, and this gateway is the only party that can serialize the two.
+        // the service rewrites secretMount.json, a file a same-session CLI can also write
+        // (a terminal `profile secret-provider rotate`), and the mutex is session-scoped -
+        // so this is exactly the pair the lock can still serialize.
         Mutex? gateway = Program.AcquireMutationLock(new[] { "service", "refresh", "vault-team" });
         try
         {
