@@ -62,8 +62,8 @@ internal static class SecretTempDirectory
 
     // Seam overload: createWithDacl is the create call that carries the DACL, and
     // recordDegradation receives the line AFTER ScrubExceptionMessage has run, so a test
-    // observes exactly what production would have recorded and cannot bypass the
-    // scrubber.
+    // observes exactly what production would have recorded and cannot bypass
+    // ScrubExceptionMessage.
     //
     // Why a parameter seam rather than the alternatives:
     //

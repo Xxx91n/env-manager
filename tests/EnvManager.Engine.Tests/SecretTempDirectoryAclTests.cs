@@ -95,7 +95,7 @@ public sealed class SecretTempDirectoryAclTests
     // of the provider stays covered by review rather than by a test.
 
     [Fact]
-    public void Create_DaclRejected_FallsBackToAUsableDirectoryUnderTheInheritedAcl()
+    public void Create_DaclRejected_FallsBackToAnInheritedAclDirectoryTheProviderCanUse()
     {
         string? requestedPath = null;
         var recorded = new List<string>();
@@ -157,6 +157,11 @@ public sealed class SecretTempDirectoryAclTests
             recorded.Add);
         try
         {
+            // The fallback really produced the directory. Without this assertion a catch
+            // that returns `new DirectoryInfo(path)` - no directory, no log - would keep
+            // this test green on the log line alone.
+            Assert.True(Directory.Exists(directory.FullName));
+
             Assert.Single(recorded);
             string line = recorded[0];
             Assert.Contains("ACL restriction failed", line);
@@ -200,7 +205,11 @@ public sealed class SecretTempDirectoryAclTests
             // Recorded before the failure escapes: the line documents the degradation, it
             // does not replace the exception.
             Assert.Single(recorded);
-            Assert.False(Directory.Exists(requestedPath!));
+            // And the occupier is untouched - no directory was substituted for it and the
+            // file was not consumed - so the IOException above came from the name being
+            // taken rather than from something the boundary did.
+            Assert.True(File.Exists(requestedPath!));
+            Assert.Equal("occupies the name the directory needs", File.ReadAllText(requestedPath!));
         }
         finally
         {
