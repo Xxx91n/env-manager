@@ -279,41 +279,37 @@ Commands:
         if (command is "list" or "get" or "backup" or "diff" or "validate" or "agents" or "help" or "expand") return false;
         // `service` is a named-pipe forwarder: it opens a pipe, writes one request line and
         // reads one response line (ServiceCommand.RunServiceCommand), so no registry value is
-        // written in this process. What varies per verb follows from who performs the write:
-        //   - rotate delegates to a CLI child, and that child is the writer - it classifies
-        //     as write and takes this mutex itself. A gateway that took it first deadlocked
-        //     its own delegate: in Background mode the service runs in the caller's session,
-        //     so the child shares this `Local\` namespace and every rotate answered "Another
-        //     Env Manager write operation is still running" after the full 30 s budget,
-        //     while the same code took 7 s in Service mode, whose session-0 child never
-        //     shares the namespace (#164).
-        //   - ping / status / health / reload / shutdown have no delegate and write no mount
-        //     state, so a gateway lock would only queue them behind someone else's write: a
-        //     health poll, or the stop request #153 taught us to deliver promptly, would
-        //     wait out a rotate's budget for nothing.
-        //   - refresh keeps the lock: it spawns no child, so locking cannot deadlock it, and
-        //     the mount-file rewrite it triggers is a file a same-session CLI writes too (a
-        //     terminal `profile secret-provider rotate`), which is the only contention this
-        //     session-scoped mutex can serialize. rotate gets no such treatment because its
-        //     writer is the child; the metadata stamp the service writes after that child
-        //     exits is guarded by the service's own reconcile lock, and that is the parent
-        //     spec's async window, not something a gateway lock can cover without deadlock.
+        // written in this process and this mutex must not be taken here at all. Two reasons,
+        // both of them the same defect seen from different verbs:
+        //   - rotate delegates to a CLI child that is the writer and classifies as write, so
+        //     it takes this mutex itself. A gateway that took it first deadlocked its own
+        //     delegate: in Background mode the service runs in the caller's session, the
+        //     child therefore shares this `Local\` namespace, and every rotate answered
+        //     "Another Env Manager write operation is still running" after the full 30 s
+        //     budget - while the same code took 7 s in Service mode, whose session-0 child
+        //     never shares the namespace (#164).
+        //   - refresh mutates state inside the service, under that service's own reconcile
+        //     lock. Holding this mutex across the IPC round-trip re-creates the deadlock from
+        //     the other side: rotate_mount holds the reconcile lock across its delegated
+        //     child, the child wants this mutex, and the refresh request wants the reconcile
+        //     lock - so the child times out behind a sibling request. That is why `refresh` is
+        //     not exempted "because it writes": the writer of secretMount.json is the service,
+        //     and its serializer is the reconcile lock, not a lock any gateway process can
+        //     take without joining that cycle. A terminal CLI writing the same file from
+        //     outside the service stays unserialized - the gap Service mode has always had,
+        //     and a narrower exposure than a guaranteed 30 s rotate failure.
+        // The remaining verbs only read or write nothing, so no verb needs the lock. What the
+        // gateway therefore guarantees is narrower and checkable: it never holds a write lock
+        // while waiting for work it caused to run.
         // Rejected alternatives: holding the mutex only around the IPC call re-creates the
         // deadlock (the child needs the lock while the gateway waits for that same child),
-        // and handing the child an inherited holder identity is a bypass - the actual
-        // writer would run unmutexed against a `set`.
+        // and handing the child an inherited holder identity is a bypass - the actual writer
+        // would run unmutexed against a `set`.
         // No GUI-side change is needed to match: main.rs is_read_only keeps refresh, rotate,
         // reload and shutdown on the write side of CLI_RWLOCK, which serializes the shell's
         // own submissions and never contended with the service's child (the service spawns
         // it, not the shell).
-        if (command == "service")
-        {
-            // Only `refresh` writes anything this process can serialize; `rotate` delegates,
-            // the probes only read, `reload`/`shutdown` write nothing, and an unknown verb is
-            // rejected by the usage path without touching state.
-            string serviceVerb = args.Length > 1 ? args[1].ToLowerInvariant() : "";
-            return serviceVerb == "refresh";
-        }
+        if (command == "service") return false;
         if (command == "history") return args.Length > 1 && args[1].Equals("undo", StringComparison.OrdinalIgnoreCase);
         if (command == "bulk") return args.Length > 1 && args[1].Equals("import", StringComparison.OrdinalIgnoreCase) && !args.Contains("--dry-run");
         if (command == "profile") return args.Length < 2 || !new[] { "list", "show", "status", "preview", "export", "help" }.Contains(args[1], StringComparer.OrdinalIgnoreCase);
@@ -329,14 +325,13 @@ Commands:
         return IsWriteInvocation(args!);
     }
 
-    // Single source of truth for the cross-process write lock. The xUnit lane opens this
-    // same name to prove what the gateway does and does not hold, so a rename here must not
-    // leave a test asserting on a stale literal (#164).
+    // Single source of truth for the cross-process write lock: the name is spelled once, so a
+    // rename cannot leave another site asserting on a stale one (#164).
     internal const string MutationMutexName = @"Local\EnvManager.RegistryMutation";
 
     // internal rather than private for the same reason as IsWriteInvocationForFuzz: the
-    // xUnit lane measures the decision this returns (mutex or null) instead of restating
-    // the classification table it is derived from (#164).
+    // xUnit lane asks this - not the classifier - what the gateway acquires, so a change that
+    // keeps the table right while acquiring a lock anyway still fails (#164).
     internal static Mutex? AcquireMutationLock(string[] args)
     {
         if (!IsWriteInvocation(args)) return null;
