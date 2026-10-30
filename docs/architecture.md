@@ -24,6 +24,8 @@ Both pipes - `\\.\pipe\EnvManager.Service` and `\\.\pipe\EnvManager.Background` 
 
 Two post-creation routes were measured and are wrong for a named pipe. `SetNamedSecurityInfoW` by name answers `87 ERROR_INVALID_PARAMETER`, so the "apply the declared DACL after create" helper this repository used to carry never had an effect and wiring it up would have changed nothing. Setting the DACL on each instance through a handle re-opens the instance the accept loop just created and takes the listener down: every later client gets `ERROR_FILE_NOT_FOUND`, sometimes `ERROR_PIPE_BUSY`. Without security attributes the kernel derived `D:(A;;FA;;;SY)(A;;FA;;;BA)(A;;FA;;;BA)(A;;FR;;;WD)(A;;FR;;;AN)` from the service token - Everyone and Anonymous readable, which is the state this descriptor replaces.
 
+Read-back note: the owner ACE is declared as `GA`, and the object stores it as `FA`, because the kernel maps generic rights onto the object type's specific rights when the descriptor is assigned. An export therefore reads `D:(A;;FA;;;BA)(A;;FA;;;SY)(A;;FA;;;OW)`. That difference is the mapping, not a different descriptor, and the tests assert the stored form.
+
 Accepted cost: a non-administrator can no longer open `\\.\pipe\EnvManager.Service` at all. Before the tightening they could open it and read from it but never complete a request, so what was removed is a read channel rather than a capability - consistent with writes to HKLM already requiring elevation. Background mode is unaffected because the owner of that pipe is the user who launched it. The crate deliberately has no "current interactive user" concept: the service runs in session 0, where that user is either absent or the wrong answer under RDP and fast user switching.
 
 Evidence is split in two, because the two halves need different apparatus. The unit half is `pipe_security_tests` in `service/src/ipc.rs`: a created instance must carry the three declared ACEs (read back through a handle, since the by-name API cannot read a live pipe), and the anti-squatting flag must still refuse a second creator. The effect half is `scripts/probe-pipe-dacl.ps1`, run only by the manual `Pipe DACL Observation` workflow: it registers the service as LocalSystem, exports both pipes' SDDL through a handle with `SE_KERNEL_OBJECT`, gets a pong from the CLI gateway and from the GUI watchdog shape, and records a non-administrator bare open as `err=5`.
@@ -586,7 +588,7 @@ The test layers in this document are not a pyramid with a single narrative; they
 
 ### Composition governance -- adding a new paradigm
 
-Every new test style that wants to land in this repo must (a) name which defect class it catches that the existing 26 do not, (b) name its target module/file, (c) pick a tool already in this list (or justify a new one), and (d) pick the CI tier that matches its risk-vs-cost trade-off. Adding a row requires updating this section and the AGENTS.md Testing paragraph in the same commit; rounds of `reports/NN-*.md` provide evidence. Pluggability rule: any row that fails three PR cycles in a row (red or flake pattern) is demoted from the table with rationale -- preventing paradigm inflation is the explicit purpose of this ledger (round-5 Q4 item 5).
+Every new test style that wants to land in this repo must (a) name which defect class it catches that the existing 27 do not, (b) name its target module/file, (c) pick a tool already in this list (or justify a new one), and (d) pick the CI tier that matches its risk-vs-cost trade-off. Adding a row requires updating this section and the AGENTS.md Testing paragraph in the same commit; rounds of `reports/NN-*.md` provide evidence. Pluggability rule: any row that fails three PR cycles in a row (red or flake pattern) is demoted from the table with rationale -- preventing paradigm inflation is the explicit purpose of this ledger (round-5 Q4 item 5).
 
 ### Cross-references
 
@@ -594,7 +596,7 @@ Every new test style that wants to land in this repo must (a) name which defect 
 - Service watchdog/SCM recovery: see "Service Resilience Fault Injection (watchdog/SCM recovery)" above.
 - Secret provider layering (L0/L1/L2): see "Secret Provider Contract Test Suite (L0/L1/L2 layering)" and "Secret Provider L1 Emulator Matrix".
 - Canary zero-leak + golden/snapshot: see "Canary Zero-Leak Assertion Net and Golden/Snapshot Layers".
-- AGENTS.md Testing paragraphs (#1, #3, #5-26) match this table row-for-row; only the portfolio-narrative paragraph (this section) lives in architecture.md because the table is the source of truth.
+- AGENTS.md Testing paragraphs (#1, #3, #5-27) match this table row-for-row; only the portfolio-narrative paragraph (this section) lives in architecture.md because the table is the source of truth.
 
 
 ## Secret Provider L1 Emulator Matrix

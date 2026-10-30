@@ -5,8 +5,10 @@
 // owner). Anyone else is refused at the first CreateFile, so "who may connect" does not
 // depend on a per-method check inside the dispatcher.
 // Anti-squatting: PIPE_FIRST_PIPE_INSTANCE flag rejects pre-existing pipe.
-// Design: the service runs as NT SERVICE\<svc> (virtual service account, no AD required), so the
-// named pipe is the only channel - the CLI stays a thin gateway and the GUI stays UI-only.
+// Design: the SCM runs the service as LOCAL SYSTEM (the installer's `ServiceInstall` sets
+// no `Account=`), so the named pipe is the only channel - the CLI stays a thin gateway and
+// the GUI stays UI-only. Under that identity the owner ACE in `PIPE_SDDL` is redundant with
+// the SYSTEM one; it earns its place on the Background pipe, whose owner is the launching user.
 
 use serde::{Deserialize, Serialize};
 use std::io;
@@ -790,6 +792,12 @@ mod pipe_security_tests {
     /// object, so removing the security attributes (or reverting to the default create)
     /// fails here even though the code still compiles.
     ///
+    /// The expectation spells the owner ACE as `FA`, not the declared `GA`: the kernel maps
+    /// generic rights onto the object type's specific rights when the descriptor is
+    /// assigned, so `GA` on a pipe object is stored as `FILE_ALL_ACCESS` and reads back as
+    /// `FA`. Asserting the declared spelling here would fail on a descriptor that was in
+    /// fact applied correctly.
+    ///
     /// Runs on a tokio runtime because a pipe handle has to register with the reactor to
     /// become a `NamedPipeServer`, not because the assertion needs async.
     #[tokio::test]
@@ -804,7 +812,7 @@ mod pipe_security_tests {
             3,
             "the instance DACL is not the three declared ACEs: {sddl}"
         );
-        for granted in ["(A;;FA;;;BA)", "(A;;FA;;;SY)", "(A;;GA;;;OW)"] {
+        for granted in ["(A;;FA;;;BA)", "(A;;FA;;;SY)", "(A;;FA;;;OW)"] {
             assert!(sddl.contains(granted), "instance DACL lost {granted}: {sddl}");
         }
         for widened in [";;;WD", ";;;AN"] {
@@ -818,14 +826,23 @@ mod pipe_security_tests {
     /// Anti-squatting must survive the switch to creation-time security attributes: the
     /// flag and the descriptor are arguments to the same call, so this is the regression
     /// the descriptor change could plausibly have caused.
+    ///
+    /// The error code is asserted, not just "some error": a failure for any other reason
+    /// (a descriptor that no longer converts, a broken option) would otherwise read as a
+    /// passing anti-squatting check. `5` is `ERROR_ACCESS_DENIED`, the documented answer
+    /// when the name is already owned; `231` is `ERROR_PIPE_BUSY`, which a named pipe can
+    /// return instead.
     #[tokio::test]
     async fn first_pipe_instance_flag_still_refuses_a_second_creator() {
         let pipe = test_pipe("Squat");
         let _first = create_instance(&pipe, true).expect("first creator must win");
         let second = create_instance(&pipe, true);
+        let code = second.as_ref().err().and_then(|e| e.raw_os_error());
         assert!(
-            second.is_err(),
-            "a second PIPE_FIRST_PIPE_INSTANCE creator took the name over"
+            matches!(code, Some(5) | Some(231)),
+            "a second PIPE_FIRST_PIPE_INSTANCE creator was not refused by the name \
+             ownership check (os error {:?})",
+            code
         );
     }
 }

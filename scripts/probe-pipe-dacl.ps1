@@ -42,12 +42,23 @@ $script:Checks = New-Object System.Collections.Generic.List[object]
 # True only after this run registered the SCM service itself, so cleanup can never
 # delete a registration it did not create.
 $script:CreatedService = $false
+# PID of the service process this run started, for the same reason.
+$script:ServicePid = 0
 # Binaries and the probe copy live in <ScratchRoot>\bin (Users: ReadAndExecute);
 # everything the secondary identity writes - its wrapper and its output files - lives in
 # <ScratchRoot>\work (Users: Modify). Two directories so the account that runs the probe
 # never holds write access to anything it executes.
 $script:WorkDir = Join-Path $ScratchRoot 'work'
 $script:BinDir = Join-Path $ScratchRoot 'bin'
+# Two access masks, because they answer different questions. 0x120000 is SYNCHRONIZE |
+# READ_CONTROL - the bare access check, deliberately below what any client asks for.
+# 0xC0000000 is GENERIC_READ | GENERIC_WRITE, the mask NamedPipeClientStream requests, so
+# it is what the CLI gateway and the GUI watchdog really need. The second is written in
+# decimal because PowerShell parses the hex literal as a negative Int32.
+$script:BareAccess = 0x120000
+$script:ClientAccess = 3221225472
+# One row per (identity, pipe) pair; rendered as a table into the summary artifact.
+$script:Matrix = New-Object System.Collections.Generic.List[object]
 
 # --- native access ------------------------------------------------------------
 
@@ -190,6 +201,13 @@ function Add-Check {
     Write-Host ("[{0}] {1} {2}" -f $verdict, $Name, $Detail)
 }
 
+# The identity matrix the artifact is supposed to carry: who, which pipe, and what the
+# access check answered for each mask and through each shipped client.
+function Add-MatrixRow {
+    param([string]$Identity, [string]$Pipe, [string]$Open, [string]$Cli)
+    $script:Matrix.Add([pscustomobject]@{ Identity = $Identity; Pipe = $Pipe; Open = $Open; Cli = $Cli })
+}
+
 # --- process helpers ---------------------------------------------------------
 
 function ConvertTo-ArgList {
@@ -234,9 +252,10 @@ function Invoke-Captured {
     }
 }
 
-# Process.Kill([bool]) only exists on .NET Core; Windows PowerShell 5.1 - the host the
-# secondary-identity cells run under - has the parameterless overload only. Probing the
-# method keeps one script valid on both instead of silently losing the kill.
+# Process.Kill([bool]) only exists on .NET Core; Windows PowerShell 5.1 has the
+# parameterless overload only. This script runs under pwsh in CI and the secondary-identity
+# child never reaches this code, but a manual 5.1 invocation would otherwise lose the
+# timeout kill silently, so the overload is probed instead of assumed.
 function Stop-ProcessTree {
     param([System.Diagnostics.Process]$Process)
     if (-not $Process) { return }
@@ -245,6 +264,27 @@ function Stop-ProcessTree {
         if ($treeKill) { $Process.Kill($true) } else { $Process.Kill() }
     }
     catch { Write-Host ("kill failed: " + $_.Exception.Message) }
+}
+
+# Terminates one process this run started. The image-name guard covers PID reuse between
+# the start and the cleanup: a recycled PID must never cost somebody else their process.
+function Stop-ProbeProcess {
+    param([int]$ProcessId, [string]$ImageName)
+    if (-not $ProcessId) { return }
+    $proc = Get-Process -Id $ProcessId -ErrorAction SilentlyContinue
+    if ($proc -and $proc.ProcessName -eq $ImageName) {
+        Stop-Process -Id $ProcessId -Force -ErrorAction SilentlyContinue
+        Write-Evidence -Key 'cleanup.killed' -Value ("{0} pid={1}" -f $ImageName, $ProcessId)
+    }
+}
+
+function Get-ChildProcessId {
+    param([int]$ParentProcessId, [string]$ImageName)
+    $child = Get-CimInstance Win32_Process -Filter ("ParentProcessId = {0}" -f $ParentProcessId) -ErrorAction SilentlyContinue |
+        Where-Object { $_.Name -eq $ImageName } |
+        Select-Object -First 1
+    if ($child) { return [int]$child.ProcessId }
+    return 0
 }
 
 # --- pipe observation --------------------------------------------------------
@@ -300,14 +340,25 @@ function Get-AceSet {
     return @([regex]::Matches($Sddl, '\((?:A|D);[^)]*\)') | ForEach-Object { $_.Value } | Sort-Object)
 }
 
+# Assigning a descriptor maps generic rights onto the object type's specific rights, so the
+# declared `GA` on the owner ACE is stored as `FILE_ALL_ACCESS` and reads back as `FA`.
+# Normalizing the expectation the same way keeps the declaration the single source instead
+# of duplicating a second literal that can drift from it.
+function ConvertTo-StoredSddl {
+    param([string]$Sddl)
+    return ($Sddl -replace ';;GA;;', ';;FA;;')
+}
+
 function Assert-DeclaredDacl {
     param([string]$Label, [string]$Sddl)
-    $expected = Get-AceSet -Sddl $DeclaredSddl
+    $stored = ConvertTo-StoredSddl -Sddl $DeclaredSddl
+    $expected = Get-AceSet -Sddl $stored
     $actual = Get-AceSet -Sddl $Sddl
+    Write-Evidence -Key ("sddl.declared_vs_stored[{0}]" -f $Label) -Value ("declared={0} expected_readback={1}" -f $DeclaredSddl, $stored) -Note 'the owner ACE differs by the generic-to-specific mapping, nothing else'
     # An unreadable DACL yields no ACEs at all; without the count guard two empty sets
     # would compare equal and the check would pass on a failed read.
     $same = ($expected.Count -gt 0) -and ($actual.Count -eq $expected.Count) -and (-not (Compare-Object -ReferenceObject $expected -DifferenceObject $actual))
-    Add-Check -Name ("sddl[{0}]" -f $Label) -Ok $same -Detail ("declared={0} actual={1}" -f ($expected -join ''), ($actual -join ''))
+    Add-Check -Name ("sddl[{0}]" -f $Label) -Ok $same -Detail ("expected={0} actual={1}" -f ($expected -join ''), ($actual -join ''))
 }
 
 # --- SCM service -------------------------------------------------------------
@@ -340,7 +391,13 @@ function Start-ProbeService {
     $deadline = (Get-Date).AddSeconds($TimeoutSec)
     while ((Get-Date) -lt $deadline) {
         $service = Get-Service -Name $Name -ErrorAction SilentlyContinue
-        if ($service -and $service.Status -eq 'Running') { return 'Running' }
+        if ($service -and $service.Status -eq 'Running') {
+            # Recorded so cleanup can terminate this exact process if a stop ever hangs,
+            # instead of killing every process that happens to share the image name.
+            $process = Get-CimInstance Win32_Service -Filter ("Name='{0}'" -f $Name) -ErrorAction SilentlyContinue
+            if ($process -and $process.ProcessId) { $script:ServicePid = [int]$process.ProcessId }
+            return 'Running'
+        }
         Start-Sleep -Milliseconds 400
     }
     return 'not-Running'
@@ -433,15 +490,31 @@ function Start-AsLowUser {
 
 # Runs under the secondary identity. One measurement, no orchestration: the raw access
 # check that the CLI cannot report (it maps every UnauthorizedAccessException to
-# "Access denied (requires elevation)", which says nothing about the DACL).
+# "Access denied (requires elevation)", which says nothing about the DACL). Both masks are
+# recorded because a DACL can admit the bare one while refusing a real client's request.
 function Invoke-ClientProbeMode {
     param([string]$Pipe, [string]$ResultPath)
     Initialize-ProbeType
     $path = if ($Pipe -like '\\.\pipe\*') { $Pipe } else { '\\.\pipe\' + $Pipe }
-    $result = [PipeProbe]::TryOpen($path, 0x120000)
-    $line = ('identity={0} pipe={1} => {2}' -f [System.Security.Principal.WindowsIdentity]::GetCurrent().Name, $path, $result)
+    $bare = [PipeProbe]::TryOpen($path, $script:BareAccess)
+    $client = [PipeProbe]::TryOpen($path, $script:ClientAccess)
+    $line = ('identity={0} pipe={1} bare(0x120000)={2} client(0xC0000000)={3}' -f [System.Security.Principal.WindowsIdentity]::GetCurrent().Name, $path, $bare, $client)
     if ($ResultPath) { Set-Content -LiteralPath $ResultPath -Value $line -Encoding ASCII }
     else { Write-Host $line }
+}
+
+# One call site for "what does this identity get from this pipe", so the Service and
+# Background legs cannot drift apart in how they measure or in what they record.
+function Invoke-LowUserBareOpen {
+    param([pscustomobject]$As, [string]$Pipe, [string]$ProbeCopy, [string]$Label, [string]$Note = '')
+    $out = Join-Path $script:WorkDir ('bare-' + [guid]::NewGuid().ToString('N').Substring(0, 8) + '.txt')
+    $console = Invoke-AsLowUser -As $As -Exe 'powershell.exe' -Arguments @(
+        '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $ProbeCopy,
+        '-ProbePipe', $Pipe, '-ProbeResultPath', $out
+    )
+    $text = if (Test-Path $out) { (Get-Content -LiteralPath $out -Raw).Trim() } else { '(no result file) ' + $console }
+    Write-Evidence -Key ("client.low_open[{0}]" -f $Label) -Value $text -Note $Note
+    return $text
 }
 
 if ($ProbePipe) {
@@ -504,7 +577,10 @@ try {
     $serviceSddl = Get-PipeDacl -Pipe $script:PipeService -Label 'service'
     Assert-DeclaredDacl -Label 'service' -Sddl $serviceSddl
 
-    # (2) The two shipped client shapes, unchanged, against the tightened pipe.
+    # (2) The two shipped client shapes, unchanged, against the tightened pipe, plus the
+    # raw access checks from this administrative token - the control row of the matrix.
+    $adminIdentity = [System.Security.Principal.WindowsIdentity]::GetCurrent().Name
+    $servicePath = '\\.\pipe\' + $script:PipeService
     $cli = Invoke-Captured -Exe $CliExe -Arguments @('service', 'ping', '--service-pipe') -TimeoutSec 60
     Write-Evidence -Key 'client.cli_gateway' -Value ("exit={0} dur={1}ms out={2} err={3}" -f $cli.Code, $cli.DurMs, $cli.StdOut, $cli.StdErr)
     Add-Check -Name 'client.cli_gateway' -Ok (($cli.Code -eq 0) -and ($cli.StdOut -match 'pong')) -Detail ("exit={0} out={1}" -f $cli.Code, $cli.StdOut)
@@ -513,31 +589,32 @@ try {
     Write-Evidence -Key 'client.watchdog' -Value ("connected={0} resp={1} err={2}" -f $watchdog.Connected, $watchdog.Response, $watchdog.Error)
     Add-Check -Name 'client.watchdog' -Ok (($watchdog.Connected) -and ($watchdog.Response -match '"ok":\s*true')) -Detail ("resp={0}" -f $watchdog.Response)
 
-    # (3) Non-privileged identities: the CLI (what a user would see) and the bare open
-    # (what the DACL actually answers). Only the second one is an assertion.
+    $adminBare = [PipeProbe]::TryOpen($servicePath, $script:BareAccess)
+    $adminClient = [PipeProbe]::TryOpen($servicePath, $script:ClientAccess)
+    Add-MatrixRow -Identity $adminIdentity -Pipe $script:PipeService -Open ("bare={0} client={1}" -f $adminBare, $adminClient) -Cli ("exit={0} pong={1}" -f $cli.Code, [bool]($cli.StdOut -match 'pong'))
+
+    # (3) Non-privileged identity on the Service pipe: both masks must be refused with
+    # err=5, and the CLI (what a user would actually see) is recorded alongside.
     if ($lowUser) {
-        $lowOut = Join-Path $script:WorkDir ('lowprobe-' + [guid]::NewGuid().ToString('N').Substring(0, 8) + '.txt')
-        $lowProbe = Invoke-AsLowUser -As $lowUser -Exe 'powershell.exe' -Arguments @(
-            '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $probeCopy,
-            '-ProbePipe', $script:PipeService, '-ProbeResultPath', $lowOut
-        )
-        $lowText = if (Test-Path $lowOut) { (Get-Content -LiteralPath $lowOut -Raw).Trim() } else { '(no result file) ' + $lowProbe }
-        Write-Evidence -Key 'client.low_bare_open' -Value $lowText -Note 'err=5 is the access check refusing the token, before any request is parsed'
-        Add-Check -Name 'client.low_bare_open' -Ok ($lowText -match 'err=5\b') -Detail $lowText
+        $lowText = Invoke-LowUserBareOpen -As $lowUser -Pipe $script:PipeService -ProbeCopy $probeCopy -Label 'service' -Note 'err=5 is the access check refusing the token, before any request is parsed'
+        $refusedBoth = ($lowText -match 'bare\(0x120000\)=REFUSED err=5') -and ($lowText -match 'client\(0xC0000000\)=REFUSED err=5')
+        Add-Check -Name 'client.low_open[service]' -Ok $refusedBoth -Detail $lowText
 
         $lowCli = Invoke-AsLowUser -As $lowUser -Exe $CliExe -Arguments @('service', 'ping', '--service-pipe')
         Write-Evidence -Key 'client.low_cli_gateway' -Value $lowCli -Note 'recorded, not asserted: the CLI maps a refused connect to its own elevation hint'
+        Add-MatrixRow -Identity $lowUser.Name -Pipe $script:PipeService -Open $lowText -Cli ($lowCli -replace '\s+', ' ')
     }
     else {
-        Write-Evidence -Key 'client.low_bare_open' -Value 'SKIPPED: no secondary identity' -Note 'the err=5 assertion did not run'
-        Add-Check -Name 'client.low_bare_open' -Ok $false -Detail 'skipped: no secondary identity, so the refusal is unproven'
+        Write-Evidence -Key 'client.low_open[service]' -Value 'SKIPPED: no secondary identity' -Note 'the err=5 assertion did not run'
+        Add-Check -Name 'client.low_open[service]' -Ok $false -Detail 'skipped: no secondary identity, so the refusal is unproven'
     }
 
     # (4) Anti-squatting with an SD in play: a console launch of --mode=service is not
     # SCM-initiated, so it falls through to the same run_server body and must lose the
     # name to the running service. Its exit code is not the assertion - a failed listener
     # is logged and the process returns 0 by design - so the assertions are "it did not
-    # stay serving" (no timeout) and "the first instance still answers".
+    # stay serving" (no timeout) and "the first instance still answers". The cause is
+    # pinned one layer down by the unit test, which asserts the OS error code.
     $squatter = Invoke-Captured -Exe $ServiceExe -Arguments @('--mode=service') -TimeoutSec 45
     Write-Evidence -Key 'antisquat.second_process' -Value ("exit={0} timedOut={1} dur={2}ms out={3} err={4}" -f $squatter.Code, $squatter.TimedOut, $squatter.DurMs, $squatter.StdOut, $squatter.StdErr)
     Add-Check -Name 'antisquat.second_process_exits' -Ok (-not $squatter.TimedOut) -Detail ("exit={0} dur={1}ms" -f $squatter.Code, $squatter.DurMs)
@@ -546,14 +623,14 @@ try {
     Add-Check -Name 'antisquat.first_instance_survives' -Ok ($serviceAlive.Connected -and ($serviceAlive.Response -match '"ok":\s*true')) -Detail ("resp={0}" -f $serviceAlive.Response)
 
     Remove-ProbeService -Name $ServiceName
-    $afterStop = [PipeProbe]::TryOpen('\\.\pipe\' + $script:PipeService, 0x120000)
+    $afterStop = [PipeProbe]::TryOpen($servicePath, $script:BareAccess)
     Write-Evidence -Key 'service.after_stop_open' -Value $afterStop -Note 'the pipe must be gone once the service stops'
 
     # (5) Background mode. Started by the secondary identity when there is one, because
     # the OW ACE exists for exactly that case: this pipe's owner is whoever launched it,
     # and the GUI's watchdog and rotate traffic use this pipe, not the Service one. The
     # administrator-launched fallback still proves the descriptor, but not the owner ACE.
-    $backgroundOwner = 'administrator'
+    $backgroundOwner = $adminIdentity
     if ($lowUser) {
         $backgroundProc = Start-AsLowUser -As $lowUser -Exe $ServiceExe -Arguments @('--mode=background')
         $backgroundOwner = $lowUser.Name
@@ -569,21 +646,20 @@ try {
     $bgWatchdog = Connect-PipePing -Pipe $script:PipeBackground
     Add-Check -Name 'background.watchdog' -Ok ($bgWatchdog.Connected -and ($bgWatchdog.Response -match '"ok":\s*true')) -Detail ("resp={0}" -f $bgWatchdog.Response)
 
+    $bgPath = '\\.\pipe\' + $script:PipeBackground
+    Add-MatrixRow -Identity $backgroundOwner -Pipe $script:PipeBackground -Open ("bare={0} client={1}" -f [PipeProbe]::TryOpen($bgPath, $script:BareAccess), [PipeProbe]::TryOpen($bgPath, $script:ClientAccess)) -Cli ("pong={0}" -f [bool]($bgWatchdog.Response -match '"ok":\s*true'))
+
     # The owner ACE is only worth its line if the non-elevated owner really gets through,
     # and the GUI reaches this pipe as that user.
     if ($lowUser) {
-        $bgOut = Join-Path $script:WorkDir ('lowbg-' + [guid]::NewGuid().ToString('N').Substring(0, 8) + '.txt')
-        $null = Invoke-AsLowUser -As $lowUser -Exe 'powershell.exe' -Arguments @(
-            '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $probeCopy,
-            '-ProbePipe', $script:PipeBackground, '-ProbeResultPath', $bgOut
-        )
-        $bgText = if (Test-Path $bgOut) { (Get-Content -LiteralPath $bgOut -Raw).Trim() } else { '(no result file)' }
-        Write-Evidence -Key 'client.low_bare_open[background]' -Value $bgText -Note 'the owner ACE is what must make this OPENED ok'
-        Add-Check -Name 'client.low_bare_open[background]' -Ok ($bgText -match 'OPENED ok') -Detail $bgText
+        $bgText = Invoke-LowUserBareOpen -As $lowUser -Pipe $script:PipeBackground -ProbeCopy $probeCopy -Label 'background' -Note 'the owner ACE is what must make both of these OPENED ok'
+        $openedBoth = ($bgText -match 'bare\(0x120000\)=OPENED ok') -and ($bgText -match 'client\(0xC0000000\)=OPENED ok')
+        Add-Check -Name 'client.low_open[background]' -Ok $openedBoth -Detail $bgText
 
         $bgLowCli = Invoke-AsLowUser -As $lowUser -Exe $CliExe -Arguments @('service', 'ping')
         Write-Evidence -Key 'client.low_cli_gateway[background]' -Value $bgLowCli
         Add-Check -Name 'client.low_cli_gateway[background]' -Ok ($bgLowCli -match 'pong') -Detail (($bgLowCli -replace '\s+', ' '))
+        Add-MatrixRow -Identity $lowUser.Name -Pipe ($script:PipeBackground + ' (as owner)') -Open $bgText -Cli ($bgLowCli -replace '\s+', ' ')
     }
 }
 catch {
@@ -592,8 +668,14 @@ catch {
 }
 finally {
     if ($backgroundProc -and -not $backgroundProc.HasExited) { Stop-ProcessTree -Process $backgroundProc }
-    $null = Invoke-Captured -Exe 'taskkill.exe' -Arguments @('/F', '/IM', 'env-manager-service.exe') -TimeoutSec 30
-    $null = Invoke-Captured -Exe 'taskkill.exe' -Arguments @('/F', '/IM', 'env-manager-cli.exe') -TimeoutSec 30
+    # Only processes this run started are terminated. A blanket kill by image name would
+    # reach a real install's service on the same machine, which is the one thing this
+    # probe promises not to disturb (New-ProbeService refuses to run when one exists).
+    Stop-ProbeProcess -ProcessId $script:ServicePid -ImageName 'env-manager-service'
+    if ($backgroundProc) {
+        $bgChild = Get-ChildProcessId -ParentProcessId $backgroundProc.Id -ImageName 'env-manager-service.exe'
+        Stop-ProbeProcess -ProcessId $bgChild -ImageName 'env-manager-service'
+    }
     Remove-ProbeService -Name $ServiceName
     Remove-LowUser
 
@@ -602,9 +684,18 @@ finally {
         '# Pipe DACL observation',
         '',
         ('- declared SDDL: {0}' -f $DeclaredSddl),
+        ('- expected read-back: {0}' -f (ConvertTo-StoredSddl -Sddl $DeclaredSddl)),
         ('- checks: {0} passed, {1} failed' -f ($script:Checks.Count - $failed.Count), $failed.Count),
-        ''
+        '',
+        '## Identity matrix',
+        '',
+        '| identity | pipe | raw open | client |',
+        '|---|---|---|---|'
     )
+    foreach ($row in $script:Matrix) {
+        $summary += ('| {0} | {1} | {2} | {3} |' -f $row.Identity, $row.Pipe, ($row.Open -replace '\s+', ' '), ($row.Cli -replace '\s+', ' '))
+    }
+    $summary += @('', '## Checks', '')
     foreach ($check in $script:Checks) {
         $verdict = 'FAIL'
         if ($check.Ok) { $verdict = 'PASS' }
