@@ -286,14 +286,16 @@ Commands:
         // this mutex until the 30 s budget expired: every rotate answered "Another Env
         // Manager write operation is still running", while the same code succeeded in
         // Service mode, whose session-0 child never shares this namespace (#164).
-        // The three locks still cover the write, each where it can see its own scope: the
-        // delegated child (`profile secret-provider rotate`) classifies as write and takes
-        // this mutex in its own process, while CLI_RWLOCK and writeChain stay with the GUI
-        // layers that issued the call - so a GUI-issued rotate is covered end to end and a
-        // direct `set` still serializes against it. No GUI-side change is needed to match:
-        // main.rs's is_read_only keeps the mutating `service` verbs on the write side of
-        // CLI_RWLOCK, which serializes the shell's own submissions and never contended with
-        // the service's child (the child is spawned by the service, not by the shell).
+        // What each verb loses by this is nothing: `rotate` delegates to a child that
+        // classifies as write and takes this mutex in its own process, so a direct `set`
+        // still serializes against the rotation; `refresh`/`reload`/`shutdown` mutate state
+        // inside the single service process, under its own reconcile lock and atomic mount
+        // writes, so the gateway's mutex was never their serializer either. CLI_RWLOCK and
+        // writeChain stay with the GUI layers that issued the call, as before - a
+        // GUI-issued rotate is still covered end to end. No GUI-side change is needed to
+        // match: main.rs's is_read_only keeps the mutating `service` verbs on the write side
+        // of CLI_RWLOCK, which serializes the shell's own submissions and never contended
+        // with the service's child (the child is spawned by the service, not by the shell).
         // Rejected alternatives: holding the mutex only around the IPC call re-creates the
         // deadlock (the child needs the lock while the gateway waits for that same child),
         // and handing the child an inherited holder identity is a bypass - the actual

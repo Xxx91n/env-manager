@@ -6,19 +6,17 @@ namespace EnvManager.Engine.Tests;
 
 /// <summary>
 /// Domain: the session-scoped write lock versus the `service` IPC gateway (#164).
-/// Background mode runs env-manager-service.exe inside the caller's session, so the CLI
-/// child it spawns for a rotate shares the `Local\` namespace with the gateway that asked
-/// for it. The gateway performs no registry write, so it holds no mutex; the write it
-/// forwards still takes all three locks inside that child. These tests measure the mutex
-/// decision the gateway actually makes and the contention a same-session delegate meets -
-/// the pair of outcomes that differs between the two runtime modes. Service mode puts the
-/// child in session 0, where this namespace is not shared and the question never arises,
-/// so a passing Background case is strictly stronger evidence than a passing Service case.
-/// Mutex ownership is tracked per thread, so a second thread stands in for the second
-/// process without spawning one. The class joins CliSnapshotSerial because it contends for
-/// the machine-global `Local\` mutex: the in-process `Program.Main` cases in that collection
-/// take the same lock while they run, and overlapping with them would turn either side into
-/// a timing artefact.
+/// The gateway's classification decision lives in src/CliRuntime.cs; this file measures the
+/// consequence rather than restating the argument. Background mode runs
+/// env-manager-service.exe inside the caller's session, so the CLI child it spawns for a
+/// rotate shares the `Local\` namespace with the gateway that asked for it, while Service
+/// mode puts that child in session 0. These tests pin the mutex decision the gateway makes
+/// and the contention a same-session delegate meets - the pair of outcomes that differs
+/// between the two modes once the namespace is shared. Mutex ownership is tracked per
+/// thread, so a second thread stands in for the second process without spawning one.
+/// The class joins CliSnapshotSerial for the same reason the other process-global cases do:
+/// it asserts on a machine-wide kernel object, so it must not share the parallel pool with
+/// anything that could take the same lock.
 /// </summary>
 [Collection("CliSnapshotSerial")]
 public class ServiceGatewayLockTests
@@ -26,8 +24,9 @@ public class ServiceGatewayLockTests
     const string MutexName = @"Local\EnvManager.RegistryMutation";
 
     // The gateway's own budget is 30 s; a probe well below it separates "ran" from
-    // "waited out the budget" without making the suite slow.
-    static readonly TimeSpan ProbeBudget = TimeSpan.FromSeconds(2);
+    // "waited out the budget" without making the suite slow. 3 s leaves room for thread
+    // startup on a loaded runner while still failing well inside the real budget.
+    static readonly TimeSpan ProbeBudget = TimeSpan.FromSeconds(3);
 
     // Taking the holder's end can legitimately wait if a real CLI write is running on the
     // box; only the probe's budget carries an assertion.
@@ -43,6 +42,7 @@ public class ServiceGatewayLockTests
         new object[] { new[] { "service", "shutdown" } },
         new object[] { new[] { "service", "status" } },
         new object[] { new[] { "service", "ping" } },
+        new object[] { new[] { "service", "health" } },
     };
 
     [Theory]

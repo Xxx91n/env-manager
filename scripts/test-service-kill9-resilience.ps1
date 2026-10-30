@@ -142,23 +142,21 @@ try {
     Assert-True "service answers ping within ${StartTimeoutSec}s of start" (Wait-ForPing $StartTimeoutSec)
 
     # ---- Background-mode rotate (#164) ----
-    # This is the path the GUI's rotate takes, and the one observation that separates
-    # Background from Service mode: the service runs in the caller's session here, so the
-    # CLI child it delegates to shares the `Local\` write-lock namespace with the gateway
-    # that asked for the rotate. While the gateway classified `service` as a write it took
-    # that mutex at its own process entry, the delegated child blocked on it, and the call
-    # came back after the full 30 s budget with "Another Env Manager write operation is
-    # still running" - the same code rotating in 7.0 s in Service mode, where the child
-    # lands in session 0 and never shares the namespace. All three assertions below fail on
-    # that behaviour and pass on the fixed one; the timing bound sits under the budget so a
-    # stall cannot hide behind a mere wording change.
+    # The GUI's rotate path, and the observation that separates Background from Service
+    # mode: here the service runs in the caller's session, so the CLI child it delegates to
+    # shares the `Local\` write-lock namespace with the gateway that asked for the rotate;
+    # in Service mode that child lands in session 0. While the gateway classified `service`
+    # as a write it took that mutex at its own entry, the delegate blocked on it, and the
+    # call returned after the full 30 s budget with "Another Env Manager write operation is
+    # still running" - the same rotate taking 7.0 s in Service mode. Rationale:
+    # src/CliRuntime.cs, IsWriteInvocation.
     #
     # Deliberately NOT asserted: how many secrets this rotates. The fixture mount is not
-    # referenced by any profile, so `RotateAll` reports 0/0 here, and pinning a count would
+    # referenced by any profile, so `RotateAll` reports 0/0, and pinning a count would
     # freeze the separate "each provider unit silently skips one secret" defect into an
-    # expectation. The evidence this step owes is that the delegated child runs at all,
-    # which exit 0 plus the elapsed time and the absent contention message already carry;
-    # the summary line is logged for the record.
+    # expectation. What this step owes is that the delegated child actually ran: the
+    # summary line it prints is the presence check, the budget is the timing check, and the
+    # contention text is the exact regression the ticket names.
     $rotateWatch = [System.Diagnostics.Stopwatch]::StartNew()
     # A failing rotate explains itself on stderr ("Error: ..."); this harness has to read
     # that text, so the capture runs under 'Continue' - same reason test-all.ps1 keeps
@@ -178,7 +176,11 @@ try {
     Log-Step ("service rotate exit={0} in {1:N1}s: {2}" -f $rotateExit, $rotateSeconds, $rotateOut.Trim())
     Assert-True ("Background rotate returned in {0:N1}s, inside the 30 s mutex budget" -f $rotateSeconds) ($rotateSeconds -lt 20)
     Assert-True "Background rotate reported no write-lock contention" (-not ($rotateOut -match 'Another Env Manager write operation is still running'))
-    Assert-True "Background rotate succeeded (exit 0; the delegated CLI must be resolvable next to the service or in %LOCALAPPDATA%\EnvManager)" ($rotateExit -eq 0)
+    Assert-True "Background rotate succeeded (exit 0)" ($rotateExit -eq 0)
+    # Presence, not absence: the delegated CLI prints this line whenever it runs, so it
+    # fails if the service never reached its child - which exit 0 alone cannot tell apart
+    # from a rotate that was never attempted.
+    Assert-True "service rotate response carries the delegated CLI's rotation summary" ($rotateOut -match 'Rotation complete')
 
     # ---- inject: kill -9 (TerminateProcess, no cleanup handlers) ----
     $killTime = Get-Date

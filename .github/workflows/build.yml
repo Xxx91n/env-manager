@@ -907,14 +907,16 @@ jobs:
         run: cargo build --release --locked
 
       # The service resolves the CLI it delegates to (find_cli_exe in
-      # service/src/reconcile.rs: next to its own exe, else %LOCALAPPDATA%\EnvManager),
-      # and the rotate step added for #164 only means something if that child can actually
-      # start. Stage the whole build output next to the service exe - the first probe, and
-      # the one that keeps binaries out of the CLI's own data directory.
+      # service/src/reconcile.rs: next to its own exe, else %LOCALAPPDATA%\EnvManager), and
+      # the rotate step added for #164 only means something if that child can actually
+      # start. Stage there rather than next to the service exe: the first probe would put
+      # ~40 unrelated artifacts inside service/target, which Swatinem/rust-cache saves and
+      # restores, and on a disposable runner the user-state directory costs nothing.
       - name: Stage CLI for service delegation
         shell: pwsh
         run: |
-          $dst = Join-Path $PWD 'service\target\x86_64-pc-windows-msvc\release'
+          $dst = Join-Path $env:LOCALAPPDATA 'EnvManager'
+          New-Item -ItemType Directory -Force -Path $dst | Out-Null
           Copy-Item -Path 'bin\Release\net10.0-windows\*' -Destination $dst -Recurse -Force
           Write-Host "staged CLI for service delegation: $dst"
 
