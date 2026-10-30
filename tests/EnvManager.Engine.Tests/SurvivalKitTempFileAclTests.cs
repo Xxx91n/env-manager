@@ -35,7 +35,14 @@ public sealed class SurvivalKitTempFileAclTests
             // table both address the file by this name; only its parent changed.
             Assert.Equal("envmanager-kit-" + Environment.ProcessId + ".json", Path.GetFileName(filePath));
 
-            File.WriteAllText(filePath, "{\"mountId\":\"probe\"}");
+            // The production path is WriteAtomicUtf8: it writes <path>.tmp.<pid> beside the
+            // kit and renames it into place. That scratch name holds the same plaintext for
+            // a moment, and SurvivalKitTempFile claims the directory covers it - so the
+            // assertions below run against a file that arrived exactly that way, not against
+            // one written by a shortcut the kit never uses.
+            string scratchPath = filePath + ".tmp." + Environment.ProcessId;
+            File.WriteAllText(scratchPath, "{\"mountId\":\"probe\"}");
+            File.Move(scratchPath, filePath, overwrite: true);
 
             // Inheritance off on the directory: %TEMP%'s ACEs are not copied in, so the
             // file cannot pick up the BUILTIN\Users read C:\Windows\Temp grants.
@@ -45,14 +52,34 @@ public sealed class SurvivalKitTempFileAclTests
 
             List<FileSystemAccessRule> directoryRules = ReadRules(directorySecurity);
             Assert.Equal(ExpectedSids(), ActualSids(directoryRules));
-            Assert.All(directoryRules, rule => Assert.False(rule.IsInherited));
+            Assert.All(directoryRules, rule =>
+            {
+                Assert.False(rule.IsInherited);
+                Assert.Equal(AccessControlType.Allow, rule.AccessControlType);
+                Assert.Equal(FileSystemRights.FullControl, rule.FileSystemRights);
+                // Inheritable, so the kit file and the scratch name carry the same ACEs
+                // instead of an empty DACL that would deny the writer too.
+                Assert.True(rule.InheritanceFlags.HasFlag(InheritanceFlags.ContainerInherit));
+                Assert.True(rule.InheritanceFlags.HasFlag(InheritanceFlags.ObjectInherit));
+            });
 
             // The file's DACL is that same set, and every ACE on it is inherited from the
             // protected directory: an unprotected parent is the only way a file in %TEMP%
             // can carry %TEMP%'s grants, so this is the half that actually closes the leak.
+            // The rights are asserted too - a DACL with the right identities but only Read
+            // would satisfy the SID comparison while breaking the kit's own write.
             List<FileSystemAccessRule> fileRules = ReadRules(new FileInfo(filePath).GetAccessControl());
             Assert.Equal(ExpectedSids(), ActualSids(fileRules));
-            Assert.All(fileRules, rule => Assert.True(rule.IsInherited));
+            Assert.All(fileRules, rule =>
+            {
+                Assert.True(rule.IsInherited);
+                Assert.Equal(AccessControlType.Allow, rule.AccessControlType);
+                // Read *and* write, asserted by flag rather than by equality with
+                // FullControl: an inherited ACE carries whatever bit pattern the directory
+                // granted, and what must not happen is a kit file the writer can only read.
+                Assert.True(rule.FileSystemRights.HasFlag(FileSystemRights.Read));
+                Assert.True(rule.FileSystemRights.HasFlag(FileSystemRights.Write));
+            });
         }
         finally
         {

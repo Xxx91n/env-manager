@@ -46,8 +46,9 @@ internal static class SurvivalKitTempFile
     /// the file gets the same three identities instead of an empty DACL.
     /// </para>
     /// <para>
-    /// The file keeps its documented name because the plaintext-lifecycle tables address the
-    /// sink by that shape; only its parent changes.
+    /// The file keeps its documented name, but its path gains a parent: the plaintext-lifecycle
+    /// tables address the sink as <c>envmanager-kit-*.json</c>, and those rows now spell out the
+    /// directory it lives in, because a glob against <c>%TEMP%</c> itself no longer finds it.
     /// </para>
     /// <para>
     /// Failure semantics are #178's, unchanged: a DACL that cannot be applied is recorded on
