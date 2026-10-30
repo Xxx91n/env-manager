@@ -56,9 +56,9 @@ public sealed class SopsContractTests : SecretProviderContractTests
         /// </summary>
         internal const string RequiredEnvVar = "EM_L1_SOPS";
 
-        // Same "1" spelling EM_L1_MATRIX's sibling EM_L1_STRICT accepts.
-        private static bool Required =>
-            string.Equals(Environment.GetEnvironmentVariable(RequiredEnvVar), "1", StringComparison.Ordinal);
+        // Read once per test process, and parsed like L1MatrixAffinity's EM_L1_STRICT.
+        private static readonly bool Required =
+            string.Equals(Environment.GetEnvironmentVariable(RequiredEnvVar), "1", StringComparison.OrdinalIgnoreCase);
 
         // One exit for every "cannot run" path. Both wordings lead with NOT RUN so the
         // reason cannot be read as a pass in a log or a TRX; the required form says it
@@ -77,7 +77,15 @@ public sealed class SopsContractTests : SecretProviderContractTests
             {
                 // host lacks the tools: downloading them is a network side effect, so
                 // it only happens with the matrix opt-in
-                L1MatrixAffinity.AssertAffinityOrSkip("sops+age pinned-release download");
+                try
+                {
+                    L1MatrixAffinity.AssertAffinityOrSkip("sops+age pinned-release download");
+                }
+                catch (Xunit.SkipException ex)
+                {
+                    // the most common local skip: keep the NOT RUN wording on it too
+                    throw NotRun(ex.Message);
+                }
                 bundle = L1ToolProvisioner.EnsureSopsBundle();
             }
             if (bundle is null)
