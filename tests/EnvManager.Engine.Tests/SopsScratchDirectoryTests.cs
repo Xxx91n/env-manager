@@ -16,7 +16,7 @@ namespace EnvManager.Engine.Tests;
 /// terminated. These assertions are about the provider half of that contract only: the
 /// directory it chooses, and the fallback that keeps a hand-run CLI working unchanged.
 ///
-/// No sops binary is involved. The seam is a static directory factory precisely so the
+/// No sops binary is involved. The seam is a directory factory precisely so the
 /// placement and the fallback are decidable without a provider backend, a key, or a network,
 /// and so a regression here fails on a machine with no sops installed at all.
 ///
