@@ -65,15 +65,30 @@ public sealed class SopsScratchDirectoryTests : IDisposable
     }
 
     [Fact]
-    public void PercentTemp_IsUsedWhenTheVariableIsUnset()
+    public void PercentTemp_IsUsedWhenTheVariableIsUnset_AndTheFallbackIsLogged()
     {
-        Environment.SetEnvironmentVariable(ScratchRootVariable, null);
+        TextWriter original = Console.Error;
+        var captured = new StringWriter();
+        string dir;
+        try
+        {
+            Console.SetError(captured);
+            Environment.SetEnvironmentVariable(ScratchRootVariable, null);
+            dir = SopsProvider.CreateWorkingDirectory("decrypt");
+        }
+        finally
+        {
+            Console.SetError(original);
+            Environment.SetEnvironmentVariable(ScratchRootVariable, _previous);
+        }
 
-        string dir = SopsProvider.CreateWorkingDirectory("decrypt");
         try
         {
             AssertDirectlyUnder(Path.GetTempPath(), dir);
             Assert.True(Directory.Exists(dir), "the fallback directory has to exist: " + dir);
+            // Both fallback shapes must leave a trace (#177): from inside the provider an
+            // un-delegated call and a delegation whose variable never arrived look the same.
+            Assert.Contains("has no delegated scratch root", captured.ToString());
         }
         finally
         {

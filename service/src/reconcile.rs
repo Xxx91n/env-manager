@@ -24,6 +24,11 @@ use crate::sops_scratch::{SopsScratch, SCRATCH_ENV}; // service-owned sops plain
 /// `Command::creation_flags`, so no `CommandExt` import is needed here.
 const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 
+/// How much of a successful child's stderr reaches the service log. Long enough for the
+/// provider's fallback warning and any single diagnostic line, short enough that a chatty
+/// helper cannot turn one rotation into a page of log.
+const STDERR_LOG_LIMIT: usize = 2000;
+
 /// The CLI argv a rotation delegates to. Rotation is not a circular dependency: it is a
 /// one-shot write of profiles.json, not an IPC back into the service. `--json` is absent
 /// because CLI rotate does not support it (it exits non-zero).
@@ -479,10 +484,27 @@ async fn spawn_cli_child(
             // EOF: a provider helper cannot keep the handle open, because each one
             // redirects its own std handles (`src/Secrets/Providers/`). A panicking reader
             // only costs the diagnostic text.
+            let stdout = read_stdout.await.unwrap_or_default();
+            let stderr = read_stderr.await.unwrap_or_default();
+            // A child that exits 0 and still wrote to stderr is where the provider's own
+            // fallback warning lands (`SopsProvider.CreateWorkingDirectory`): the rotation
+            // is fine, but its sops plaintext may sit outside the scratch root this call
+            // reclaims, so the line cannot be dropped on the success path. sops writes
+            // nothing to stderr on a normal encrypt/decrypt (measured on 3.7.3 and 3.13.3),
+            // so this is not a per-rotation line; the level is info because the default
+            // filter records it and a chatty provider must not read as a failure.
+            if !stderr.is_empty() {
+                let shown: String = stderr.chars().take(STDERR_LOG_LIMIT).collect();
+                tracing::info!(
+                    "delegated CLI wrote to stderr on success ({} bytes): {}",
+                    stderr.len(),
+                    shown
+                );
+            }
             Ok(ChildOutcome::Finished {
                 success: status.success(),
-                stdout: read_stdout.await.unwrap_or_default(),
-                stderr: read_stderr.await.unwrap_or_default(),
+                stdout,
+                stderr,
             })
         }
         _ = shutdown.cancelled() => {

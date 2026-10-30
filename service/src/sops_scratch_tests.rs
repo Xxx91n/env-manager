@@ -16,7 +16,7 @@
 // registry, no real `%LOCALAPPDATA%\EnvManager` or `ProgramData\EnvManager` state.
 
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use tokio_util::sync::CancellationToken;
@@ -176,6 +176,12 @@ async fn completed_delegation_reclaims_the_scratch_root() {
 /// holding plaintext on disk. The CLI is terminated before its `finally`, so only the
 /// service can remove the file - and the removal has to happen before `run_cli_child`
 /// returns, inside the window the stop path has.
+///
+/// What this measures is the common case: the stub writes its file and releases the handle
+/// before the stop lands, so the delete meets nothing. A helper that still owns the handle
+/// after the job handle has closed is the bound `service/src/sops_scratch.rs` records -
+/// retried for about a second, then logged at error level - and is asserted separately by
+/// `reclaim_logs_when_the_tree_cannot_be_removed`.
 #[tokio::test]
 async fn interrupted_delegation_reclaims_the_scratch_root() {
     let report = StubReport::new("interrupted");
@@ -249,4 +255,77 @@ async fn reclaim_removes_the_tree_it_created() {
     std::fs::remove_dir_all(&again_root).expect("remove the second root out from under the guard");
     again.reclaim().await;
     assert!(!again_root.exists());
+}
+
+/// A `tracing` writer that keeps whatever was logged, so "删除失败必须留痕" is asserted
+/// instead of read out of a comment. `set_default` is thread-local, which is why the tests
+/// that use it stay on the single-threaded runtime `#[tokio::test]` gives them.
+#[derive(Clone)]
+struct LogSink(Arc<Mutex<Vec<u8>>>);
+
+impl std::io::Write for LogSink {
+    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+        if let Ok(mut out) = self.0.lock() {
+            out.extend_from_slice(buf);
+        }
+        Ok(buf.len())
+    }
+
+    fn flush(&mut self) -> std::io::Result<()> {
+        Ok(())
+    }
+}
+
+impl<'a> tracing_subscriber::fmt::MakeWriter<'a> for LogSink {
+    type Writer = LogSink;
+
+    fn make_writer(&'a self) -> Self::Writer {
+        LogSink(Arc::clone(&self.0))
+    }
+}
+
+/// Scenario for the last acceptance criterion: a delete that cannot happen must leave a
+/// trace. The file is held open with `share_mode(0)`, so no other handle may open, rename
+/// or delete it and the failure is deterministic rather than a race - which is also the
+/// shape of the real case, a killed helper still holding the plaintext.
+#[tokio::test(flavor = "current_thread")]
+async fn reclaim_logs_when_the_tree_cannot_be_removed() {
+    use std::os::windows::fs::OpenOptionsExt;
+
+    let scratch = SopsScratch::create().expect("a scratch root must be creatable in %TEMP%");
+    let root = scratch.path().to_path_buf();
+    let file = root.join("secret.json");
+    std::fs::write(&file, "{\"value\":\"probe\"}").expect("write the plaintext fixture");
+
+    let held = std::fs::OpenOptions::new()
+        .read(true)
+        .share_mode(0)
+        .open(&file)
+        .expect("hold the plaintext file open without sharing");
+
+    let sink = LogSink(Arc::new(Mutex::new(Vec::new())));
+    let guard = tracing::subscriber::set_default(
+        tracing_subscriber::fmt()
+            .with_writer(sink.clone())
+            .with_ansi(false)
+            .finish(),
+    );
+
+    scratch.reclaim().await;
+
+    let captured = String::from_utf8_lossy(&sink.0.lock().expect("the log sink lock")).to_string();
+    assert!(
+        captured.contains("could not be removed"),
+        "a delete that fails must leave a trace in the service log, never a silent leftover; \
+         got: {captured}"
+    );
+    assert!(
+        root.exists(),
+        "the assertion above is about the leftover this test creates on purpose; removing it \
+         anyway would measure nothing"
+    );
+
+    drop(held);
+    drop(guard);
+    let _ = std::fs::remove_dir_all(&root);
 }

@@ -150,14 +150,22 @@ internal sealed class SopsProvider : ISecretProvider
     // terminated. Unset, or set to something that cannot be written, this falls back to
     // %TEMP% exactly as before - a CLI started by hand has no service to reclaim anything
     // for it, and an unusable scratch root is a configuration problem, never a reason to
-    // refuse to encrypt or decrypt.
+    // refuse to encrypt or decrypt. Both fallback shapes write one line to stderr: the
+    // ticket requires the fallback to leave a trace, and from in here an un-delegated call
+    // and a delegation whose variable never arrived are indistinguishable.
     private const string ScratchRootEnvVar = "ENVMANAGER_SOPS_SCRATCH_DIR";
     private const string WorkingDirectoryPrefix = "env-manager-sops-";
 
     internal static string CreateWorkingDirectory(string operation)
     {
         string? scratchRoot = Environment.GetEnvironmentVariable(ScratchRootEnvVar);
-        if (!string.IsNullOrWhiteSpace(scratchRoot))
+        if (string.IsNullOrWhiteSpace(scratchRoot))
+        {
+            Console.Error.WriteLine("Warning: sops " + operation + " has no delegated scratch root (" +
+                ScratchRootEnvVar + " is unset); using " + Path.GetTempPath() +
+                " with a best-effort delete only");
+        }
+        else
         {
             string candidate = Path.Combine(scratchRoot, WorkingDirectoryPrefix + Guid.NewGuid().ToString("N"));
             try
