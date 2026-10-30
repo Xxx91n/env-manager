@@ -45,11 +45,11 @@ internal static class SecretTempDirectory
 
     /// <summary>
     /// Creates <c>%TEMP%\env-manager-&lt;provider&gt;-&lt;guid&gt;</c> with the owner-only
-    /// DACL already applied. A DACL that cannot be applied is best-effort - the caller
-    /// gets the directory on the inherited <c>%TEMP%</c> ACL it would have had before this
-    /// boundary existed, and the failure is recorded on the same debug channel
-    /// <c>SetFileAclRestricted</c> uses for the audit file. A directory that cannot be
-    /// created at all still throws: the provider cannot work without it.
+    /// DACL already applied. A DACL that cannot be applied is best-effort: the directory is
+    /// then created with the inherited <c>%TEMP%</c> ACL it would have had before this
+    /// boundary existed, and the degradation is recorded on the same debug channel
+    /// <c>SetFileAclRestricted</c> uses for the audit file. Only a directory that cannot be
+    /// created at all reaches the caller as an exception.
     /// </summary>
     internal static DirectoryInfo Create(string provider)
     {
@@ -61,13 +61,13 @@ internal static class SecretTempDirectory
         }
         catch (Exception ex)
         {
-            // Both failures land here. A directory on disk means the create succeeded and
-            // only the DACL write failed; nothing on disk means creation itself failed and
-            // that is not ours to swallow.
-            if (!Directory.Exists(path)) throw;
-
+            // The create call carried the DACL, so a failure here means the DACL was
+            // rejected. Fall back to the documented behaviour instead of failing the
+            // rotation: create the directory without a security descriptor (inherited ACL)
+            // and record what was lost. A failure of THIS call is a real creation failure
+            // - no temp directory, no sops - and is left to propagate.
             Program.DebugLog(Program.ScrubExceptionMessage($"ACL restriction failed for {path}: {ex.Message}"));
-            return new DirectoryInfo(path);
+            return Directory.CreateDirectory(path);
         }
     }
 

@@ -69,6 +69,9 @@ public sealed class SecretTempDirectoryAclTests
 
             List<FileSystemAccessRule> rules = ReadRules(new FileInfo(plainFile).GetAccessControl());
             Assert.Equal(ExpectedSids(), ActualSids(rules));
+            // Inherited from the directory, not re-granted on the file: this is what keeps
+            // the plaintext covered by the directory's DACL rather than by its own.
+            Assert.All(rules, rule => Assert.True(rule.IsInherited));
         }
         finally
         {
