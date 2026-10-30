@@ -1,5 +1,6 @@
 using System.Text.Json;
 
+using EnvManager.Secrets.Core;
 using EnvManager.Secrets.Manager;
 
 namespace EnvManager;
@@ -230,7 +231,26 @@ partial class Program
 
             case "rotate":
                 var profilesToRotate = LoadProfiles();
-                var (total, rotatedN, failedN) = SecretStore.Rotate(profilesToRotate);
+                // A "mount:<id>" secret keeps its envelope in secretMount.json, so rotation
+                // resolves through the mount and the rotated envelope is written back there.
+                // Refuse a file that does not parse: LoadSecretMounts silently falls back to
+                // the .bak copy, and persisting that stale snapshot would drop every mount
+                // created since the backup, leaving profiles pointing at ids that are gone.
+                if (File.Exists(SecretMountFilePath))
+                {
+                    try { JsonSerializer.Deserialize<List<SecretMount>>(File.ReadAllText(SecretMountFilePath), JsonOpts); }
+                    catch (JsonException)
+                    {
+                        return ArgError("Error: secretMount.json is not valid JSON; restore it (or its .bak copy) before rotating secrets");
+                    }
+                }
+                var mountsToRotate = LoadSecretMounts();
+                var envelopeHolder = new SecretMountEnvelopeHolder(mountsToRotate);
+                var (total, rotatedN, failedN) = SecretStore.Rotate(profilesToRotate, envelopeHolder);
+                // Write order mount-first, profile-second (A3): a crash between the two leaves
+                // a rotated envelope that a profile still references, never a reference that
+                // names an envelope nobody rewrote.
+                if (envelopeHolder.Changed) SaveSecretMounts(mountsToRotate);
                 if (rotatedN > 0) SaveProfiles(profilesToRotate);
                 Console.WriteLine($"Rotation complete: {rotatedN}/{total} secrets re-encrypted, {failedN} failed");
                 if (rotatedN > 0)

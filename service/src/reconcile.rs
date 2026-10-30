@@ -16,6 +16,8 @@ use tokio::io::AsyncReadExt; // draining the CLI child's pipes while it runs
 use std::process::Stdio; // piped stdout/stderr on the CLI child (tokio takes std's type)
 use tokio::sync::Mutex; // Phase 4C: TOCTOU protection
 
+use crate::job_object::KillOnCloseJob; // kill-on-close tree containment for the CLI child
+
 /// `CREATE_NO_WINDOW`: the service has no console, and without the flag the CLI child
 /// would flash a window on the interactive desktop. Passed to tokio's own
 /// `Command::creation_flags`, so no `CommandExt` import is needed here.
@@ -227,7 +229,7 @@ pub(crate) async fn rotate_mount_at(
     shutdown: &CancellationToken,
 ) -> Result<serde_json::Value, String> {
     let _guard = RECONCILE_LOCK.lock().await; // Phase 4C: TOCTOU protection
-    let mut mounts = load_mounts(mount_path);
+    let mounts = load_mounts(mount_path);
     if !mounts.iter().any(|m| m.id == mount_id) {
         return Err(format!("mount not found: {}", mount_id));
     }
@@ -240,16 +242,42 @@ pub(crate) async fn rotate_mount_at(
     let result = call_cli_rotate(cli_exe, cli_args, shutdown).await?;
     let now = Utc::now().to_rfc3339();
 
-    if let Some(m) = mounts.iter_mut().find(|m| m.id == mount_id) {
-        m.lastRotatedAt = Some(now.clone());
-        m.lastFetchedAt = Some(now.clone());
+    // Re-read what the child left on disk instead of reusing the snapshot from before the
+    // call: a delegated rotation writes each rotated envelope back into the mount that owns
+    // it (the profile only holds `mount:<id>`), so `mounts` is stale by now and saving it
+    // would restore the pre-rotation envelopes - silently undoing the rotation this call is
+    // about to record. Only the two metadata stamps are ours to write.
+    //
+    // The strict read is what keeps "the mount is gone" apart from "the child left a file
+    // this build cannot read": the plain loader answers an empty list for both, and the
+    // second one must never be reported as a completed rotation.
+    let mut rotated = load_mounts_strict(mount_path)?;
+    let stamped = match rotated.iter_mut().find(|m| m.id == mount_id) {
+        Some(m) => {
+            m.lastRotatedAt = Some(now.clone());
+            m.lastFetchedAt = Some(now.clone());
+            true
+        }
+        None => {
+            // The mount vanished while the rotation ran. Look it up again and skip: the
+            // rotation of its secret already happened, and rewriting a file that no longer
+            // names the mount would resurrect a list that lost it. Never fail a completed
+            // rotation over a mount nobody can act on.
+            tracing::warn!(
+                "mount {} disappeared during the rotation; leaving the mount file alone",
+                mount_id
+            );
+            false
+        }
+    };
+    if stamped {
+        save_mounts(mount_path, &rotated)?;
     }
-    save_mounts(mount_path, &mounts)?;
 
     Ok(serde_json::json!({
         "mountId": mount_id,
         "rotated": true,
-        "lastRotatedAt": now,
+        "lastRotatedAt": stamped.then(|| now.clone()),
         "rotateResult": result,
     }))
 }
@@ -309,11 +337,14 @@ pub(crate) enum ChildOutcome {
         stderr: String,
     },
     /// A stop was requested while the child was still running. By the time this variant
-    /// is returned the child has been terminated *and reaped* (#153).
+    /// is returned the child has been terminated *and reaped* (#153), and the job object
+    /// holding its process tree has been closed (#160), which terminates the helpers it had
+    /// started - requested at handle close, not awaited, so they can still be winding down
+    /// for a moment after this returns.
     Interrupted { pid: Option<u32> },
 }
 
-/// Run a CLI child and converge it with the service stop path (#153).
+/// Run a CLI child and converge it with the service stop path (#153, #160).
 ///
 /// Strategy, chosen over join-to-completion: **terminate and reap**. A rotate waits on
 /// provider round-trips that can outlive the SCM stop window, and STOP shares that window
@@ -323,15 +354,45 @@ pub(crate) enum ChildOutcome {
 /// write profiles.json". The abandoned rotation is recovered by replay, not by waiting -
 /// see `rotate_mount_at`.
 ///
-/// Scope of the guarantee: the child spawned here. A provider helper that child started
-/// (`op`, `sops`, `pwsh` in `src/Secrets/Providers/`) is not tree-killed - that needs a
-/// kill-on-close job object - but no helper writes `profiles.json` or `secretMount.json`,
-/// so the window this ticket closes is closed.
+/// Scope of the guarantee, and the holes it cannot close. The child spawned here joins a
+/// kill-on-close job object (`crate::job_object::KillOnCloseJob`), so the provider helpers
+/// it starts (`op`, `sops`, `pwsh` in `src/Secrets/Providers/`) and *their* children are
+/// terminated with the CLI: a stop no longer leaves an orphan helper writing to the
+/// backend. Termination is requested, not awaited - a helper can still be visibly alive
+/// for a moment after this returns, which is why the stop-path test measures a five-second
+/// budget instead of asserting on the return of this call. If the job cannot be created or
+/// the child cannot be assigned, the guarantee degrades to the direct child only; both are
+/// logged and the rotation proceeds rather than being refused. The remaining hole is the
+/// interval between the spawn below and the assignment that follows it - assigning a
+/// process puts its future children in the job, not the ones it already has - so a helper
+/// the CLI managed to start inside that interval is outside the job and still survives the
+/// stop. `Command` offers no create-suspended spawn, so the window cannot be closed from
+/// here; it is recorded instead of promised away.
+///
+/// A different gap stays open and is not this function's to close: sops writes the value it
+/// decrypted into its own temp directory and deletes it in the CLI's `finally`, so a stop
+/// that terminates the CLI still leaves that file on disk. Killing the helper does not
+/// remove it. See the secret-value lifecycle table in `docs/architecture.md`.
 pub(crate) async fn run_cli_child(
     cli_exe: &str,
     args: &[&str],
     shutdown: &CancellationToken,
 ) -> Result<ChildOutcome, String> {
+    // One job per delegation, never a process-wide singleton: the handle lives exactly as
+    // long as this call, so a stop kills the rotation it interrupted and nothing else. A
+    // failure to create it degrades the guarantee to "the direct child only" and must not
+    // fail the rotation - losing the tree kill is bad, refusing to rotate is worse.
+    let job = match KillOnCloseJob::new() {
+        Ok(job) => Some(job),
+        Err(e) => {
+            tracing::warn!(
+                "CLI child job object unavailable, provider helpers may outlive this rotation: {}",
+                e
+            );
+            None
+        }
+    };
+
     let mut child = tokio::process::Command::new(cli_exe)
         .args(args)
         .creation_flags(CREATE_NO_WINDOW)
@@ -344,6 +405,30 @@ pub(crate) async fn run_cli_child(
         .map_err(|e| format!("failed to run CLI rotate: {}", e))?;
 
     let pid = child.id();
+    // Straight after the spawn, because this call is what ends the window described in
+    // the doc comment. Assignment needs `PROCESS_SET_QUOTA | PROCESS_TERMINATE` on the
+    // target, which `crate::job_object` opens by pid.
+    match (job.as_ref(), pid) {
+        (Some(job), Some(pid)) => {
+            if let Err(e) = job.assign(pid) {
+                tracing::warn!(
+                    "CLI child {} could not join the job object, its helpers may outlive this rotation: {}",
+                    pid, e
+                );
+            }
+        }
+        (Some(_), None) => {
+            // No pid means the child was already reaped, so there is nothing left to
+            // assign and anything it started before exiting is outside the job for good.
+            // Rare, and the same class of hole as the window in the doc comment - logged
+            // rather than skipped in silence.
+            tracing::warn!(
+                "CLI rotate child exited before it could join the job object, its helpers may outlive this rotation"
+            );
+        }
+        // No job: `KillOnCloseJob::new` already logged why.
+        (None, _) => {}
+    }
     // Output is drained while the child runs, never after the wait: a child that fills a
     // pipe buffer would otherwise block on write and never observe the kill.
     let mut stdout = child.stdout.take().ok_or("CLI rotate child has no stdout pipe")?;
@@ -378,6 +463,10 @@ pub(crate) async fn run_cli_child(
                 .map_err(|e| format!("failed to terminate the CLI rotate child: {}", e))?;
             read_stdout.abort();
             read_stderr.abort();
+            // The job handle drops as this function returns, which is where the helper
+            // tree dies (#160): the CLI is already reaped, so nothing left in the job can
+            // still be serving this rotation. Both happen inside the stop budget - closing
+            // a job handle is not a wait.
             Ok(ChildOutcome::Interrupted { pid })
         }
     }
@@ -452,6 +541,21 @@ fn load_mounts(path: &Path) -> Vec<SecretMount> {
             Vec::new()
         }
     }
+}
+
+/// `load_mounts`, but keeping "no mounts" apart from "a file this build cannot read".
+/// After a delegated rotation the two mean opposite things: no mounts is a mount that
+/// disappeared (skip it), a file that will not parse is a rotation that must not be reported
+/// as completed over state nobody can inspect. Only an unparseable or unreadable file is an
+/// error - a missing file means the same thing as an empty one.
+fn load_mounts_strict(path: &Path) -> Result<Vec<SecretMount>, String> {
+    if !path.exists() {
+        return Ok(Vec::new());
+    }
+    let raw = std::fs::read_to_string(path)
+        .map_err(|e| format!("failed to read the mount file after the rotation: {}", e))?;
+    serde_json::from_str(&raw)
+        .map_err(|e| format!("the mount file did not parse after the rotation: {}", e))
 }
 
 /// Save mounts atomically (temp + fsync + rename). Matches C# AtomicWriteProfiles pattern (A3).

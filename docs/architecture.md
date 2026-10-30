@@ -56,7 +56,7 @@ The service crate's lifecycle resilience terms (watchdog, heartbeat enrichment, 
 - `ipc_read_timeout_fires_on_hung_server` - a mock server accepts and reads the request line but never responds; the client-side bounded read must surface a timeout instead of blocking forever. Pins the `cli_gateway` timeout contract.
 - `ipc_schema_compliance_under_faults` - every `ok:false` response sample in `docs/schemas/ipc-samples.json` carries a `message`; the envelope survives fault-shaped conditions without drifting from the golden contract.
 
-`service/src/rotate_stop_tests.rs` (issue #153) pins the other lifecycle edge: a stop that lands while a rotation's CLI child is in flight. `reconcile::run_cli_child` must terminate **and reap** that child inside the stop budget, and `reconcile::rotate_mount_at` must leave `secretMount.json` byte-identical and un-rotated so the next `rotate` replays the work. Evidence seam, as chosen in the ticket: the service-side rotation call driven against a real stub process (`ping.exe -n 30`) and a temp mount file under `%TEMP%`, with liveness asserted through `tasklist`. A literal `Stop-Service` leg was rejected because it would additionally need an installed service, a working provider and a rotation of predictable duration - none of which a CI runner can schedule. The ordering the child convergence relies on is pinned one level up, in `startup_contract_tests` in `service/src/main.rs`: `stop_waits_for_an_in_flight_connection_handler` parks a handler with a silent client and asserts the server body stays inside it until the client is released, which is the property `ipc::accept_loop`'s handler join added (#153); `stopping_releases_the_pipe` keeps the pipe-release half.
+`service/src/rotate_stop_tests.rs` (issue #153) pins the other lifecycle edge: a stop that lands while a rotation's CLI child is in flight. `reconcile::run_cli_child` must terminate **and reap** that child inside the stop budget, and `reconcile::rotate_mount_at` must leave `secretMount.json` byte-identical and un-rotated so the next `rotate` replays the work. Evidence seam, as chosen in the ticket: the service-side rotation call driven against a real stub process (`ping.exe -n 30`) and a temp mount file under `%TEMP%`, with liveness asserted through `tasklist`. A literal `Stop-Service` leg was rejected because it would additionally need an installed service, a working provider and a rotation of predictable duration - none of which a CI runner can schedule. The ordering the child convergence relies on is pinned one level up, in `startup_contract_tests` in `service/src/main.rs`: `stop_waits_for_an_in_flight_connection_handler` parks a handler with a silent client and asserts the server body stays inside it until the client is released, which is the property `ipc::accept_loop`'s handler join added (#153); `stopping_releases_the_pipe` keeps the pipe-release half. `service/src/rotate_stop_tests.rs` carries a second stub for the tree guarantee (#160): a `powershell.exe` that starts a `ping` grandchild, writes that pid to a temp file and waits for it, so the stop is measured against the grandchild's liveness rather than the stub's. The childless `ping.exe` stub stays the #153 fixture - a tree kill must not be able to satisfy an assertion that was about the direct child alone.
 
 Documented-only scenarios (runnable `#[ignore]` tests with the reason inline): the kill -9 → watchdog detection → restart → `secretMount.json` persistence sequence needs administrator process control and is exercised by the manual script `kill-9-test.ps1` (retained in the architecture-recovery process archive, untracked); the reconcile loop's 30s warmup (SCM boot-timeout guard) touches `LOCALAPPDATA` through `secret_mount_path()`, conflicting with the CI user-state isolation, so it is pinned as documentation until the warmup becomes seam-parameterized.
 
@@ -278,11 +278,13 @@ The frontend exposes `getCliAgentsSpec()` and `getCliAgentsPath()` in `api.ts` f
 | `profile reveal-secret` stdout | The operator's terminal or pipe consumer; env-manager keeps no persisted copy | `ProfileSecretCommand.ProfileRevealSecret` (`Console.Out.Write(secret.AsSpan())`) |
 | `profile show --reveal` stdout (unaudited, unlike `profile reveal-secret`) | Same as above | `ProfileCommand.ProfileShow` -> `CliRuntime.TryDecryptSafe` |
 | Launch-profile child environment block | The child process lifetime - decrypted values are placed in `ProcessStartInfo.EnvironmentVariables`, then `Process.Start` hands the block to the child | `ProfileLaunchCommand.ProfileLaunch` |
-| sops encryption input file `%TEMP%\env-manager-sops-<guid>\secret.json` | Written, consumed by `sops -e`, then deleted with the temp directory in `finally`; the delete is best-effort, so a failed delete leaves the file on disk | `SopsProvider.Encrypt` |
-| sops decryption output file `%TEMP%\env-manager-sops-<guid>\secret.dec.json` | Written by `sops -d`, read back, then deleted with the temp directory in `finally` (same best-effort caveat) | `SopsProvider.Decrypt` |
+| sops encryption input file `%TEMP%\env-manager-sops-<guid>\secret.json` | Written, consumed by `sops -e`, then deleted with the temp directory in `finally`; the delete is best-effort, so a failed delete leaves the file on disk - and so does a service stop (the stop note after this table) | `SopsProvider.Encrypt` |
+| sops decryption output file `%TEMP%\env-manager-sops-<guid>\secret.dec.json` | Written by `sops -d`, read back, then deleted with the temp directory in `finally` (same best-effort caveat, and the same stop note) | `SopsProvider.Decrypt` |
 | Provider child processes: `pwsh -EncodedCommand` receives the value as base64 UTF-16LE (encoding, not encryption); `op item create ... password=<value>` receives it as literal argv, stores it in the 1Password backend, and `op item get --reveal` returns it on stdout | The provider child's lifetime; the 1Password backend's retention policy applies to the stored item | `PowerShellSecretManagementProvider.Encrypt`, `OnePasswordProvider.Encrypt/Decrypt` |
 | Remote provider write (`vault-kv2`, `azure-keyvault`, `aws-secretsmanager`): the plaintext is placed in the request body sent to the backend | The request; the backend's own retention policy applies afterwards | `VaultKV2Provider.Encrypt`, `AzureKeyVaultProvider.Encrypt`, `AwsSecretsManagerProvider.Encrypt` |
 | CLI argument vector: `profile add-secret` and `profile edit-secret` take the value as an argument | The CLI process lifetime; whether a shell records it to history is outside env-manager | `ProfileSecretCommand.RunProfileSecretCommand` |
+
+**Stop note (the sops temp directory)**: a service stop terminates the CLI child before that `finally` runs, so the directory is not deleted. The kill-on-close job object in `service/src/job_object.rs` converges the helper *tree* - `sops`, `op` and `pwsh` die with the CLI instead of outliving it - but the delete belongs to the CLI, not to the helper, so a rotation interrupted by a stop can leave `secret.json` or `secret.dec.json` on disk under the service identity's `%TEMP%` (`C:\Windows\SystemTemp` in the prototype observations, for a LOCAL SYSTEM service). Tree convergence stops the writer - requested when the job handle closes, observable inside the five-second budget `service/src/rotate_stop_tests.rs` asserts; removing the file would need a cleanup step the service does not have, and this table records the gap rather than closing it.
 
 **Known gap**: the generic `profile add-var`, `edit-var` and `remove-var` verbs do not consult the secret marker. On a secret name, `add-var`/`edit-var` replace the stored envelope with an ordinary value, and `profile preview` prints the stored value raw, so it leaks that plaintext in every case. After an `edit-var` rename the marker also stays on the old name, so the new name is an ordinary variable: `profile launch` injects its plaintext, `profile show` prints it unmasked, and `profile set-launch --type global` followed by `profile apply` writes it to the registry because the preflight only sees the stale marker. A same-name overwrite only fails closed at launch, where decryption fails. All three verbs copy the value or the stored envelope into `audit.json`'s old/new summaries, and `remove-var` leaves the marker behind. `add-secret`/`edit-secret`/`remove-secret` are the supported verbs for secret names; the CLI does not currently reject the generic verbs on a secret name.
 
@@ -331,7 +333,7 @@ The current DPAPI-CurrentUser implementation corresponds to Phase 0 below. Provi
 
 **Phase 3 - Key Rotation + Secret Export/Import (delivered)**
 
-- `profile secret-provider rotate` re-encrypts every profile secret from its original provider to the active provider; failed decryptions are counted and skipped, never deleted.
+- `profile secret-provider rotate` re-encrypts every profile secret from its original provider to the active provider, in both stored forms: an inline envelope is rewritten inside the profile, a `mount:<id>` reference is resolved and the rotated envelope is written back into the mount that owns it. Unresolvable or undecryptable secrets are counted and skipped, never deleted.
 - `profile export-secrets` / `profile import-secrets` move a profile's secrets through a DPAPI-encrypted portable JSON blob; import verifies each entry by trial-decryption before writing.
 - Suitability: provider-agnostic maintenance - keeps every provider phase rotatable and portable within the same user account.
 - Boundary: no plaintext persistence; audit entries record operation name, file path, and success/failure counts only - never secret or ciphertext values.
@@ -390,7 +392,7 @@ Phase 1 (Versioned Envelopes) and Phase 2 (Windows Credential Manager) are imple
 
 Phase 3 (Key Rotation + Secret Export/Import) is implemented in `src/Secrets/Manager/SecretProviderManager.cs`:
 
-- **Rotation**: `SecretProviderManager.RotateAll(profiles)` iterates all profiles and all secret variables, decrypts each with its original provider, re-encrypts with the active provider. Failed decryptions are counted and skipped (not deleted). CLI: `profile secret-provider rotate`.
+- **Rotation**: `SecretProviderManager.RotateAll(profiles, failureCounts, envelopeHolder)` iterates all profiles and all secret variables, decrypts each with its original provider, re-encrypts with the active provider. A value stored as a `mount:<id>` reference is resolved through the holder and the rotated envelope is committed back to that mount, because the mount - not the profile - owns it. Failed decryptions (including a reference with no mount behind it) are counted and skipped (not deleted). CLI: `profile secret-provider rotate`.
 - **Export**: `SecretProviderManager.ExportSecrets(profile)` serializes all secrets from a profile to JSON, DPAPI-encrypts the entire blob, and writes to a file. The export is portable within the same user account regardless of the provider used. CLI: `profile export-secrets <profile> <file>`.
 - **Import**: `SecretProviderManager.ImportSecrets(profile, encryptedBackup)` decrypts the backup with DPAPI, parses the JSON, verifies each secret by trial-decryption, then writes verified secrets to the profile. CLI: `profile import-secrets <profile> <file>`.
 - **Audit**: Rotation, export, and import all create audit entries with the operation name, file path (for export/import), and success/failure counts. No plaintext or ciphertext values are ever recorded.
@@ -432,7 +434,7 @@ Each phase is opt-in via secret-providers.json; the default remains Phase 0 so e
 Architecture-recovery (spec Phase 6 story 19) adds the domain facade port above the transport adapters:
 
 - **ISecretStore** (`src/Secrets/Core/ISecretStore.cs`, `EnvManager.Secrets.Core`): exactly five domain verbs - `Mount` (encrypt to envelope), `Reveal` (decrypt), `Rotate` (re-encrypt all profile secrets with the active provider), `Export` (DPAPI-encrypted backup blob), `Import` (restore from backup).
-- **SecretProviderManager** (`EnvManager.Secrets.Manager`) is the single implementation: `internal sealed class` + `internal static readonly SecretProviderManager.Instance`; the five verbs are explicit interface implementations delegating to the unchanged static routing core (Encrypt/Decrypt/RotateAll/ExportSecrets/ImportSecrets), so behavior is bit-identical (0 behavior change).
+- **SecretProviderManager** (`EnvManager.Secrets.Manager`) is the single implementation: `internal sealed class` + `internal static readonly SecretProviderManager.Instance`; the five verbs are explicit interface implementations delegating to the static routing core (Encrypt/Decrypt/RotateAll/ExportSecrets/ImportSecrets). That extraction changed no behavior; `Rotate` has since gained the envelope-holder parameter and the mount-reference resolution described below it.
 - **Call sites consume the port, not the manager**: `Program.SecretStore` (CliRuntime.cs, `internal static readonly ISecretStore`) is wired from `SecretProviderManager.Instance`; ProfileSecretCommand (add/edit/reveal/rotate/export/import), ProfileLaunchCommand (launch injection), CliRuntime.TryDecryptSafe (show-with-reveal), and AuditCommand encrypt-file all go through `SecretStore.<verb>`. Provider routing (GetActiveProvider/Delete/ListProviders/SetActiveProvider) stays on the manager.
 - **Adapter boundary**: `ISecretProvider` keeps its 4 transport methods (Encrypt/Decrypt/Rotate/Delete). All 8 adapters are BCL-only (HttpClient/Process/P-Invoke) - external SDK types (KeyVaultSecret / AWSSDK.SecretsManager.* / op JSON) do not exist in the codebase and cannot cross the boundary; `SecretStorePortTests` pins the five-verb surface and fail-closed reveal routing.
 
@@ -464,7 +466,8 @@ while gaining the typed `SecretProviderInvalidEnvelopeException`. AWS is the aud
 (aws-sdk-java #2702): it drops response bodies and raw transport messages entirely
 (`discardRawMessage: true`) - only the typed classification survives. Azure's identity-token
 stderr diagnostics are scrubbed by `ScrubExceptionMessage`. `SecretProviderManager.RotateAll` classifies failures
-via `SecretProviderErrors.Classify` into an optional `failureCounts` dictionary; the
+via `SecretProviderErrors.Classify` into an optional `failureCounts` dictionary, and resolves
+`mount:<id>` references through the supplied holder before it hands anything to a provider; the
 `(total, rotated, failed)` contract and the skip-and-count (never delete) invariant are unchanged.
 Covered by `SecretProviderExceptionTests` (family surface, scrubber masking/truncation,
 classification theory, loopback echo-mock against the real AWS adapter, classified rotation) and
@@ -487,6 +490,20 @@ Architecture-recovery (spec Phase 6 story 22) turns `ProfileData` (`src/Models.c
 - **SecretMount stays independent**: `ProfileData` never holds `SecretMount` objects -
   only secret variable names plus `mount:<id>` references inside `Variables[].Value`
   (the envelope lives in `secretMount.json`). No schema or lifecycle change (delta #3).
+- **Rotation crosses that boundary through a port**: a stored secret value is either an
+  envelope or a `mount:<id>` reference, and rotation must not assume the first - a pass that
+  assumed it handed the bare reference to a provider, so every mount-referenced secret failed
+  the pass and was never re-encrypted (the value stayed readable, which is why the failure
+  read like a provider problem). `ISecretEnvelopeHolder`
+  (`src/Secrets/Core/ISecretEnvelopeHolder.cs`) answers "is this a reference", "what
+  envelope is behind it", and "persist this rotated envelope"; `SecretMountEnvelopeHolder`
+  (`src/Secrets/Core/SecretMountEnvelopeHolder.cs`) implements it over the mounted list, so
+  `SecretProviderManager` never touches `secretMount.json` and the mount keeps owning its
+  envelope. The CLI loads the mount file before the pass and saves it first when it changed
+  (mount-first, profile-second). The service-side delegation must re-read that file after
+  the child exits rather than save the snapshot it took before the call
+  (`service/src/reconcile.rs`), otherwise the stamp would put the pre-rotation envelopes
+  back.
 - **Call-site migration**: `ProfileCommand.cs` (create/import/show/apply/rename/var/path/
   set-inherits), `ProfileLaunchCommand.cs` (set-launch), `ProfileSecretCommand.cs`
   (secret add/edit/remove) and the test fixtures (`ProfileCommandCharacterizationTests`,

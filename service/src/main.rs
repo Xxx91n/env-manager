@@ -22,11 +22,14 @@ mod cert_bootstrap;
 mod audit_ledger;
 mod redaction;
 mod process_guard;
+mod job_object;
 mod scm;
 #[cfg(test)]
 mod resilience_tests;
 #[cfg(test)]
 mod rotate_stop_tests;
+#[cfg(test)]
+mod rotate_writeback_tests;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RuntimeMode {
