@@ -26,7 +26,7 @@ internal sealed class SecretProviderManager : ISecretStore
     // --- ISecretStore domain facade: thin delegates over the routing core ---
     string ISecretStore.Mount(string plaintext, string? context) => Encrypt(plaintext, context);
     string ISecretStore.Reveal(string envelope, string? context) => Decrypt(envelope, context);
-    (int total, int rotated, int failed) ISecretStore.Rotate(List<ProfileData> profiles) => RotateAll(profiles);
+    (int total, int rotated, int failed) ISecretStore.Rotate(List<ProfileData> profiles, ISecretEnvelopeHolder envelopeHolder) => RotateAll(profiles, null, envelopeHolder);
     string ISecretStore.Export(ProfileData profile) => ExportSecrets(profile);
     List<(string name, bool success)> ISecretStore.Import(ProfileData profile, string encryptedBackup) => ImportSecrets(profile, encryptedBackup);
 
@@ -241,12 +241,15 @@ internal sealed class SecretProviderManager : ISecretStore
     // unknown). The (total, rotated, failed) signature and the failed++ skip-and-count
     // semantics are pinned by the frontend source gate (secret-regression.test.ts) and
     // must not change - a failed secret is never deleted, only counted.
-    public static (int total, int rotated, int failed) RotateAll(System.Collections.Generic.List<ProfileData> profiles)
-    {
-        return RotateAll(profiles, failureCounts: null);
-    }
-
-    public static (int total, int rotated, int failed) RotateAll(System.Collections.Generic.List<ProfileData> profiles, System.Collections.Generic.Dictionary<string, int>? failureCounts)
+    //
+    // Both stored forms are rotated: a profile holds either the envelope itself or a
+    // "mount:<id>" reference into secretMount.json. The reference form is resolved through
+    // the supplied holder and the rotated envelope is written back to the mount, because the
+    // mount - not the profile - owns that envelope (GLOSSARY: Secret Mount). Rotation used to
+    // hand the bare "mount:<id>" string to the provider, which cannot parse it as an
+    // envelope, so every mount-referenced secret failed the pass and was never re-encrypted.
+    // The value stayed readable, which is why nobody noticed: it just never rotated.
+    public static (int total, int rotated, int failed) RotateAll(System.Collections.Generic.List<ProfileData> profiles, System.Collections.Generic.Dictionary<string, int>? failureCounts, ISecretEnvelopeHolder envelopeHolder)
     {
         var provider = GetActiveProvider();
         int total = 0, rotated = 0, failed = 0;
@@ -260,26 +263,46 @@ internal sealed class SecretProviderManager : ISecretStore
                 total++;
                 try
                 {
-                    // Decrypt with whatever provider encrypted it
-                    string plaintext = Decrypt(v.Value, profile.Name + "\\" + v.Name);
-                    // Re-encrypt with the active provider
-                    v.Value = Encrypt(plaintext, profile.Name + "\\" + v.Name);
+                    RotateStoredValue(profile, v, envelopeHolder);
                     rotated++;
                 }
                 catch (Exception ex)
                 {
-                    // Decryption failed (wrong provider, deleted CredMan entry, etc.):
-                    // skip + count, never delete. classify by error type.
+                    // Decryption failed (wrong provider, deleted CredMan entry, dangling mount
+                    // reference, etc.): skip + count, never delete.
                     failed++;
-                    if (failureCounts != null)
-                    {
-                        string cat = SecretProviderErrors.Classify(ex);
-                        failureCounts[cat] = failureCounts.TryGetValue(cat, out int n) ? n + 1 : 1;
-                    }
+                    RecordFailure(failureCounts, ex);
                 }
             }
         }
         return (total, rotated, failed);
+    }
+
+    // Re-encrypt one stored secret value and put it back where it came from: a profile holds
+    // either the envelope itself (inline form) or a "mount:<id>" reference whose envelope
+    // lives in the SecretMount aggregate. Only the reference needs the holder, and only the
+    // holder owns that write-back.
+    static void RotateStoredValue(ProfileData profile, ProfileVariable variable, ISecretEnvelopeHolder envelopeHolder)
+    {
+        string context = profile.Name + "\\" + variable.Name;
+        // Mount-referenced secrets are decryptable through the mount that owns the envelope;
+        // the reference itself is not an envelope.
+        bool byReference = envelopeHolder.IsReference(variable.Value);
+        string storedEnvelope = byReference ? envelopeHolder.ResolveReference(variable.Value) : variable.Value;
+        // Decrypt with whatever provider encrypted it, re-encrypt with the active provider
+        string plaintext = Decrypt(storedEnvelope, context);
+        string rotatedEnvelope = Encrypt(plaintext, context);
+        if (byReference) envelopeHolder.CommitReference(variable.Value, rotatedEnvelope);
+        else variable.Value = rotatedEnvelope;
+    }
+
+    // Classified failure bucket behind the failed counter; a null dictionary means the
+    // caller only wants the three counts.
+    static void RecordFailure(System.Collections.Generic.Dictionary<string, int>? failureCounts, Exception ex)
+    {
+        if (failureCounts == null) return;
+        string cat = SecretProviderErrors.Classify(ex);
+        failureCounts[cat] = failureCounts.TryGetValue(cat, out int n) ? n + 1 : 1;
     }
 
     // Phase 3: Export secrets from a profile to an encrypted backup file

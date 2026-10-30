@@ -60,13 +60,15 @@ fn pid_is_running(pid: u32) -> bool {
 const ALWAYS_TOO_LONG: Duration = Duration::from_secs(20);
 
 /// A temp `secretMount.json` holding one un-rotated mount, deleted with the file.
-struct MountFixture {
-    path: PathBuf,
+/// Shared with `rotate_writeback_tests`, which drives the completed-rotation file states
+/// against the same fixture shape.
+pub(crate) struct MountFixture {
+    pub(crate) path: PathBuf,
     original: String,
 }
 
 impl MountFixture {
-    fn new(label: &str) -> Self {
+    pub(crate) fn new(label: &str) -> Self {
         let path = std::env::temp_dir().join(format!(
             "env-manager-rotate-stop-{label}-{}.json",
             uuid::Uuid::new_v4()
@@ -91,7 +93,7 @@ impl MountFixture {
     /// Reading the fixture back through JSON is the point: #153 forbids a stop that
     /// leaves the mount file half-written, and a file that no longer parses is exactly
     /// that, whether or not the bytes look plausible.
-    fn mounts(&self) -> Vec<serde_json::Value> {
+    pub(crate) fn mounts(&self) -> Vec<serde_json::Value> {
         let raw = std::fs::read_to_string(&self.path).expect("read the mount file back");
         serde_json::from_str(&raw).expect("the mount file must stay whole JSON")
     }

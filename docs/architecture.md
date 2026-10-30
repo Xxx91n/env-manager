@@ -331,7 +331,7 @@ The current DPAPI-CurrentUser implementation corresponds to Phase 0 below. Provi
 
 **Phase 3 - Key Rotation + Secret Export/Import (delivered)**
 
-- `profile secret-provider rotate` re-encrypts every profile secret from its original provider to the active provider; failed decryptions are counted and skipped, never deleted.
+- `profile secret-provider rotate` re-encrypts every profile secret from its original provider to the active provider, in both stored forms: an inline envelope is rewritten inside the profile, a `mount:<id>` reference is resolved and the rotated envelope is written back into the mount that owns it. Unresolvable or undecryptable secrets are counted and skipped, never deleted.
 - `profile export-secrets` / `profile import-secrets` move a profile's secrets through a DPAPI-encrypted portable JSON blob; import verifies each entry by trial-decryption before writing.
 - Suitability: provider-agnostic maintenance - keeps every provider phase rotatable and portable within the same user account.
 - Boundary: no plaintext persistence; audit entries record operation name, file path, and success/failure counts only - never secret or ciphertext values.
@@ -390,7 +390,7 @@ Phase 1 (Versioned Envelopes) and Phase 2 (Windows Credential Manager) are imple
 
 Phase 3 (Key Rotation + Secret Export/Import) is implemented in `src/Secrets/Manager/SecretProviderManager.cs`:
 
-- **Rotation**: `SecretProviderManager.RotateAll(profiles)` iterates all profiles and all secret variables, decrypts each with its original provider, re-encrypts with the active provider. Failed decryptions are counted and skipped (not deleted). CLI: `profile secret-provider rotate`.
+- **Rotation**: `SecretProviderManager.RotateAll(profiles, failureCounts, envelopeHolder)` iterates all profiles and all secret variables, decrypts each with its original provider, re-encrypts with the active provider. A value stored as a `mount:<id>` reference is resolved through the holder and the rotated envelope is committed back to that mount, because the mount - not the profile - owns it. Failed decryptions (including a reference with no mount behind it) are counted and skipped (not deleted). CLI: `profile secret-provider rotate`.
 - **Export**: `SecretProviderManager.ExportSecrets(profile)` serializes all secrets from a profile to JSON, DPAPI-encrypts the entire blob, and writes to a file. The export is portable within the same user account regardless of the provider used. CLI: `profile export-secrets <profile> <file>`.
 - **Import**: `SecretProviderManager.ImportSecrets(profile, encryptedBackup)` decrypts the backup with DPAPI, parses the JSON, verifies each secret by trial-decryption, then writes verified secrets to the profile. CLI: `profile import-secrets <profile> <file>`.
 - **Audit**: Rotation, export, and import all create audit entries with the operation name, file path (for export/import), and success/failure counts. No plaintext or ciphertext values are ever recorded.
@@ -432,7 +432,7 @@ Each phase is opt-in via secret-providers.json; the default remains Phase 0 so e
 Architecture-recovery (spec Phase 6 story 19) adds the domain facade port above the transport adapters:
 
 - **ISecretStore** (`src/Secrets/Core/ISecretStore.cs`, `EnvManager.Secrets.Core`): exactly five domain verbs - `Mount` (encrypt to envelope), `Reveal` (decrypt), `Rotate` (re-encrypt all profile secrets with the active provider), `Export` (DPAPI-encrypted backup blob), `Import` (restore from backup).
-- **SecretProviderManager** (`EnvManager.Secrets.Manager`) is the single implementation: `internal sealed class` + `internal static readonly SecretProviderManager.Instance`; the five verbs are explicit interface implementations delegating to the unchanged static routing core (Encrypt/Decrypt/RotateAll/ExportSecrets/ImportSecrets), so behavior is bit-identical (0 behavior change).
+- **SecretProviderManager** (`EnvManager.Secrets.Manager`) is the single implementation: `internal sealed class` + `internal static readonly SecretProviderManager.Instance`; the five verbs are explicit interface implementations delegating to the static routing core (Encrypt/Decrypt/RotateAll/ExportSecrets/ImportSecrets). That extraction changed no behavior; `Rotate` has since gained the envelope-holder parameter and the mount-reference resolution described below it.
 - **Call sites consume the port, not the manager**: `Program.SecretStore` (CliRuntime.cs, `internal static readonly ISecretStore`) is wired from `SecretProviderManager.Instance`; ProfileSecretCommand (add/edit/reveal/rotate/export/import), ProfileLaunchCommand (launch injection), CliRuntime.TryDecryptSafe (show-with-reveal), and AuditCommand encrypt-file all go through `SecretStore.<verb>`. Provider routing (GetActiveProvider/Delete/ListProviders/SetActiveProvider) stays on the manager.
 - **Adapter boundary**: `ISecretProvider` keeps its 4 transport methods (Encrypt/Decrypt/Rotate/Delete). All 8 adapters are BCL-only (HttpClient/Process/P-Invoke) - external SDK types (KeyVaultSecret / AWSSDK.SecretsManager.* / op JSON) do not exist in the codebase and cannot cross the boundary; `SecretStorePortTests` pins the five-verb surface and fail-closed reveal routing.
 
@@ -464,7 +464,8 @@ while gaining the typed `SecretProviderInvalidEnvelopeException`. AWS is the aud
 (aws-sdk-java #2702): it drops response bodies and raw transport messages entirely
 (`discardRawMessage: true`) - only the typed classification survives. Azure's identity-token
 stderr diagnostics are scrubbed by `ScrubExceptionMessage`. `SecretProviderManager.RotateAll` classifies failures
-via `SecretProviderErrors.Classify` into an optional `failureCounts` dictionary; the
+via `SecretProviderErrors.Classify` into an optional `failureCounts` dictionary, and resolves
+`mount:<id>` references through the supplied holder before it hands anything to a provider; the
 `(total, rotated, failed)` contract and the skip-and-count (never delete) invariant are unchanged.
 Covered by `SecretProviderExceptionTests` (family surface, scrubber masking/truncation,
 classification theory, loopback echo-mock against the real AWS adapter, classified rotation) and
@@ -487,6 +488,20 @@ Architecture-recovery (spec Phase 6 story 22) turns `ProfileData` (`src/Models.c
 - **SecretMount stays independent**: `ProfileData` never holds `SecretMount` objects -
   only secret variable names plus `mount:<id>` references inside `Variables[].Value`
   (the envelope lives in `secretMount.json`). No schema or lifecycle change (delta #3).
+- **Rotation crosses that boundary through a port**: a stored secret value is either an
+  envelope or a `mount:<id>` reference, and rotation must not assume the first - a pass that
+  assumed it handed the bare reference to a provider, so every mount-referenced secret failed
+  the pass and was never re-encrypted (the value stayed readable, which is why the failure
+  read like a provider problem). `ISecretEnvelopeHolder`
+  (`src/Secrets/Core/ISecretEnvelopeHolder.cs`) answers "is this a reference", "what
+  envelope is behind it", and "persist this rotated envelope"; `SecretMountEnvelopeHolder`
+  (`src/Secrets/Core/SecretMountEnvelopeHolder.cs`) implements it over the mounted list, so
+  `SecretProviderManager` never touches `secretMount.json` and the mount keeps owning its
+  envelope. The CLI loads the mount file before the pass and saves it first when it changed
+  (mount-first, profile-second). The service-side delegation must re-read that file after
+  the child exits rather than save the snapshot it took before the call
+  (`service/src/reconcile.rs`), otherwise the stamp would put the pre-rotation envelopes
+  back.
 - **Call-site migration**: `ProfileCommand.cs` (create/import/show/apply/rename/var/path/
   set-inherits), `ProfileLaunchCommand.cs` (set-launch), `ProfileSecretCommand.cs`
   (secret add/edit/remove) and the test fixtures (`ProfileCommandCharacterizationTests`,

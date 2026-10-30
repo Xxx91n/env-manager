@@ -335,7 +335,7 @@ Assert.True(ex.Message.Length <= 514, "message must stay at the 512-char cap (+2
             };
 
             var failures = new Dictionary<string, int>();
-            var (total, rotated, failed) = SecretProviderManager.RotateAll(profiles, failures);
+            var (total, rotated, failed) = SecretProviderManager.RotateAll(profiles, failures, new InlineOnlyEnvelopes());
 
             Assert.Equal(2, total);
             Assert.Equal(0, rotated);
@@ -363,5 +363,21 @@ Assert.True(ex.Message.Length <= 514, "message must stay at the 512-char cap (+2
         p.AddVariable("A", awsEnvelope);                          // AWS adapter -> authFailed
         p.AddVariable("B", "not-a-valid-envelope!!");             // manager guard -> unknown
         return p;
+    }
+
+    /// <summary>
+    /// Both fixture secrets hold their envelope inline, so the rotation never asks where an
+    /// envelope lives: any reference lookup fails the test instead of silently passing.
+    /// Mount-referenced rotation is covered by SecretRotateMountTests.
+    /// </summary>
+    private sealed class InlineOnlyEnvelopes : ISecretEnvelopeHolder
+    {
+        public bool IsReference(string storedValue) => false;
+
+        public string ResolveReference(string storedValue) =>
+            throw new InvalidOperationException("this fixture has no mount references");
+
+        public void CommitReference(string storedValue, string rotatedEnvelope) =>
+            throw new InvalidOperationException("this fixture has no mount references");
     }
 }

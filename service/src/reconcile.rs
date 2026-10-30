@@ -227,7 +227,7 @@ pub(crate) async fn rotate_mount_at(
     shutdown: &CancellationToken,
 ) -> Result<serde_json::Value, String> {
     let _guard = RECONCILE_LOCK.lock().await; // Phase 4C: TOCTOU protection
-    let mut mounts = load_mounts(mount_path);
+    let mounts = load_mounts(mount_path);
     if !mounts.iter().any(|m| m.id == mount_id) {
         return Err(format!("mount not found: {}", mount_id));
     }
@@ -240,16 +240,42 @@ pub(crate) async fn rotate_mount_at(
     let result = call_cli_rotate(cli_exe, cli_args, shutdown).await?;
     let now = Utc::now().to_rfc3339();
 
-    if let Some(m) = mounts.iter_mut().find(|m| m.id == mount_id) {
-        m.lastRotatedAt = Some(now.clone());
-        m.lastFetchedAt = Some(now.clone());
+    // Re-read what the child left on disk instead of reusing the snapshot from before the
+    // call: a delegated rotation writes each rotated envelope back into the mount that owns
+    // it (the profile only holds `mount:<id>`), so `mounts` is stale by now and saving it
+    // would restore the pre-rotation envelopes - silently undoing the rotation this call is
+    // about to record. Only the two metadata stamps are ours to write.
+    //
+    // The strict read is what keeps "the mount is gone" apart from "the child left a file
+    // this build cannot read": the plain loader answers an empty list for both, and the
+    // second one must never be reported as a completed rotation.
+    let mut rotated = load_mounts_strict(mount_path)?;
+    let stamped = match rotated.iter_mut().find(|m| m.id == mount_id) {
+        Some(m) => {
+            m.lastRotatedAt = Some(now.clone());
+            m.lastFetchedAt = Some(now.clone());
+            true
+        }
+        None => {
+            // The mount vanished while the rotation ran. Look it up again and skip: the
+            // rotation of its secret already happened, and rewriting a file that no longer
+            // names the mount would resurrect a list that lost it. Never fail a completed
+            // rotation over a mount nobody can act on.
+            tracing::warn!(
+                "mount {} disappeared during the rotation; leaving the mount file alone",
+                mount_id
+            );
+            false
+        }
+    };
+    if stamped {
+        save_mounts(mount_path, &rotated)?;
     }
-    save_mounts(mount_path, &mounts)?;
 
     Ok(serde_json::json!({
         "mountId": mount_id,
         "rotated": true,
-        "lastRotatedAt": now,
+        "lastRotatedAt": stamped.then(|| now.clone()),
         "rotateResult": result,
     }))
 }
@@ -452,6 +478,21 @@ fn load_mounts(path: &Path) -> Vec<SecretMount> {
             Vec::new()
         }
     }
+}
+
+/// `load_mounts`, but keeping "no mounts" apart from "a file this build cannot read".
+/// After a delegated rotation the two mean opposite things: no mounts is a mount that
+/// disappeared (skip it), a file that will not parse is a rotation that must not be reported
+/// as completed over state nobody can inspect. Only an unparseable or unreadable file is an
+/// error - a missing file means the same thing as an empty one.
+fn load_mounts_strict(path: &Path) -> Result<Vec<SecretMount>, String> {
+    if !path.exists() {
+        return Ok(Vec::new());
+    }
+    let raw = std::fs::read_to_string(path)
+        .map_err(|e| format!("failed to read the mount file after the rotation: {}", e))?;
+    serde_json::from_str(&raw)
+        .map_err(|e| format!("the mount file did not parse after the rotation: {}", e))
 }
 
 /// Save mounts atomically (temp + fsync + rename). Matches C# AtomicWriteProfiles pattern (A3).
