@@ -81,12 +81,14 @@ mod tests {
 
     #[test]
     fn test_scrub_masks_on_character_boundaries() {
-        // Non-ASCII before the pattern is the case the byte arithmetic got wrong: the
-        // mask window is eight characters, and an end offset computed in bytes either
-        // replaced the wrong text or panicked `replace_range` off a character boundary.
-        let input = "秘密 password=abcdef12 tail";
+        // Both halves have to be non-ASCII to discriminate: a byte offset used as a
+        // character count only goes wrong when the prefix is multi-byte, and the end
+        // offset only lands off a character boundary when the masked window is multi-byte
+        // too. On this input the old arithmetic asked `replace_range` to cut at byte 36 -
+        // the middle of a CJK character, i.e. a panic - instead of masking eight characters.
+        let input = "秘密 password=密码密码密码密码密码 tail";
         let out = scrub_message(input);
-        assert_eq!(out, "秘密 password=<redacted> tail");
+        assert_eq!(out, "秘密 password=<redacted>密码 tail");
     }
 
     #[test]

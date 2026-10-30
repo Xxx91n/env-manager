@@ -513,10 +513,10 @@ async fn spawn_cli_child(
         _ = shutdown.cancelled() => {
             // `Child::kill` is TerminateProcess followed by `wait`, so the child is reaped
             // here rather than left as an orphan of a service the SCM already calls
-            // Stopped. The readers are aborted instead of awaited: an aborted rotation has
-            // no output worth returning, and the stop path should not depend on a pipe
-            // reaching EOF - even though it does, because provider helpers redirect their
-            // own std handles (`src/Secrets/Providers/`).
+            // Stopped. The two pipe readers are then handled differently - stdout is
+            // aborted, stderr is drained (below) - and the stop path must not depend on
+            // either pipe reaching EOF, even though both do: provider helpers redirect
+            // their own std handles (`src/Secrets/Providers/`).
             child
                 .kill()
                 .await
@@ -534,6 +534,13 @@ async fn spawn_cli_child(
                 Ok(Ok(text)) => text,
                 _ => {
                     stderr_reader.abort();
+                    // Logged rather than dropped: a helper that keeps the pipe open past the
+                    // drain budget is exactly the case where the reclaim below may find a
+                    // held file, and silence here would read as "nothing to say".
+                    tracing::warn!(
+                        "delegated CLI stderr could not be read within {:?} on the stop path; the provider's fallback line may be lost",
+                        STDERR_DRAIN_ON_STOP
+                    );
                     String::new()
                 }
             };
