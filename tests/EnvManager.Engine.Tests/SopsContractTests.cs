@@ -46,10 +46,34 @@ public sealed class SopsContractTests : SecretProviderContractTests
 
         private SopsScope(SopsL1Harness harness) => Harness = harness;
 
+        /// <summary>
+        /// CI lanes that carry the sops evidence set this to 1 after putting the pinned
+        /// sops + age on PATH (scripts/install-sops-age.ps1). It makes the round trip
+        /// REQUIRED: every path that would otherwise skip fails instead, so a lane that
+        /// lost its tools goes red rather than reporting a skipped run as "Passed!".
+        /// Independent of EM_L1_MATRIX, because sops + age is a local offline key system
+        /// that needs neither Docker nor a cloud credential.
+        /// </summary>
+        internal const string RequiredEnvVar = "EM_L1_SOPS";
+
+        private static bool Required =>
+            string.Equals(Environment.GetEnvironmentVariable(RequiredEnvVar), "1", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(Environment.GetEnvironmentVariable(RequiredEnvVar), "true", StringComparison.OrdinalIgnoreCase);
+
+        // One exit for every "cannot run" path. The wording leads with NOT RUN so the
+        // skip reason cannot be read as a pass in a log or a TRX.
+        private static Exception NotRun(string reason)
+        {
+            var text = "sops round trip NOT RUN (skipped, not a pass): " + reason;
+            return Required
+                ? new InvalidOperationException(text + $" - {RequiredEnvVar}=1 makes this test required on this lane")
+                : new Xunit.SkipException(text);
+        }
+
         internal static SopsScope Install()
         {
             var bundle = L1ToolProvisioner.TryGetSopsBundle();
-            if (bundle is null)
+            if (bundle is null && !Required)
             {
                 // host lacks the tools: downloading them is a network side effect, so
                 // it only happens with the matrix opt-in
@@ -58,12 +82,14 @@ public sealed class SopsContractTests : SecretProviderContractTests
             }
             if (bundle is null)
             {
-                throw new Xunit.SkipException("sops L1 smoke needs the sops + age binaries (host PATH lookup and pinned release download both unavailable)");
+                throw NotRun(Required
+                    ? "sops + age not found on PATH (the lane must run scripts/install-sops-age.ps1 before the tests)"
+                    : "needs the sops + age binaries (host PATH lookup and pinned release download both unavailable)");
             }
             var recipients = SopsL1Harness.ExtractPublicKey(bundle.Value.AgeKeyFile);
             if (recipients is null)
             {
-                throw new Xunit.SkipException("sops L1 smoke could not extract the age public key from the generated key file");
+                throw NotRun("could not extract the age public key from the generated key file");
             }
             // First-exec warmup: host binaries can stall on AV/SmartScan on some Windows
             // hosts (same observation as the op CLI warmup); retry until --version answers.
@@ -91,7 +117,7 @@ public sealed class SopsContractTests : SecretProviderContractTests
             }
             if (!warmOk)
             {
-                throw new Xunit.SkipException("sops L1 smoke: sops --version warmup did not complete (host stalled the binary; retry the run)");
+                throw NotRun("sops --version warmup did not complete (host stalled the binary; retry the run)");
             }
             Environment.SetEnvironmentVariable("SOPS_PATH", bundle.Value.Sops);
             Environment.SetEnvironmentVariable("SOPS_AGE_KEY_FILE", bundle.Value.AgeKeyFile);

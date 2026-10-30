@@ -90,8 +90,12 @@ internal static class L1ToolProvisioner
 
         var bundleDir = Path.Combine(SessionRoot, "sops-age");
         var sopsPath = sopsHost ?? Path.Combine(bundleDir, IsWindows ? "sops.exe" : "sops");
-        var agePath = ageHost ?? Path.Combine(bundleDir, IsWindows ? "age.exe" : "age");
-        var ageKeygenPath = ageKeygenHost ?? Path.Combine(bundleDir, IsWindows ? "age-keygen.exe" : "age-keygen");
+        // The age release archives (zip and tar.gz alike) unpack into an age/ subfolder.
+        // Looking for the binaries at the bundle root missed them, the keypair was never
+        // generated, and the sops round trip skipped on the Linux lane that downloads.
+        var ageDir = Path.Combine(bundleDir, "age");
+        var agePath = ageHost ?? Path.Combine(ageDir, IsWindows ? "age.exe" : "age");
+        var ageKeygenPath = ageKeygenHost ?? Path.Combine(ageDir, IsWindows ? "age-keygen.exe" : "age-keygen");
         var keyFile = Path.Combine(bundleDir, "age-keys.txt");
 
         try
@@ -100,10 +104,11 @@ internal static class L1ToolProvisioner
 
             if (sopsHost is null)
             {
-                // sops 3.13.3 does not publish a windows release asset; winget/scoop
-                // installs cover Windows hosts
-                if (IsWindows || !allowDownload) return null;
-                Download($"https://github.com/getsops/sops/releases/download/v{SopsVersion}/sops-v{SopsVersion}.linux.amd64", sopsPath);
+                if (!allowDownload) return null;
+                // the release publishes sops-v<ver>.amd64.exe for Windows next to the
+                // linux.amd64 build
+                var sopsAsset = IsWindows ? $"sops-v{SopsVersion}.amd64.exe" : $"sops-v{SopsVersion}.linux.amd64";
+                Download($"https://github.com/getsops/sops/releases/download/v{SopsVersion}/{sopsAsset}", sopsPath);
                 ChmodExecutable(sopsPath);
             }
 
@@ -125,6 +130,8 @@ internal static class L1ToolProvisioner
                     Download(url, tgzPath);
                     Run("tar", $"-xzf \"{tgzPath}\" -C \"{bundleDir}\"");
                     File.Delete(tgzPath);
+                    ChmodExecutable(agePath);
+                    ChmodExecutable(ageKeygenPath);
                 }
             }
 
