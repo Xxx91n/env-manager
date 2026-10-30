@@ -1,7 +1,9 @@
 // Named Pipe IPC + protocol.
 // Server: listens on \\.\pipe\EnvManager.Service (service) or \\.\pipe\EnvManager.Background (background).
 // Client: one-shot CLI gateway connects to pipe, sends request, prints response.
-// DACL: only EnvManagerService SID and current user can connect.
+// DACL: every instance is created with `PIPE_SDDL` below (Administrators, LOCAL SYSTEM,
+// owner). Anyone else is refused at the first CreateFile, so "who may connect" does not
+// depend on a per-method check inside the dispatcher.
 // Anti-squatting: PIPE_FIRST_PIPE_INSTANCE flag rejects pre-existing pipe.
 // Design: the service runs as NT SERVICE\<svc> (virtual service account, no AD required), so the
 // named pipe is the only channel - the CLI stays a thin gateway and the GUI stays UI-only.
@@ -68,13 +70,121 @@ impl IpcResponse {
 use std::sync::atomic::{AtomicU64, Ordering};
 static CONNECTION_COUNT: AtomicU64 = AtomicU64::new(0);
 
+/// The declared DACL of every pipe instance, in both modes.
+///
+/// - `FA` (FILE_ALL_ACCESS) for `BA` (Built-in Administrators) and `SY` (LOCAL SYSTEM);
+/// - `GA` (GENERIC_ALL) for `OW` (OWNER RIGHTS), the SID of whichever principal created
+///   the instance.
+///
+/// The owner ACE is what keeps Background mode usable: that pipe is created by the user
+/// who launched the GUI, so the owner is exactly the identity that must reach it. It is
+/// also why this crate has no "current interactive user" concept - a service runs in
+/// session 0, where that user either does not exist or is the wrong answer under RDP and
+/// fast user switching, and asking would grant the wrong principal.
+///
+/// The accepted cost: a non-administrator can no longer open the machine-level
+/// `EnvManager.Service` pipe at all. Before this descriptor they could open it (the
+/// default descriptor granted Everyone and Anonymous read access) but never complete a
+/// request, so the tightening removes a read channel rather than a capability.
+const PIPE_SDDL: &str = "D:(A;;FA;;;BA)(A;;FA;;;SY)(A;;GA;;;OW)";
+
 /// Create one pipe instance. `first_pipe_instance` sets PIPE_FIRST_PIPE_INSTANCE.
+///
+/// The descriptor travels in `lpSecurityAttributes` at creation time, which is the only
+/// route that works. Both post-creation routes were measured and rejected:
+///
+/// - `SetNamedSecurityInfoW` by name answers `87 ERROR_INVALID_PARAMETER` for a named
+///   pipe, so the "apply after create" helper this crate used to carry could never have
+///   had an effect - wiring it up would have changed nothing;
+/// - setting the DACL on each instance through a handle re-opens the instance the accept
+///   loop just created and takes the listener down (every later client gets
+///   `ERROR_FILE_NOT_FOUND`, sometimes `ERROR_PIPE_BUSY`).
+///
+/// `PIPE_FIRST_PIPE_INSTANCE` still applies: the flag and the security attributes are
+/// both arguments to the same `CreateNamedPipeW` call.
 fn create_instance(pipe_name: &str, first_pipe_instance: bool) -> io::Result<NamedPipeServer> {
     let mut options = tokio::net::windows::named_pipe::ServerOptions::new();
     if first_pipe_instance {
         options.first_pipe_instance(true);
     }
-    options.create(pipe_name)
+    create_with_declared_dacl(&options, pipe_name)
+}
+
+/// Hand [`PIPE_SDDL`] to `CreateNamedPipeW` as `lpSecurityAttributes`.
+///
+/// Fail-closed on purpose: a conversion failure returns the OS error instead of falling
+/// back to `ServerOptions::create`, because that fallback is the default descriptor -
+/// Everyone and Anonymous readable. A constant that cannot be converted is a build-level
+/// defect, and the caller's retry loop reports it as "cannot listen" rather than serving
+/// on a wider descriptor than the code declares.
+fn create_with_declared_dacl(
+    options: &tokio::net::windows::named_pipe::ServerOptions,
+    pipe_name: &str,
+) -> io::Result<NamedPipeServer> {
+    use std::ffi::c_void;
+    use windows_sys::Win32::Security::SECURITY_ATTRIBUTES;
+
+    let descriptor = DeclaredSecurityDescriptor::new()?;
+    let mut attributes = SECURITY_ATTRIBUTES {
+        nLength: std::mem::size_of::<SECURITY_ATTRIBUTES>() as u32,
+        lpSecurityDescriptor: descriptor.as_ptr(),
+        bInheritHandle: 0,
+    };
+    // Safety: `attributes` outlives the call and its descriptor pointer stays valid for
+    // the whole call (`descriptor` is dropped only afterwards). `CreateNamedPipeW` copies
+    // the descriptor into the pipe object, so freeing it once the call returns is correct.
+    unsafe {
+        options.create_with_security_attributes_raw(
+            pipe_name,
+            &mut attributes as *mut SECURITY_ATTRIBUTES as *mut c_void,
+        )
+    }
+}
+
+/// [`PIPE_SDDL`] converted to a self-freeing security descriptor.
+///
+/// The guard exists so an early return between conversion and the `CreateNamedPipeW` call
+/// cannot leak the descriptor: `LocalFree` is the only way to release it.
+struct DeclaredSecurityDescriptor(*mut std::ffi::c_void);
+
+impl DeclaredSecurityDescriptor {
+    fn new() -> io::Result<Self> {
+        use windows_sys::Win32::Security::Authorization::{
+            ConvertStringSecurityDescriptorToSecurityDescriptorW, SDDL_REVISION_1,
+        };
+
+        let sddl: Vec<u16> = PIPE_SDDL
+            .encode_utf16()
+            .chain(std::iter::once(0))
+            .collect();
+        let mut raw: *mut std::ffi::c_void = std::ptr::null_mut();
+        let converted = unsafe {
+            ConvertStringSecurityDescriptorToSecurityDescriptorW(
+                sddl.as_ptr(),
+                SDDL_REVISION_1,
+                &mut raw,
+                std::ptr::null_mut(),
+            )
+        };
+        if converted == 0 {
+            return Err(io::Error::last_os_error());
+        }
+        Ok(Self(raw))
+    }
+
+    fn as_ptr(&self) -> *mut std::ffi::c_void {
+        self.0
+    }
+}
+
+impl Drop for DeclaredSecurityDescriptor {
+    fn drop(&mut self) {
+        if !self.0.is_null() {
+            unsafe {
+                windows_sys::Win32::Foundation::LocalFree(self.0);
+            }
+        }
+    }
 }
 
 /// Wait out a retry delay. `false` means shutdown cancelled the wait first.
@@ -547,5 +657,175 @@ mod tests {
                 assert!(resp.data.is_some(), "sample {} should carry data", sample["name"]);
             }
         }
+    }
+}
+
+/// Pipe security: the DACL is a property of the instance, so it is asserted against a real
+/// instance rather than against the call path that creates one.
+///
+/// The effect layer - "a non-privileged identity is refused `err=5`, the two shipped
+/// clients still answer pong" - needs a second identity and a LocalSystem service, so it
+/// lives in the dispatch-only observation job (`scripts/probe-pipe-dacl.ps1`, wired by
+/// `.github/workflows/pipe-dacl-observation.yml`) and not here.
+#[cfg(test)]
+mod pipe_security_tests {
+    use super::*;
+    use windows_sys::Win32::Foundation::{CloseHandle, HANDLE, INVALID_HANDLE_VALUE};
+    use windows_sys::Win32::Security::Authorization::{
+        ConvertSecurityDescriptorToStringSecurityDescriptorW, GetSecurityInfo, SE_KERNEL_OBJECT,
+        SDDL_REVISION_1,
+    };
+    use windows_sys::Win32::Security::DACL_SECURITY_INFORMATION;
+    use windows_sys::Win32::Storage::FileSystem::{
+        CreateFileW, FILE_SHARE_READ, FILE_SHARE_WRITE, OPEN_EXISTING,
+    };
+
+    /// READ_CONTROL, the access `GetSecurityInfo` needs to read a DACL.
+    const READ_CONTROL: u32 = 0x0002_0000;
+
+    /// A pipe name no real service and no sibling test uses, so the assertions cannot be
+    /// answered by somebody else's instance.
+    fn test_pipe(label: &str) -> String {
+        format!(r"\\.\pipe\EnvManager.Test{}{}", label, std::process::id())
+    }
+
+    /// Read the live DACL of a pipe instance through a handle.
+    ///
+    /// By name is not an option: `GetNamedSecurityInfoW` answers `87
+    /// ERROR_INVALID_PARAMETER` for `\\.\pipe\<name>`, which is the same reason the
+    /// deleted post-creation helper could never have taken effect. A handle opened for
+    /// READ_CONTROL plus `SE_KERNEL_OBJECT` is the route the pipe tools use.
+    ///
+    /// Opening the client side consumes the instance the server is waiting on, which is
+    /// exactly what a client does; the caller drops the server afterwards either way.
+    fn dacl_sddl(pipe: &str) -> String {
+        let wide: Vec<u16> = pipe.encode_utf16().chain(std::iter::once(0)).collect();
+        let handle: HANDLE = unsafe {
+            CreateFileW(
+                wide.as_ptr(),
+                READ_CONTROL,
+                FILE_SHARE_READ | FILE_SHARE_WRITE,
+                std::ptr::null(),
+                OPEN_EXISTING,
+                0,
+                std::ptr::null_mut(),
+            )
+        };
+        assert!(
+            handle != INVALID_HANDLE_VALUE,
+            "cannot open {pipe} for READ_CONTROL: {}",
+            std::io::Error::last_os_error()
+        );
+        let result = (|| {
+            let (mut owner, mut group, mut dacl, mut sacl) = (
+                std::ptr::null_mut(),
+                std::ptr::null_mut(),
+                std::ptr::null_mut(),
+                std::ptr::null_mut(),
+            );
+            let mut sd: *mut std::ffi::c_void = std::ptr::null_mut();
+            let rc = unsafe {
+                GetSecurityInfo(
+                    handle,
+                    SE_KERNEL_OBJECT,
+                    DACL_SECURITY_INFORMATION,
+                    &mut owner,
+                    &mut group,
+                    &mut dacl,
+                    &mut sacl,
+                    &mut sd,
+                )
+            };
+            assert_eq!(rc, 0, "GetSecurityInfo on {pipe} failed with {rc}");
+            let mut text: *mut u16 = std::ptr::null_mut();
+            let mut chars: u32 = 0;
+            let converted = unsafe {
+                ConvertSecurityDescriptorToStringSecurityDescriptorW(
+                    sd,
+                    SDDL_REVISION_1,
+                    DACL_SECURITY_INFORMATION,
+                    &mut text,
+                    &mut chars,
+                )
+            };
+            assert!(converted != 0, "SDDL conversion failed on {pipe}");
+            let mut buf = Vec::with_capacity(chars as usize);
+            let mut cursor = text;
+            while unsafe { *cursor } != 0 {
+                buf.push(unsafe { *cursor });
+                cursor = unsafe { cursor.add(1) };
+            }
+            unsafe {
+                windows_sys::Win32::Foundation::LocalFree(sd);
+                windows_sys::Win32::Foundation::LocalFree(text as *mut std::ffi::c_void);
+            }
+            String::from_utf16(&buf).expect("DACL SDDL is not valid UTF-16")
+        })();
+        unsafe { CloseHandle(handle) };
+        result
+    }
+
+    /// Guards the constant itself: widening it (Everyone, Anonymous, Authenticated Users,
+    /// Users) or dropping one of the three grantees has to fail here rather than silently
+    /// change who may connect to a machine-level pipe.
+    #[test]
+    fn declared_sddl_grants_only_administrators_system_and_the_owner() {
+        assert_eq!(PIPE_SDDL, "D:(A;;FA;;;BA)(A;;FA;;;SY)(A;;GA;;;OW)");
+        for granted in ["(A;;FA;;;BA)", "(A;;FA;;;SY)", "(A;;GA;;;OW)"] {
+            assert!(
+                PIPE_SDDL.contains(granted),
+                "declared DACL lost {granted}: {PIPE_SDDL}"
+            );
+        }
+        for widened in [";;;WD", ";;;AN", ";;;AU", ";;;BU", ";;;IU"] {
+            assert!(
+                !PIPE_SDDL.contains(widened),
+                "declared DACL grants {widened}: {PIPE_SDDL}"
+            );
+        }
+    }
+
+    /// The regression this crate actually needed: an instance created by `create_instance`
+    /// must carry the declared descriptor, not the token default. Asserted on the live
+    /// object, so removing the security attributes (or reverting to the default create)
+    /// fails here even though the code still compiles.
+    ///
+    /// Runs on a tokio runtime because a pipe handle has to register with the reactor to
+    /// become a `NamedPipeServer`, not because the assertion needs async.
+    #[tokio::test]
+    async fn created_instance_carries_the_declared_dacl() {
+        let pipe = test_pipe("Dacl");
+        let server = create_instance(&pipe, true).expect("create instance");
+        let sddl = dacl_sddl(&pipe);
+        drop(server);
+
+        assert_eq!(
+            sddl.matches("(A;").count(),
+            3,
+            "the instance DACL is not the three declared ACEs: {sddl}"
+        );
+        for granted in ["(A;;FA;;;BA)", "(A;;FA;;;SY)", "(A;;GA;;;OW)"] {
+            assert!(sddl.contains(granted), "instance DACL lost {granted}: {sddl}");
+        }
+        for widened in [";;;WD", ";;;AN"] {
+            assert!(
+                !sddl.contains(widened),
+                "instance DACL still grants {widened} (the default descriptor): {sddl}"
+            );
+        }
+    }
+
+    /// Anti-squatting must survive the switch to creation-time security attributes: the
+    /// flag and the descriptor are arguments to the same call, so this is the regression
+    /// the descriptor change could plausibly have caused.
+    #[tokio::test]
+    async fn first_pipe_instance_flag_still_refuses_a_second_creator() {
+        let pipe = test_pipe("Squat");
+        let _first = create_instance(&pipe, true).expect("first creator must win");
+        let second = create_instance(&pipe, true);
+        assert!(
+            second.is_err(),
+            "a second PIPE_FIRST_PIPE_INSTANCE creator took the name over"
+        );
     }
 }

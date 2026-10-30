@@ -21,7 +21,6 @@ mod ipc;
 mod cert_bootstrap;
 mod audit_ledger;
 mod redaction;
-mod pipe_dacl;
 mod process_guard;
 mod scm;
 #[cfg(test)]
