@@ -723,6 +723,16 @@ finally {
     Remove-ProbeService -Name $ServiceName
     Remove-LowUser
 
+    # The Background leg runs as the secondary identity with LOCALAPPDATA redirected into
+    # work\, so its tracing log lands there and the workflow's ProgramData collector never
+    # sees it. Copy it into the evidence directory, which is what the artifact uploads.
+    $backgroundLogDir = Join-Path $script:WorkDir 'localappdata\EnvManager'
+    $backgroundLogs = @(Get-ChildItem -Path $backgroundLogDir -Filter 'env-manager-service.log*' -File -ErrorAction SilentlyContinue)
+    foreach ($log in $backgroundLogs) {
+        Copy-Item -LiteralPath $log.FullName -Destination (Join-Path $EvidenceDir ('background-' + $log.Name)) -Force
+    }
+    Write-Evidence -Key 'background.log_files' -Value ("{0} file(s) copied from {1}" -f $backgroundLogs.Count, $backgroundLogDir)
+
     $failed = @($script:Checks | Where-Object { -not $_.Ok })
     $summary = @(
         '# Pipe DACL observation',
