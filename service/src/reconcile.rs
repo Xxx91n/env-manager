@@ -16,6 +16,8 @@ use tokio::io::AsyncReadExt; // draining the CLI child's pipes while it runs
 use std::process::Stdio; // piped stdout/stderr on the CLI child (tokio takes std's type)
 use tokio::sync::Mutex; // Phase 4C: TOCTOU protection
 
+use crate::job_object::KillOnCloseJob; // kill-on-close tree containment for the CLI child
+
 /// `CREATE_NO_WINDOW`: the service has no console, and without the flag the CLI child
 /// would flash a window on the interactive desktop. Passed to tokio's own
 /// `Command::creation_flags`, so no `CommandExt` import is needed here.
@@ -335,11 +337,14 @@ pub(crate) enum ChildOutcome {
         stderr: String,
     },
     /// A stop was requested while the child was still running. By the time this variant
-    /// is returned the child has been terminated *and reaped* (#153).
+    /// is returned the child has been terminated *and reaped* (#153), and the job object
+    /// holding its process tree has been closed (#160), which terminates the helpers it had
+    /// started - requested at handle close, not awaited, so they can still be winding down
+    /// for a moment after this returns.
     Interrupted { pid: Option<u32> },
 }
 
-/// Run a CLI child and converge it with the service stop path (#153).
+/// Run a CLI child and converge it with the service stop path (#153, #160).
 ///
 /// Strategy, chosen over join-to-completion: **terminate and reap**. A rotate waits on
 /// provider round-trips that can outlive the SCM stop window, and STOP shares that window
@@ -349,15 +354,45 @@ pub(crate) enum ChildOutcome {
 /// write profiles.json". The abandoned rotation is recovered by replay, not by waiting -
 /// see `rotate_mount_at`.
 ///
-/// Scope of the guarantee: the child spawned here. A provider helper that child started
-/// (`op`, `sops`, `pwsh` in `src/Secrets/Providers/`) is not tree-killed - that needs a
-/// kill-on-close job object - but no helper writes `profiles.json` or `secretMount.json`,
-/// so the window this ticket closes is closed.
+/// Scope of the guarantee, and the holes it cannot close. The child spawned here joins a
+/// kill-on-close job object (`crate::job_object::KillOnCloseJob`), so the provider helpers
+/// it starts (`op`, `sops`, `pwsh` in `src/Secrets/Providers/`) and *their* children are
+/// terminated with the CLI: a stop no longer leaves an orphan helper writing to the
+/// backend. Termination is requested, not awaited - a helper can still be visibly alive
+/// for a moment after this returns, which is why the stop-path test measures a five-second
+/// budget instead of asserting on the return of this call. If the job cannot be created or
+/// the child cannot be assigned, the guarantee degrades to the direct child only; both are
+/// logged and the rotation proceeds rather than being refused. The remaining hole is the
+/// interval between the spawn below and the assignment that follows it - assigning a
+/// process puts its future children in the job, not the ones it already has - so a helper
+/// the CLI managed to start inside that interval is outside the job and still survives the
+/// stop. `Command` offers no create-suspended spawn, so the window cannot be closed from
+/// here; it is recorded instead of promised away.
+///
+/// A different gap stays open and is not this function's to close: sops writes the value it
+/// decrypted into its own temp directory and deletes it in the CLI's `finally`, so a stop
+/// that terminates the CLI still leaves that file on disk. Killing the helper does not
+/// remove it. See the secret-value lifecycle table in `docs/architecture.md`.
 pub(crate) async fn run_cli_child(
     cli_exe: &str,
     args: &[&str],
     shutdown: &CancellationToken,
 ) -> Result<ChildOutcome, String> {
+    // One job per delegation, never a process-wide singleton: the handle lives exactly as
+    // long as this call, so a stop kills the rotation it interrupted and nothing else. A
+    // failure to create it degrades the guarantee to "the direct child only" and must not
+    // fail the rotation - losing the tree kill is bad, refusing to rotate is worse.
+    let job = match KillOnCloseJob::new() {
+        Ok(job) => Some(job),
+        Err(e) => {
+            tracing::warn!(
+                "CLI child job object unavailable, provider helpers may outlive this rotation: {}",
+                e
+            );
+            None
+        }
+    };
+
     let mut child = tokio::process::Command::new(cli_exe)
         .args(args)
         .creation_flags(CREATE_NO_WINDOW)
@@ -370,6 +405,30 @@ pub(crate) async fn run_cli_child(
         .map_err(|e| format!("failed to run CLI rotate: {}", e))?;
 
     let pid = child.id();
+    // Straight after the spawn, because this call is what ends the window described in
+    // the doc comment. Assignment needs `PROCESS_SET_QUOTA | PROCESS_TERMINATE` on the
+    // target, which `crate::job_object` opens by pid.
+    match (job.as_ref(), pid) {
+        (Some(job), Some(pid)) => {
+            if let Err(e) = job.assign(pid) {
+                tracing::warn!(
+                    "CLI child {} could not join the job object, its helpers may outlive this rotation: {}",
+                    pid, e
+                );
+            }
+        }
+        (Some(_), None) => {
+            // No pid means the child was already reaped, so there is nothing left to
+            // assign and anything it started before exiting is outside the job for good.
+            // Rare, and the same class of hole as the window in the doc comment - logged
+            // rather than skipped in silence.
+            tracing::warn!(
+                "CLI rotate child exited before it could join the job object, its helpers may outlive this rotation"
+            );
+        }
+        // No job: `KillOnCloseJob::new` already logged why.
+        (None, _) => {}
+    }
     // Output is drained while the child runs, never after the wait: a child that fills a
     // pipe buffer would otherwise block on write and never observe the kill.
     let mut stdout = child.stdout.take().ok_or("CLI rotate child has no stdout pipe")?;
@@ -404,6 +463,10 @@ pub(crate) async fn run_cli_child(
                 .map_err(|e| format!("failed to terminate the CLI rotate child: {}", e))?;
             read_stdout.abort();
             read_stderr.abort();
+            // The job handle drops as this function returns, which is where the helper
+            // tree dies (#160): the CLI is already reaped, so nothing left in the job can
+            // still be serving this rotation. Both happen inside the stop budget - closing
+            // a job handle is not a wait.
             Ok(ChildOutcome::Interrupted { pid })
         }
     }

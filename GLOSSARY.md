@@ -45,7 +45,7 @@ The service-side loop that refreshes `Periodic` mounts, default off. Only `CanRo
 _Avoid_: refresh daemon, sync loop, agent process
 
 **Interrupted Rotation**:
-A `rotate` whose delegated CLI child was terminated by a service stop before the rotation completed. Names who owns that child, not the provider verb.
+A `rotate` whose delegated CLI child was terminated by a service stop before the rotation completed. The interrupted unit is the whole process tree that child owned, so the provider helpers it had started stop with it. Names who owns that tree, not the provider verb.
 _Avoid_: cancelled rotation, aborted write, half-written file
 
 **Capability-Scoped Agentic Surface**:
