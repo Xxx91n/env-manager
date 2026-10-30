@@ -291,11 +291,13 @@ Commands:
         //     state, so a gateway lock would only queue them behind someone else's write: a
         //     health poll, or the stop request #153 taught us to deliver promptly, would
         //     wait out a rotate's budget for nothing.
-        //   - refresh keeps the lock. It is the one verb whose service-side write
-        //     (secretMount.json) a same-session CLI can also perform - a terminal
-        //     `profile secret-provider rotate` writes that file - and it spawns no child, so
-        //     the lock cannot deadlock. This mutex is session-scoped, so it serializes
-        //     same-session writers only, which is all it ever did.
+        //   - refresh keeps the lock: it spawns no child, so locking cannot deadlock it, and
+        //     the mount-file rewrite it triggers is a file a same-session CLI writes too (a
+        //     terminal `profile secret-provider rotate`), which is the only contention this
+        //     session-scoped mutex can serialize. rotate gets no such treatment because its
+        //     writer is the child; the metadata stamp the service writes after that child
+        //     exits is guarded by the service's own reconcile lock, and that is the parent
+        //     spec's async window, not something a gateway lock can cover without deadlock.
         // Rejected alternatives: holding the mutex only around the IPC call re-creates the
         // deadlock (the child needs the lock while the gateway waits for that same child),
         // and handing the child an inherited holder identity is a bypass - the actual
@@ -306,9 +308,11 @@ Commands:
         // it, not the shell).
         if (command == "service")
         {
+            // Only `refresh` writes anything this process can serialize; `rotate` delegates,
+            // the probes only read, `reload`/`shutdown` write nothing, and an unknown verb is
+            // rejected by the usage path without touching state.
             string serviceVerb = args.Length > 1 ? args[1].ToLowerInvariant() : "";
-            if (serviceVerb is "rotate" or "ping" or "status" or "health" or "reload" or "shutdown") return false;
-            return true;
+            return serviceVerb == "refresh";
         }
         if (command == "history") return args.Length > 1 && args[1].Equals("undo", StringComparison.OrdinalIgnoreCase);
         if (command == "bulk") return args.Length > 1 && args[1].Equals("import", StringComparison.OrdinalIgnoreCase) && !args.Contains("--dry-run");

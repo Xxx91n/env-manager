@@ -30,8 +30,9 @@ public class ServiceGatewayLockTests
     // startup on a loaded runner while still failing well inside the real budget.
     static readonly TimeSpan ProbeBudget = TimeSpan.FromSeconds(3);
 
-    // Taking the holder's end can legitimately wait if a real CLI write is running on the
-    // box; only the probe's budget carries an assertion.
+    // Taking the holder's end can wait - or time out - if a real CLI write owns the mutex on
+    // this box; only the probe's budget carries an assertion, and the failure mode of a
+    // blocked acquisition (a TimeoutException from the production 30 s budget) is loud.
     static readonly TimeSpan HolderBudget = TimeSpan.FromSeconds(30);
 
     // ---- classification: which `service` verbs hold the gateway mutex ----
@@ -47,6 +48,10 @@ public class ServiceGatewayLockTests
         new object[] { new[] { "service", "health" } },
         new object[] { new[] { "service", "reload" } },
         new object[] { new[] { "service", "shutdown" } },
+        // A missing or unknown verb is rejected by the usage path without touching state,
+        // so it must not queue for a lock it will never use.
+        new object[] { new[] { "service" } },
+        new object[] { new[] { "service", "bogus" } },
     };
 
     [Theory]
