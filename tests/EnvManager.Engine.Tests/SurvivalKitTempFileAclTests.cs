@@ -39,7 +39,10 @@ public sealed class SurvivalKitTempFileAclTests
             // kit and renames it into place. That scratch name holds the same plaintext for
             // a moment, and SurvivalKitTempFile claims the directory covers it - so the
             // assertions below run against a file that arrived exactly that way, not against
-            // one written by a shortcut the kit never uses.
+            // one written by a shortcut the kit never uses. Known limit: WriteAtomicUtf8 is
+            // a private member of Program, so this reproduces its scratch-name shape instead
+            // of calling it - if that shape ever changes, the scratch-name half of this test
+            // goes stale while staying green, and has to be updated with it.
             string scratchPath = filePath + ".tmp." + Environment.ProcessId;
             File.WriteAllText(scratchPath, "{\"mountId\":\"probe\"}");
             File.Move(scratchPath, filePath, overwrite: true);

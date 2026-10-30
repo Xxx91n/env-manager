@@ -278,7 +278,7 @@ partial class Program
         {
             // Secure delete temp plaintext
             try { File.Delete(tmpPath); } catch { }
-            SurvivalKitTempFile.Delete(kitDirectory);
+            SurvivalKitTempFile.DeleteDirectory(kitDirectory);
         }
 
         DebugLog($"audit export-survival-kit: {events.Count} events -> {outputPath}");

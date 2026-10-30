@@ -18,6 +18,11 @@
 
 using System;
 using System.IO;
+// Secrets.Core is one of the two surfaces the Secrets context publishes to the rest of the
+// engine (AGENTS.md: cross-context code consumes Secrets.Core and Secrets.Manager), so the
+// audit context reaching for SecretTempDirectory here is the sanctioned direction -
+// Providers would not be. The dependency is one call, and it is the only reason this file
+// needs a Secrets import at all.
 using EnvManager.Secrets.Core;
 
 namespace EnvManager;
@@ -71,7 +76,7 @@ internal static class SurvivalKitTempFile
     /// directory, not a secret; the failure is still recorded rather than swallowed, because
     /// an unbounded pile of them in <c>%TEMP%</c> is its own problem.
     /// </summary>
-    internal static void Delete(DirectoryInfo directory)
+    internal static void DeleteDirectory(DirectoryInfo directory)
     {
         try
         {
