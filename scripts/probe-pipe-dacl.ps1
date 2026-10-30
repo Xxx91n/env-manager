@@ -471,8 +471,29 @@ function New-LowUserCommandFile {
     # cmd.exe cannot execute a .ps1, and Start-Process -Credential cannot redirect output
     # (redirection needs UseShellExecute = false, which -Credential rejects), so the child
     # runs through a generated batch file and writes into the work directory.
+    #
+    # The child inherits this process's environment, so TEMP / TMP / LOCALAPPDATA / APPDATA
+    # still point into the elevated user's profile - where the secondary identity has no
+    # write access. That is not cosmetic: Add-Type compiles through a temp file (so the
+    # probe died with UnauthorizedAccessException), and the service creates its log
+    # directory under LOCALAPPDATA (so Background mode exited before the pipe existed).
+    # Redirect all four into the work directory, which the account can write.
+    $tmp = Join-Path $script:WorkDir 'tmp'
+    $localAppData = Join-Path $script:WorkDir 'localappdata'
+    $appData = Join-Path $script:WorkDir 'appdata'
+    foreach ($dir in @($tmp, $localAppData, $appData)) {
+        New-Item -ItemType Directory -Force -Path $dir | Out-Null
+    }
     $bat = Join-Path $script:WorkDir ('run-low-' + [guid]::NewGuid().ToString('N').Substring(0, 8) + '.bat')
-    $body = "chdir /d `"$script:WorkDir`"`r`n$Line > `"$OutFile`" 2>&1`r`necho LOW_EXIT=%ERRORLEVEL% >> `"$OutFile`""
+    $body = @(
+        "chdir /d `"$script:WorkDir`""
+        "set `"TEMP=$tmp`""
+        "set `"TMP=$tmp`""
+        "set `"LOCALAPPDATA=$localAppData`""
+        "set `"APPDATA=$appData`""
+        "$Line > `"$OutFile`" 2>&1"
+        "echo LOW_EXIT=%ERRORLEVEL% >> `"$OutFile`""
+    ) -join "`r`n"
     [System.IO.File]::WriteAllText($bat, $body, [System.Text.Encoding]::ASCII)
     return $bat
 }
@@ -490,13 +511,16 @@ function Invoke-AsLowUser {
 }
 
 # Same identity, but the child keeps running (Background mode serves until killed), so
-# there is nothing to wait for. Cleanup kills it by image name.
+# there is nothing to wait for. Cleanup kills it by image name. The launcher's output file
+# comes back with the process: when the service dies at startup, that file is the only
+# place the reason appears.
 function Start-AsLowUser {
     param([pscustomobject]$As, [string]$Exe, [string[]]$Arguments = @())
     $out = Join-Path $script:WorkDir ('low-bg-' + [guid]::NewGuid().ToString('N').Substring(0, 8) + '.txt')
     $bat = New-LowUserCommandFile -Line (ConvertTo-ArgLine -Exe $Exe -Arguments $Arguments) -OutFile $out
     Write-Evidence -Key 'lowuser.background_launch' -Value ("{0} {1} => {2}" -f $Exe, (ConvertTo-ArgList -Arguments $Arguments), $bat)
-    return Start-Process -FilePath 'cmd.exe' -ArgumentList @('/c', $bat) -Credential $As.Credential -WindowStyle Hidden -PassThru
+    $proc = Start-Process -FilePath 'cmd.exe' -ArgumentList @('/c', $bat) -Credential $As.Credential -WindowStyle Hidden -PassThru
+    return [pscustomobject]@{ Process = $proc; OutputPath = $out }
 }
 
 # --- client mode -------------------------------------------------------------
@@ -644,8 +668,11 @@ try {
     # and the GUI's watchdog and rotate traffic use this pipe, not the Service one. The
     # administrator-launched fallback still proves the descriptor, but not the owner ACE.
     $backgroundOwner = $adminIdentity
+    $backgroundOutput = $null
     if ($lowUser) {
-        $backgroundProc = Start-AsLowUser -As $lowUser -Exe $ServiceExe -Arguments @('--mode=background')
+        $bgLaunch = Start-AsLowUser -As $lowUser -Exe $ServiceExe -Arguments @('--mode=background')
+        $backgroundProc = $bgLaunch.Process
+        $backgroundOutput = $bgLaunch.OutputPath
         $backgroundOwner = $lowUser.Name
     }
     else {
@@ -654,6 +681,10 @@ try {
     $bgAnswer = Wait-PipePing -Pipe $script:PipeBackground -TimeoutSec 30
     Write-Evidence -Key 'background.launching_identity' -Value $backgroundOwner -Note 'the OW ACE resolves to this identity'
     Write-Evidence -Key 'background.first_ping' -Value $bgAnswer
+    # A Background process that died at startup leaves its reason only here.
+    if ($backgroundOutput -and (Test-Path $backgroundOutput)) {
+        Write-Evidence -Key 'background.launch_output' -Value (Get-Content -LiteralPath $backgroundOutput -Raw) -Note 'console output of the launcher; empty means it is still serving'
+    }
     $backgroundSddl = Get-PipeDacl -Pipe $script:PipeBackground -Label 'background'
     Assert-DeclaredDacl -Label 'background' -Sddl $backgroundSddl
     $bgWatchdog = Connect-PipePing -Pipe $script:PipeBackground
@@ -691,6 +722,16 @@ finally {
     }
     Remove-ProbeService -Name $ServiceName
     Remove-LowUser
+
+    # The Background leg runs as the secondary identity with LOCALAPPDATA redirected into
+    # work\, so its tracing log lands there and the workflow's ProgramData collector never
+    # sees it. Copy it into the evidence directory, which is what the artifact uploads.
+    $backgroundLogDir = Join-Path $script:WorkDir 'localappdata\EnvManager'
+    $backgroundLogs = @(Get-ChildItem -Path $backgroundLogDir -Filter 'env-manager-service.log*' -File -ErrorAction SilentlyContinue)
+    foreach ($log in $backgroundLogs) {
+        Copy-Item -LiteralPath $log.FullName -Destination (Join-Path $EvidenceDir ('background-' + $log.Name)) -Force
+    }
+    Write-Evidence -Key 'background.log_files' -Value ("{0} file(s) copied from {1}" -f $backgroundLogs.Count, $backgroundLogDir)
 
     $failed = @($script:Checks | Where-Object { -not $_.Ok })
     $summary = @(
