@@ -57,7 +57,10 @@ partial class Program
 
     static bool DebugMode = false;
 
-    static void DebugLog(string msg)
+    // internal so Secrets.Core can record its own best-effort failures on the same
+    // channel (SecretTempDirectory's ACL restriction); the same reason
+    // ScrubExceptionMessage is internal.
+    internal static void DebugLog(string msg)
     {
         if (DebugMode)
             Console.Error.WriteLine($"[debug] {DateTime.Now:HH:mm:ss.fff} {msg}");

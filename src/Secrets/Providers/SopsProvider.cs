@@ -40,6 +40,15 @@ internal sealed class SopsProvider : ISecretProvider
 
     private static readonly string SOPS_BINARY = FindSopsBinary();
 
+    // Single creation point for the plaintext temp directory. Both Encrypt and Decrypt go
+    // through it so neither can inherit %TEMP%'s ACL by accident: on a host whose TEMP is
+    // C:\Windows\Temp the inherited ACE grants BUILTIN\Users read, and this directory is
+    // where the plaintext lands. SecretTempDirectory applies the owner-only DACL in the
+    // same call that creates the directory; a DACL that cannot be applied is logged and
+    // the provider keeps working, while a directory that cannot be created still throws.
+    private string CreatePlaintextTempDirectory()
+        => SecretTempDirectory.Create(Name).FullName;
+
     // Budget for the `sops --version` availability probe. Measured on a warm Windows
     // host: 2.1-2.9s wall clock per start (antivirus scans the resolved binary), and it
     // overshoots 5s under concurrent load. The probe MUST NOT be stricter than the
@@ -137,8 +146,7 @@ internal sealed class SopsProvider : ISecretProvider
     {
         EnsureSopsAvailable();
 
-        string tempDir = Path.Combine(Path.GetTempPath(), "env-manager-sops-" + Guid.NewGuid().ToString("N"));
-        Directory.CreateDirectory(tempDir);
+        string tempDir = CreatePlaintextTempDirectory();
 
         string plainFile = Path.Combine(tempDir, "secret.json");
         string encFile = Path.Combine(tempDir, "secret.enc.json");
@@ -232,8 +240,7 @@ internal sealed class SopsProvider : ISecretProvider
 
         EnsureSopsAvailable();
 
-        string tempDir = Path.Combine(Path.GetTempPath(), "env-manager-sops-" + Guid.NewGuid().ToString("N"));
-        Directory.CreateDirectory(tempDir);
+        string tempDir = CreatePlaintextTempDirectory();
 
         string encFile = Path.Combine(tempDir, "secret.enc.json");
         string plainFile = Path.Combine(tempDir, "secret.dec.json");
