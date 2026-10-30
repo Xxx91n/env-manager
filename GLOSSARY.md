@@ -48,6 +48,10 @@ _Avoid_: refresh daemon, sync loop, agent process
 A `rotate` whose delegated CLI child was terminated by a service stop before the rotation completed. The interrupted unit is the whole process tree that child owned, so the provider helpers it had started stop with it. Names who owns that tree, not the provider verb.
 _Avoid_: cancelled rotation, aborted write, half-written file
 
+**Sops Scratch Root**:
+The per-delegation directory the service creates for the sops provider's working files, hands to the CLI as `ENVMANAGER_SOPS_SCRATCH_DIR`, and deletes itself once the delegated CLI child is gone (`service/src/sops_scratch.rs`). It is what makes "a stop leaves no sops plaintext behind" a fact rather than an aspiration: the deleter is the process that survives the CLI. A CLI run by hand has no such root and keeps its own `%TEMP%` directory.
+_Avoid_: sops temp dir (ambiguous with the provider's own `env-manager-sops-<guid>`), plaintext cache, cleanup job
+
 **Capability-Scoped Agentic Surface**:
 The `agentCapabilities` whitelist on `secret-providers.json`; empty (the default) means all-allowed. Opt-in deployments use it to reject parallel set/delete calls from LLM agents.
 _Avoid_: agent gate, capability filter, agent whitelist

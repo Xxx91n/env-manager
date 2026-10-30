@@ -7,7 +7,8 @@
 // stays closed, but sops writes plaintext into `%TEMP%\env-manager-sops-<guid>\` and the
 // deletion of that directory is the CLI's own `finally` (`SopsProvider.Decrypt`): a
 // terminated CLI never runs it, so one stop used to leave both an orphan helper and a
-// plaintext file behind.
+// plaintext file behind. The file half is `crate::sops_scratch` (#177), which owns the
+// root the provider writes into; this module only ends the processes.
 //
 // Chosen over `taskkill /T` (shells out, races the reap this crate already does) and over
 // one process-wide job (one stop would then take down every unrelated delegation). The

@@ -17,6 +17,7 @@ use std::process::Stdio; // piped stdout/stderr on the CLI child (tokio takes st
 use tokio::sync::Mutex; // Phase 4C: TOCTOU protection
 
 use crate::job_object::KillOnCloseJob; // kill-on-close tree containment for the CLI child
+use crate::sops_scratch::{SopsScratch, SCRATCH_ENV}; // service-owned sops plaintext root (#177)
 
 /// `CREATE_NO_WINDOW`: the service has no console, and without the flag the CLI child
 /// would flash a window on the interactive desktop. Passed to tokio's own
@@ -369,14 +370,41 @@ pub(crate) enum ChildOutcome {
 /// stop. `Command` offers no create-suspended spawn, so the window cannot be closed from
 /// here; it is recorded instead of promised away.
 ///
-/// A different gap stays open and is not this function's to close: sops writes the value it
-/// decrypted into its own temp directory and deletes it in the CLI's `finally`, so a stop
-/// that terminates the CLI still leaves that file on disk. Killing the helper does not
-/// remove it. See the secret-value lifecycle table in `docs/architecture.md`.
+/// The plaintext sops writes does not outlive the delegation either (#177): the root the
+/// CLI puts its sops working directories in is created here, handed over through
+/// `SCRATCH_ENV`, and deleted once the outcome above is known - including the interrupted
+/// case, where the CLI's own `finally` never runs, because the process doing the delete is
+/// this one. That delete is retried for a moment (a killed helper can still own a handle
+/// for a fraction of a second) and a failure that survives the retries is logged at error
+/// level, never swallowed; see `crate::sops_scratch`. What this cannot cover is a service
+/// that is killed rather than stopped: the root then stays on disk with a name that says
+/// the service wrote it.
 pub(crate) async fn run_cli_child(
     cli_exe: &str,
     args: &[&str],
     shutdown: &CancellationToken,
+) -> Result<ChildOutcome, String> {
+    // Created before the spawn and reclaimed after the outcome is known, so no early
+    // return inside `spawn_cli_child` - a failed spawn, a missing pipe, a failed wait -
+    // can skip the delete.
+    let scratch = SopsScratch::create();
+    let outcome = spawn_cli_child(cli_exe, args, shutdown, scratch.as_ref()).await;
+    if let Some(scratch) = scratch {
+        scratch.reclaim().await;
+    }
+    outcome
+}
+
+/// The delegation itself: job object, spawn, drain, converge.
+///
+/// Split out of `run_cli_child` so the reclaim above runs on every exit path. The job
+/// handle is dropped when this returns, which is before the caller deletes the scratch
+/// root, so the tree is already under termination when its files are removed.
+async fn spawn_cli_child(
+    cli_exe: &str,
+    args: &[&str],
+    shutdown: &CancellationToken,
+    scratch: Option<&SopsScratch>,
 ) -> Result<ChildOutcome, String> {
     // One job per delegation, never a process-wide singleton: the handle lives exactly as
     // long as this call, so a stop kills the rotation it interrupted and nothing else. A
@@ -393,14 +421,21 @@ pub(crate) async fn run_cli_child(
         }
     };
 
-    let mut child = tokio::process::Command::new(cli_exe)
+    let mut command = tokio::process::Command::new(cli_exe);
+    command
         .args(args)
         .creation_flags(CREATE_NO_WINDOW)
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         // Backstop for the one exit this function cannot await: the runtime dropping this
         // task. The guarantee is the cancellation branch below, which also reaps.
-        .kill_on_drop(true)
+        .kill_on_drop(true);
+    // Where the CLI's sops working directories go. Unset, the provider keeps using its own
+    // `%TEMP%` directory - the hand-run CLI case, which has no service to reclaim for it.
+    if let Some(scratch) = scratch {
+        command.env(SCRATCH_ENV, scratch.path());
+    }
+    let mut child = command
         .spawn()
         .map_err(|e| format!("failed to run CLI rotate: {}", e))?;
 

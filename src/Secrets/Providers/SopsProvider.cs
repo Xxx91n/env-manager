@@ -142,6 +142,45 @@ internal sealed class SopsProvider : ISecretProvider
         }
     }
 
+    // Where this provider writes the plaintext sops needs to read or produce (#177).
+    //
+    // A service-delegated rotation is handed a directory the service owns through
+    // ENVMANAGER_SOPS_SCRATCH_DIR and deletes once the CLI child is gone: that is the only
+    // shape that also covers a stop, because the CLI's own `finally` never runs when it is
+    // terminated. Unset, or set to something that cannot be written, this falls back to
+    // %TEMP% exactly as before - a CLI started by hand has no service to reclaim anything
+    // for it, and an unusable scratch root is a configuration problem, never a reason to
+    // refuse to encrypt or decrypt.
+    private const string ScratchRootEnvVar = "ENVMANAGER_SOPS_SCRATCH_DIR";
+    private const string WorkingDirectoryPrefix = "env-manager-sops-";
+
+    internal static string CreateWorkingDirectory(string operation)
+    {
+        string? scratchRoot = Environment.GetEnvironmentVariable(ScratchRootEnvVar);
+        if (!string.IsNullOrWhiteSpace(scratchRoot))
+        {
+            string candidate = Path.Combine(scratchRoot, WorkingDirectoryPrefix + Guid.NewGuid().ToString("N"));
+            try
+            {
+                Directory.CreateDirectory(candidate);
+                return candidate;
+            }
+            catch (Exception ex) when (ex is IOException || ex is UnauthorizedAccessException
+                                       || ex is ArgumentException || ex is NotSupportedException
+                                       || ex is System.Security.SecurityException)
+            {
+                // Exception type only, never ex.Message: the type is stable text, while the
+                // message can quote whatever path segment Windows objected to.
+                Console.Error.WriteLine("Warning: sops " + operation + " scratch root '" + scratchRoot +
+                    "' is not usable (" + ex.GetType().Name + "); falling back to " + Path.GetTempPath());
+            }
+        }
+
+        string fallback = Path.Combine(Path.GetTempPath(), WorkingDirectoryPrefix + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(fallback);
+        return fallback;
+    }
+
     public string Encrypt(string plaintext, string? context = null)
     {
         EnsureSopsAvailable();
@@ -155,7 +194,10 @@ internal sealed class SopsProvider : ISecretProvider
         {
             // Design: sops is file-in/file-out, so plaintext must reach disk as its input.
             // This file and secret.dec.json in Decrypt are the documented on-disk plaintext
-            // exception (docs/architecture.md "Plaintext lifecycle"); delete is best-effort.
+            // exception (docs/architecture.md "Plaintext lifecycle"). Under the service the
+            // directory lives inside the root `run_cli_child` owns and reclaims, so a stop
+            // that kills this process still ends with the file deleted; run by hand, the
+            // delete below is best-effort.
             // Write JSON: { "value": "<plaintext>" }
             // write UTF-8 WITHOUT BOM. Encoding.UTF8 emits a BOM (0xEF 0xBB 0xBF)
             // and sops >= 3.x rejects BOM-prefixed JSON with "invalid character 'ï'
