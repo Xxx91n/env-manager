@@ -38,9 +38,14 @@ const STDERR_DRAIN_ON_STOP: Duration = Duration::from_millis(200);
 /// so its cost is linear in the mount's secret count and dominated by process spawns (sops
 /// starts four processes per secret, ~10s/secret cold on the prototype machine, so 50 secrets
 /// already pass two minutes). A fixed *performance* limit was therefore rejected: it would
-/// fail healthy rotations. This number is instead chosen far above any real rotation, and is
-/// deliberately not derived from the secret count - a delegated rotate carries no mount id
-/// and covers every profile, so N is only estimable, and a wrong estimate kills healthy work.
+/// fail healthy rotations. This number is instead chosen as a ceiling nobody expects to reach,
+/// and it is deliberately not derived from the secret count: a delegated rotate carries no
+/// mount id and covers every profile, so N is only estimable, and a wrong estimate kills
+/// healthy work. The arithmetic is worth stating, because it is the honest limit of the claim:
+/// at the ~10s/secret cold estimate above, 900s covers roughly 90 secrets, so a mount past that
+/// size could legitimately reach this ceiling and be failed. That is the accepted cost of
+/// having a ceiling at all - the alternative is a child that can hold the rotation, and
+/// everything queued behind it, forever.
 ///
 /// It does not widen the stop window: the stop branch of the same `select!` still fires the
 /// moment the token is cancelled, so `SHUTDOWN_DRAIN` + `RUNTIME_DRAIN` stay inside
@@ -127,12 +132,11 @@ static ROTATIONS_IN_FLIGHT: AtomicUsize = AtomicUsize::new(0);
 
 /// RAII marker for one running delegation; see `ROTATIONS_IN_FLIGHT`. Dropped when the
 /// rotation returns - after the child is reaped and the write-back is done - so a writer that
-/// sees zero cannot race a child that is still writing. `pub(crate)` so the stand-down in
-/// `refresh_mount` can be pinned by a test without a real mount file.
-pub(crate) struct RotationInFlight;
+/// sees zero cannot race a child that is still writing.
+struct RotationInFlight;
 
 impl RotationInFlight {
-    pub(crate) fn enter() -> Self {
+    fn enter() -> Self {
         ROTATIONS_IN_FLIGHT.fetch_add(1, Ordering::SeqCst);
         Self
     }
@@ -692,23 +696,23 @@ async fn spawn_cli_child(
         ending.reason(),
     )
     .await?;
-    if let Ending::Hung = ending {
-        // The service log is where a budget expiry has to be visible: the IPC client gave up
-        // 30s into the call (`ipc::cli_gateway`), so for a rotation this long nobody is
-        // waiting on the response any more.
-        tracing::warn!(
-            "CLI rotate child {} outlived its {:?} hang budget and was terminated; the mount keeps its old metadata and the next rotate replays it",
-            pid_label(pid),
-            hang_budget
-        );
-    }
     // The job handle drops as this function returns, which is where the helper tree dies
     // (#160): the CLI is already reaped, so nothing left in the job can still be serving this
     // rotation. Both paths reach it inside the stop budget - closing a job handle is not a
     // wait - and the hang-budget path adds no window of its own.
     Ok(match ending {
         Ending::Stopped => ChildOutcome::Interrupted { pid },
-        Ending::Hung => ChildOutcome::OverHangBudget { pid },
+        Ending::Hung => {
+            // The service log is where a budget expiry has to be visible: the IPC client gave
+            // up 30s into the call (`ipc::cli_gateway`), so for a rotation this long nobody is
+            // waiting on the response any more.
+            tracing::warn!(
+                "CLI rotate child {} outlived its {:?} hang budget and was terminated; the mount keeps its old metadata and the next rotate replays it",
+                pid_label(pid),
+                hang_budget
+            );
+            ChildOutcome::OverHangBudget { pid }
+        }
     })
 }
 

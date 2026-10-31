@@ -18,7 +18,7 @@ use std::time::Duration;
 
 use tokio_util::sync::CancellationToken;
 
-use crate::reconcile::{refresh_mount, rotate_mount_at, RotationInFlight, ROTATE_HANG_BUDGET};
+use crate::reconcile::{refresh_mount, rotate_mount_at, ROTATE_HANG_BUDGET};
 use crate::rotate_stop_tests::MountFixture;
 use crate::SHUTDOWN_DRAIN;
 
@@ -110,12 +110,32 @@ async fn a_slow_rotation_does_not_hold_the_reconcile_lock() {
 /// Scenario for #161: the *other* writer of the mount file stands down instead of saving a
 /// snapshot it took before the child rewrote the envelopes.
 ///
-/// `refresh_mount` refuses before it touches `%LOCALAPPDATA%`, so this one needs no fixture:
-/// the assertion is the refusal itself. It also pins the "fails fast" half - the old lock made
-/// this call block for the whole delegation, which for a wedged child meant until it died.
+/// Driven through a real rotation rather than a test-only marker, so what is asserted is the
+/// production path. `refresh_mount` answers before it touches `%LOCALAPPDATA%`, which is why
+/// this half needs no fixture: the assertion is the refusal itself. It also pins the "fails
+/// fast" half - the old lock made this call block for the whole delegation, which for a wedged
+/// child meant until it died.
 #[tokio::test]
 async fn refresh_stands_down_while_a_rotation_is_in_flight() {
-    let _rotation = RotationInFlight::enter();
+    let slow = MountFixture::new("refresh-stand-down");
+    let shutdown = CancellationToken::new();
+    let token = shutdown.clone();
+    let slow_path = slow.path.clone();
+
+    let in_flight = tokio::spawn(async move {
+        rotate_mount_at(
+            &slow_path,
+            STUB_EXE,
+            &STUB_SLOW_ARGS,
+            "mount-1",
+            &token,
+            ROTATE_HANG_BUDGET,
+        )
+        .await
+    });
+
+    // The same ordering the lock test relies on: the rotation has reached its child wait.
+    tokio::time::sleep(Duration::from_millis(300)).await;
 
     let err = tokio::time::timeout(LOCK_FREE_BUDGET, refresh_mount("mount-1"))
         .await
@@ -126,4 +146,10 @@ async fn refresh_stands_down_while_a_rotation_is_in_flight() {
         "the refusal has to say why, so a caller can retry instead of reporting a broken \
          mount, got: {err}"
     );
+
+    // End the slow rotation instead of waiting the 30s stub out.
+    shutdown.cancel();
+    let _ = tokio::time::timeout(SHUTDOWN_DRAIN, in_flight)
+        .await
+        .expect("the stop must terminate and reap the slow child inside SHUTDOWN_DRAIN");
 }

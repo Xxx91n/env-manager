@@ -4,7 +4,7 @@
 // question the ticket left open - "nobody stopped us, the CLI is simply wedged". Both end the
 // same way (terminate, reap, close the job object), which is why `reconcile::run_cli_child`
 // shares one convergence path between them, and the assertions here are about what makes the
-// budget path *distinguishable*: a `TimedOut` outcome, a message that does not read as a
+// budget path *distinguishable*: an `OverHangBudget` outcome, a message that does not read as a
 // service stop, and a mount file the failed rotation never touched.
 //
 // The budget is injected, never waited out: the stub is a 3000-second `ping`, and every
