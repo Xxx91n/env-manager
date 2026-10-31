@@ -174,14 +174,14 @@ The original Phase A-E roadmap below assumed an `secrets-agent.exe` reconcile pr
 | --- | --- | --- |
 | v0.8.0 | A | SecretMount schema v2 + one-shot migration + C# fsync + new nullable fields (refreshPolicy, refreshIntervalSeconds, bootstrapCertThumbprint). audit.json unchanged. |
 | v0.9.0 | B+C merged | env-manager-service.exe Rust binary, NT SERVICE\EnvManagerService, Named Pipe IPC, CLI service gateway subcommand, periodic full-scan reconcile, GUI as control panel, three-level capability whitelist. |
-| v0.9.5 | D | Cert bootstrap: Vault AppRole/client cert, Azure SP cert. AWS Roles Anywhere documented but deferred. Env-var fallback retained. |
+| v0.9.5 | D | Cert bootstrap: Vault AppRole/client cert, Azure SP cert — **removed before it was ever wired** (no caller, and its blocking `powershell` subprocess sat outside the stop-convergence contract). AWS Roles Anywhere documented but deferred. Env-var fallback retained. |
 | v1.0.0 | E | Unified audit-ledger.jsonl (append-only, hash-chained, 100MB rotation), Mount survival kit export, GUI recover-from-ledger, audit.json retired after migration. |
 
 ### Key reversals from the original blueprint
 
 - **Phase C**: the original `secrets-agent.exe` standalone process is rejected. It is now a Windows system service (`env-manager-service.exe` with `--mode=service`) under `NT SERVICE\EnvManagerService` virtual service account. In-process tokio task inside the GUI is also rejected (GUI close = reconcile stops). See the Design notes at the top of `service/src/main.rs` and `service/src/ipc.rs`.
-- **Phase D**: the original passkey/Windows Hello identity layer is rejected. Session 0 service cannot show biometric UI. It is replaced by certificate-based bootstrap at `Cert:\LocalMachine\My` with non-exportable private key ACL'd to per-service SID. See the Design note at the top of `service/src/cert_bootstrap.rs`.
-- **Phase E**: the original wrap-key escrow is rejected. The escrow solved a recovery problem that A5/A6/A8 proved empty (for cloud providers the backend IS the recovery source; for user-bound providers loss is by-design). It is replaced by unified audit-ledger + Mount survival kit export + GUI recover-from-ledger UX. See the Design note at the top of `service/src/audit_ledger.rs` and the [Decision Summary](secret-architecture-decision-summary.md).
+- **Phase D**: the original passkey/Windows Hello identity layer is rejected — a session 0 service cannot show biometric UI. The planned replacement, a certificate-based bootstrap at `Cert:\LocalMachine\My` with a non-exportable private key ACL'd to the per-service SID, was deleted before it was ever called. Wiring it would have promoted three cloud credential bootstraps (Vault AppRole/client cert, Azure service principal, AWS Roles Anywhere — the last still deferred) into the supported service interface with no product trigger, and its blocking `powershell` subprocess sat outside the stop-convergence contract the service relies on. No service-side credential bootstrap exists today.
+- **Phase E**: the original wrap-key escrow is rejected. The escrow solved a recovery problem that A5/A6/A8 proved empty (for cloud providers the backend IS the recovery source; for user-bound providers loss is by-design). It is replaced by unified audit-ledger + Mount survival kit export + GUI recover-from-ledger UX. The survival kit export is a CLI verb (`audit export-survival-kit`), not a service path. See the Design note at the top of `service/src/audit_ledger.rs` and the [Decision Summary](secret-architecture-decision-summary.md).
 - **Phase B and Phase C merged into a single v0.9.0 release** (user chose Option 2). See the four-version cadence in the [Decision Summary](secret-architecture-decision-summary.md).
 
 ### Release-gate risk matrix (11 domains)
@@ -191,11 +191,11 @@ The original blueprint had an anti-rejection checklist as a per-phase gate. The 
 1. Windows service lifecycle (SCM timeout, boot ordering, stop-during-reconcile)
 2. Named pipe IPC security (DACL, impersonation, squatting, stale connection)
 3. Periodic reconcile loop (lease TTL < tick, 429 throttle, clock skew, thundering herd, partial tick)
-4. Certificate lifecycle (expiry, ACL reset by GPO, Mimikatz CNG export, Windows-upgrade loss)
+4. Certificate lifecycle (expiry, ACL reset by GPO, Mimikatz CNG export, Windows-upgrade loss) — **historical**: the only certificate holder was the deleted bootstrap; nothing in the product stores a service certificate today.
 5. Audit ledger tamper-resistance (hash-chain, unauthorized actor, rollover race, replay)
 6. Schema migration (crash orphan, rollback script completeness, service race, per-user)
 7. Existing codebase regressions (DPAPI `_EnvManager_disabled` orphan, mutex vs write_atomic race, frontend cache staleness)
-8. Cert-enroll cancellation mid-flight (3 sub-states, temp dir cleanup, cloud revoke path)
+8. Cert-enroll cancellation mid-flight (3 sub-states, temp dir cleanup, cloud revoke path) — **historical**: the enroll flow this guards was never built, and the module was deleted before it was wired.
 9. MSI major-upgrade outage (child survives, schema mismatch, mid-write profiles.json)
 10. Memory pressure / startup timeout (SCM event 7009/7000, OOM-by-mount skipping, deferred cold-start full scan)
 11. IPC endpoint name (Global\pipe\ scope, RDP per-session CLI routing, machine rename no-op, locale no-op)

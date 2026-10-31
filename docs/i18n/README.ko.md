@@ -102,7 +102,6 @@ env-manager.exe를 실행하세요. GUI는 검색, 범위 필터링, 인라인 �
 env-manager-service.exe는 명명된 파이프 IPC를 통해 시크릿 마운트 수명 주기를 관리하는 독립 실행형 Rust 바이너리입니다:
 - RuntimeMode: Service(SCM 관리, 머신 부팅), Background(사용자 시작), Cli(원샷 게이트웨이)
 - 재조정 루프: 300초 주기 전체 검사, 항목별 멱등 핸들러, 30초 첫 틱 지연
-- 인증서 부트스트랩: Vault AppRole 및 Azure SP 인증서 기반 인증으로 장기 토큰 제거
 - 감사 원장: 추가 전용 해시 체인 audit-ledger.jsonl, 100MB 로테이션 및 변조 감지
 - IPC: 안티 스쿼팅 파이프 플래그, 65536바이트 요청 상한, 개행 구분 JSON 프로토콜
 - 워치독: 2계층 복구 — SCM 자동 재시작(Service 모드) + GUI 30초 핑 워치독(Background 모드)
