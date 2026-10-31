@@ -470,11 +470,22 @@ async fn spawn_cli_child(
         (None, _) => {}
     }
     // Output is drained while the child runs, never after the wait: a child that fills a
-    // pipe buffer would otherwise block on write and never observe the kill.
+    // pipe buffer would otherwise block on write and never observe the kill. Each reader
+    // pushes what it sees into a shared buffer as it arrives, so a caller that stops
+    // waiting for EOF - the stop drain below - keeps the text instead of losing it inside
+    // the task it aborts.
     let mut stdout = child.stdout.take().ok_or("CLI rotate child has no stdout pipe")?;
     let mut stderr = child.stderr.take().ok_or("CLI rotate child has no stderr pipe")?;
-    let read_stdout = tokio::spawn(async move { read_pipe(&mut stdout).await });
-    let read_stderr = tokio::spawn(async move { read_pipe(&mut stderr).await });
+    let stdout_seen = Arc::new(std::sync::Mutex::new(Vec::<u8>::new()));
+    let stderr_seen = Arc::new(std::sync::Mutex::new(Vec::<u8>::new()));
+    let read_stdout = tokio::spawn({
+        let seen = Arc::clone(&stdout_seen);
+        async move { read_pipe_into(&mut stdout, seen).await }
+    });
+    let read_stderr = tokio::spawn({
+        let seen = Arc::clone(&stderr_seen);
+        async move { read_pipe_into(&mut stderr, seen).await }
+    });
 
     tokio::select! {
         status = child.wait() => {
@@ -484,8 +495,10 @@ async fn spawn_cli_child(
             // EOF: a provider helper cannot keep the handle open, because each one
             // redirects its own std handles (`src/Secrets/Providers/`). A panicking reader
             // only costs the diagnostic text.
-            let stdout = read_stdout.await.unwrap_or_default();
-            let stderr = read_stderr.await.unwrap_or_default();
+            let _ = read_stdout.await;
+            let _ = read_stderr.await;
+            let stdout = take_seen(&stdout_seen);
+            let stderr = take_seen(&stderr_seen);
             // A child that exits 0 and still wrote to stderr is where the provider's own
             // fallback warning lands (`SopsProvider.CreateWorkingDirectory`): the rotation
             // is fine, but the file sops wrote may sit outside the scratch root this call
@@ -523,31 +536,32 @@ async fn spawn_cli_child(
                 .map_err(|e| format!("failed to terminate the CLI rotate child: {}", e))?;
             read_stdout.abort();
             // stderr is drained instead of aborted: the provider's fallback warning is
-            // written before it does any work, so aborting would erase the one line that
+            // written before it does any work, so dropping it would erase the one line that
             // explains why the reclaim this call is about to run may find nothing to
             // delete. Bounded, because the stop path must not depend on a pipe reaching
             // EOF - even though it does, since the child is reaped above and provider
-            // helpers redirect their own std handles (`src/Secrets/Providers/`).
+            // helpers redirect their own std handles (`src/Secrets/Providers/`). The reader
+            // accumulates as bytes arrive, so giving up at the budget keeps what was already
+            // captured; only bytes written after the budget are lost.
             let mut stderr_reader = read_stderr;
-            let stderr = match tokio::time::timeout(STDERR_DRAIN_ON_STOP, &mut stderr_reader).await
-            {
-                Ok(Ok(text)) => text,
-                _ => {
-                    stderr_reader.abort();
-                    // Logged rather than dropped: a helper that keeps the pipe open past the
-                    // drain budget is exactly the case where the reclaim below may find a
-                    // held file, and silence here would read as "nothing to say".
-                    tracing::warn!(
-                        "delegated CLI stderr could not be read within {:?} on the stop path; the provider's fallback line may be lost",
-                        STDERR_DRAIN_ON_STOP
-                    );
-                    String::new()
-                }
-            };
+            let closed = tokio::time::timeout(STDERR_DRAIN_ON_STOP, &mut stderr_reader).await;
+            if closed.is_err() {
+                stderr_reader.abort();
+            }
+            let stderr = take_seen(&stderr_seen);
             if !stderr.is_empty() {
                 tracing::info!(
                     "delegated CLI wrote to stderr before the stop: {}",
                     crate::redaction::scrub_message(&stderr)
+                );
+            }
+            if closed.is_err() {
+                // Logged rather than dropped: a helper that keeps the pipe open past the
+                // drain budget is exactly the case where the reclaim below may find a
+                // held file, and silence here would read as "nothing to say".
+                tracing::warn!(
+                    "delegated CLI stderr did not close within {:?} on the stop path; what had arrived is logged above, anything later is lost",
+                    STDERR_DRAIN_ON_STOP
                 );
             }
             // The job handle drops as this function returns, which is where the helper
@@ -559,12 +573,35 @@ async fn spawn_cli_child(
     }
 }
 
-/// Read a child pipe to the end, lossy-decoded and trimmed.
-async fn read_pipe<R: tokio::io::AsyncRead + Unpin>(pipe: &mut R) -> String {
-    let mut buf = Vec::new();
+/// Read a child pipe to the end, appending each chunk to `seen` as it arrives. The
+/// incremental append is what lets the stop drain keep partial text: the reader task can
+/// be aborted mid-pipe, and what it already read stays in `seen`. Bytes accumulate raw and
+/// are decoded once, so a multi-byte character split across two reads is not corrupted.
+async fn read_pipe_into<R: tokio::io::AsyncRead + Unpin>(
+    pipe: &mut R,
+    seen: Arc<std::sync::Mutex<Vec<u8>>>,
+) {
+    let mut buf = [0u8; 4096];
     // A terminated child closes its end, so this reaches EOF rather than failing.
-    let _ = pipe.read_to_end(&mut buf).await;
-    String::from_utf8_lossy(&buf).trim().to_string()
+    loop {
+        match pipe.read(&mut buf).await {
+            Ok(0) | Err(_) => return,
+            Ok(n) => {
+                if let Ok(mut out) = seen.lock() {
+                    out.extend_from_slice(&buf[..n]);
+                }
+            }
+        }
+    }
+}
+
+/// What a reader captured so far, lossy-decoded and trimmed the way the single-shot read
+/// used to.
+fn take_seen(seen: &Arc<std::sync::Mutex<Vec<u8>>>) -> String {
+    match seen.lock() {
+        Ok(bytes) => String::from_utf8_lossy(&bytes).trim().to_string(),
+        Err(_) => String::new(),
+    }
 }
 
 async fn call_cli_rotate(

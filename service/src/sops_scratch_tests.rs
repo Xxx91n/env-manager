@@ -71,9 +71,12 @@ impl Drop for StubReport {
 
 /// argv for `STUB_EXE`.
 ///
-/// `wait_on_ping` is the difference between the two scenarios: `Some` keeps the stub alive
-/// (so a stop can land on it), `None` lets it exit 0 (the uninterrupted rotation).
-fn stub_args(report: &Path, wait_on_ping: bool) -> Vec<String> {
+/// `wait_on_ping` is the difference between the two scenarios: `true` keeps the stub alive
+/// (so a stop can land on it), `false` lets it exit 0 (the uninterrupted rotation).
+/// `echo_stderr` writes one line to stderr before the report file, so a test that reacts to
+/// the report knows the line is already in the pipe - what it then asserts is "captured
+/// before the budget", not lucky timing.
+fn stub_args(report: &Path, wait_on_ping: bool, echo_stderr: bool) -> Vec<String> {
     // A single-quoted PowerShell literal takes the path verbatim except for `'`, which has
     // to be doubled; `-LiteralPath` keeps `[`/`]` in the same path from being read as a
     // wildcard.
@@ -83,6 +86,11 @@ fn stub_args(report: &Path, wait_on_ping: bool) -> Vec<String> {
     } else {
         "Start-Sleep -Milliseconds 1"
     };
+    let stderr_line = if echo_stderr {
+        "[Console]::Error.WriteLine('scratch-root fallback probe'); "
+    } else {
+        ""
+    };
     let script = format!(
         "$root = $env:{env}; \
          if (-not $root) {{ exit 3 }}; \
@@ -91,10 +99,12 @@ fn stub_args(report: &Path, wait_on_ping: bool) -> Vec<String> {
          $file = Join-Path $dir 'secret.json'; \
          Set-Content -LiteralPath $file -Value '{{\"value\":\"probe\"}}' -Encoding ascii; \
          if (-not (Test-Path -LiteralPath $file)) {{ exit 4 }}; \
+         {stderr_line}\
          Set-Content -LiteralPath '{report}' -Value @($root, $file) -Encoding ascii; \
          {tail}",
         env = SCRATCH_ENV,
         report = report,
+        stderr_line = stderr_line,
         tail = tail
     );
     vec![
@@ -144,7 +154,7 @@ fn assert_service_owned_root(root: &str) {
 #[tokio::test]
 async fn completed_delegation_reclaims_the_scratch_root() {
     let report = StubReport::new("completed");
-    let argv = stub_args(&report.path, false);
+    let argv = stub_args(&report.path, false, false);
     let argv_refs: Vec<&str> = argv.iter().map(|a| a.as_str()).collect();
     let shutdown = CancellationToken::new();
 
@@ -185,7 +195,7 @@ async fn completed_delegation_reclaims_the_scratch_root() {
 #[tokio::test]
 async fn interrupted_delegation_reclaims_the_scratch_root() {
     let report = StubReport::new("interrupted");
-    let argv = stub_args(&report.path, true);
+    let argv = stub_args(&report.path, true, false);
     let shutdown = Arc::new(CancellationToken::new());
     let token = shutdown.clone();
 
@@ -227,6 +237,57 @@ async fn interrupted_delegation_reclaims_the_scratch_root() {
         "the scratch root {root} survived the stop: {file} is the plaintext that \
          `SopsProvider` would have deleted in its `finally`, which a terminated CLI never runs"
     );
+}
+
+/// The stop drain keeps what already arrived: a helper that writes its line and then holds
+/// the pipe open past the budget must not cost that line. The stub writes to stderr *before*
+/// it publishes its report, so the cancel below can only land after the line is in the pipe;
+/// without the incremental reader the aborted task would take it down with it, which is the
+/// loss `docs/architecture.md` now refuses to promise away.
+#[tokio::test(flavor = "current_thread")]
+async fn interrupted_delegation_logs_stderr_that_arrived_before_the_budget() {
+    let report = StubReport::new("stderr-drain");
+    let argv = stub_args(&report.path, true, true);
+    let shutdown = Arc::new(CancellationToken::new());
+    let token = shutdown.clone();
+
+    let sink = LogSink(Arc::new(Mutex::new(Vec::new())));
+    let guard = tracing::subscriber::set_default(
+        tracing_subscriber::fmt()
+            .with_writer(sink.clone())
+            .with_ansi(false)
+            .finish(),
+    );
+
+    let in_flight = tokio::spawn(async move {
+        let argv_refs: Vec<&str> = argv.iter().map(|a| a.as_str()).collect();
+        run_cli_child(STUB_EXE, &argv_refs, &token).await
+    });
+
+    poll_until(ALWAYS_TOO_LONG, || report.read())
+        .await
+        .expect("the stub never reported, so its stderr line was never written either");
+
+    shutdown.cancel();
+    let outcome = tokio::time::timeout(SHUTDOWN_DRAIN, in_flight)
+        .await
+        .expect("the stop must finish inside SHUTDOWN_DRAIN")
+        .expect("the rotate call task must not panic")
+        .expect("spawn the stub rotate child");
+    assert!(matches!(outcome, ChildOutcome::Interrupted { .. }));
+
+    let captured = String::from_utf8_lossy(&sink.0.lock().expect("the log sink lock")).to_string();
+    assert!(
+        captured.contains("scratch-root fallback probe"),
+        "text that arrived before the drain budget must reach the service log even when the \
+         pipe never closes; got: {captured}"
+    );
+    assert!(
+        captured.contains("did not close within"),
+        "giving up on the drain budget is itself a fact the log has to carry; got: {captured}"
+    );
+
+    drop(guard);
 }
 
 /// The reclaim on its own, without a child: it deletes what `create` made, including a
