@@ -158,7 +158,7 @@ The `--overwrite` flag is passed through only when the user explicitly confirmed
 
 ## Profile Audit History
 
-Profile-level mutations (`create`, `delete`, `rename`, `add-var`, `remove-var`, `edit-var`) modify `profiles.json` rather than the registry, so they bypass the standard snapshot diff the CLI writes for registry mutations in `Main()`. They are recorded explicitly via `RecordProfileAudit()` (see `src/ProfileAudit.cs`) so the user can see profile changes in `history list` and undo them via `history undo <id>`.
+Profile-level mutations (`create`, `delete`, `rename`, `add-var`, `remove-var`, `edit-var`) modify `profiles.json` rather than the registry, so they bypass the standard snapshot diff the CLI writes for registry mutations in `Main()`. They are recorded explicitly via `RecordProfileAudit()` (see `src/Audit/Recording/ProfileAudit.cs`) so the user can see profile changes in `history list` and undo them via `history undo <id>`.
 
 - Audit entries for profile mutations carry `Scope = "profile"` so the GUI and `history` command can distinguish them from registry-level entries.
 - `OldValue` / `NewValue` store a compact JSON summary of the affected profile (`id`, `name`, `isEnabled`, `inherits`, `pathEntries`, `variables`) so an undo restores that profile state without clobbering other profiles.
@@ -648,4 +648,4 @@ Implementation:
 - `lostpointercapture` on `<svelte:window>` also calls `finishPointerDrag` (not `cancelPointerDrag`). When pointer capture is lost after release, the reorder should complete, not cancel.
 - `finishPointerDrag` is idempotent: the first call reorders; subsequent calls are no-ops because `isDragging` is false.
 
-The reorder is GUI-only: it persists to `localStorage` (key `envManager_profileOrder`) and never touches the registry or CLI. The shared helper is in `src/lib/profileDrag.ts` with full test coverage in `profile-drag.test.ts`.
+The reorder is GUI-only: it persists to `localStorage` (key `envManager_profileOrder`) and never touches the registry or CLI. The shared helper is in `frontend/src/lib/profileDrag.ts` with full test coverage in `profile-drag.test.ts`.

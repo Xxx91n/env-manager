@@ -9,11 +9,15 @@
 #   2. git diff --check            (whitespace errors)
 #   3. backticked repo-relative file paths exist
 #   4. backticked Class.Member citations resolve to a real member
-#      (types/namespaces with no local class or file are skipped)
+#      (types/namespaces with no local class or file are skipped; a member
+#      declared in a sibling `partial class` file still counts)
 #   5. banned stale claims that keep coming back ("only plaintext output path",
 #      "唯一明文输出路径", "Plaintext is NEVER written to")
 #
-# Scope: README.md, AGENTS.md, GLOSSARY.md and docs/**/*.md except docs/history.
+# Scope: README.md, AGENTS.md, GLOSSARY.md and every .md under docs/ except
+# docs/history. The full scan re-derives that set independently of how it was
+# enumerated and fails loudly on anything missing - silence is how this gate
+# lost its "green means clean" reading once already.
 # Pass -Paths to check only specific files. Source changes still run
 # scripts/test-all.ps1.
 #
@@ -25,6 +29,7 @@ $root = Split-Path -Parent $PSScriptRoot
 Push-Location $root
 $failures = New-Object System.Collections.Generic.List[string]
 $script:memberCache = @{}
+$script:partialCache = @{}
 
 function Add-Failure([string]$Message) { $script:failures.Add($Message) | Out-Null }
 
@@ -33,15 +38,42 @@ function Get-DocLines([string]$Path) {
     return [System.IO.File]::ReadAllLines((Resolve-Path -LiteralPath $Path).Path, [System.Text.Encoding]::UTF8)
 }
 
+function Get-TrackedPaths([string[]]$Pathspec = @()) {
+    # git quotes non-ASCII paths in line output ("docs/\345...md"), and the
+    # trailing quote drops them from the *.md filter and the expected-set
+    # cross-check alike: the file ends up silently unscanned. NUL-delimited
+    # output is never quoted, so split on NUL instead of on newlines.
+    $nul = [string][char]0
+    $blob = @(& git ls-files -z @Pathspec 2>$null) -join $nul
+    return @($blob -split $nul | Where-Object { $_ -ne '' })
+}
+
+function Resolve-CachedFiles([hashtable]$Cache, [string]$Key, [string]$Pattern) {
+    if ($Cache.ContainsKey($Key)) { return $Cache[$Key] }
+    $files = @(& git grep -l -E $Pattern -- '*.cs' 2>$null)
+    $Cache[$Key] = $files
+    return $files
+}
+
 function Resolve-SymbolFiles([string]$Left) {
     if ($script:memberCache.ContainsKey($Left)) { return $script:memberCache[$Left] }
     $files = @(& git ls-files "*/$Left.cs" 2>$null)
     if ($files.Count -eq 0) {
-        $classPattern = ('class {0}\b' -f $Left)
-        $files = @(& git grep -l -E $classPattern -- '*.cs' 2>$null)
+        $files = @(Resolve-CachedFiles $script:memberCache $Left ('class {0}\b' -f $Left))
     }
-    $script:memberCache[$Left] = $files
+    else {
+        $script:memberCache[$Left] = $files
+    }
     return $files
+}
+
+function Resolve-PartialFiles([string]$Left) {
+    # Anchor on the declaration, not the phrase: four files mention
+    # `partial class Program` inside /// comments and would otherwise join the
+    # fallback set, letting any stray occurrence of a member name count as a
+    # hit - the same dilution this gate exists to prevent.
+    $pattern = ('^[[:space:]]*([a-z]+[[:space:]]+)*partial[[:space:]]+class[[:space:]]+{0}\b' -f $Left)
+    return @(Resolve-CachedFiles $script:partialCache $Left $pattern)
 }
 
 try {
@@ -69,8 +101,32 @@ try {
         $files = @($Paths)
     }
     else {
-        $files = @(& git ls-files 'README.md' 'AGENTS.md' 'GLOSSARY.md' 'docs/**/*.md' |
-            Where-Object { $_ -notlike 'docs/history/*' })
+        # Do not lean on git's `**` pathspec here: on common git builds
+        # docs/**/*.md silently skips the docs that sit directly in docs/ -
+        # docs/architecture.md among them, which is how three dead citations
+        # outlived every full run. Enumerate the tree and filter here instead.
+        $files = @(Get-TrackedPaths -Pathspec 'README.md', 'AGENTS.md', 'GLOSSARY.md', 'docs/' |
+            Where-Object { $_ -like '*.md' -and $_ -notlike 'docs/history/*' })
+        # Independent cross-check: re-derive the set from the whole index and
+        # filter here, rather than trusting the pathspec above, so a git glob
+        # quirk surfaces as a hard failure naming the files instead of as
+        # silent under-coverage.
+        $expected = @(Get-TrackedPaths |
+            Where-Object { $_ -like 'docs/*.md' -and $_ -notlike 'docs/history/*' })
+        $missed = @($expected | Where-Object { $files -notcontains $_ })
+        if ($missed.Count -gt 0) {
+            Add-Failure ('docs enumeration missed {0} file(s): {1}' -f $missed.Count, ($missed -join ', '))
+        }
+        # Floor on what "scanned" must mean. Both sets above parse git output
+        # the same way, so a parsing failure empties them together and the
+        # cross-check has nothing to miss; a doc deleted outright leaves it
+        # equally silent. These anchors are the structural contract - if one
+        # is renamed on purpose, update this list in the same change.
+        foreach ($anchor in @('README.md', 'AGENTS.md', 'GLOSSARY.md', 'docs/architecture.md')) {
+            if ($files -notcontains $anchor) {
+                Add-Failure ("docs enumeration missed required document: {0}" -f $anchor)
+            }
+        }
     }
 
     $pathPattern = '`([^`\r\n]+\.(?:md|cs|rs|ts|tsx|svelte|json|ya?ml|ps1|psm1|wxs|mjs|js))`'
@@ -119,6 +175,20 @@ try {
                 $found = @($declaring | Where-Object {
                         $null -ne (& git grep -l -E $memberPattern -- $_ 2>$null)
                     })
+                if ($found.Count -eq 0) {
+                    # A partial class keeps the member in a sibling declaration
+                    # (Program spans src/Program.cs and src/CliRuntime.cs): retry
+                    # across those before calling the citation dead. This arm is
+                    # only reachable once a declaring file resolved and missed,
+                    # so the "no local class or file, skip it" leniency above
+                    # stays exactly as it was.
+                    $partialFiles = @(Resolve-PartialFiles $left)
+                    if ($partialFiles.Count -gt 0) {
+                        # One grep over every partial declaration rather than one
+                        # per file: Program alone spans 24.
+                        $found = @(& git grep -l -E $memberPattern -- $partialFiles 2>$null)
+                    }
+                }
                 if ($found.Count -eq 0) {
                     Add-Failure ("{0}:{1}: cited member not found: {2}.{3}" -f $file, $lineNo, $left, $right)
                 }
