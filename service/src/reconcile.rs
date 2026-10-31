@@ -76,6 +76,17 @@ pub struct MountHealth {
 }
 
 /// Phase 4C: Global lock to prevent TOCTOU between reconcile tick and CLI mount mutations.
+///
+/// Scope (#161): the lock covers the mount-file read and the write-back, never the wait for a
+/// delegated CLI child. `rotate_mount_at` releases it around that wait because the reconcile
+/// tick (`run_reconcile_tick`, 300s interval) queues on this same lock: held across a child
+/// that never returns, one rotation starved every later `rotate`/`refresh` and the tick
+/// itself for as long as the child lived, which is the defect this ticket closes.
+///
+/// What the lock still buys is that a write-back cannot interleave with another mount-file
+/// writer. What it no longer buys is exclusivity between two rotations of the same mount;
+/// that is accepted, because a duplicate rotation is harmless by design - `RotateAll`
+/// decrypts then re-encrypts per secret, and the CLI replaces the mount file atomically.
 static RECONCILE_LOCK: Mutex<()> = Mutex::const_new(());
 
 /// Main reconcile loop. Runs indefinitely (300s interval).
@@ -227,6 +238,9 @@ pub async fn rotate_mount(
 /// `rotate_mount` with the mount file and the delegated command taken as parameters.
 /// That seam is what lets `rotate_stop_tests` interrupt a real child process against a
 /// temp mount file, instead of the real `%LOCALAPPDATA%` / `ProgramData` state.
+///
+/// The lock is taken twice - around the mount check and around the write-back - and never
+/// held while the child runs (#161). See `RECONCILE_LOCK` for what that trades away.
 pub(crate) async fn rotate_mount_at(
     mount_path: &Path,
     cli_exe: &str,
@@ -234,10 +248,19 @@ pub(crate) async fn rotate_mount_at(
     mount_id: &str,
     shutdown: &CancellationToken,
 ) -> Result<serde_json::Value, String> {
-    let _guard = RECONCILE_LOCK.lock().await; // Phase 4C: TOCTOU protection
-    let mounts = load_mounts(mount_path);
-    if !mounts.iter().any(|m| m.id == mount_id) {
-        return Err(format!("mount not found: {}", mount_id));
+    // Check-then-delegate, with the lock released for the delegation itself (#161). The child
+    // wait is the only long part of a rotation, and holding the lock across it made one slow
+    // or wedged child stall every later `rotate`/`refresh` and the 300s reconcile tick, which
+    // queues on this same lock. Two windows open and both are handled: the mount can be
+    // deleted while the child runs (the write-back re-reads and skips it), and a second
+    // rotation of the same mount can start (harmless - `RotateAll` decrypts then re-encrypts
+    // per secret, and the CLI replaces the mount file atomically).
+    {
+        let _guard = RECONCILE_LOCK.lock().await; // Phase 4C: TOCTOU protection
+        let mounts = load_mounts(mount_path);
+        if !mounts.iter().any(|m| m.id == mount_id) {
+            return Err(format!("mount not found: {}", mount_id));
+        }
     }
 
     // Any error here - a failing child or an interrupted one - returns before the
@@ -247,6 +270,10 @@ pub(crate) async fn rotate_mount_at(
     // secret, `src/Secrets/Manager/SecretProviderManager.cs`).
     let result = call_cli_rotate(cli_exe, cli_args, shutdown).await?;
     let now = Utc::now().to_rfc3339();
+
+    // Re-acquired for the write-back only, so the read below and the save it feeds cannot be
+    // interleaved with another mount-file writer.
+    let _guard = RECONCILE_LOCK.lock().await;
 
     // Re-read what the child left on disk instead of reusing the snapshot from before the
     // call: a delegated rotation writes each rotated envelope back into the mount that owns
