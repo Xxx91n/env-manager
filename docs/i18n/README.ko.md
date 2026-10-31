@@ -58,7 +58,7 @@
 ## Features
 - 에이전트 네이티브 CLI — 일급 머신 계약을 갖춘 18개 이상의 명령: env-manager-cli agents --json은 구조화된 명령 사양을 출력하며, 모든 기능은 바이너리와 함께 배포되는 에이전트용 매뉴얼(AGENTS.cli.md)에 문서화되어 있습니다.
 - 프로필 및 구성 — 글로벌 프로필은 레지스트리에 적용됩니다. Launch 프로필은 단일 프로세스에 격리된 env 블록을 주입합니다(레지스트리를 건드리지 않으며 WM_SETTINGCHANGE도 브로드캐스트하지 않음). 상속, 충돌 미리보기, 안전한 역순 롤백이 포함됩니다.
-- 8가지 시크릿 공급자, 평문 제로 — DPAPI, Credential Manager, SecretStore, HashiCorp Vault, SOPS, Azure Key Vault, 1Password, AWS Secrets Manager. 평문은 디스크나 로그에 절대 남지 않습니다.
+- 8가지 시크릿 공급자 — DPAPI, Credential Manager, SecretStore, HashiCorp Vault, SOPS, Azure Key Vault, 1Password, AWS Secrets Manager. 시크릿은 암호문 엔벨로프로만 저장되며, 평문이 노출될 수 있는 정확한 범위는 [Security](#security) 표에 정리되어 있습니다. 시크릿 명령에서는 프로필에 암호문 엔벨로프만 저장됩니다. 다만 평문은 문서화된 임시 파일, 프로세스/요청 경로, 출력 경로에 나타날 수 있으며 정리와 마스킹은 최선의 노력으로 수행됩니다.
 - 기본적으로 보호 — 시스템 변수와 PATH 항목은 삭제하거나 이름을 바꿀 수 없습니다. 모든 쓰기는 3계층 직렬화 계약(mutex + write lock + 검증 후 교체)을 따릅니다.
 - PATH 상태 검사 — 중복 및 유효하지 않은 항목을 감지하며 --fix / --dry-run을 지원합니다.
 - 감사 원장 — 추가 전용, SHA256 해시 체인 히스토리. 롤백 및 재해 복구 내보내기를 지원합니다.
@@ -70,7 +70,31 @@ Env Manager는 인간뿐 아니라 LLM 에이전트가 운영하도록 설계되
 - 기능 범위별 에이전트 서피스 — secret-providers.json의 옵트인 agentCapabilities 화이트리스트를 통해 배포 환경이 에이전트의 병렬 set/delete 호출을 거부할 수 있습니다.
 ## Security
 > 현재 빌드는 코드 서명되지 않았습니다. Windows SmartScreen이 첫 실행 시 인식할 수 없는 앱 경고를 표시할 수 있습니다 — [추가 정보]를 클릭한 다음 [실행]을 클릭하세요. SignPath Foundation을 통해 무료 오픈소스 코드 서명을 신청했습니다. 승인되면 모든 릴리스 아티팩트(MSI + EXE)가 서명됩니다.
-보호된 변수와 PATH 항목은 삭제 전에 비활성화되며, 복원 시 레지스트리 값 종류를 정확히 검증합니다. 시크릿 값은 공급자별 메커니즘으로 암호화됩니다 — 평문은 디스크나 로그에 절대 남지 않습니다. 명명된 파이프 IPC는 안티 스쿼팅 플래그와 입력 검증(인수 최대 64개, 32767자 상한, null 바이트 거부)을 사용합니다.
+보호된 변수와 PATH 항목은 삭제 전에 비활성화되며, 복원 시 레지스트리 값 종류를 정확히 검증합니다. 명명된 파이프 IPC는 안티 스쿼팅 플래그와 입력 검증(인수 최대 64개, 32767자 상한, null 바이트 거부)을 사용합니다.
+
+### 평문이 존재할 수 있는 곳 (시크릿 경계 표)
+
+| 싱크 | 평문이 남는가 | 수명 | 정리 | 근거 |
+|---|---|---|---|---|
+| `profiles.json` / `secretMount.json` | secret 명령에서는 남지 않음 — 봉투 `{provider, version, createdAt, ciphertext, targetName}` 또는 `mount:<id>` 참조만 저장. 범용 `add-var`/`edit-var` 명령은 마커를 우회함 ([평문 수명 주기](../../docs/architecture.md#v070-dpapi-secrets-runtime) 참조) | 시크릿이 제거될 때까지 | `profile remove-secret`이 봉투와 공급자 측 상태를 삭제 | 하드 경계; `plaintext-never-in-envelope` 계약 단언 |
+| dpapi-current-user | 남지 않음 — DPAPI `CryptProtectData`, CurrentUser 범위 | 봉투 안 | 봉투와 함께 | 하드 경계 (v0.7.0) |
+| credential-manager | 남지 않음 — CredMan blob 자체가 저장 전에 DPAPI로 암호화됨 | 공급자 `Delete`까지 | remove-secret 시 `Delete` | [공급자 가이드](../../docs/secret-providers-guide.md) |
+| powershell-secretmanagement | SecretStore 보관소 파일은 암호화된 상태 유지 — 단, 호출마다 평문이 `pwsh -EncodedCommand` 인수(base64 스크립트)를 거쳐 감 | pwsh 프로세스 수명; 보관소 항목은 제거될 때까지 | 인수는 프로세스와 함께 소멸; 보관소 항목은 remove-secret 시 삭제 | 하드 경계 (v0.7.4) |
+| vault-kv2 · azure-keyvault · aws-secretsmanager · 1password | 로컬 평문 없음 — 프로필은 경로/시크릿 ID 참조만 보관하고 시크릿은 원격 백엔드에 남음. 로컬 프로필에는 평문이 없지만 공급자 작업 중 자식 프로세스 인수/출력과 요청 본문에 일시적으로 나타날 수 있습니다.| 백엔드 측 운영 정책 | 공급자 `Delete`; `secret-provider rotate`로 재암호화 | [공급자 가이드](../../docs/secret-providers-guide.md) |
+| sops | 봉투에는 암호문만 — **추가로** 암호화/복호화 중 호출마다 만드는 디렉터리에 평문 `secret.json` / `secret.dec.json`이 생김: `%TEMP%\env-manager-sops-*`, 또는 회전이 위임된 경우 서비스 소유 루트 안의 디렉터리. 헬퍼가 회수 창을 넘어 파일을 보유하면 삭제에 실패해 scratch 루트가 남을 수 있으며 정리는 최선의 노력입니다.| 호출당 몇 초 | 그 디렉터리를 `Directory.Delete`. 서비스가 위임한 경우, CLI 자식 프로세스가 끝난 뒤 서비스가 루트 전체를 삭제함 — CLI를 종료시킨 중지도 포함 — 삭제는 제한된 횟수로 재시도하고, 그래도 실패하면 error 수준 로그를 남김(조용히 넘어가지 않음). 수동 실행 시 삭제는 최선 노력이며 비정상 종료로 남겨질 수 있음. 디렉터리는 생성 시부터 소유자 전용(상속 해제; 현재 ID, SYSTEM, Administrators)이므로 남은 디렉터리는 이 ID들만 읽을 수 있음 — 단, 그 DACL 적용에 실패하면 원래 상속받았을 ACL(`%TEMP%`의 것, 또는 위임 시 서비스 scratch 루트의 것)을 유지함 | 하드 경계 (v0.7.11); `SopsProvider`, `SecretTempDirectory`, `service/src/sops_scratch.rs` |
+| 실행 프로세스 메모리 (`env-manager-cli`) | 남음 — 복호화된 바이트가 실행 프로세스에 잠시 존재. 값은 CLI 종료까지 System.String에 남을 수 있고 SecretString은 별도 복사본만 지웁니다. GC 복사본과 중간 문자열은 남을 수 있습니다.| 밀리초 단위, 주입/reveal 완료까지 | `SecretString`이 Dispose 시 `char[]`를 0으로 지움 — **최선 노력**: GC 복사본과 string 중간값은 더 오래 남을 수 있음 | `SecretString` 제로화; [canary 무유출 그물](../../docs/architecture.md#canary-zero-leak-assertion-net-and-goldensnapshot-layers) |
+| 실행된 자식 프로세스의 환경 블록 | 남음 — 주입된 환경 변수는 자식 프로세스 안에서 평문 | 자식 프로세스 수명 | 불가능 — OS 설계상 환경 블록은 같은 사용자가 읽을 수 있음 | Launch 프로필 설계 |
+| `profile reveal-secret` 표준 출력 | 남음 — **설계상 의도됨**; 평문 출력 경로 두 가지 중 하나 (`profile reveal-secret`, `profile show --reveal`) | 터미널 스크롤백을 지울 때까지 ; 하위 pipe 소비자는 삭제할 때까지 평문 복사본을 보관할 수 있습니다.| 없음 — 사용자가 직접 실행 | 하드 경계; canary 그물은 이 싱크들을 의도적으로 건너뜀 |
+| 생존 키트 임시 파일 (`%TEMP%\env-manager-kit-<guid>\` 아래의 `envmanager-kit-*.json`, `mount-survival-kit.tmp.json`) | 남음 — 키트 조립 중 잠깐 평문 임시 파일이 생김. CLI 측 키트 파일은 `%TEMP%\env-manager-kit-<guid>\` 안에 쓰이며, 이 디렉터리는 생성 시부터 소유자 전용(상속 해제; 현재 ID, SYSTEM, Administrators)이므로 남은 디렉터리는 이 ID들만 읽을 수 있음 — 단, 그 DACL 적용에 실패하면 상속된 `%TEMP%` ACL을 유지함. 서비스 측 `mount-survival-kit.tmp.json`은 ledger 디렉터리에 있으며 `%TEMP%` 아래가 아님 | 몇 초 | 암호화 후 최선 노력으로 삭제하고, 이어서 담고 있던 디렉터리도 최선 노력으로 삭제: 디렉터리 삭제가 실패하면 빈 디렉터리가 남고, 파일 삭제도 실패했다면 평문 파일도 남음 — 둘 다 최선 노력이며 위 sops 행과 같은 기준 | `AuditLedgerMigration.RunAuditExportSurvivalKit`, `SecretTempDirectory.Create`; `service/src/audit_ledger.rs` |
+| `audit-ledger.jsonl` | 마이그레이션된 ledger 이벤트에는 시크릿 값이 복사되지 않으며 메타데이터와 마스킹 마커만 저장되고 일반 old/new 요약은 마이그레이션되지 않습니다. | 추가 전용, 100MB 로테이션 | 로테이션 | 하드 경계 (v0.9.13); `AuditCrypto` 정적 암호화 |
+| `export-state` 파일 | 남지 않음 — 이중 계층: AES-256-GCM 페이로드 + DPAPI로 래핑한 DEK + HMAC-SHA256 | 사용자가 파일을 삭제할 때까지 | 사용자 관리 | `AuditCrypto` (v0.9.13) |
+| `logs/env-manager.log` / stderr | 설계상 남지 않음 — 예외 텍스트는 먼저 22개 시크릿 패턴으로 정리됨; **최선 노력** 허용 목록: 인식되지 않은 시크릿 형식은 여전히 새어 나갈 수 있으며 512자 절단으로 범위를 제한 | 로그 보존 기간 | — | `ScrubExceptionMessage` 허용 목록; `CanaryRedactionTests` + 7개 싱크 canary 그물 |
+| GUI (WebView2) / Rust 서비스 | 남지 않음 — GUI는 `<encrypted>` 자리표시자만 렌더링하고 reveal 표시가 없음; 서비스는 값을 저장하지 않음 | — | — | 아키텍처 시크릿 경계 |
+| Windows 레지스트리 | secret 명령에서는 남지 않음 — Launch 프로필은 레지스트리에 쓸 수 없고 apply가 거부함; 범용 명령의 이름 변경 허점은 도달할 수 있음 ([평문 수명 주기](../../docs/architecture.md#v070-dpapi-secrets-runtime) 참조) | — | — | 하드 경계; `launch-env-injection.Tests.ps1` 불변식 |
+
+이 표는 사용자용 요약입니다. 범용 명령의 허점을 포함한 표면별 공식 허용 목록은 `docs/architecture.md`의 Plaintext lifecycle 절입니다.
+
+메모리 제로화와 로그 정리는 최선 노력의 위생 조치이지 보장이 아닙니다 — Microsoft가 `SecureString`에 대해 문서화한 것과 같은 주의 사항입니다(불변 string, GC 재배치, interop 복사본). 검증할 수 있는 주장은 테스트로 뒷받침합니다: `tests/canary-redaction.Tests.ps1`은 7개 출력 싱크에서 심어 둔 canary를 검사하고, 공유 계약 스위트는 8개 공급자 모두에 대해 `plaintext-never-in-envelope`를 단언합니다.
 ## Install
 ### MSI 설치 관리자
 GitHub Releases에서 MSI를 다운로드하여 실행하세요. 시작 메뉴 바로 가기가 자동으로 생성됩니다. x64, x86, ARM64 지원.
