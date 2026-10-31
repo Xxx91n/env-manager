@@ -15,6 +15,10 @@ namespace EnvManager.Engine.Tests;
 
 public sealed class SopsToolPinTests
 {
+    /// <summary>
+    /// CI installs sops + age with scripts/install-sops-age.ps1 while local runs use
+    /// L1ToolProvisioner; both must pin the same versions or the lanes test a different tool.
+    /// </summary>
     [Fact]
     public void InstallScript_PinsTheSameVersionsAsTheProvisioner()
     {
@@ -24,6 +28,10 @@ public sealed class SopsToolPinTests
         Assert.Equal(L1ToolProvisioner.AgeVersion, ReadPin(script, "AgeVersion"));
     }
 
+    /// <summary>Reads the <c>$name = 'x.y.z'</c> pin from the install script.</summary>
+    /// <param name="script">The script's text.</param>
+    /// <param name="name">The PowerShell variable holding the version.</param>
+    /// <returns>The pinned version string; fails the test when the pin is missing.</returns>
     private static string ReadPin(string script, string name)
     {
         Match m = Regex.Match(script, @"^\$" + name + @"\s*=\s*'([^']+)'", RegexOptions.Multiline);
@@ -31,6 +39,8 @@ public sealed class SopsToolPinTests
         return m.Groups[1].Value;
     }
 
+    /// <summary>Walks up from the test output folder to the folder holding the repo's scripts/.</summary>
+    /// <returns>The repository root path.</returns>
     private static string FindRepoRoot()
     {
         var dir = new DirectoryInfo(AppContext.BaseDirectory);

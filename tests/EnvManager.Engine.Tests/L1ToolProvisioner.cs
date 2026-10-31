@@ -82,6 +82,13 @@ internal static class L1ToolProvisioner
     /// <summary>Discovery + pinned-release download of the missing binaries (network).</summary>
     internal static (string Sops, string AgeKeyFile)? EnsureSopsBundle() => BuildSopsBundle(allowDownload: true);
 
+    /// <summary>
+    /// Resolves sops, age and age-keygen from PATH first, then from the session cache,
+    /// downloading the pinned releases only when <paramref name="allowDownload"/> is set.
+    /// The age archive unpacks into an <c>age/</c> subfolder, and on Linux the binaries are made executable.
+    /// </summary>
+    /// <param name="allowDownload">Whether a missing binary may be fetched from its pinned release (network).</param>
+    /// <returns>The sops path and a session age key file, or null when either cannot be had.</returns>
     private static (string Sops, string AgeKeyFile)? BuildSopsBundle(bool allowDownload)
     {
         var sopsHost = FindOnPath("sops");

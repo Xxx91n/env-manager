@@ -60,9 +60,13 @@ public sealed class SopsContractTests : SecretProviderContractTests
         private static readonly bool Required =
             string.Equals(Environment.GetEnvironmentVariable(RequiredEnvVar), "1", StringComparison.OrdinalIgnoreCase);
 
-        // One exit for every "cannot run" path. Both wordings lead with NOT RUN so the
-        // reason cannot be read as a pass in a log or a TRX; the required form says it
-        // failed, because on a required lane it is a failure, not a skip.
+        /// <summary>
+        /// One exit for every "cannot run" path. Both wordings lead with NOT RUN so the
+        /// reason cannot be read as a pass in a log or a TRX; the required form says it
+        /// failed, because on a required lane it is a failure, not a skip.
+        /// </summary>
+        /// <param name="reason">Why the round trip cannot run on this host.</param>
+        /// <returns>A failure when <see cref="RequiredEnvVar"/> is set, otherwise a skip.</returns>
         private static Exception NotRun(string reason)
         {
             return Required
@@ -70,6 +74,12 @@ public sealed class SopsContractTests : SecretProviderContractTests
                 : new Xunit.SkipException("sops round trip NOT RUN (skipped, not a pass): " + reason);
         }
 
+        /// <summary>
+        /// Finds (or, with the matrix opt-in, downloads) sops + age, extracts the age
+        /// recipient and warms sops up, then sets SOPS_PATH / SOPS_AGE_KEY_FILE / SOPS_AGE_RECIPIENTS.
+        /// Every step that cannot complete exits through <see cref="NotRun"/>.
+        /// </summary>
+        /// <returns>A scope whose disposal clears those three variables.</returns>
         internal static SopsScope Install()
         {
             var bundle = L1ToolProvisioner.TryGetSopsBundle();
