@@ -46,6 +46,7 @@ function Resolve-CachedFiles([hashtable]$Cache, [string]$Key, [string]$Pattern) 
 }
 
 function Resolve-SymbolFiles([string]$Left) {
+    if ($script:memberCache.ContainsKey($Left)) { return $script:memberCache[$Left] }
     $files = @(& git ls-files "*/$Left.cs" 2>$null)
     if ($files.Count -eq 0) {
         $files = @(Resolve-CachedFiles $script:memberCache $Left ('class {0}\b' -f $Left))
