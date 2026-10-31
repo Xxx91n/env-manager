@@ -142,8 +142,31 @@ jobs:
           Set-Content -Path 'dist/index.html' -Value '<!doctype html><title>CI placeholder</title>'
           Write-Host 'seeded: dist/index.html placeholder for frontendDist'
 
+      # The real sops round trip (SopsContractTests) runs on this lane, in the same test
+      # run as SecretTempDirectoryAclTests: the DACL is a Windows boundary, so this is
+      # the only lane where "owner-only temp dir -> sops still reads and writes it" is one
+      # evidence chain. The binaries go on PATH before the test process starts because
+      # SopsProvider resolves its binary once, statically.
+      - name: Install pinned sops + age (SHA-256 verified)
+        shell: pwsh
+        run: ./scripts/install-sops-age.ps1
+
       - name: Run C# engine unit tests
-        run: dotnet test tests/EnvManager.Engine.Tests/EnvManager.Engine.Tests.csproj -c Release --nologo
+        run: dotnet test tests/EnvManager.Engine.Tests/EnvManager.Engine.Tests.csproj -c Release --nologo --logger "trx;LogFileName=engine.trx" --results-directory test-results/engine
+        env:
+          # required, not opt-in: a missing tool fails the sops tests instead of skipping
+          EM_L1_SOPS: "1"
+
+      # "Passed!" also covers skipped tests; this step names each evidence test and fails
+      # unless it reported Passed.
+      - name: Require sops round trip + temp-dir DACL evidence (Passed, not Skipped)
+        shell: pwsh
+        run: >-
+          ./scripts/assert-test-outcomes.ps1 -TrxPath test-results/engine/engine.trx -Tests
+          SopsContractTests.RoundTrip_EncryptThenDecrypt_ReturnsPlaintext,
+          SopsContractTests.PlaintextNotEmbedded_EncryptOmitsPlaintext,
+          SecretTempDirectoryAclTests.Create_LeavesInheritanceOffAndOnlyTheThreeExpectedAces,
+          SecretTempDirectoryAclTests.Create_FilesWrittenInsideInheritTheRestrictedAclAndStayReadableToTheOwner
 
       - name: Run unit tests
         working-directory: frontend
@@ -361,10 +384,24 @@ jobs:
         shell: pwsh
         run: Install-PSResource Microsoft.PowerShell.SecretManagement,Microsoft.PowerShell.SecretStore -Scope CurrentUser -TrustRepository || Install-Module Microsoft.PowerShell.SecretManagement,Microsoft.PowerShell.SecretStore -Scope CurrentUser -Force
 
+      - name: Install pinned sops + age (SHA-256 verified)
+        shell: pwsh
+        run: ./scripts/install-sops-age.ps1
+
       - name: Run L1 secret-provider contract tests (Testcontainers matrix)
-        run: dotnet test tests/EnvManager.Engine.Tests/EnvManager.Engine.Tests.csproj -c Release --nologo -p:EnableWindowsTargeting=true --filter "Category=L1"
+        run: dotnet test tests/EnvManager.Engine.Tests/EnvManager.Engine.Tests.csproj -c Release --nologo -p:EnableWindowsTargeting=true --filter "Category=L1" --logger "trx;LogFileName=l1.trx" --results-directory test-results/l1
         env:
           EM_L1_MATRIX: "1"
+          EM_L1_SOPS: "1"
+
+      # Second sops lane (Linux, no DACL): the round trip itself, so losing the windows
+      # lane's tools never leaves the provider with zero real-binary evidence.
+      - name: Require sops round trip evidence (Passed, not Skipped)
+        shell: pwsh
+        run: >-
+          ./scripts/assert-test-outcomes.ps1 -TrxPath test-results/l1/l1.trx -Tests
+          SopsContractTests.RoundTrip_EncryptThenDecrypt_ReturnsPlaintext,
+          SopsContractTests.PlaintextNotEmbedded_EncryptOmitsPlaintext
 
   # Builds and uploads the release artifacts. Kept separate from the required
   # "package" gate below so the upgrade matrix can consume the MSI artifact

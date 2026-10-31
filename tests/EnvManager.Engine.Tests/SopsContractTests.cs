@@ -46,24 +46,68 @@ public sealed class SopsContractTests : SecretProviderContractTests
 
         private SopsScope(SopsL1Harness harness) => Harness = harness;
 
+        /// <summary>
+        /// CI lanes that carry the sops evidence set this to 1 after putting the pinned
+        /// sops + age on PATH (scripts/install-sops-age.ps1). It makes the round trip
+        /// REQUIRED: every path that would otherwise skip fails instead, so a lane that
+        /// lost its tools goes red rather than reporting a skipped run as "Passed!".
+        /// Independent of EM_L1_MATRIX, because sops + age is a local offline key system
+        /// that needs neither Docker nor a cloud credential.
+        /// </summary>
+        internal const string RequiredEnvVar = "EM_L1_SOPS";
+
+        // Read once per test process, and parsed like L1MatrixAffinity's EM_L1_STRICT.
+        private static readonly bool Required =
+            string.Equals(Environment.GetEnvironmentVariable(RequiredEnvVar), "1", StringComparison.OrdinalIgnoreCase);
+
+        /// <summary>
+        /// One exit for every "cannot run" path. Both wordings lead with NOT RUN so the
+        /// reason cannot be read as a pass in a log or a TRX; the required form says it
+        /// failed, because on a required lane it is a failure, not a skip.
+        /// </summary>
+        /// <param name="reason">Why the round trip cannot run on this host.</param>
+        /// <returns>A failure when <see cref="RequiredEnvVar"/> is set, otherwise a skip.</returns>
+        private static Exception NotRun(string reason)
+        {
+            return Required
+                ? new InvalidOperationException($"sops round trip NOT RUN and REQUIRED on this lane ({RequiredEnvVar}=1), so this is a failure: " + reason)
+                : new Xunit.SkipException("sops round trip NOT RUN (skipped, not a pass): " + reason);
+        }
+
+        /// <summary>
+        /// Finds (or, with the matrix opt-in, downloads) sops + age, extracts the age
+        /// recipient and warms sops up, then sets SOPS_PATH / SOPS_AGE_KEY_FILE / SOPS_AGE_RECIPIENTS.
+        /// Every step that cannot complete exits through <see cref="NotRun"/>.
+        /// </summary>
+        /// <returns>A scope whose disposal clears those three variables.</returns>
         internal static SopsScope Install()
         {
             var bundle = L1ToolProvisioner.TryGetSopsBundle();
-            if (bundle is null)
+            if (bundle is null && !Required)
             {
                 // host lacks the tools: downloading them is a network side effect, so
                 // it only happens with the matrix opt-in
-                L1MatrixAffinity.AssertAffinityOrSkip("sops+age pinned-release download");
+                try
+                {
+                    L1MatrixAffinity.AssertAffinityOrSkip("sops+age pinned-release download");
+                }
+                catch (Xunit.SkipException ex)
+                {
+                    // the most common local skip: keep the NOT RUN wording on it too
+                    throw NotRun(ex.Message);
+                }
                 bundle = L1ToolProvisioner.EnsureSopsBundle();
             }
             if (bundle is null)
             {
-                throw new Xunit.SkipException("sops L1 smoke needs the sops + age binaries (host PATH lookup and pinned release download both unavailable)");
+                throw NotRun(Required
+                    ? "sops + age not found on PATH (the lane must run scripts/install-sops-age.ps1 before the tests)"
+                    : "needs the sops + age binaries (host PATH lookup and pinned release download both unavailable)");
             }
             var recipients = SopsL1Harness.ExtractPublicKey(bundle.Value.AgeKeyFile);
             if (recipients is null)
             {
-                throw new Xunit.SkipException("sops L1 smoke could not extract the age public key from the generated key file");
+                throw NotRun("could not extract the age public key from the generated key file");
             }
             // First-exec warmup: host binaries can stall on AV/SmartScan on some Windows
             // hosts (same observation as the op CLI warmup); retry until --version answers.
@@ -91,7 +135,7 @@ public sealed class SopsContractTests : SecretProviderContractTests
             }
             if (!warmOk)
             {
-                throw new Xunit.SkipException("sops L1 smoke: sops --version warmup did not complete (host stalled the binary; retry the run)");
+                throw NotRun("sops --version warmup did not complete (host stalled the binary; retry the run)");
             }
             Environment.SetEnvironmentVariable("SOPS_PATH", bundle.Value.Sops);
             Environment.SetEnvironmentVariable("SOPS_AGE_KEY_FILE", bundle.Value.AgeKeyFile);

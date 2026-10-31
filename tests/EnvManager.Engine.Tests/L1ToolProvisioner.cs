@@ -82,6 +82,13 @@ internal static class L1ToolProvisioner
     /// <summary>Discovery + pinned-release download of the missing binaries (network).</summary>
     internal static (string Sops, string AgeKeyFile)? EnsureSopsBundle() => BuildSopsBundle(allowDownload: true);
 
+    /// <summary>
+    /// Resolves sops, age and age-keygen from PATH first, then from the session cache,
+    /// downloading the pinned releases only when <paramref name="allowDownload"/> is set.
+    /// The age archive unpacks into an <c>age/</c> subfolder, and on Linux the binaries are made executable.
+    /// </summary>
+    /// <param name="allowDownload">Whether a missing binary may be fetched from its pinned release (network).</param>
+    /// <returns>The sops path and a session age key file, or null when either cannot be had.</returns>
     private static (string Sops, string AgeKeyFile)? BuildSopsBundle(bool allowDownload)
     {
         var sopsHost = FindOnPath("sops");
@@ -90,8 +97,12 @@ internal static class L1ToolProvisioner
 
         var bundleDir = Path.Combine(SessionRoot, "sops-age");
         var sopsPath = sopsHost ?? Path.Combine(bundleDir, IsWindows ? "sops.exe" : "sops");
-        var agePath = ageHost ?? Path.Combine(bundleDir, IsWindows ? "age.exe" : "age");
-        var ageKeygenPath = ageKeygenHost ?? Path.Combine(bundleDir, IsWindows ? "age-keygen.exe" : "age-keygen");
+        // The age release archives (zip and tar.gz alike) unpack into an age/ subfolder.
+        // Looking for the binaries at the bundle root missed them, the keypair was never
+        // generated, and the sops round trip skipped on the Linux lane that downloads.
+        var ageDir = Path.Combine(bundleDir, "age");
+        var agePath = ageHost ?? Path.Combine(ageDir, IsWindows ? "age.exe" : "age");
+        var ageKeygenPath = ageKeygenHost ?? Path.Combine(ageDir, IsWindows ? "age-keygen.exe" : "age-keygen");
         var keyFile = Path.Combine(bundleDir, "age-keys.txt");
 
         try
@@ -100,8 +111,9 @@ internal static class L1ToolProvisioner
 
             if (sopsHost is null)
             {
-                // sops 3.13.3 does not publish a windows release asset; winget/scoop
-                // installs cover Windows hosts
+                // Windows hosts take sops from PATH: CI installs the pinned, SHA-256
+                // checked binary with scripts/install-sops-age.ps1 before the tests run;
+                // locally, winget/scoop. This in-test download stays Linux-only.
                 if (IsWindows || !allowDownload) return null;
                 Download($"https://github.com/getsops/sops/releases/download/v{SopsVersion}/sops-v{SopsVersion}.linux.amd64", sopsPath);
                 ChmodExecutable(sopsPath);
@@ -125,6 +137,8 @@ internal static class L1ToolProvisioner
                     Download(url, tgzPath);
                     Run("tar", $"-xzf \"{tgzPath}\" -C \"{bundleDir}\"");
                     File.Delete(tgzPath);
+                    ChmodExecutable(agePath);
+                    ChmodExecutable(ageKeygenPath);
                 }
             }
 
