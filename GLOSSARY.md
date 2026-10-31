@@ -44,6 +44,10 @@ _Avoid_: event store, event log, audit log (ambiguous with audit.json), blockcha
 The service-side loop that refreshes `Periodic` mounts, default off. Only `CanRotate=true` providers carry a lease concept.
 _Avoid_: refresh daemon, sync loop, agent process
 
+**Delegated Rotation**:
+A `rotate` the service hands to `env-manager-cli.exe` as a child process (`profile secret-provider rotate`) instead of performing it in-process. The unit that owns everything the child touches: its process tree (the per-delegation job object), the sops scratch root, and the in-flight marker that keeps the other mount-file writers off the file. "Delegation" alone means the same act.
+_Avoid_: service-side rotate (ambiguous with the CLI's own `rotate`), subprocess rotate, background rotation (that names a runtime mode, not an ownership boundary)
+
 **Interrupted Rotation**:
 A `rotate` whose delegated CLI child was terminated by a service stop before the rotation completed. The interrupted unit is the whole process tree that child owned, so the provider helpers it had started stop with it. Names who owns that tree, not the provider verb.
 _Avoid_: cancelled rotation, aborted write, half-written file
