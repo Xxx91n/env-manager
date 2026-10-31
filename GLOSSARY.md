@@ -49,7 +49,7 @@ A `rotate` whose delegated CLI child was terminated by a service stop before the
 _Avoid_: cancelled rotation, aborted write, half-written file
 
 **Hang Budget**:
-The 15-minute ceiling a delegated rotation may spend inside its CLI child before the service terminates and reaps it (`reconcile::ROTATE_HANG_BUDGET`). A liveness backstop for a wedged CLI or provider - not a rotation SLA, and not a function of the secret count, because no healthy rotation is expected to reach it. The IPC client has usually given up at 30s, so the evidence for one is the service log; it is not an `Interrupted Rotation`, and it says so in its own message.
+The 15-minute ceiling a delegated rotation may spend inside its CLI child before the service terminates and reaps it (`reconcile::ROTATE_HANG_BUDGET`). A liveness backstop for a wedged CLI or provider - not a rotation SLA, and not a function of the secret count: it is a fixed ceiling, and the size at which a healthy rotation would reach it (roughly 90 secrets at the cold-start estimate) is stated next to the constant instead of being hidden here. The IPC client has usually given up at 30s, so the evidence for one is the service log; it is not an `Interrupted Rotation`, and it says so in its own message.
 _Avoid_: rotate timeout, rotation deadline, per-secret budget
 
 **Sops Scratch Root**:

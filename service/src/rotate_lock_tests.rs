@@ -111,10 +111,12 @@ async fn a_slow_rotation_does_not_hold_the_reconcile_lock() {
 /// snapshot it took before the child rewrote the envelopes.
 ///
 /// Driven through a real rotation rather than a test-only marker, so what is asserted is the
-/// production path. `refresh_mount` answers before it touches `%LOCALAPPDATA%`, which is why
-/// this half needs no fixture: the assertion is the refusal itself. It also pins the "fails
-/// fast" half - the old lock made this call block for the whole delegation, which for a wedged
-/// child meant until it died.
+/// production path: the rotation gets a temp mount file, and `refresh_mount` answers before it
+/// reads any state, so the assertion is the refusal itself. The gate is per service, not per
+/// mount (`ROTATIONS_IN_FLIGHT` is a process-wide count, and a refresh saves the whole mount
+/// file), which is why the id here only names the call. It also pins the "fails fast" half -
+/// the old lock made this call block for the whole delegation, which for a wedged child meant
+/// until it died.
 #[tokio::test]
 async fn refresh_stands_down_while_a_rotation_is_in_flight() {
     let slow = MountFixture::new("refresh-stand-down");

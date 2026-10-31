@@ -38,14 +38,14 @@ const STDERR_DRAIN_ON_STOP: Duration = Duration::from_millis(200);
 /// so its cost is linear in the mount's secret count and dominated by process spawns (sops
 /// starts four processes per secret, ~10s/secret cold on the prototype machine, so 50 secrets
 /// already pass two minutes). A fixed *performance* limit was therefore rejected: it would
-/// fail healthy rotations. This number is instead chosen as a ceiling nobody expects to reach,
-/// and it is deliberately not derived from the secret count: a delegated rotate carries no
-/// mount id and covers every profile, so N is only estimable, and a wrong estimate kills
-/// healthy work. The arithmetic is worth stating, because it is the honest limit of the claim:
-/// at the ~10s/secret cold estimate above, 900s covers roughly 90 secrets, so a mount past that
-/// size could legitimately reach this ceiling and be failed. That is the accepted cost of
-/// having a ceiling at all - the alternative is a child that can hold the rotation, and
-/// everything queued behind it, forever.
+/// fail healthy rotations. This number is instead a fixed ceiling, deliberately not derived from
+/// the secret count: a delegated rotate carries no mount id and covers every profile, so N is
+/// only estimable, and an estimate that is wrong by a factor kills healthy work. What that buys
+/// and what it costs, one sentence each: no mount this product targets (a few dozen secrets)
+/// comes near 900s, and a mount large enough to reach it - roughly 90 secrets at the cold-start
+/// estimate above - is failed by the ceiling rather than by a hang. That false positive is the
+/// recorded cost of having a ceiling at all; the alternative is a child that can hold the
+/// rotation, and everything queued behind it, forever.
 ///
 /// It does not widen the stop window: the stop branch of the same `select!` still fires the
 /// moment the token is cancelled, so `SHUTDOWN_DRAIN` + `RUNTIME_DRAIN` stay inside
