@@ -17,7 +17,7 @@ use std::time::Duration;
 
 use tokio_util::sync::CancellationToken;
 
-use crate::reconcile::rotate_mount_at;
+use crate::reconcile::{rotate_mount_at, ROTATE_HANG_BUDGET};
 use crate::rotate_stop_tests::MountFixture;
 
 /// Every wait here is bounded, so a regression fails the test instead of wedging the runner
@@ -106,7 +106,14 @@ async fn completed_rotation_keeps_the_envelopes_the_child_wrote() {
 
     let info = tokio::time::timeout(
         WRITEBACK_TIMEOUT,
-        rotate_mount_at(&fixture.path, "powershell.exe", &arg_refs, "mount-1", &shutdown),
+        rotate_mount_at(
+            &fixture.path,
+            "powershell.exe",
+            &arg_refs,
+            "mount-1",
+            &shutdown,
+            ROTATE_HANG_BUDGET,
+        ),
     )
     .await
     .expect("a child that finishes must not be held by the stop path")
@@ -141,7 +148,14 @@ async fn completed_rotation_skips_a_mount_that_vanished() {
 
     let info = tokio::time::timeout(
         WRITEBACK_TIMEOUT,
-        rotate_mount_at(&fixture.path, "powershell.exe", &arg_refs, "mount-1", &shutdown),
+        rotate_mount_at(
+            &fixture.path,
+            "powershell.exe",
+            &arg_refs,
+            "mount-1",
+            &shutdown,
+            ROTATE_HANG_BUDGET,
+        ),
     )
     .await
     .expect("a child that finishes must not be held by the stop path")
@@ -174,7 +188,14 @@ async fn completed_rotation_tolerates_a_deleted_mount_file() {
 
     let info = tokio::time::timeout(
         WRITEBACK_TIMEOUT,
-        rotate_mount_at(&fixture.path, "powershell.exe", &arg_refs, "mount-1", &shutdown),
+        rotate_mount_at(
+            &fixture.path,
+            "powershell.exe",
+            &arg_refs,
+            "mount-1",
+            &shutdown,
+            ROTATE_HANG_BUDGET,
+        ),
     )
     .await
     .expect("a child that finishes must not be held by the stop path")
@@ -205,7 +226,14 @@ async fn completed_rotation_reports_an_unreadable_mount_file() {
 
     let err = tokio::time::timeout(
         WRITEBACK_TIMEOUT,
-        rotate_mount_at(&fixture.path, "powershell.exe", &arg_refs, "mount-1", &shutdown),
+        rotate_mount_at(
+            &fixture.path,
+            "powershell.exe",
+            &arg_refs,
+            "mount-1",
+            &shutdown,
+            ROTATE_HANG_BUDGET,
+        ),
     )
     .await
     .expect("a child that finishes must not be held by the stop path")

@@ -21,7 +21,7 @@ use std::time::Duration;
 
 use tokio_util::sync::CancellationToken;
 
-use crate::reconcile::{run_cli_child, ChildOutcome};
+use crate::reconcile::{run_cli_child, ChildOutcome, ROTATE_HANG_BUDGET};
 use crate::sops_scratch::{SopsScratch, SCRATCH_ENV};
 use crate::SHUTDOWN_DRAIN;
 
@@ -160,7 +160,7 @@ async fn completed_delegation_reclaims_the_scratch_root() {
 
     let outcome = tokio::time::timeout(
         ALWAYS_TOO_LONG,
-        run_cli_child(STUB_EXE, &argv_refs, &shutdown),
+        run_cli_child(STUB_EXE, &argv_refs, &shutdown, ROTATE_HANG_BUDGET),
     )
     .await
     .expect("a stub that exits must not be held by the delegation")
@@ -201,7 +201,7 @@ async fn interrupted_delegation_reclaims_the_scratch_root() {
 
     let in_flight = tokio::spawn(async move {
         let argv_refs: Vec<&str> = argv.iter().map(|a| a.as_str()).collect();
-        run_cli_child(STUB_EXE, &argv_refs, &token).await
+        run_cli_child(STUB_EXE, &argv_refs, &token, ROTATE_HANG_BUDGET).await
     });
 
     // The plaintext has to be on disk *before* the stop, otherwise "it is gone afterwards"
@@ -261,7 +261,7 @@ async fn interrupted_delegation_logs_stderr_that_arrived_before_the_budget() {
 
     let in_flight = tokio::spawn(async move {
         let argv_refs: Vec<&str> = argv.iter().map(|a| a.as_str()).collect();
-        run_cli_child(STUB_EXE, &argv_refs, &token).await
+        run_cli_child(STUB_EXE, &argv_refs, &token, ROTATE_HANG_BUDGET).await
     });
 
     poll_until(ALWAYS_TOO_LONG, || report.read())

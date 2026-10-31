@@ -23,7 +23,7 @@ use std::path::{Path, PathBuf};
 use std::time::Duration;
 use tokio_util::sync::CancellationToken;
 
-use crate::reconcile::{rotate_mount_at, run_cli_child, ChildOutcome};
+use crate::reconcile::{rotate_mount_at, run_cli_child, ChildOutcome, ROTATE_HANG_BUDGET};
 use crate::SHUTDOWN_DRAIN;
 
 /// The stub "CLI": one `ping.exe` process doing 30 one-second round trips, so it is
@@ -56,7 +56,7 @@ fn cancel_after(shutdown: &std::sync::Arc<CancellationToken>, delay: Duration) {
 /// Whether Windows still has a process with this pid. `tasklist` is used rather than
 /// `OpenProcess` + `GetExitCodeProcess` so the assertion does not need a `windows-sys`
 /// feature that no production code in this crate requires.
-fn pid_is_running(pid: u32) -> bool {
+pub(crate) fn pid_is_running(pid: u32) -> bool {
     let output = std::process::Command::new("tasklist")
         .args(["/FI", &format!("PID eq {pid}"), "/NH", "/FO", "CSV"])
         .output()
@@ -78,10 +78,11 @@ const TREE_KILL_BUDGET: Duration = Duration::from_secs(5);
 
 /// A temp `secretMount.json` holding one un-rotated mount, deleted with the file.
 /// Shared with `rotate_writeback_tests`, which drives the completed-rotation file states
-/// against the same fixture shape.
+/// against the same fixture shape, and with `rotate_hang_tests`, which needs the untouched
+/// bytes to prove a budget expiry wrote nothing.
 pub(crate) struct MountFixture {
     pub(crate) path: PathBuf,
-    original: String,
+    pub(crate) original: String,
 }
 
 impl MountFixture {
@@ -134,8 +135,9 @@ async fn stop_terminates_and_reaps_the_rotate_child() {
 
     let shutdown = std::sync::Arc::new(CancellationToken::new());
     let token = shutdown.clone();
-    let in_flight =
-        tokio::spawn(async move { run_cli_child(STUB_EXE, &STUB_SLOW_ARGS, &token).await });
+    let in_flight = tokio::spawn(async move {
+        run_cli_child(STUB_EXE, &STUB_SLOW_ARGS, &token, ROTATE_HANG_BUDGET).await
+    });
 
     // Let the child get going, then time only the stop: everything between the cancel and
     // the return is terminate + reap, so a slow runner cannot be blamed for the result -
@@ -175,7 +177,14 @@ async fn interrupted_rotation_leaves_the_mount_unrotated() {
 
     let err = tokio::time::timeout(
         ALWAYS_TOO_LONG,
-        rotate_mount_at(&fixture.path, STUB_EXE, &STUB_SLOW_ARGS, "mount-1", &shutdown),
+        rotate_mount_at(
+            &fixture.path,
+            STUB_EXE,
+            &STUB_SLOW_ARGS,
+            "mount-1",
+            &shutdown,
+            ROTATE_HANG_BUDGET,
+        ),
     )
     .await
     .expect("an interrupted rotate must converge, not wait the stub out")
@@ -213,7 +222,14 @@ async fn completed_rotation_records_the_mount() {
 
     let info = tokio::time::timeout(
         ALWAYS_TOO_LONG,
-        rotate_mount_at(&fixture.path, "cmd.exe", &["/c", "echo", "rotated"], "mount-1", &shutdown),
+        rotate_mount_at(
+            &fixture.path,
+            "cmd.exe",
+            &["/c", "echo", "rotated"],
+            "mount-1",
+            &shutdown,
+            ROTATE_HANG_BUDGET,
+        ),
     )
     .await
     .expect("a child that finishes must not be held by the stop path")
@@ -338,7 +354,7 @@ async fn stop_kills_the_helper_tree_not_just_the_direct_child() {
     let in_flight = tokio::spawn(async move {
         let args = tree_stub_args(&report_path);
         let argv: Vec<&str> = args.iter().map(|a| a.as_str()).collect();
-        run_cli_child(TREE_STUB_EXE, &argv, &token).await
+        run_cli_child(TREE_STUB_EXE, &argv, &token, ROTATE_HANG_BUDGET).await
     });
 
     // The helper has to be up before the stop lands, otherwise "the pid disappeared" would
