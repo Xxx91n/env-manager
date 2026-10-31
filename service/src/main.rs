@@ -35,6 +35,8 @@ mod sops_scratch_tests;
 mod rotate_writeback_tests;
 #[cfg(test)]
 mod rotate_lock_tests;
+#[cfg(test)]
+mod rotate_hang_tests;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RuntimeMode {

@@ -29,6 +29,25 @@ const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 /// helper holding the handle open cannot extend the stop.
 const STDERR_DRAIN_ON_STOP: Duration = Duration::from_millis(200);
 
+/// How long a delegated rotation may stay inside its CLI child before the service treats it
+/// as hung, terminates it and reaps it (#161).
+///
+/// This is a liveness backstop, not a rotation SLA, and that distinction is the decision this
+/// ticket asked for rather than a constant. A rotation is decrypt-then-re-encrypt per secret,
+/// so its cost is linear in the mount's secret count and dominated by process spawns (sops
+/// starts four processes per secret, ~10s/secret cold on the prototype machine, so 50 secrets
+/// already pass two minutes). A fixed *performance* limit was therefore rejected: it would
+/// fail healthy rotations. This number is instead chosen far above any real rotation, and is
+/// deliberately not derived from the secret count - a delegated rotate carries no mount id
+/// and covers every profile, so N is only estimable, and a wrong estimate kills healthy work.
+///
+/// It does not widen the stop window: the stop branch of the same `select!` still fires the
+/// moment the token is cancelled, so `SHUTDOWN_DRAIN` + `RUNTIME_DRAIN` stay inside
+/// `STOP_WAIT_HINT_MS`. What it buys is that a wedged child - a provider round-trip that never
+/// returns, a DPAPI prompt nobody can answer, a CLI deadlock - ends the rotation instead of
+/// holding it, and the reconcile loop behind it, forever.
+pub(crate) const ROTATE_HANG_BUDGET: Duration = Duration::from_secs(15 * 60);
+
 /// The CLI argv a rotation delegates to. Rotation is not a circular dependency: it is a
 /// one-shot write of profiles.json, not an IPC back into the service. `--json` is absent
 /// because CLI rotate does not support it (it exits non-zero).
@@ -231,6 +250,7 @@ pub async fn rotate_mount(
         &ROTATE_ARGS,
         mount_id,
         shutdown,
+        ROTATE_HANG_BUDGET,
     )
     .await
 }
@@ -241,12 +261,16 @@ pub async fn rotate_mount(
 ///
 /// The lock is taken twice - around the mount check and around the write-back - and never
 /// held while the child runs (#161). See `RECONCILE_LOCK` for what that trades away.
+///
+/// `hang_budget` is passed through to `run_cli_child` and is a parameter for the same reason
+/// it is there: the tests inject a short one, production passes `ROTATE_HANG_BUDGET`.
 pub(crate) async fn rotate_mount_at(
     mount_path: &Path,
     cli_exe: &str,
     cli_args: &[&str],
     mount_id: &str,
     shutdown: &CancellationToken,
+    hang_budget: Duration,
 ) -> Result<serde_json::Value, String> {
     // Check-then-delegate, with the lock released for the delegation itself (#161). The child
     // wait is the only long part of a rotation, and holding the lock across it made one slow
@@ -263,12 +287,12 @@ pub(crate) async fn rotate_mount_at(
         }
     }
 
-    // Any error here - a failing child or an interrupted one - returns before the
-    // metadata is touched. That is the replay half of #153's recovery semantics: the mount
-    // still reads as un-rotated, so the next `rotate` or the reconcile tick does the work
-    // again, and re-rotating is harmless (`RotateAll` decrypts then re-encrypts per
-    // secret, `src/Secrets/Manager/SecretProviderManager.cs`).
-    let result = call_cli_rotate(cli_exe, cli_args, shutdown).await?;
+    // Any error here - a failing child, an interrupted one, or one that outlived its hang
+    // budget - returns before the metadata is touched. That is the replay half of #153's
+    // recovery semantics: the mount still reads as un-rotated, so the next `rotate` or the
+    // reconcile tick does the work again, and re-rotating is harmless (`RotateAll` decrypts
+    // then re-encrypts per secret, `src/Secrets/Manager/SecretProviderManager.cs`).
+    let result = call_cli_rotate(cli_exe, cli_args, shutdown, hang_budget).await?;
     let now = Utc::now().to_rfc3339();
 
     // Re-acquired for the write-back only, so the read below and the save it feeds cannot be
@@ -375,6 +399,11 @@ pub(crate) enum ChildOutcome {
     /// started - requested at handle close, not awaited, so they can still be winding down
     /// for a moment after this returns.
     Interrupted { pid: Option<u32> },
+    /// The rotation outlived its hang budget while no stop was requested (#161). Converged
+    /// exactly like `Interrupted` - terminated, reaped, job handle closed - so the only
+    /// difference is the reason and the message the caller gets. A liveness backstop, not a
+    /// rotation SLA: see `ROTATE_HANG_BUDGET`.
+    TimedOut { pid: Option<u32> },
 }
 
 /// Run a CLI child and converge it with the service stop path (#153, #160).
@@ -411,16 +440,23 @@ pub(crate) enum ChildOutcome {
 /// level, never swallowed; see `crate::sops_scratch`. What this cannot cover is a service
 /// that is killed rather than stopped: the root then stays on disk with a name that says
 /// the service wrote it.
+///
+/// `hang_budget` bounds the wait on a *live* child (#161): whichever of the child's exit, the
+/// stop token and that budget comes first decides how the call ends, and the two that are not
+/// an exit converge the same way. The budget is a parameter rather than a constant so the
+/// tests can inject a short one and never wait a real 15 minutes on a CI runner; production
+/// passes `ROTATE_HANG_BUDGET`, which documents why the value is what it is.
 pub(crate) async fn run_cli_child(
     cli_exe: &str,
     args: &[&str],
     shutdown: &CancellationToken,
+    hang_budget: Duration,
 ) -> Result<ChildOutcome, String> {
     // Created before the spawn and reclaimed after the outcome is known, so no early
     // return inside `spawn_cli_child` - a failed spawn, a missing pipe, a failed wait -
     // can skip the delete.
     let scratch = SopsScratch::create();
-    let outcome = spawn_cli_child(cli_exe, args, shutdown, scratch.as_ref()).await;
+    let outcome = spawn_cli_child(cli_exe, args, shutdown, hang_budget, scratch.as_ref()).await;
     if let Some(scratch) = scratch {
         scratch.reclaim().await;
     }
@@ -436,6 +472,7 @@ async fn spawn_cli_child(
     cli_exe: &str,
     args: &[&str],
     shutdown: &CancellationToken,
+    hang_budget: Duration,
     scratch: Option<&SopsScratch>,
 ) -> Result<ChildOutcome, String> {
     // One job per delegation, never a process-wide singleton: the handle lives exactly as
@@ -514,7 +551,13 @@ async fn spawn_cli_child(
         async move { read_pipe_into(&mut stderr, seen).await }
     });
 
-    tokio::select! {
+    // Three ways out of the wait. "The child exited" is the only one that reports what the
+    // child did; the other two both decide to stop waiting on a live child and owe the same
+    // guarantee - terminated *and reaped* here, job handle closed on return, stderr salvaged -
+    // so they share one convergence path below (#153, #161). Which of the two wins when both
+    // are ready is not a correctness question: either way the child dies the same way, and
+    // only the message the caller gets differs.
+    let (why, timed_out) = tokio::select! {
         status = child.wait() => {
             let status = status
                 .map_err(|e| format!("failed to wait for the CLI rotate child: {}", e))?;
@@ -544,60 +587,93 @@ async fn spawn_cli_child(
                     crate::redaction::scrub_message(&stderr)
                 );
             }
-            Ok(ChildOutcome::Finished {
+            return Ok(ChildOutcome::Finished {
                 success: status.success(),
                 stdout,
                 stderr,
-            })
+            });
         }
-        _ = shutdown.cancelled() => {
-            // `Child::kill` is TerminateProcess followed by `wait`, so the child is reaped
-            // here rather than left as an orphan of a service the SCM already calls
-            // Stopped. The two pipe readers are then handled differently - stdout is
-            // aborted, stderr is drained (below) - and the stop path must not depend on
-            // either pipe reaching EOF, even though both do: provider helpers redirect
-            // their own std handles (`src/Secrets/Providers/`).
-            child
-                .kill()
-                .await
-                .map_err(|e| format!("failed to terminate the CLI rotate child: {}", e))?;
-            read_stdout.abort();
-            // stderr is drained instead of aborted: the provider's fallback warning is
-            // written before it does any work, so dropping it would erase the one line that
-            // explains why the reclaim this call is about to run may find nothing to
-            // delete. Bounded, because the stop path must not depend on a pipe reaching
-            // EOF - even though it does, since the child is reaped above and provider
-            // helpers redirect their own std handles (`src/Secrets/Providers/`). The reader
-            // accumulates as bytes arrive, so giving up at the budget keeps what was already
-            // captured; only bytes written after the budget are lost.
-            let mut stderr_reader = read_stderr;
-            let closed = tokio::time::timeout(STDERR_DRAIN_ON_STOP, &mut stderr_reader).await;
-            if closed.is_err() {
-                stderr_reader.abort();
-            }
-            let stderr = take_seen(&stderr_seen);
-            if !stderr.is_empty() {
-                tracing::info!(
-                    "delegated CLI wrote to stderr before the stop: {}",
-                    crate::redaction::scrub_message(&stderr)
-                );
-            }
-            if closed.is_err() {
-                // Logged rather than dropped: a helper that keeps the pipe open past the
-                // drain budget is exactly the case where the reclaim below may find a
-                // held file, and silence here would read as "nothing to say".
-                tracing::warn!(
-                    "delegated CLI stderr did not close within {:?} on the stop path; what had arrived is logged above, anything later is lost",
-                    STDERR_DRAIN_ON_STOP
-                );
-            }
-            // The job handle drops as this function returns, which is where the helper
-            // tree dies (#160): the CLI is already reaped, so nothing left in the job can
-            // still be serving this rotation. Both happen inside the stop budget - closing
-            // a job handle is not a wait.
-            Ok(ChildOutcome::Interrupted { pid })
-        }
+        _ = shutdown.cancelled() => ("the stop", false),
+        _ = tokio::time::sleep(hang_budget) => ("the hang budget", true),
+    };
+
+    converge_killed_child(&mut child, read_stdout, read_stderr, &stderr_seen, why).await?;
+    if timed_out {
+        // The service log is where a budget expiry has to be visible: the IPC client gave up
+        // 30s into the call (`ipc::cli_gateway`), so for a rotation this long nobody is
+        // waiting on the response any more.
+        tracing::warn!(
+            "CLI rotate child {} outlived its {:?} hang budget and was terminated; the mount keeps its old metadata and the next rotate replays it",
+            pid.map(|p| p.to_string()).unwrap_or_else(|| "unknown".to_string()),
+            hang_budget
+        );
     }
+    // The job handle drops as this function returns, which is where the helper tree dies
+    // (#160): the CLI is already reaped, so nothing left in the job can still be serving this
+    // rotation. Both paths reach it inside the stop budget - closing a job handle is not a
+    // wait - and the hang-budget path adds no window of its own.
+    Ok(if timed_out {
+        ChildOutcome::TimedOut { pid }
+    } else {
+        ChildOutcome::Interrupted { pid }
+    })
+}
+
+/// End a rotation whose child the caller has decided not to wait for: terminate, reap, and
+/// salvage whatever its stderr already said.
+///
+/// Shared by the stop branch (#153) and the hang-budget branch (#161) - the two owe the same
+/// guarantee, and the only difference between them is what the caller is told afterwards.
+/// `why` names the reason in the log lines, so a service log distinguishes "the SCM asked us
+/// to stop" from "this child wedged".
+async fn converge_killed_child(
+    child: &mut tokio::process::Child,
+    read_stdout: tokio::task::JoinHandle<()>,
+    read_stderr: tokio::task::JoinHandle<()>,
+    stderr_seen: &Arc<std::sync::Mutex<Vec<u8>>>,
+    why: &str,
+) -> Result<(), String> {
+    // `Child::kill` is TerminateProcess followed by `wait`, so the child is reaped here
+    // rather than left as an orphan of a service the SCM already calls Stopped. The two pipe
+    // readers are then handled differently - stdout is aborted, stderr is drained (below) -
+    // and neither path may depend on a pipe reaching EOF, even though both do: provider
+    // helpers redirect their own std handles (`src/Secrets/Providers/`).
+    child
+        .kill()
+        .await
+        .map_err(|e| format!("failed to terminate the CLI rotate child: {}", e))?;
+    read_stdout.abort();
+    // stderr is drained instead of aborted: the provider's fallback warning is written before
+    // it does any work, so dropping it would erase the one line that explains why the reclaim
+    // that follows may find nothing to delete. Bounded, because the stop path must not depend
+    // on a pipe reaching EOF - even though it does, since the child is reaped above and
+    // provider helpers redirect their own std handles (`src/Secrets/Providers/`). The reader
+    // accumulates as bytes arrive, so giving up at the budget keeps what was already captured;
+    // only bytes written after the budget are lost.
+    let mut stderr_reader = read_stderr;
+    let closed = tokio::time::timeout(STDERR_DRAIN_ON_STOP, &mut stderr_reader).await;
+    if closed.is_err() {
+        stderr_reader.abort();
+    }
+    let stderr = take_seen(stderr_seen);
+    if !stderr.is_empty() {
+        tracing::info!(
+            "delegated CLI wrote to stderr before it was terminated ({}): {}",
+            why,
+            crate::redaction::scrub_message(&stderr)
+        );
+    }
+    if closed.is_err() {
+        // Logged rather than dropped: a helper that keeps the pipe open past the drain budget
+        // is exactly the case where the reclaim may find a held file, and silence here would
+        // read as "nothing to say".
+        tracing::warn!(
+            "delegated CLI stderr did not close within {:?} after it was terminated ({}); what had arrived is logged above, anything later is lost",
+            STDERR_DRAIN_ON_STOP,
+            why
+        );
+    }
+    Ok(())
 }
 
 /// Read a child pipe to the end, appending each chunk to `seen` as it arrives. The
@@ -635,8 +711,9 @@ async fn call_cli_rotate(
     cli_exe: &str,
     cli_args: &[&str],
     shutdown: &CancellationToken,
+    hang_budget: Duration,
 ) -> Result<String, String> {
-    match run_cli_child(cli_exe, cli_args, shutdown).await? {
+    match run_cli_child(cli_exe, cli_args, shutdown, hang_budget).await? {
         ChildOutcome::Finished {
             success: true,
             stdout,
@@ -651,6 +728,19 @@ async fn call_cli_rotate(
                 .unwrap_or_else(|| "unknown".to_string());
             Err(format!(
                 "CLI rotate interrupted by service stop (child {pid} terminated and reaped)"
+            ))
+        }
+        ChildOutcome::TimedOut { pid } => {
+            let pid = pid
+                .map(|p| p.to_string())
+                .unwrap_or_else(|| "unknown".to_string());
+            // Deliberately not the stop wording: an operator reading the IPC error or the
+            // service log has to be able to tell "the SCM stopped us" from "this rotation
+            // wedged". The duration is in the message because it is the only thing that
+            // makes the number in `ROTATE_HANG_BUDGET` falsifiable from a log line.
+            Err(format!(
+                "CLI rotate exceeded its {:?} hang budget (child {pid} terminated and reaped)",
+                hang_budget
             ))
         }
     }

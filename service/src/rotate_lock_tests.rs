@@ -16,7 +16,7 @@ use std::time::Duration;
 
 use tokio_util::sync::CancellationToken;
 
-use crate::reconcile::{rotate_mount_at, ChildOutcome};
+use crate::reconcile::{rotate_mount_at, ChildOutcome, ROTATE_HANG_BUDGET};
 use crate::rotate_stop_tests::MountFixture;
 use crate::SHUTDOWN_DRAIN;
 
@@ -47,7 +47,15 @@ async fn a_slow_rotation_does_not_hold_the_reconcile_lock() {
     let slow_path = slow.path.clone();
 
     let in_flight = tokio::spawn(async move {
-        rotate_mount_at(&slow_path, STUB_EXE, &STUB_SLOW_ARGS, "mount-1", &token).await
+        rotate_mount_at(
+            &slow_path,
+            STUB_EXE,
+            &STUB_SLOW_ARGS,
+            "mount-1",
+            &token,
+            ROTATE_HANG_BUDGET,
+        )
+        .await
     });
 
     // Let the first rotation reach its child wait. 300ms is nothing against the 30s stub, and
@@ -64,6 +72,7 @@ async fn a_slow_rotation_does_not_hold_the_reconcile_lock() {
             &["/c", "echo", "rotated"],
             "mount-1",
             &fast_shutdown,
+            ROTATE_HANG_BUDGET,
         ),
     )
     .await
