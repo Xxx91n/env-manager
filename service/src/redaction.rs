@@ -36,9 +36,18 @@ pub fn scrub_message(s: &str) -> String {
     ] {
         if let Some(i) = out.find(pat) {
             let start = i + pat.len();
-            let tail: String = out.chars().skip(start).take(8).collect();
-            if !tail.is_empty() {
-                out.replace_range(start..start + tail.len(), "<redacted>");
+            // The mask is a *character* window, so the range has to be built from character
+            // boundaries: `start` is a byte index (the pattern is ASCII, so it lands on one)
+            // and mixing byte offsets with `chars().skip` either masks the wrong text or -
+            // worse - hands `replace_range` an end that is not a character boundary, which
+            // panics. Helper stderr is not guaranteed to be ASCII.
+            let end = out[start..]
+                .char_indices()
+                .nth(8)
+                .map(|(offset, _)| start + offset)
+                .unwrap_or(out.len());
+            if end > start {
+                out.replace_range(start..end, "<redacted>");
             }
         }
     }
@@ -71,6 +80,25 @@ mod tests {
     }
 
     #[test]
+    fn test_scrub_masks_on_character_boundaries() {
+        // Both halves have to be non-ASCII to discriminate: a byte offset used as a
+        // character count only goes wrong when the prefix is multi-byte, and the end
+        // offset only lands off a character boundary when the masked window is multi-byte
+        // too. On this input the old arithmetic asked `replace_range` to cut at byte 36 -
+        // the middle of a CJK character, i.e. a panic - instead of masking eight characters.
+        let input = "秘密 password=密码密码密码密码密码 tail";
+        let out = scrub_message(input);
+        assert_eq!(out, "秘密 password=<redacted>密码 tail");
+    }
+
+    #[test]
+    fn test_scrub_masks_a_remainder_shorter_than_eight_characters() {
+        let input = "password=ab tail";
+        let out = scrub_message(input);
+        assert_eq!(out, "password=<redacted>");
+    }
+
+    #[test]
     fn test_zeroizing_string_drop() {
         use zeroize::Zeroizing;
         // Just verify Zeroizing<String> compiles and can be used
@@ -78,5 +106,4 @@ mod tests {
         assert_eq!(&*secret, "s3cr3t-v4lu3");
         // secret drops here, inner String zeroed
     }
-
 }

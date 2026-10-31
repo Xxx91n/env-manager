@@ -45,6 +45,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- sops 明文临时目录由服务拥有并回收：停服务打断 rotate 后，服务在被终止的 helper 释放句柄的窗口内删除整棵临时目录树（有限重试），不再无声遗留 `env-manager-sops-*`；回退与删除失败均留痕（#177）
+
 ## [0.12.0] - 2026-09-09
 
 Release-infrastructure milestone (architecture-recovery Round 7, tickets 44-45): first release cut from the tag-driven CI pipeline, with release-please taking over subsequent version bumps.

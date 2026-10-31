@@ -40,15 +40,6 @@ internal sealed class SopsProvider : ISecretProvider
 
     private static readonly string SOPS_BINARY = FindSopsBinary();
 
-    // Single creation point for the plaintext temp directory. Both Encrypt and Decrypt go
-    // through it so neither can inherit %TEMP%'s ACL by accident: on a host whose TEMP is
-    // C:\Windows\Temp the inherited ACE grants BUILTIN\Users read, and this directory is
-    // where the plaintext lands. SecretTempDirectory applies the owner-only DACL in the
-    // same call that creates the directory; a DACL that cannot be applied is logged and
-    // the provider keeps working, while a directory that cannot be created still throws.
-    private string CreatePlaintextTempDirectory()
-        => SecretTempDirectory.Create(Name).FullName;
-
     // Budget for the `sops --version` availability probe. Measured on a warm Windows
     // host: 2.1-2.9s wall clock per start (antivirus scans the resolved binary), and it
     // overshoots 5s under concurrent load. The probe MUST NOT be stricter than the
@@ -142,11 +133,57 @@ internal sealed class SopsProvider : ISecretProvider
         }
     }
 
+    // Single creation point for the plaintext temp directory, and the only place that
+    // decides where it lives (#177). Both Encrypt and Decrypt go through it so neither can
+    // inherit %TEMP%'s ACL by accident: on a host whose TEMP is C:\Windows\Temp the
+    // inherited ACE grants BUILTIN\Users read, and this directory is where the plaintext
+    // lands. `SecretTempDirectory` (#178) applies the owner-only DACL in the same call that
+    // creates the directory; a DACL that cannot be applied is logged and the provider keeps
+    // working, while a directory that cannot be created still throws.
+    //
+    // A service-delegated rotation is handed a parent directory the service owns through
+    // ENVMANAGER_SOPS_SCRATCH_DIR and deletes once the CLI child is gone: that is the only
+    // shape that also covers a stop, because the CLI's own `finally` never runs when it is
+    // terminated. Unset, or set to something that cannot be written, this falls back to
+    // %TEMP% exactly as before - a CLI started by hand has no service to reclaim anything
+    // for it, and an unusable scratch root is a configuration problem, never a reason to
+    // refuse to encrypt or decrypt. Both fallback shapes write one line to stderr: the
+    // ticket requires the fallback to leave a trace, and from in here an un-delegated call
+    // and a delegation whose variable never arrived are indistinguishable.
+    private const string ScratchRootEnvVar = "ENVMANAGER_SOPS_SCRATCH_DIR";
+
+    internal string CreateWorkingDirectory(string operation)
+    {
+        string? scratchRoot = Environment.GetEnvironmentVariable(ScratchRootEnvVar);
+        if (string.IsNullOrWhiteSpace(scratchRoot))
+        {
+            Console.Error.WriteLine("Warning: sops " + operation + " has no delegated scratch root (" +
+                ScratchRootEnvVar + " is unset); using " + Path.GetTempPath() +
+                " with a best-effort delete only");
+            return SecretTempDirectory.Create(Name).FullName;
+        }
+
+        try
+        {
+            return SecretTempDirectory.CreateUnder(scratchRoot, Name).FullName;
+        }
+        catch (Exception ex) when (ex is IOException || ex is UnauthorizedAccessException
+                                   || ex is ArgumentException || ex is NotSupportedException
+                                   || ex is System.Security.SecurityException)
+        {
+            // Exception type only, never ex.Message: the type is stable text, while the
+            // message can quote whatever path segment Windows objected to.
+            Console.Error.WriteLine("Warning: sops " + operation + " scratch root '" + scratchRoot +
+                "' is not usable (" + ex.GetType().Name + "); falling back to " + Path.GetTempPath());
+            return SecretTempDirectory.Create(Name).FullName;
+        }
+    }
+
     public string Encrypt(string plaintext, string? context = null)
     {
         EnsureSopsAvailable();
 
-        string tempDir = CreatePlaintextTempDirectory();
+        string tempDir = CreateWorkingDirectory(SecretProviderErrors.OpEncrypt);
 
         string plainFile = Path.Combine(tempDir, "secret.json");
         string encFile = Path.Combine(tempDir, "secret.enc.json");
@@ -155,7 +192,10 @@ internal sealed class SopsProvider : ISecretProvider
         {
             // Design: sops is file-in/file-out, so plaintext must reach disk as its input.
             // This file and secret.dec.json in Decrypt are the documented on-disk plaintext
-            // exception (docs/architecture.md "Plaintext lifecycle"); delete is best-effort.
+            // exception (docs/architecture.md "Plaintext lifecycle"). Under the service the
+            // directory lives inside the root `run_cli_child` owns and reclaims, so a stop
+            // that kills this process still ends with the file deleted; run by hand, the
+            // delete below is best-effort.
             // Write JSON: { "value": "<plaintext>" }
             // write UTF-8 WITHOUT BOM. Encoding.UTF8 emits a BOM (0xEF 0xBB 0xBF)
             // and sops >= 3.x rejects BOM-prefixed JSON with "invalid character 'ï'
@@ -240,7 +280,7 @@ internal sealed class SopsProvider : ISecretProvider
 
         EnsureSopsAvailable();
 
-        string tempDir = CreatePlaintextTempDirectory();
+        string tempDir = CreateWorkingDirectory(SecretProviderErrors.OpDecrypt);
 
         string encFile = Path.Combine(tempDir, "secret.enc.json");
         string plainFile = Path.Combine(tempDir, "secret.dec.json");

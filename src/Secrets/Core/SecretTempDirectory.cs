@@ -60,6 +60,18 @@ internal static class SecretTempDirectory
     internal static DirectoryInfo Create(string provider)
         => Create(provider, CreateWithDacl, RecordDegradation);
 
+    /// <summary>
+    /// Creates <c>&lt;parent&gt;\env-manager-&lt;provider&gt;-&lt;guid&gt;</c> with the
+    /// owner-only DACL already applied. The parent is a parameter so a caller that owns a
+    /// scratch directory (the service's per-delegation root, #177) can put the working
+    /// directory inside it without giving up the DACL; <see cref="Create(string)"/> is the
+    /// %TEMP% case. An unusable parent is a real creation failure and propagates, which is
+    /// how <c>SopsProvider.CreateWorkingDirectory</c> tells "the delegated root is not
+    /// writable" apart from "the DACL was refused".
+    /// </summary>
+    internal static DirectoryInfo CreateUnder(string parent, string provider)
+        => CreateUnder(parent, provider, CreateWithDacl, RecordDegradation);
+
     // Seam overload: createWithDacl is the create call that carries the DACL, and
     // recordDegradation receives the line AFTER ScrubExceptionMessage has run, so a test
     // observes exactly what production would have recorded and cannot bypass
@@ -83,8 +95,20 @@ internal static class SecretTempDirectory
         string provider,
         Func<string, DirectorySecurity, DirectoryInfo> createWithDacl,
         Action<string> recordDegradation)
+        => CreateUnder(Path.GetTempPath(), provider, createWithDacl, recordDegradation);
+
+    /// <summary>
+    /// Parent-aware seam overload (#177): the same DACL and degradation contract under a
+    /// caller-owned parent. Everything above delegates here, so the parent is the only
+    /// thing that differs between the %TEMP% case and the service's scratch root.
+    /// </summary>
+    internal static DirectoryInfo CreateUnder(
+        string parent,
+        string provider,
+        Func<string, DirectorySecurity, DirectoryInfo> createWithDacl,
+        Action<string> recordDegradation)
     {
-        string path = Path.Combine(Path.GetTempPath(), Prefix + provider + "-" + Guid.NewGuid().ToString("N"));
+        string path = Path.Combine(parent, Prefix + provider + "-" + Guid.NewGuid().ToString("N"));
 
         try
         {

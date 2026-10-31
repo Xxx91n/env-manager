@@ -17,11 +17,17 @@ use std::process::Stdio; // piped stdout/stderr on the CLI child (tokio takes st
 use tokio::sync::Mutex; // Phase 4C: TOCTOU protection
 
 use crate::job_object::KillOnCloseJob; // kill-on-close tree containment for the CLI child
+use crate::sops_scratch::{SopsScratch, SCRATCH_ENV}; // service-owned sops working root (#177)
 
 /// `CREATE_NO_WINDOW`: the service has no console, and without the flag the CLI child
 /// would flash a window on the interactive desktop. Passed to tokio's own
 /// `Command::creation_flags`, so no `CommandExt` import is needed here.
 const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+
+/// How long the stop path waits for the killed child's stderr before giving up on it.
+/// Long enough for a pipe that closes the moment its writer is reaped, short enough that a
+/// helper holding the handle open cannot extend the stop.
+const STDERR_DRAIN_ON_STOP: Duration = Duration::from_millis(200);
 
 /// The CLI argv a rotation delegates to. Rotation is not a circular dependency: it is a
 /// one-shot write of profiles.json, not an IPC back into the service. `--json` is absent
@@ -369,14 +375,41 @@ pub(crate) enum ChildOutcome {
 /// stop. `Command` offers no create-suspended spawn, so the window cannot be closed from
 /// here; it is recorded instead of promised away.
 ///
-/// A different gap stays open and is not this function's to close: sops writes the value it
-/// decrypted into its own temp directory and deletes it in the CLI's `finally`, so a stop
-/// that terminates the CLI still leaves that file on disk. Killing the helper does not
-/// remove it. See the secret-value lifecycle table in `docs/architecture.md`.
+/// The value sops writes to disk does not outlive the delegation either (#177): the root the
+/// CLI puts its sops working directories in is created here, handed over through
+/// `SCRATCH_ENV`, and deleted once the outcome above is known - including the interrupted
+/// case, where the CLI's own `finally` never runs, because the process doing the delete is
+/// this one. That delete is retried for a moment (a killed helper can still own a handle
+/// for a fraction of a second) and a failure that survives the retries is logged at error
+/// level, never swallowed; see `crate::sops_scratch`. What this cannot cover is a service
+/// that is killed rather than stopped: the root then stays on disk with a name that says
+/// the service wrote it.
 pub(crate) async fn run_cli_child(
     cli_exe: &str,
     args: &[&str],
     shutdown: &CancellationToken,
+) -> Result<ChildOutcome, String> {
+    // Created before the spawn and reclaimed after the outcome is known, so no early
+    // return inside `spawn_cli_child` - a failed spawn, a missing pipe, a failed wait -
+    // can skip the delete.
+    let scratch = SopsScratch::create();
+    let outcome = spawn_cli_child(cli_exe, args, shutdown, scratch.as_ref()).await;
+    if let Some(scratch) = scratch {
+        scratch.reclaim().await;
+    }
+    outcome
+}
+
+/// The delegation itself: job object, spawn, drain, converge.
+///
+/// Split out of `run_cli_child` so the reclaim above runs on every exit path. The job
+/// handle is dropped when this returns, which is before the caller deletes the scratch
+/// root, so the tree is already under termination when its files are removed.
+async fn spawn_cli_child(
+    cli_exe: &str,
+    args: &[&str],
+    shutdown: &CancellationToken,
+    scratch: Option<&SopsScratch>,
 ) -> Result<ChildOutcome, String> {
     // One job per delegation, never a process-wide singleton: the handle lives exactly as
     // long as this call, so a stop kills the rotation it interrupted and nothing else. A
@@ -393,14 +426,21 @@ pub(crate) async fn run_cli_child(
         }
     };
 
-    let mut child = tokio::process::Command::new(cli_exe)
+    let mut command = tokio::process::Command::new(cli_exe);
+    command
         .args(args)
         .creation_flags(CREATE_NO_WINDOW)
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         // Backstop for the one exit this function cannot await: the runtime dropping this
         // task. The guarantee is the cancellation branch below, which also reaps.
-        .kill_on_drop(true)
+        .kill_on_drop(true);
+    // Where the CLI's sops working directories go. Unset, the provider keeps using its own
+    // `%TEMP%` directory - the hand-run CLI case, which has no service to reclaim for it.
+    if let Some(scratch) = scratch {
+        command.env(SCRATCH_ENV, scratch.path());
+    }
+    let mut child = command
         .spawn()
         .map_err(|e| format!("failed to run CLI rotate: {}", e))?;
 
@@ -430,11 +470,22 @@ pub(crate) async fn run_cli_child(
         (None, _) => {}
     }
     // Output is drained while the child runs, never after the wait: a child that fills a
-    // pipe buffer would otherwise block on write and never observe the kill.
+    // pipe buffer would otherwise block on write and never observe the kill. Each reader
+    // pushes what it sees into a shared buffer as it arrives, so a caller that stops
+    // waiting for EOF - the stop drain below - keeps the text instead of losing it inside
+    // the task it aborts.
     let mut stdout = child.stdout.take().ok_or("CLI rotate child has no stdout pipe")?;
     let mut stderr = child.stderr.take().ok_or("CLI rotate child has no stderr pipe")?;
-    let read_stdout = tokio::spawn(async move { read_pipe(&mut stdout).await });
-    let read_stderr = tokio::spawn(async move { read_pipe(&mut stderr).await });
+    let stdout_seen = Arc::new(std::sync::Mutex::new(Vec::<u8>::new()));
+    let stderr_seen = Arc::new(std::sync::Mutex::new(Vec::<u8>::new()));
+    let read_stdout = tokio::spawn({
+        let seen = Arc::clone(&stdout_seen);
+        async move { read_pipe_into(&mut stdout, seen).await }
+    });
+    let read_stderr = tokio::spawn({
+        let seen = Arc::clone(&stderr_seen);
+        async move { read_pipe_into(&mut stderr, seen).await }
+    });
 
     tokio::select! {
         status = child.wait() => {
@@ -444,25 +495,75 @@ pub(crate) async fn run_cli_child(
             // EOF: a provider helper cannot keep the handle open, because each one
             // redirects its own std handles (`src/Secrets/Providers/`). A panicking reader
             // only costs the diagnostic text.
+            let _ = read_stdout.await;
+            let _ = read_stderr.await;
+            let stdout = take_seen(&stdout_seen);
+            let stderr = take_seen(&stderr_seen);
+            // A child that exits 0 and still wrote to stderr is where the provider's own
+            // fallback warning lands (`SopsProvider.CreateWorkingDirectory`): the rotation
+            // is fine, but the file sops wrote may sit outside the scratch root this call
+            // reclaims, so the line cannot be dropped on the success path. sops writes
+            // nothing to stderr on a normal encrypt/decrypt (measured on 3.7.3 and 3.13.3),
+            // so this is not a per-rotation line. Through `redaction::scrub_message` before
+            // it reaches the log (`docs/agents/hard-boundaries.md`): the CLI scrubs at the
+            // source, but a helper's own stderr is not this crate's to vouch for - and the
+            // scrub caps the length, so one rotation cannot become a page of log. The level
+            // is info because the default filter records it and a chatty provider must not
+            // read as a failure. A failing child is left out of this: its stderr is already
+            // the substance of the error the client gets.
+            if status.success() && !stderr.is_empty() {
+                tracing::info!(
+                    "delegated CLI wrote to stderr on success: {}",
+                    crate::redaction::scrub_message(&stderr)
+                );
+            }
             Ok(ChildOutcome::Finished {
                 success: status.success(),
-                stdout: read_stdout.await.unwrap_or_default(),
-                stderr: read_stderr.await.unwrap_or_default(),
+                stdout,
+                stderr,
             })
         }
         _ = shutdown.cancelled() => {
             // `Child::kill` is TerminateProcess followed by `wait`, so the child is reaped
             // here rather than left as an orphan of a service the SCM already calls
-            // Stopped. The readers are aborted instead of awaited: an aborted rotation has
-            // no output worth returning, and the stop path should not depend on a pipe
-            // reaching EOF - even though it does, because provider helpers redirect their
-            // own std handles (`src/Secrets/Providers/`).
+            // Stopped. The two pipe readers are then handled differently - stdout is
+            // aborted, stderr is drained (below) - and the stop path must not depend on
+            // either pipe reaching EOF, even though both do: provider helpers redirect
+            // their own std handles (`src/Secrets/Providers/`).
             child
                 .kill()
                 .await
                 .map_err(|e| format!("failed to terminate the CLI rotate child: {}", e))?;
             read_stdout.abort();
-            read_stderr.abort();
+            // stderr is drained instead of aborted: the provider's fallback warning is
+            // written before it does any work, so dropping it would erase the one line that
+            // explains why the reclaim this call is about to run may find nothing to
+            // delete. Bounded, because the stop path must not depend on a pipe reaching
+            // EOF - even though it does, since the child is reaped above and provider
+            // helpers redirect their own std handles (`src/Secrets/Providers/`). The reader
+            // accumulates as bytes arrive, so giving up at the budget keeps what was already
+            // captured; only bytes written after the budget are lost.
+            let mut stderr_reader = read_stderr;
+            let closed = tokio::time::timeout(STDERR_DRAIN_ON_STOP, &mut stderr_reader).await;
+            if closed.is_err() {
+                stderr_reader.abort();
+            }
+            let stderr = take_seen(&stderr_seen);
+            if !stderr.is_empty() {
+                tracing::info!(
+                    "delegated CLI wrote to stderr before the stop: {}",
+                    crate::redaction::scrub_message(&stderr)
+                );
+            }
+            if closed.is_err() {
+                // Logged rather than dropped: a helper that keeps the pipe open past the
+                // drain budget is exactly the case where the reclaim below may find a
+                // held file, and silence here would read as "nothing to say".
+                tracing::warn!(
+                    "delegated CLI stderr did not close within {:?} on the stop path; what had arrived is logged above, anything later is lost",
+                    STDERR_DRAIN_ON_STOP
+                );
+            }
             // The job handle drops as this function returns, which is where the helper
             // tree dies (#160): the CLI is already reaped, so nothing left in the job can
             // still be serving this rotation. Both happen inside the stop budget - closing
@@ -472,12 +573,35 @@ pub(crate) async fn run_cli_child(
     }
 }
 
-/// Read a child pipe to the end, lossy-decoded and trimmed.
-async fn read_pipe<R: tokio::io::AsyncRead + Unpin>(pipe: &mut R) -> String {
-    let mut buf = Vec::new();
+/// Read a child pipe to the end, appending each chunk to `seen` as it arrives. The
+/// incremental append is what lets the stop drain keep partial text: the reader task can
+/// be aborted mid-pipe, and what it already read stays in `seen`. Bytes accumulate raw and
+/// are decoded once, so a multi-byte character split across two reads is not corrupted.
+async fn read_pipe_into<R: tokio::io::AsyncRead + Unpin>(
+    pipe: &mut R,
+    seen: Arc<std::sync::Mutex<Vec<u8>>>,
+) {
+    let mut buf = [0u8; 4096];
     // A terminated child closes its end, so this reaches EOF rather than failing.
-    let _ = pipe.read_to_end(&mut buf).await;
-    String::from_utf8_lossy(&buf).trim().to_string()
+    loop {
+        match pipe.read(&mut buf).await {
+            Ok(0) | Err(_) => return,
+            Ok(n) => {
+                if let Ok(mut out) = seen.lock() {
+                    out.extend_from_slice(&buf[..n]);
+                }
+            }
+        }
+    }
+}
+
+/// What a reader captured so far, lossy-decoded and trimmed the way the single-shot read
+/// used to.
+fn take_seen(seen: &Arc<std::sync::Mutex<Vec<u8>>>) -> String {
+    match seen.lock() {
+        Ok(bytes) => String::from_utf8_lossy(&bytes).trim().to_string(),
+        Err(_) => String::new(),
+    }
 }
 
 async fn call_cli_rotate(

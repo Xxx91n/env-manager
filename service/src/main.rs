@@ -23,11 +23,14 @@ mod audit_ledger;
 mod redaction;
 mod process_guard;
 mod job_object;
+mod sops_scratch;
 mod scm;
 #[cfg(test)]
 mod resilience_tests;
 #[cfg(test)]
 mod rotate_stop_tests;
+#[cfg(test)]
+mod sops_scratch_tests;
 #[cfg(test)]
 mod rotate_writeback_tests;
 
