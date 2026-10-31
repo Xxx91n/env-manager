@@ -4,6 +4,14 @@
 // Tamper detection on parse.
 // Design: wrap-key escrow was dropped - for cloud providers the backend itself is the recovery
 // source, and for user-bound ones loss is by-design - so this ledger is the recovery record.
+//
+// Boundary: this module never spawns a process. A survival-kit export used to live here; it
+// shelled out to `env-manager-cli audit encrypt-file` through a blocking `Command::output()`,
+// which holds a tokio worker thread for the child's whole lifetime and deletes its plaintext
+// temp file only after the child returns - a service stop in that window left both an orphan
+// and a plaintext file behind, bypassing the convergence contract in `reconcile::run_cli_child`.
+// It had no caller, so it was deleted rather than re-plumbed; `audit export-survival-kit` stays
+// a CLI verb, implemented in `src/Audit/Ledger/AuditLedgerMigration.cs`.
 
 use serde::{Deserialize, Serialize};
 use sha2::{Sha256, Digest};
@@ -173,83 +181,6 @@ pub fn verify_ledger() -> Result<(), String> {
     Ok(())
 }
 
-/// Export a Mount survival kit: AES-GCM encrypted archive of audit + re-enroll
-/// token + cert thumbprint. NOT plaintext. Machine + user bound.
-/// Domain 5/A10: recovery source for cloud-backend providers.
-pub fn export_survival_kit(mount_id: Option<&str>) -> Result<PathBuf, String> {
-    let ledger = ledger_path();
-    if !ledger.exists() {
-        return Err("no audit ledger found to export".to_string());
-    }
-
-    let content = fs::read_to_string(&ledger)
-        .map_err(|e| format!("failed to read ledger for export: {}", e))?;
-
-    // Filter events by mount_id if provided.
-    let events: Vec<&str> = if let Some(mid) = mount_id {
-        content.lines()
-            .filter(|l| l.contains(mid))
-            .collect()
-    } else {
-        content.lines().collect()
-    };
-
-    if events.is_empty() {
-        return Err("no events found for the given mount".to_string());
-    }
-
-    // Build the survival kit JSON archive, then encrypt it via the
-    // CLI's DPAPI-CurrentUser infrastructure (same proven path as profile
-    // export-secrets). The kit is machine+user-bound: only the same Windows
-    // user on the same machine can decrypt it. A10 replacement for wrap-key escrow.
-    let kit = serde_json::json!({
-        "mountId": mount_id,
-        "events": events,
-        "exportedAt": chrono::Utc::now().to_rfc3339(),
-        "schemaVersion": 1,
-    });
-
-    let kit_json = serde_json::to_string_pretty(&kit)
-        .map_err(|e| format!("serialize kit error: {}", e))?;
-
-    // Write plaintext to a temp file, then encrypt via CLI subprocess.
-    let ledger_path_val = ledger_path();
-    let ledger_dir = match ledger_path_val.parent() {
-        Some(p) => p.to_path_buf(),
-        None => PathBuf::from("."),
-    };
-    let tmp_plain = ledger_dir.join("mount-survival-kit.tmp.json");
-    fs::write(&tmp_plain, &kit_json)
-        .map_err(|e| format!("failed to write temp kit: {}", e))?;
-
-    // The export path is a .dpapi file (DPAPI-encrypted).
-    let export_path = ledger_dir.join("mount-survival-kit.dpapi");
-
-    // Call the CLI to encrypt: the CLI reads the temp file, DPAPI-encrypts
-    // its contents, and writes to the export path. This reuses the existing
-    // proven DPAPI code path — no new crypto dependency in the Rust crate.
-    // ponytail: reuse existing DPAPI rather than adding aes-gcm crate.
-    let cli_exe = find_cli_exe_for_audit();
-    let output = std::process::Command::new(&cli_exe)
-        .args(["audit", "encrypt-file", "--input"])
-        .arg(&tmp_plain)
-        .arg("--output")
-        .arg(&export_path)
-        .output()
-        .map_err(|e| format!("failed to run CLI encrypt: {}", e))?;
-
-    // Clean up temp plaintext regardless of success/failure.
-    let _ = fs::remove_file(&tmp_plain);
-
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        return Err(format!("CLI encrypt-file failed: {}", stderr.trim()));
-    }
-
-    tracing::info!("survival kit encrypted and exported to {:?}", export_path);
-    Ok(export_path)
-}
-
 /// Recover from the ledger: replay audit events to reconstruct secretMount.json.
 /// Domain 5/A10: GUI "recover from ledger" UX backend.
 pub fn recover_from_ledger() -> Result<(), String> {
@@ -369,25 +300,4 @@ fn rotate_ledger(path: &PathBuf) -> Result<(), String> {
 
     tracing::info!("ledger rotated to {:?}", rotated);
     Ok(())
-}
-
-/// Find the env-manager-cli.exe for DPAPI encryption of the survival kit.
-fn find_cli_exe_for_audit() -> String {
-    if let Ok(exe_path) = std::env::current_exe() {
-        if let Some(parent) = exe_path.parent() {
-            let candidate = parent.join("env-manager-cli.exe");
-            if candidate.exists() {
-                return candidate.to_string_lossy().to_string();
-            }
-        }
-    }
-    if let Ok(local_app) = std::env::var("LOCALAPPDATA") {
-        let candidate = PathBuf::from(local_app)
-            .join("EnvManager")
-            .join("env-manager-cli.exe");
-        if candidate.exists() {
-            return candidate.to_string_lossy().to_string();
-        }
-    }
-    "env-manager-cli.exe".to_string()
 }

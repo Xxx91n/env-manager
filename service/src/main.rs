@@ -18,7 +18,6 @@ pub(crate) const SHUTDOWN_DRAIN: Duration = Duration::from_secs(2);
 
 mod reconcile;
 mod ipc;
-mod cert_bootstrap;
 mod audit_ledger;
 mod redaction;
 mod process_guard;
