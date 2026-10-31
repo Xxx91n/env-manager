@@ -14,9 +14,10 @@
 #   5. banned stale claims that keep coming back ("only plaintext output path",
 #      "唯一明文输出路径", "Plaintext is NEVER written to")
 #
-# Scope: README.md, AGENTS.md, GLOSSARY.md and every docs/**/*.md except
-# docs/history. The full scan fails loudly if docs/architecture.md drops out of
-# that set - silence is how the gate lost its "green means clean" reading.
+# Scope: README.md, AGENTS.md, GLOSSARY.md and every .md under docs/ except
+# docs/history. The full scan re-derives that set independently of how it was
+# enumerated and fails loudly on anything missing - silence is how this gate
+# lost its "green means clean" reading once already.
 # Pass -Paths to check only specific files. Source changes still run
 # scripts/test-all.ps1.
 #
@@ -37,23 +38,31 @@ function Get-DocLines([string]$Path) {
     return [System.IO.File]::ReadAllLines((Resolve-Path -LiteralPath $Path).Path, [System.Text.Encoding]::UTF8)
 }
 
+function Resolve-CachedFiles([hashtable]$Cache, [string]$Key, [string]$Pattern) {
+    if ($Cache.ContainsKey($Key)) { return $Cache[$Key] }
+    $files = @(& git grep -l -E $Pattern -- '*.cs' 2>$null)
+    $Cache[$Key] = $files
+    return $files
+}
+
 function Resolve-SymbolFiles([string]$Left) {
-    if ($script:memberCache.ContainsKey($Left)) { return $script:memberCache[$Left] }
     $files = @(& git ls-files "*/$Left.cs" 2>$null)
     if ($files.Count -eq 0) {
-        $classPattern = ('class {0}\b' -f $Left)
-        $files = @(& git grep -l -E $classPattern -- '*.cs' 2>$null)
+        $files = @(Resolve-CachedFiles $script:memberCache $Left ('class {0}\b' -f $Left))
     }
-    $script:memberCache[$Left] = $files
+    else {
+        $script:memberCache[$Left] = $files
+    }
     return $files
 }
 
 function Resolve-PartialFiles([string]$Left) {
-    if ($script:partialCache.ContainsKey($Left)) { return $script:partialCache[$Left] }
-    $partialPattern = ('partial class {0}\b' -f $Left)
-    $files = @(& git grep -l -E $partialPattern -- '*.cs' 2>$null)
-    $script:partialCache[$Left] = $files
-    return $files
+    # Anchor on the declaration, not the phrase: four files mention
+    # `partial class Program` inside /// comments and would otherwise join the
+    # fallback set, letting any stray occurrence of a member name count as a
+    # hit - the same dilution this gate exists to prevent.
+    $pattern = ('^[[:space:]]*([a-z]+[[:space:]]+)*partial[[:space:]]+class[[:space:]]+{0}\b' -f $Left)
+    return @(Resolve-CachedFiles $script:partialCache $Left $pattern)
 }
 
 try {
@@ -87,8 +96,15 @@ try {
         # outlived every full run. Enumerate the tree and filter here instead.
         $files = @(& git ls-files 'README.md' 'AGENTS.md' 'GLOSSARY.md' 'docs/' |
             Where-Object { $_ -like '*.md' -and $_ -notlike 'docs/history/*' })
-        if ($files -notcontains 'docs/architecture.md') {
-            Add-Failure 'docs enumeration missed docs/architecture.md: the gate stopped covering the docs it claims'
+        # Independent cross-check: re-derive the set from the whole index and
+        # filter here, rather than trusting the pathspec above, so a git glob
+        # quirk surfaces as a hard failure naming the files instead of as
+        # silent under-coverage.
+        $expected = @(& git ls-files |
+            Where-Object { $_ -like 'docs/*.md' -and $_ -notlike 'docs/history/*' })
+        $missed = @($expected | Where-Object { $files -notcontains $_ })
+        if ($missed.Count -gt 0) {
+            Add-Failure ('docs enumeration missed {0} file(s): {1}' -f $missed.Count, ($missed -join ', '))
         }
     }
 
@@ -147,8 +163,9 @@ try {
                     # stays exactly as it was.
                     $partialFiles = @(Resolve-PartialFiles $left)
                     if ($partialFiles.Count -gt 0) {
-                        $partialHit = @(& git grep -l -E $memberPattern -- $partialFiles 2>$null)
-                        if ($partialHit.Count -gt 0) { $found = $partialHit }
+                        # One grep over every partial declaration rather than one
+                        # per file: Program alone spans 24.
+                        $found = @(& git grep -l -E $memberPattern -- $partialFiles 2>$null)
                     }
                 }
                 if ($found.Count -eq 0) {
