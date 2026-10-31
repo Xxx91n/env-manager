@@ -16,7 +16,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - uses: qte77/gha-github-mirror-action@72829a031ed7d581f4c1061a8863e88ff3cfefd8 # main@2026-08-27
+      - uses: qte77/gha-github-mirror-action@3c8bd03d1c17576cb085090320fe01149a663158 # main@2026-08-27
         with:
           source_repo: https://github.com/Xxx91n/env-manager.git
           codeberg_url: 'https://codeberg.org/${{ vars.CODEBERG_USER }}/env-manager.git'
@@ -26,7 +26,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - uses: qte77/gha-github-mirror-action@72829a031ed7d581f4c1061a8863e88ff3cfefd8 # main@2026-08-27
+      - uses: qte77/gha-github-mirror-action@3c8bd03d1c17576cb085090320fe01149a663158 # main@2026-08-27
         with:
           source_repo: https://github.com/Xxx91n/env-manager.git
           gitlab_url: 'https://gitlab.com/${{ vars.GITLAB_USER }}/env-manager.git'
