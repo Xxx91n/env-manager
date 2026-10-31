@@ -58,7 +58,7 @@ Die Demo zeigt schreibgeschützte CLI-Befehle in Aktion: agents --summary, path 
 ## Features
 - Agenten-native CLI — 18+ Befehle mit einem erstklassigen Maschinenvertrag: env-manager-cli agents --json gibt eine strukturierte Befehlspezifikation aus, und jede Funktion ist in einem agentenorientierten Handbuch (AGENTS.cli.md) dokumentiert, das mit der Binärdatei ausgeliefert wird.
 - Profile & Konfiguration — Globale Profile werden auf die Registrierung angewendet; Launch-Profile injizieren einen isolierten env-Block in einen einzelnen Prozess (sie berühren niemals die Registrierung und senden niemals WM_SETTINGCHANGE). Vererbung, Konfliktvorschau und sicheres Rollback in umgekehrter Reihenfolge sind enthalten.
-- 8 Secret-Anbieter, null Klartext — DPAPI, Credential Manager, SecretStore, HashiCorp Vault, SOPS, Azure Key Vault, 1Password, AWS Secrets Manager. Klartext wird nie auf Datenträger oder in Logs persistiert.
+- 8 Secret-Anbieter — DPAPI, Credential Manager, SecretStore, HashiCorp Vault, SOPS, Azure Key Vault, 1Password, AWS Secrets Manager. Secrets werden ausschließlich als verschlüsselte Envelopes gespeichert; wo genau Klartext auftreten kann, zeigt die Tabelle unter [Security](#security).
 - Standardmäßig geschützt — Systemvariablen und PATH-Einträge können nicht gelöscht oder umbenannt werden; jeder Schreibvorgang folgt einem dreischichtigen serialisierten Vertrag (Mutex + Write Lock + Verifizieren vor dem Austausch).
 - PATH-Health — erkennt Duplikate und tote Einträge, mit --fix / --dry-run.
 - Audit-Ledger — append-only, SHA256-hashverkettete Historie. Mit Rollback und Export für die Notfallwiederherstellung.
@@ -70,7 +70,7 @@ Env Manager ist für den Betrieb durch LLM-Agenten konzipiert, nicht nur durch M
 - Auf Fähigkeiten ausgerichtete Agentenoberfläche — eine Opt-in-agentCapabilities-Whitelist in secret-providers.json erlaubt es Bereitstellungen, parallele set/delete-Aufrufe von Agenten abzulehnen.
 ## Security
 > Aktuelle Builds sind nicht codesigniert. Windows SmartScreen zeigt beim ersten Start möglicherweise eine Warnung vor einer nicht erkannten App an — klicken Sie auf Weitere Informationen und dann auf Trotzdem ausführen. Wir haben eine kostenlose Open-Source-Codesignierung über die SignPath Foundation beantragt; sobald diese genehmigt ist, werden alle Release-Artefakte (MSI + EXE) signiert.
-Geschützte Variablen und PATH-Einträge werden vor dem Löschen deaktiviert, mit exakter Prüfung des Registrierungswerttyps bei der Wiederherstellung. Secret-Werte werden über anbieterspezifische Mechanismen verschlüsselt — Klartext wird nie auf Datenträger oder in Logs persistiert. Named-Pipe-IPC verwendet Anti-Squatting-Flags und Eingabevalidierung (max. 64 Argumente, 32767-Zeichen-Obergrenze, Ablehnung von Null-Bytes).
+Geschützte Variablen und PATH-Einträge werden vor dem Löschen deaktiviert, mit exakter Prüfung des Registrierungswerttyps bei der Wiederherstellung. Named-Pipe-IPC verwendet Anti-Squatting-Flags und Eingabevalidierung (max. 64 Argumente, 32767-Zeichen-Obergrenze, Ablehnung von Null-Bytes).
 
 ### Wo Klartext existieren kann (Secret-Grenztabelle)
 

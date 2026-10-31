@@ -61,7 +61,7 @@ La demo muestra comandos CLI de solo lectura en acción: agents --summary, path 
 
 - CLI nativo para agentes — más de 18 comandos con un contrato de máquina de primera clase: env-manager-cli agents --json expone una especificación estructurada de comandos, y cada capacidad está documentada en un manual orientado a agentes (AGENTS.cli.md) que se distribuye con el binario.
 - Perfiles y configuración — los perfiles globales se aplican al registro; los perfiles de lanzamiento (Launch profiles) inyectan un bloque de entorno aislado en un único proceso (nunca tocan el registro ni emiten WM_SETTINGCHANGE). Incluyen herencia, vistas previas de conflictos y reversión segura en orden inverso.
-- 8 proveedores de secretos, cero texto en claro — DPAPI, Credential Manager, SecretStore, HashiCorp Vault, SOPS, Azure Key Vault, 1Password, AWS Secrets Manager. El texto en claro nunca se persiste en disco ni en registros.
+- 8 proveedores de secretos — DPAPI, Credential Manager, SecretStore, HashiCorp Vault, SOPS, Azure Key Vault, 1Password, AWS Secrets Manager. Los secretos solo se guardan como sobres cifrados; la tabla de [Seguridad](#seguridad) detalla exactamente dónde puede quedar expuesto el texto en claro.
 - Protegido por defecto — las variables del sistema y las entradas de PATH no se pueden eliminar ni renombrar; cada escritura es un contrato serializado de tres capas (mutex + bloqueo de escritura + verificación antes del intercambio).
 - Salud de PATH — detecta entradas duplicadas y obsoletas, con --fix / --dry-run.
 - Registro de auditoría — historial de solo añadido (append-only) encadenado por hash SHA256, con reversión y exportación para recuperación ante desastres.
@@ -79,7 +79,7 @@ Env Manager está diseñado para ser operado por agentes LLM, no solo por humano
 
 > Las compilaciones actuales no están firmadas con código. Windows SmartScreen puede mostrar una advertencia de aplicación no reconocida en el primer inicio: haz clic en Más información y luego en Ejecutar de todos modos. Hemos solicitado la firma gratuita de código para código abierto a través de la SignPath Foundation; una vez aprobada, todos los artefactos de la versión (MSI + EXE) estarán firmados.
 
-Las variables protegidas y las entradas de PATH se deshabilitan antes de su eliminación, con verificación exacta del tipo de valor del registro al restaurar. Los valores de secretos se cifran mediante mecanismos específicos de cada proveedor: el texto en claro nunca se persiste en disco ni en registros. La IPC por named pipe usa indicadores antisquatting y validación de entrada (máximo 64 argumentos, límite de 32767 caracteres, rechazo de bytes nulos).
+Las variables protegidas y las entradas de PATH se deshabilitan antes de su eliminación, con verificación exacta del tipo de valor del registro al restaurar. La IPC por named pipe usa indicadores antisquatting y validación de entrada (máximo 64 argumentos, límite de 32767 caracteres, rechazo de bytes nulos).
 
 ### Dónde puede existir texto en claro (tabla de límites de secretos)
 

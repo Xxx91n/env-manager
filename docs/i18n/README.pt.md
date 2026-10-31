@@ -61,7 +61,7 @@ A demo mostra comandos CLI somente leitura em ação: agents --summary, path hea
 
 - CLI nativo para agentes — 18+ comandos com um contrato de máquina de primeira classe: env-manager-cli agents --json expõe uma especificação estruturada de comandos, e todos os recursos estão documentados em um manual voltado para agentes (AGENTS.cli.md) que acompanha o binário.
 - Perfis e configuração — os perfis globais são aplicados ao registro; os perfis de lançamento (Launch profiles) injetam um bloco de ambiente isolado em um único processo (nunca tocam o registro, nunca transmitem WM_SETTINGCHANGE). Inclui herança, visualização de conflitos e reversão segura em ordem inversa.
-- 8 provedores de segredos, zero texto simples — DPAPI, Credential Manager, SecretStore, HashiCorp Vault, SOPS, Azure Key Vault, 1Password, AWS Secrets Manager. O texto simples nunca é persistido em disco nem em logs.
+- 8 provedores de segredos — DPAPI, Credential Manager, SecretStore, HashiCorp Vault, SOPS, Azure Key Vault, 1Password, AWS Secrets Manager. Os segredos só são armazenados como envelopes cifrados; a tabela de [Segurança](#segurança) mostra exatamente onde o texto simples pode ficar exposto.
 - Protegido por padrão — variáveis do sistema e entradas do PATH não podem ser excluídas nem renomeadas; toda gravação é um contrato serializado em três camadas (mutex + bloqueio de gravação + verificação antes da troca).
 - Saúde do PATH — detecta entradas duplicadas e inválidas, com --fix / --dry-run.
 - Livro de auditoria — histórico somente acréscimo (append-only) encadeado por hash SHA256, com reversão e exportação para recuperação de desastres.
@@ -79,7 +79,7 @@ O Env Manager foi projetado para ser operado por agentes LLM, não apenas por hu
 
 > Os builds atuais não são assinados com código. O Windows SmartScreen pode exibir um aviso de aplicativo não reconhecido no primeiro início — clique em Mais informações e depois em Executar mesmo assim. Solicitamos assinatura de código gratuita para código aberto por meio da SignPath Foundation; assim que aprovada, todos os artefatos de release (MSI + EXE) serão assinados.
 
-Variáveis protegidas e entradas do PATH são desabilitadas antes da exclusão, com verificação exata do tipo de valor do registro na restauração. Os valores de segredos são criptografados por mecanismos específicos de cada provedor — o texto simples nunca é persistido em disco nem em logs. A IPC por named pipe usa sinalizadores anti-squatting e validação de entrada (máximo de 64 argumentos, limite de 32767 caracteres, rejeição de bytes nulos).
+Variáveis protegidas e entradas do PATH são desabilitadas antes da exclusão, com verificação exata do tipo de valor do registro na restauração. A IPC por named pipe usa sinalizadores anti-squatting e validação de entrada (máximo de 64 argumentos, limite de 32767 caracteres, rejeição de bytes nulos).
 
 ### Onde o texto simples pode existir (tabela de limites de segredos)
 
@@ -103,7 +103,7 @@ Variáveis protegidas e entradas do PATH são desabilitadas antes da exclusão, 
 
 Esta tabela é o resumo para usuários; a lista de permissões autoritativa por superfície, incluindo a brecha dos verbos genéricos, é a seção Plaintext lifecycle de `docs/architecture.md`.
 
-A zeragem de memória e a limpeza de logs são higiene na medida do possível, não garantias — a mesma ressalva que a Microsoft documenta para `SecureString` (strings imutáveis, realocação pelo GC, cópias de interop). Onde a afirmação pode ser testada, ela é: `tests/canary-redaction.Tests.ps1` varre 7 saídas em busca de um canary plantado, e a suíte de contratos compartilhada verifica `plaintext-never-in-envelope` nos 8 provedores.
+A zeragem de memória e a limpeza de logs são medidas de higiene dentro do possível, não garantias — a mesma ressalva que a Microsoft documenta para `SecureString` (strings imutáveis, realocação pelo GC, cópias de interop). Onde a afirmação pode ser testada, ela é: `tests/canary-redaction.Tests.ps1` varre 7 saídas em busca de um canary plantado, e a suíte de contratos compartilhada verifica `plaintext-never-in-envelope` nos 8 provedores.
 
 ## Instalação
 
