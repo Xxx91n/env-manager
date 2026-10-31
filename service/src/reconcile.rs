@@ -12,6 +12,7 @@ use std::io::Write;
 use chrono::{DateTime, Utc};
 use tokio_util::sync::CancellationToken;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering}; // in-flight delegations, read under the lock (#161)
 use tokio::io::AsyncReadExt; // draining the CLI child's pipes while it runs
 use std::process::Stdio; // piped stdout/stderr on the CLI child (tokio takes std's type)
 use tokio::sync::Mutex; // Phase 4C: TOCTOU protection
@@ -105,8 +106,46 @@ pub struct MountHealth {
 /// What the lock still buys is that a write-back cannot interleave with another mount-file
 /// writer. What it no longer buys is exclusivity between two rotations of the same mount;
 /// that is accepted, because a duplicate rotation is harmless by design - `RotateAll`
-/// decrypts then re-encrypts per secret, and the CLI replaces the mount file atomically.
+/// decrypts then re-encrypts per secret, and the CLI replaces the mount file atomically. The
+/// other two writers - `run_reconcile_tick` and `refresh_mount` - would otherwise save a
+/// pre-rotation snapshot over the envelopes the child just rewrote, so both consult
+/// `ROTATIONS_IN_FLIGHT` under this lock and stand down while a delegation runs.
 static RECONCILE_LOCK: Mutex<()> = Mutex::const_new(());
+
+/// How many delegated CLI rotations are running in this service right now (#161).
+///
+/// It exists because releasing `RECONCILE_LOCK` for the child wait let the other two writers of
+/// the mount file - `run_reconcile_tick` and `refresh_mount` - run *while* a rotation's child is
+/// rewriting that file in place. Both save a whole snapshot they loaded before the child's
+/// writes, which would restore the pre-rotation envelopes; the lock used to exclude them only
+/// by keeping them blocked for the entire delegation. The count is taken under the lock (see
+/// `rotate_mount_at`), so a reader that holds the lock sees a value that cannot change until it
+/// releases: zero means no child can be writing, non-zero means one owns the file.
+static ROTATIONS_IN_FLIGHT: AtomicUsize = AtomicUsize::new(0);
+
+/// RAII marker for one running delegation; see `ROTATIONS_IN_FLIGHT`. Dropped when the
+/// rotation returns - after the child is reaped and the write-back is done - so a writer that
+/// sees zero cannot race a child that is still writing.
+struct RotationInFlight;
+
+impl RotationInFlight {
+    fn enter() -> Self {
+        ROTATIONS_IN_FLIGHT.fetch_add(1, Ordering::SeqCst);
+        Self
+    }
+}
+
+impl Drop for RotationInFlight {
+    fn drop(&mut self) {
+        ROTATIONS_IN_FLIGHT.fetch_sub(1, Ordering::SeqCst);
+    }
+}
+
+/// Whether a delegated rotation currently owns the mount file's envelopes (#161). Only
+/// meaningful while holding `RECONCILE_LOCK`, which is where every caller reads it.
+fn rotation_in_flight() -> bool {
+    ROTATIONS_IN_FLIGHT.load(Ordering::SeqCst) > 0
+}
 
 /// Main reconcile loop. Runs indefinitely (300s interval).
 /// Domain 10: defer first tick 30s to avoid SCM timeout on boot.
@@ -147,6 +186,16 @@ pub async fn reconcile_loop(shutdown: Arc<CancellationToken>) {
 async fn run_reconcile_tick() -> Result<(), String> {
     // Phase 4C: Acquire global lock for the entire tick to prevent TOCTOU with CLI mutations.
     let _guard = RECONCILE_LOCK.lock().await;
+    // A delegated rotation owns the envelopes in the mount file while its child runs (#161):
+    // the CLI rewrites them in place, and the snapshot this tick would save predates that.
+    // Saving it would restore the pre-rotation envelopes the rotation is about to record, so
+    // the tick stands down for this interval instead. Nothing is lost by doing so - the tick
+    // only stamps `lastFetchedAt`, and the next one does that - and the rotation cannot start
+    // while this tick holds the lock, so the answer read here cannot go stale underneath it.
+    if rotation_in_flight() {
+        tracing::info!("reconcile tick: a delegated rotation is in flight, skipping this tick");
+        return Ok(());
+    }
     tracing::info!("reconcile tick: scanning secretMount.json");
 
     let path = crate::secret_mount_path();
@@ -211,6 +260,13 @@ async fn run_reconcile_tick() -> Result<(), String> {
 /// Refresh a single mount by ID (IPC `refresh` method).
 pub async fn refresh_mount(mount_id: &str) -> Result<serde_json::Value, String> {
     let _guard = RECONCILE_LOCK.lock().await; // Phase 4C: TOCTOU protection
+    // Same reason as the reconcile tick (#161): while a rotation's child is rewriting the
+    // mount file, the snapshot loaded below predates those writes and saving it would undo
+    // them. Failing fast also beats what the old lock did here - block until the delegation
+    // finished, which for a wedged child meant until the process died.
+    if rotation_in_flight() {
+        return Err("a delegated rotation is in flight; retry once it completes".to_string());
+    }
     let path = crate::secret_mount_path();
     let mut mounts = load_mounts(&path);
     let mount = mounts
@@ -279,12 +335,18 @@ pub(crate) async fn rotate_mount_at(
     // deleted while the child runs (the write-back re-reads and skips it), and a second
     // rotation of the same mount can start (harmless - `RotateAll` decrypts then re-encrypts
     // per secret, and the CLI replaces the mount file atomically).
+    // The in-flight marker is taken *inside* the locked block (#161): a writer holding the lock
+    // that reads zero must not be able to race a child which is about to start, so the count
+    // may only go up while the lock is held. It is released when this function returns, after
+    // the child is reaped and the write-back is done.
+    let _in_flight;
     {
         let _guard = RECONCILE_LOCK.lock().await; // Phase 4C: TOCTOU protection
         let mounts = load_mounts(mount_path);
         if !mounts.iter().any(|m| m.id == mount_id) {
             return Err(format!("mount not found: {}", mount_id));
         }
+        _in_flight = RotationInFlight::enter();
     }
 
     // Any error here - a failing child, an interrupted one, or one that outlived its hang
