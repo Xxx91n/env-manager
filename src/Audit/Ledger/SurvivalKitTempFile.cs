@@ -72,9 +72,11 @@ internal static class SurvivalKitTempFile
 
     /// <summary>
     /// Best-effort removal of the directory <see cref="Create"/> made. The caller deletes the
-    /// plaintext file inside first, so what a failed delete can leave behind is an empty
-    /// directory, not a secret; the failure is still recorded rather than swallowed, because
-    /// an unbounded pile of them in <c>%TEMP%</c> is its own problem.
+    /// plaintext file inside first, so the usual residue of a failed delete is an empty
+    /// directory rather than a secret - but both deletes are best-effort, and a failure of
+    /// both leaves the plaintext on disk, exactly as the sops rows of the plaintext
+    /// lifecycle table can. Failures are recorded rather than swallowed, because silent
+    /// accumulation in <c>%TEMP%</c> is its own problem.
     /// </summary>
     internal static void DeleteDirectory(DirectoryInfo directory)
     {
