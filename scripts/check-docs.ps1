@@ -38,6 +38,16 @@ function Get-DocLines([string]$Path) {
     return [System.IO.File]::ReadAllLines((Resolve-Path -LiteralPath $Path).Path, [System.Text.Encoding]::UTF8)
 }
 
+function Get-TrackedPaths([string[]]$Pathspec = @()) {
+    # git quotes non-ASCII paths in line output ("docs/\345...md"), and the
+    # trailing quote drops them from the *.md filter and the expected-set
+    # cross-check alike: the file ends up silently unscanned. NUL-delimited
+    # output is never quoted, so split on NUL instead of on newlines.
+    $nul = [string][char]0
+    $blob = @(& git ls-files -z @Pathspec 2>$null) -join $nul
+    return @($blob -split $nul | Where-Object { $_ -ne '' })
+}
+
 function Resolve-CachedFiles([hashtable]$Cache, [string]$Key, [string]$Pattern) {
     if ($Cache.ContainsKey($Key)) { return $Cache[$Key] }
     $files = @(& git grep -l -E $Pattern -- '*.cs' 2>$null)
@@ -95,13 +105,13 @@ try {
         # docs/**/*.md silently skips the docs that sit directly in docs/ -
         # docs/architecture.md among them, which is how three dead citations
         # outlived every full run. Enumerate the tree and filter here instead.
-        $files = @(& git ls-files 'README.md' 'AGENTS.md' 'GLOSSARY.md' 'docs/' |
+        $files = @(Get-TrackedPaths -Pathspec 'README.md', 'AGENTS.md', 'GLOSSARY.md', 'docs/' |
             Where-Object { $_ -like '*.md' -and $_ -notlike 'docs/history/*' })
         # Independent cross-check: re-derive the set from the whole index and
         # filter here, rather than trusting the pathspec above, so a git glob
         # quirk surfaces as a hard failure naming the files instead of as
         # silent under-coverage.
-        $expected = @(& git ls-files |
+        $expected = @(Get-TrackedPaths |
             Where-Object { $_ -like 'docs/*.md' -and $_ -notlike 'docs/history/*' })
         $missed = @($expected | Where-Object { $files -notcontains $_ })
         if ($missed.Count -gt 0) {
