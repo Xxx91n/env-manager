@@ -117,6 +117,16 @@ try {
         if ($missed.Count -gt 0) {
             Add-Failure ('docs enumeration missed {0} file(s): {1}' -f $missed.Count, ($missed -join ', '))
         }
+        # Floor on what "scanned" must mean. Both sets above parse git output
+        # the same way, so a parsing failure empties them together and the
+        # cross-check has nothing to miss; a doc deleted outright leaves it
+        # equally silent. These anchors are the structural contract - if one
+        # is renamed on purpose, update this list in the same change.
+        foreach ($anchor in @('README.md', 'AGENTS.md', 'GLOSSARY.md', 'docs/architecture.md')) {
+            if ($files -notcontains $anchor) {
+                Add-Failure ("docs enumeration missed required document: {0}" -f $anchor)
+            }
+        }
     }
 
     $pathPattern = '`([^`\r\n]+\.(?:md|cs|rs|ts|tsx|svelte|json|ya?ml|ps1|psm1|wxs|mjs|js))`'
