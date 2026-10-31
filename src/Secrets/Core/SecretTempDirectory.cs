@@ -14,6 +14,12 @@
 // FileInfo; the secrets adapters are a bounded context that consumes Secrets.Core /
 // Secrets.Manager, so the directory counterpart belongs on the secrets surface rather
 // than behind the CLI command surface.
+//
+// Seam (#184): Create has a second overload that takes the DACL-bearing create call and
+// the degradation channel as parameters. It exists because the failure branch - the half
+// of this boundary that decides whether a rejected DACL costs the rotation or only the
+// ACL - was reachable by nothing but a reviewer's attention; the parameterless overload
+// stays the production path and keeps the call sequence #178 landed.
 
 using System;
 using System.Collections.Generic;
@@ -52,12 +58,37 @@ internal static class SecretTempDirectory
     /// created at all reaches the caller as an exception.
     /// </summary>
     internal static DirectoryInfo Create(string provider)
+        => Create(provider, CreateWithDacl, RecordDegradation);
+
+    // Seam overload: createWithDacl is the create call that carries the DACL, and
+    // recordDegradation receives the line AFTER ScrubExceptionMessage has run, so a test
+    // observes exactly what production would have recorded and cannot bypass
+    // ScrubExceptionMessage.
+    //
+    // Why a parameter seam rather than the alternatives:
+    //
+    // * Not a settable static hook (the shape RegistryScope.DebugSink uses): that hook is
+    //   wired once by Main for the whole process, while xunit runs test classes in
+    //   parallel - two tests would race on one field. A parameter scopes the substitute
+    //   to the single call under test.
+    // * Not an interface plus a constructor dependency: this is a static helper reached
+    //   from a private method on SopsProvider, and the CLI has no composition root to
+    //   thread one through. Wiring it in would change the production call sequence this
+    //   boundary exists to keep.
+    // * The inherited-ACL fallback stays a real Directory.CreateDirectory call and is
+    //   deliberately NOT part of the seam: what the ticket needs pinned is that the
+    //   provider gets a usable directory back, and a stubbed fallback would let that
+    //   assertion pass on a promise instead of on a directory that exists.
+    internal static DirectoryInfo Create(
+        string provider,
+        Func<string, DirectorySecurity, DirectoryInfo> createWithDacl,
+        Action<string> recordDegradation)
     {
         string path = Path.Combine(Path.GetTempPath(), Prefix + provider + "-" + Guid.NewGuid().ToString("N"));
 
         try
         {
-            return OwnerOnlyDacl().CreateDirectory(path);
+            return createWithDacl(path, OwnerOnlyDacl());
         }
         catch (Exception ex)
         {
@@ -66,10 +97,25 @@ internal static class SecretTempDirectory
             // rotation: create the directory without a security descriptor (inherited ACL)
             // and record what was lost. A failure of THIS call is a real creation failure
             // - no temp directory, no sops - and is left to propagate.
-            Program.DebugLog(Program.ScrubExceptionMessage($"ACL restriction failed for {path}: {ex.Message}"));
+            recordDegradation(Program.ScrubExceptionMessage($"ACL restriction failed for {path}: {ex.Message}"));
             return Directory.CreateDirectory(path);
         }
     }
+
+    // Production delegates, i.e. the two calls #178 landed: the security descriptor goes
+    // in as SECURITY_ATTRIBUTES on the create call, and the degradation is recorded on the
+    // --debug channel through the scrubber.
+    //
+    // Residual gap: the success-path tests pin that Create(provider) still passes
+    // CreateWithDacl - a directory carrying %TEMP%'s inherited ACL fails them - but
+    // nothing pins that it passes RecordDegradation. Swapping that one delegate for a
+    // no-op would silence every degradation with the suite still green, so the binding is
+    // covered by review rather than by a test.
+    private static DirectoryInfo CreateWithDacl(string path, DirectorySecurity security)
+        => security.CreateDirectory(path);
+
+    private static void RecordDegradation(string message)
+        => Program.DebugLog(message);
 
     private static DirectorySecurity OwnerOnlyDacl()
     {
