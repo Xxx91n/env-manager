@@ -7,7 +7,9 @@
 // slow rotation in flight plus one fast rotation that has to complete in the meantime.
 //
 // Separate module from `rotate_stop_tests` on purpose: that file pins how a rotation ends
-// when a stop lands, this one pins only what the lock covers while it runs.
+// when a stop lands, this one pins only what the lock covers while it runs - that a second
+// rotation is not blocked behind the first one's child, and that the other writer of the same
+// file (`refresh_mount`) refuses instead of saving a pre-rotation snapshot over it.
 //
 // Isolation: temp mount files under `%TEMP%`, removed on drop; no registry, no real
 // `%LOCALAPPDATA%\EnvManager` or `ProgramData\EnvManager` state.
@@ -16,7 +18,7 @@ use std::time::Duration;
 
 use tokio_util::sync::CancellationToken;
 
-use crate::reconcile::{rotate_mount_at, ChildOutcome, ROTATE_HANG_BUDGET};
+use crate::reconcile::{refresh_mount, rotate_mount_at, RotationInFlight, ROTATE_HANG_BUDGET};
 use crate::rotate_stop_tests::MountFixture;
 use crate::SHUTDOWN_DRAIN;
 
@@ -94,13 +96,34 @@ async fn a_slow_rotation_does_not_hold_the_reconcile_lock() {
 
     // End the slow rotation instead of waiting the 30s stub out.
     slow_shutdown.cancel();
-    let outcome = tokio::time::timeout(SHUTDOWN_DRAIN, in_flight)
+    let err = tokio::time::timeout(SHUTDOWN_DRAIN, in_flight)
         .await
         .expect("the stop must terminate and reap the slow child inside SHUTDOWN_DRAIN")
         .expect("the rotate task must not panic")
-        .expect("the stub was spawned");
+        .expect_err("an interrupted rotation must fail for its caller");
     assert!(
-        matches!(outcome, ChildOutcome::Interrupted { .. }),
-        "the slow rotation must end as interrupted, not as a completed rotation"
+        err.contains("interrupted by service stop"),
+        "the slow rotation must end as interrupted, not as a completed rotation, got: {err}"
+    );
+}
+
+/// Scenario for #161: the *other* writer of the mount file stands down instead of saving a
+/// snapshot it took before the child rewrote the envelopes.
+///
+/// `refresh_mount` refuses before it touches `%LOCALAPPDATA%`, so this one needs no fixture:
+/// the assertion is the refusal itself. It also pins the "fails fast" half - the old lock made
+/// this call block for the whole delegation, which for a wedged child meant until it died.
+#[tokio::test]
+async fn refresh_stands_down_while_a_rotation_is_in_flight() {
+    let _rotation = RotationInFlight::enter();
+
+    let err = tokio::time::timeout(LOCK_FREE_BUDGET, refresh_mount("mount-1"))
+        .await
+        .expect("a refresh must answer, not queue behind a rotation that may never finish")
+        .expect_err("a refresh must not write the mount file while a rotation owns it");
+    assert!(
+        err.contains("in flight"),
+        "the refusal has to say why, so a caller can retry instead of reporting a broken \
+         mount, got: {err}"
     );
 }

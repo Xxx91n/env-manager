@@ -119,17 +119,20 @@ static RECONCILE_LOCK: Mutex<()> = Mutex::const_new(());
 /// rewriting that file in place. Both save a whole snapshot they loaded before the child's
 /// writes, which would restore the pre-rotation envelopes; the lock used to exclude them only
 /// by keeping them blocked for the entire delegation. The count is taken under the lock (see
-/// `rotate_mount_at`), so a reader that holds the lock sees a value that cannot change until it
-/// releases: zero means no child can be writing, non-zero means one owns the file.
+/// `rotate_mount_at`), so a reader holding the lock can never see it *rise*: zero means no
+/// child can be writing, and a value that falls to zero under the reader means that rotation's
+/// child is already reaped and its write-back done - the guard outlives the write-back, which
+/// needs the lock itself.
 static ROTATIONS_IN_FLIGHT: AtomicUsize = AtomicUsize::new(0);
 
 /// RAII marker for one running delegation; see `ROTATIONS_IN_FLIGHT`. Dropped when the
 /// rotation returns - after the child is reaped and the write-back is done - so a writer that
-/// sees zero cannot race a child that is still writing.
-struct RotationInFlight;
+/// sees zero cannot race a child that is still writing. `pub(crate)` so the stand-down in
+/// `refresh_mount` can be pinned by a test without a real mount file.
+pub(crate) struct RotationInFlight;
 
 impl RotationInFlight {
-    fn enter() -> Self {
+    pub(crate) fn enter() -> Self {
         ROTATIONS_IN_FLIGHT.fetch_add(1, Ordering::SeqCst);
         Self
     }
@@ -465,7 +468,29 @@ pub(crate) enum ChildOutcome {
     /// exactly like `Interrupted` - terminated, reaped, job handle closed - so the only
     /// difference is the reason and the message the caller gets. A liveness backstop, not a
     /// rotation SLA: see `ROTATE_HANG_BUDGET`.
-    TimedOut { pid: Option<u32> },
+    OverHangBudget { pid: Option<u32> },
+}
+
+/// Why a live child was ended instead of waited for (#161).
+///
+/// `ChildOutcome` carries the same distinction, but only once the child has been converged;
+/// the `select!` needs to know before that, so it does not have to encode the reason twice
+/// (a bool next to a string that says the same thing).
+enum Ending {
+    /// The service stop token was cancelled.
+    Stopped,
+    /// The rotation outlived `ROTATE_HANG_BUDGET`.
+    Hung,
+}
+
+impl Ending {
+    /// How the reason reads inside a log line: "before it was terminated (the stop)".
+    fn reason(&self) -> &'static str {
+        match self {
+            Ending::Stopped => "the stop",
+            Ending::Hung => "the hang budget",
+        }
+    }
 }
 
 /// Run a CLI child and converge it with the service stop path (#153, #160).
@@ -619,7 +644,7 @@ async fn spawn_cli_child(
     // so they share one convergence path below (#153, #161). Which of the two wins when both
     // are ready is not a correctness question: either way the child dies the same way, and
     // only the message the caller gets differs.
-    let (why, timed_out) = tokio::select! {
+    let ending = tokio::select! {
         status = child.wait() => {
             let status = status
                 .map_err(|e| format!("failed to wait for the CLI rotate child: {}", e))?;
@@ -655,18 +680,25 @@ async fn spawn_cli_child(
                 stderr,
             });
         }
-        _ = shutdown.cancelled() => ("the stop", false),
-        _ = tokio::time::sleep(hang_budget) => ("the hang budget", true),
+        _ = shutdown.cancelled() => Ending::Stopped,
+        _ = tokio::time::sleep(hang_budget) => Ending::Hung,
     };
 
-    converge_killed_child(&mut child, read_stdout, read_stderr, &stderr_seen, why).await?;
-    if timed_out {
+    converge_killed_child(
+        &mut child,
+        read_stdout,
+        read_stderr,
+        &stderr_seen,
+        ending.reason(),
+    )
+    .await?;
+    if let Ending::Hung = ending {
         // The service log is where a budget expiry has to be visible: the IPC client gave up
         // 30s into the call (`ipc::cli_gateway`), so for a rotation this long nobody is
         // waiting on the response any more.
         tracing::warn!(
             "CLI rotate child {} outlived its {:?} hang budget and was terminated; the mount keeps its old metadata and the next rotate replays it",
-            pid.map(|p| p.to_string()).unwrap_or_else(|| "unknown".to_string()),
+            pid_label(pid),
             hang_budget
         );
     }
@@ -674,10 +706,9 @@ async fn spawn_cli_child(
     // (#160): the CLI is already reaped, so nothing left in the job can still be serving this
     // rotation. Both paths reach it inside the stop budget - closing a job handle is not a
     // wait - and the hang-budget path adds no window of its own.
-    Ok(if timed_out {
-        ChildOutcome::TimedOut { pid }
-    } else {
-        ChildOutcome::Interrupted { pid }
+    Ok(match ending {
+        Ending::Stopped => ChildOutcome::Interrupted { pid },
+        Ending::Hung => ChildOutcome::OverHangBudget { pid },
     })
 }
 
@@ -686,14 +717,14 @@ async fn spawn_cli_child(
 ///
 /// Shared by the stop branch (#153) and the hang-budget branch (#161) - the two owe the same
 /// guarantee, and the only difference between them is what the caller is told afterwards.
-/// `why` names the reason in the log lines, so a service log distinguishes "the SCM asked us
+/// `reason` names the cause in the log lines, so a service log distinguishes "the SCM asked us
 /// to stop" from "this child wedged".
 async fn converge_killed_child(
     child: &mut tokio::process::Child,
     read_stdout: tokio::task::JoinHandle<()>,
     read_stderr: tokio::task::JoinHandle<()>,
     stderr_seen: &Arc<std::sync::Mutex<Vec<u8>>>,
-    why: &str,
+    reason: &str,
 ) -> Result<(), String> {
     // `Child::kill` is TerminateProcess followed by `wait`, so the child is reaped here
     // rather than left as an orphan of a service the SCM already calls Stopped. The two pipe
@@ -721,7 +752,7 @@ async fn converge_killed_child(
     if !stderr.is_empty() {
         tracing::info!(
             "delegated CLI wrote to stderr before it was terminated ({}): {}",
-            why,
+            reason,
             crate::redaction::scrub_message(&stderr)
         );
     }
@@ -732,7 +763,7 @@ async fn converge_killed_child(
         tracing::warn!(
             "delegated CLI stderr did not close within {:?} after it was terminated ({}); what had arrived is logged above, anything later is lost",
             STDERR_DRAIN_ON_STOP,
-            why
+            reason
         );
     }
     Ok(())
@@ -784,28 +815,28 @@ async fn call_cli_rotate(
         ChildOutcome::Finished { stderr, .. } => {
             Err(format!("CLI rotate failed: {}", stderr.trim()))
         }
-        ChildOutcome::Interrupted { pid } => {
-            let pid = pid
-                .map(|p| p.to_string())
-                .unwrap_or_else(|| "unknown".to_string());
-            Err(format!(
-                "CLI rotate interrupted by service stop (child {pid} terminated and reaped)"
-            ))
-        }
-        ChildOutcome::TimedOut { pid } => {
-            let pid = pid
-                .map(|p| p.to_string())
-                .unwrap_or_else(|| "unknown".to_string());
+        ChildOutcome::Interrupted { pid } => Err(format!(
+            "CLI rotate interrupted by service stop (child {} terminated and reaped)",
+            pid_label(pid)
+        )),
+        ChildOutcome::OverHangBudget { pid } => {
             // Deliberately not the stop wording: an operator reading the IPC error or the
             // service log has to be able to tell "the SCM stopped us" from "this rotation
             // wedged". The duration is in the message because it is the only thing that
             // makes the number in `ROTATE_HANG_BUDGET` falsifiable from a log line.
             Err(format!(
-                "CLI rotate exceeded its {:?} hang budget (child {pid} terminated and reaped)",
-                hang_budget
+                "CLI rotate exceeded its {:?} hang budget (child {} terminated and reaped)",
+                hang_budget,
+                pid_label(pid)
             ))
         }
     }
+}
+
+/// A pid for a message, or `unknown` when the child was already reaped (#153, #161).
+fn pid_label(pid: Option<u32>) -> String {
+    pid.map(|p| p.to_string())
+        .unwrap_or_else(|| "unknown".to_string())
 }
 
 fn find_cli_exe() -> Result<String, String> {

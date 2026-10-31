@@ -56,10 +56,10 @@ async fn a_hung_child_is_terminated_and_reaped_at_the_hang_budget() {
     .expect("the hang budget must end the child, not the test's own timeout")
     .expect("spawn the hung stub");
 
-    let ChildOutcome::TimedOut { pid } = outcome else {
+    let ChildOutcome::OverHangBudget { pid } = outcome else {
         panic!(
-            "a child that outlived its hang budget must be reported as timed out, not as \
-             finished or interrupted"
+            "a child that outlived its hang budget must be reported as over the budget, not \
+             as finished or interrupted"
         );
     };
     let pid = pid.expect("a spawned child reports its pid");
