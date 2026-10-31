@@ -9,11 +9,14 @@
 #   2. git diff --check            (whitespace errors)
 #   3. backticked repo-relative file paths exist
 #   4. backticked Class.Member citations resolve to a real member
-#      (types/namespaces with no local class or file are skipped)
+#      (types/namespaces with no local class or file are skipped; a member
+#      declared in a sibling `partial class` file still counts)
 #   5. banned stale claims that keep coming back ("only plaintext output path",
 #      "唯一明文输出路径", "Plaintext is NEVER written to")
 #
-# Scope: README.md, AGENTS.md, GLOSSARY.md and docs/**/*.md except docs/history.
+# Scope: README.md, AGENTS.md, GLOSSARY.md and every docs/**/*.md except
+# docs/history. The full scan fails loudly if docs/architecture.md drops out of
+# that set - silence is how the gate lost its "green means clean" reading.
 # Pass -Paths to check only specific files. Source changes still run
 # scripts/test-all.ps1.
 #
@@ -25,6 +28,7 @@ $root = Split-Path -Parent $PSScriptRoot
 Push-Location $root
 $failures = New-Object System.Collections.Generic.List[string]
 $script:memberCache = @{}
+$script:partialCache = @{}
 
 function Add-Failure([string]$Message) { $script:failures.Add($Message) | Out-Null }
 
@@ -41,6 +45,14 @@ function Resolve-SymbolFiles([string]$Left) {
         $files = @(& git grep -l -E $classPattern -- '*.cs' 2>$null)
     }
     $script:memberCache[$Left] = $files
+    return $files
+}
+
+function Resolve-PartialFiles([string]$Left) {
+    if ($script:partialCache.ContainsKey($Left)) { return $script:partialCache[$Left] }
+    $partialPattern = ('partial class {0}\b' -f $Left)
+    $files = @(& git grep -l -E $partialPattern -- '*.cs' 2>$null)
+    $script:partialCache[$Left] = $files
     return $files
 }
 
@@ -69,8 +81,15 @@ try {
         $files = @($Paths)
     }
     else {
-        $files = @(& git ls-files 'README.md' 'AGENTS.md' 'GLOSSARY.md' 'docs/**/*.md' |
-            Where-Object { $_ -notlike 'docs/history/*' })
+        # Do not lean on git's `**` pathspec here: on common git builds
+        # docs/**/*.md silently skips the docs that sit directly in docs/ -
+        # docs/architecture.md among them, which is how three dead citations
+        # outlived every full run. Enumerate the tree and filter here instead.
+        $files = @(& git ls-files 'README.md' 'AGENTS.md' 'GLOSSARY.md' 'docs/' |
+            Where-Object { $_ -like '*.md' -and $_ -notlike 'docs/history/*' })
+        if ($files -notcontains 'docs/architecture.md') {
+            Add-Failure 'docs enumeration missed docs/architecture.md: the gate stopped covering the docs it claims'
+        }
     }
 
     $pathPattern = '`([^`\r\n]+\.(?:md|cs|rs|ts|tsx|svelte|json|ya?ml|ps1|psm1|wxs|mjs|js))`'
@@ -119,6 +138,19 @@ try {
                 $found = @($declaring | Where-Object {
                         $null -ne (& git grep -l -E $memberPattern -- $_ 2>$null)
                     })
+                if ($found.Count -eq 0) {
+                    # A partial class keeps the member in a sibling declaration
+                    # (Program spans src/Program.cs and src/CliRuntime.cs): retry
+                    # across those before calling the citation dead. This arm is
+                    # only reachable once a declaring file resolved and missed,
+                    # so the "no local class or file, skip it" leniency above
+                    # stays exactly as it was.
+                    $partialFiles = @(Resolve-PartialFiles $left)
+                    if ($partialFiles.Count -gt 0) {
+                        $partialHit = @(& git grep -l -E $memberPattern -- $partialFiles 2>$null)
+                        if ($partialHit.Count -gt 0) { $found = $partialHit }
+                    }
+                }
                 if ($found.Count -eq 0) {
                     Add-Failure ("{0}:{1}: cited member not found: {2}.{3}" -f $file, $lineNo, $left, $right)
                 }
