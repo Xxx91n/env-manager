@@ -21,8 +21,6 @@ The chameleon logo is a 1:1 metaphor of the system architecture, not decoration.
 | `../logo.png` | 1024² | Default logo (Dev emerald active) |
 | `../logo-light-theme.png` | 1024² | Light-theme documents |
 | `../logo-dark-theme.png` | 1024² | Dark terminals / GitHub dark mode |
-| `../env_variants_showcase.png` | 2400×1200 | Multi-env showcase board (README hero) |
-| `../social-preview.png` | 1280×640 | GitHub social preview card |
 | `variants/env-chameleon-dev.png` | 1024² | Dev variant — emerald `#10B981` |
 | `variants/env-chameleon-staging.png` | 1024² | Staging variant — cyan `#06B6D4` |
 | `variants/env-chameleon-prod.png` | 1024² | Prod variant — amber `#F59E0B` |
