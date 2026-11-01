@@ -8,20 +8,24 @@
   <source media="(prefers-color-scheme: light)" srcset="../../docs/assets/logo-light-theme.png">
   <img src="../../docs/assets/logo.png" alt="Env Manager 标志" width="120" height="120">
 </picture>
-<p align="center">
-  <img src="../../docs/assets/brand/hero.gif" alt="Env Manager mini hero" width="100%">
-</p>
 
+<p align="center">
+  <img src="../../docs/assets/brand/hero.gif" alt="Env Manager 主视觉：终端提示符与三峰徽记（Dev/Staging/Prod 配色令牌）" width="100%">
+</p>
 
 # Env Manager
 
-现代、轻量的 **Windows 环境变量管理器**——支持 CLI 和 GUI 双模式。灵感来自 Microsoft PowerToys，独立开发，追求速度、简洁与自动化友好。
+Windows 环境变量管理器，提供两个前端——为脚本和 AI agent 打造的 C# CLI，以及用于交互式编辑的 Tauri GUI——共享同一套注册表契约。
+
+**"无缝适配每一个环境。"**
 
 [![Release](https://img.shields.io/github/v/release/Xxx91n/env-manager)](https://github.com/Xxx91n/env-manager/releases)
 [![License](https://img.shields.io/badge/License-Apache--2.0-yellow.svg)](../../LICENSE)
-[![Platform](https://img.shields.io/badge/Platform-Windows%2010%2B-brightgreen?logo=windows&logoColor=white)](#install)
-[![.NET 10](https://img.shields.io/badge/.NET-10-512BD4?logo=dotnet&logoColor=white)](#prerequisites)
-[![Tauri](https://img.shields.io/badge/Tauri-2-24C8D8?logo=tauri&logoColor=white)](#architecture)
+[![Platform](https://img.shields.io/badge/Platform-Windows%2010%2B-brightgreen?logo=windows&logoColor=white)](#安装)
+[![.NET 10](https://img.shields.io/badge/.NET-10-512BD4?logo=dotnet&logoColor=white)](#前置要求)
+[![Tauri](https://img.shields.io/badge/Tauri-2-24C8D8?logo=tauri&logoColor=white)](#架构)
+
+[安装](#安装) · [功能](#功能) · [CLI 参考](../../docs/cli-commands.md) · [架构](#架构) · [更新日志](../../CHANGELOG.md)
 
 <!-- README-I18N:START -->
 **语言:** [English](../../README.md) · **简体中文** · [日本語](README.ja.md) · [한국어](README.ko.md) · [Deutsch](README.de.md) · [Français](README.fr.md) · [Español](README.es.md) · [Português](README.pt.md) · [Русский](README.ru.md) · [العربية](README.ar.md)
@@ -29,143 +33,80 @@
 
 </div>
 
+## 展示
 
----
+### GUI
 
+| | | |
+|:-:|:-:|:-:|
+| ![变量视图](../../docs/assets/gallery/01-variables.webp)<br>**变量** —— 搜索、作用域筛选、逐行操作 | ![System 作用域](../../docs/assets/gallery/02-variables-system.webp)<br>**System 作用域** —— 受保护条目已锁定 | ![PATH 编辑器](../../docs/assets/gallery/03-path-editor.webp)<br>**PATH 编辑器** —— 失效与重复项检测 |
+| ![配置文件](../../docs/assets/gallery/04-profiles.webp)<br>**配置文件** —— apply / launch / 继承 | ![审计账本](../../docs/assets/gallery/07-audit.webp)<br>**审计账本** —— 哈希链式、可验证 | ![服务管理](../../docs/assets/gallery/08-service.webp)<br>**服务管理** —— 机密挂载 |
 
-## 演示
+### CLI
 
 <p align="center">
   <img src="../../docs/assets/demo.gif" alt="Env Manager CLI 演示：agents、path health 和 get 命令" width="100%">
 </p>
 
-演示展示了只读 CLI 命令的实际效果：`agents --summary`、`path health`、`get PATH` 和 `agents --json`。使用 `node scripts/demo/capture.mjs` 重新生成。
-
-*上述演示终端输出为模拟数据。*
-
-### 截图图集
-
-| | | |
-|:-:|:-:|:-:|
-| ![变量视图](../../docs/assets/gallery/01-variables.png)<br>**变量视图** —— 搜索、作用域过滤、逐行操作 | ![System 作用域](../../docs/assets/gallery/02-variables-system.png)<br>**System 作用域** —— 受保护条目锁定 | ![PATH 编辑器](../../docs/assets/gallery/03-path-editor.png)<br>**PATH 编辑器** —— 失效与重复项检测 |
-| ![配置文件](../../docs/assets/gallery/04-profiles.png)<br>**配置文件** —— apply / launch / 继承 | ![历史与导入](../../docs/assets/gallery/05-history.png)<br>**历史与导入** —— 可撤销变更 | ![保护](../../docs/assets/gallery/06-protection.png)<br>**保护** —— 自定义锁定 |
-| ![审计账本](../../docs/assets/gallery/07-audit.png)<br>**审计账本** —— 哈希链式、可验证 | ![服务管理](../../docs/assets/gallery/08-service.png)<br>**服务管理** —— secret mounts | ![设置](../../docs/assets/gallery/09-settings-i18n.png)<br>**设置** —— 10 语言 i18n |
-| ![编辑对话框](../../docs/assets/gallery/10-edit-dialog.png)<br>**编辑对话框** —— 展开值预览 | ![浅色主题](../../docs/assets/gallery/11-variables-light.png)<br>**浅色主题**变体 | ![CLI](../../docs/assets/gallery/12-cli-terminal.png)<br>**CLI** —— JSON 优先、agent 友好 |
-
+| | |
+|:-:|:-:|
+| ![CLI 终端](../../docs/assets/gallery/12-cli-terminal.webp)<br>**JSON 优先输出** —— `agents --json` 输出完整命令规格 | CLI 是一等界面：18+ 命令，全部可脚本化、可 JSON 消费。agent 手册内置于二进制中——运行 `env-manager-cli agents` 即可打印。上方只读命令使用模拟终端输出；使用 `node scripts/demo/capture.mjs` 重新生成。 |
 
 ## 功能
 
-### CLI 模式
-
-- 18+ 命令，完整环境变量管理
-- 配置文件支持继承、冲突预览、PATH 片段、安全逆序回滚；预检验证分两级（票 19）：可疑但安全的问题（未定义 %VAR%、陈旧 PATH 条目、悬空 launch target）降为警告——写入照常执行、退出码 2，`--strict` 才拒绝
-- PATH 编辑器：重复项和失效目录诊断
-- **Launch 配置文件**：隔离环境块（`env_clear` + 注入），绝不写注册表，绝不广播 `WM_SETTINGCHANGE`
-- **PATH 健康检查**：`path health [--fix] [--dry-run]` 检测重复和失效条目
-- **机密提供者**：8 种后端，激活预检和内联错误引导
-- **备份/恢复**：JSON 备份、diff、合并、验证、审计历史和受保护的撤销
-- **批量导入/导出**：`.env`、CSV、JSON，支持 dry-run 冲突预览
-- **状态导出/导入**：`export-state`/`import-state` — DPAPI 加密的全状态归档，用于容灾恢复
-- **审计账本**：`audit migrate-audit` / `verify --strict` / `verify-ledger` / `export-survival-kit` / `recover-from-ledger`（`verify` 为 CI 链校验门：正常链退出 0，任一断裂退出 1）
-- **服务控制**：`service status` / `ping` / `refresh` / `rotate` / `reload` / `shutdown`
-- 用户和系统范围支持，用户范围无需管理员权限
-
-### GUI 模式
-
-- 基于 Tauri 2.0 的原生桌面应用（WebView2）
-- 实时变量列表：高亮搜索、范围筛选、`%VAR%` 展开预览
-- PATH 编辑器：暂存移动（Apply 按钮）、健康徽章、批量删除失效条目
-- 配置文件管理：Global 和 Launch 类型、继承、机密变量、提供者选择器带内联错误横幅
-- 机密提供者选择器：激活预检，内联琥珀色错误横幅
-- 服务管理面板（Ping/Reload/Shutdown + 挂载健康列表）
-- 审计历史查看器：全命令级操作标签
-- 设置：暗色模式、字体缩放、CLI 加入 PATH 开关、DR 导出/导入、i18n 语言
-- Edge 风格悬浮滚动条（浮于内容之上，零布局空间）
-- 10 语言国际化：English, 简体中文, 日本語, 한국어, Deutsch, Français, Español, Português, Русский, العربية
-
+- **双前端** —— `env-manager-cli` 面向脚本与 CI，`env-manager.exe`（Tauri 2 + Svelte）面向交互式编辑。两者都走同一套注册表契约。
+- **默认受保护** —— 系统变量和 PATH 条目不可删除或改名；每次写入都经三层串行化（互斥锁 + 写锁 + 换前验证）。
+- **配置文件** —— Global 配置文件应用到注册表；Launch 配置文件向单个进程注入隔离的环境块，不触碰注册表。支持继承、冲突预览、逆序回滚。
+- **8 种机密提供者** —— DPAPI、Credential Manager、SecretStore、HashiCorp Vault、SOPS、Azure Key Vault、1Password、AWS Secrets Manager。secret 动词仅持久化密文信封；明文暴露边界见[安全](#安全)和 [docs/plaintext-sinks.md](../../docs/plaintext-sinks.md)。
+- **PATH 健康检查** —— `path health` 检测重复和失效条目；`--fix` 重写，`--dry-run` 仅报告。
+- **审计账本** —— 追加式、SHA256 哈希链历史，支持回滚与容灾恢复导出。
 
 ## AI Agent 专区
 
-Env Manager 专为 LLM Agent 设计，不仅面向人类：
-
 ```bash
-env-manager-cli agents            # 打印内嵌的 agent 手册
-env-manager-cli agents --path     # 手册文件路径（AGENTS.cli.md）
-env-manager-cli agents --summary  # 单行机器可读规格
-env-manager-cli agents --json     # 完整命令表结构化 JSON
+env-manager-cli agents            # print the embedded agent manual
+env-manager-cli agents --path     # file path of the manual (AGENTS.cli.md)
+env-manager-cli agents --summary  # one-line machine-readable spec
+env-manager-cli agents --json     # full command table as structured JSON
 ```
 
-- [AGENTS.md](../../AGENTS.md) — 仓库级 agent 指南（架构、硬边界、测试）。
-- [AGENTS.cli.md](../../AGENTS.cli.md) — 随 CLI 二进制分发，任何 agent 可在运行时发现契约。
-- **能力范围限定的 agent 接口** — `secret-providers.json` 上的 `agentCapabilities` 白名单让部署方可以拒绝 agent 的并行 set/delete 调用。
-
+- [AGENTS.md](../../AGENTS.md) —— 仓库级 agent 指南（架构、硬边界、测试）。
+- [AGENTS.cli.md](../../AGENTS.cli.md) —— 随 CLI 二进制分发，agent 可在运行时发现契约。
+- **能力范围限定的 agent 接口** —— `secret-providers.json` 上可选启用的 `agentCapabilities` 白名单让部署方可以拒绝 agent 的并行 set/delete 调用。
 
 ## 安全
 
 > [!WARNING]
-> Env Manager **未经代码签名**。Windows SmartScreen 可能会在首次启动时显示“未知应用”警告。点击“更多信息”然后选择“仍要运行”即可继续。代码签名计划在未来版本中实现。
+> 当前构建**未经代码签名**。Windows SmartScreen 可能在首次启动时显示“无法识别的应用”警告——点击“更多信息”然后选择“仍要运行”。我们已通过 SignPath Foundation 申请免费的开源代码签名；获批后，所有发布产物（MSI + EXE）都将签名。参见[代码签名政策](../../docs/code-signing-policy.md)。
 
 受保护的环境变量和 PATH 条目在删除前会被禁用，恢复时进行精确的注册表值类型验证。命名管道 IPC 使用防劫持标志和输入验证（最大 64 参数，32767 字符上限，拒绝空字节）。漏洞报告请参见 [SECURITY.md](../../SECURITY.md)。
 
-**威胁模型（一句话）：** 本设计不设防的对手是运行在你自己 Windows 用户会话内的任何进程——它本就可以调用 `profile reveal-secret`、读取被启动子进程的环境块、或在下述临时文件的短暂存活期内截获它们；本设计真正约束的是：DPAPI-CurrentUser 密文对其他用户/其他机器不可解密、机密无法落入注册表、除 reveal 这条设计内路径外没有任何 sink 旨在承载机密值。
+**威胁模型。** 本设计*不*设防的对手是运行在你自己 Windows 用户会话内的任何进程——它本就可以调用 `profile reveal-secret`、读取被启动子进程的环境块、或截获提供者产生的临时文件。本设计*真正*约束的是：DPAPI-CurrentUser 密文对其他用户、其他机器不可解密；机密无法落入注册表；除设计内的 reveal 路径外，没有任何 sink *旨在*承载机密值。
 
-### 明文可能的落点（机密边界表）
-
-| 落点（sink） | 是否落明文 | 生命周期 | 清理机制 | 依据 |
-|---|---|---|---|---|
-| `profiles.json` / `secretMount.json` | secret 动词为否——仅信封 `{provider, version, createdAt, ciphertext, targetName}` 或 `mount:<id>` 引用；泛用 `add-var`/`edit-var` 会绕过标记（见[明文生命周期](../../docs/architecture.md#v070-dpapi-secrets-runtime)） | 直到该机密被移除 | `profile remove-secret` 删除信封及提供者侧状态 | 硬边界；`plaintext-never-in-envelope` 契约断言 |
-| dpapi-current-user | 否——DPAPI `CryptProtectData`，CurrentUser 作用域 | 随信封存续 | 随信封删除 | 硬边界（DPAPI secrets 条） |
-| credential-manager | 否——CredMan blob 落盘前经 DPAPI 加密 | 直到提供者 `Delete` | remove-secret 时 `Delete` | [提供者指南](../../docs/secret-providers-guide.md) |
-| powershell-secretmanagement | SecretStore 库文件保持加密——但每次调用明文经 `pwsh -EncodedCommand` 参数（base64 脚本）过境 | pwsh 进程存续期；库条目直到移除 | 参数随进程消亡；库条目随 remove-secret 删除 | 硬边界（PowerShell -EncodedCommand 条） |
-| vault-kv2 · azure-keyvault · aws-secretsmanager · 1password | 本地不落明文——配置文件仅存路径/secret-ID 引用，机密留在远端后端 | 后端侧取决于运营策略 | 提供者 `Delete`；`secret-provider rotate` 重加密 | [提供者指南](../../docs/secret-providers-guide.md) |
-| sops | 信封仅密文——但加解密期间在每次调用的目录下落明文 `secret.json` / `secret.dec.json`：`%TEMP%\env-manager-sops-*`，由服务委托时则位于服务拥有的根目录内 | 每次调用数秒 | 删除该目录。由服务委托时，服务在 CLI 子进程结束后回收整棵根目录树——包括「停服务终止了 CLI」这条路径——删除做有限重试，最终失败记 error 级日志（不留无声遗留）；手工运行时是尽力删除，崩溃仍可能遗留。目录创建即 owner-only（关闭继承；当前身份、SYSTEM、Administrators），因此遗留文件只有这些身份可读——除非设置 DACL 失败，此时退回本会继承的 ACL（`%TEMP%` 的，或服务委托情形下 scratch 根的） | 硬边界（SOPS file-write no BOM 条）；`SopsProvider`、`SecretTempDirectory`、`service/src/sops_scratch.rs` |
-| launcher 进程内存（`env-manager-cli`） | 是——解密字节在发起进程中短暂存在 | 毫秒级，至注入/reveal 完成 | `SecretString` 在 Dispose 时清零 `char[]`——**尽力而为**：GC 副本与 string 中间态可能存续更久 | `SecretString` 清零；[canary 零泄漏网](../../docs/architecture.md#canary-zero-leak-assertion-net-and-goldensnapshot-layers) |
-| 被启动子进程的环境块 | 是——注入的环境变量在子进程内为明文 | 子进程存续期 | 无法清理——环境块按 OS 设计同用户进程可读 | Launch 配置文件设计 |
-| `profile reveal-secret` stdout | 是——**设计内**；两条明文输出路径之一（`profile reveal-secret`、`profile show --reveal`） | 直到终端回滚缓冲被清除 | 无——由用户主动触发 | 硬边界；canary 网刻意不扫描这些 sink |
-| 生存包临时文件（`envmanager-kit-*.json`，现位于 `%TEMP%\env-manager-kit-<guid>\` 下） | 是——组装期间短暂落明文文件。CLI 侧的 kit 文件写在 `%TEMP%\env-manager-kit-<guid>\` 内，该目录创建即 owner-only（关闭继承；当前身份、SYSTEM、Administrators），因此遗留文件只有这些身份可读——除非设置 DACL 失败，此时退回继承的 `%TEMP%` ACL | 数秒 | 加密完成后尽力删除，随后尽力删除容纳它的目录：目录删除失败会留下空目录；若文件删除也失败，明文本文件同样会残留——两次删除都是尽力而为，与上面 sops 两行口径一致 | `AuditLedgerMigration.RunAuditExportSurvivalKit`、`SecretTempDirectory.Create` |
-| `audit-ledger.jsonl` | 否——仅变量名 + `<redacted>`/`<encrypted>` 标记；CLI 侧条目另有 AES-256-GCM 静态加密（DEK 经 DPAPI 包裹） | 追加式，100MB 轮转 | 轮转 | 硬边界（audit AES-GCM 静态加密条）；`AuditCrypto` 静态加密 |
-| `export-state` 文件 | 否——双层：AES-256-GCM 载荷 + DPAPI 包裹 DEK + HMAC-SHA256 | 直到你删除该文件 | 用户自管 | `AuditCrypto`（export-state 双层加密） |
-| `logs/env-manager.log` / stderr | 设计上否——异常文本先经 22 条机密模式清洗；**尽力而为**白名单：未识别的机密格式仍可能泄漏，512 字符截断限制爆炸半径 | 日志保留期 | — | `ScrubExceptionMessage` 允许清单；`CanaryRedactionTests` + 7-sink canary 网 |
-| GUI（WebView2）/ Rust 服务 | 否——GUI 只渲染 `<encrypted>` 占位符且无 reveal 显示面；服务侧不持久化机密值 | — | — | 架构机密边界 |
-| Windows 注册表 | secret 动词为否——Launch 配置文件不写注册表且 apply 会拒绝；泛用动词的改名缺口可触及注册表（见[明文生命周期](../../docs/architecture.md#v070-dpapi-secrets-runtime)） | — | — | 硬边界；`launch-env-injection.Tests.ps1` 不变量 |
-
-本表是面向用户的摘要；逐条允许清单（含泛用动词缺口）以 `docs/architecture.md` 的 Plaintext lifecycle 为准。
-
-内存清零与日志清洗是尽力而为的卫生措施而非保证——与微软为 `SecureString` 声明的注意点相同（不可变 string、GC 搬迁、interop 副本）。可测试处皆有测试兜底：`tests/canary-redaction.Tests.ps1` 对 7 个输出 sink 植入 canary 扫描，共享契约套件对全部 8 个提供者断言 `plaintext-never-in-envelope`。
-
+**明文边界。** 完整的逐 sink 矩阵——明文可能存在于何处、存续多久、由谁清理——见 [docs/plaintext-sinks.md](../../docs/plaintext-sinks.md)；`docs/architecture.md` 的 Plaintext lifecycle 一节是逐表面的权威允许清单。内存清零与日志清洗是尽力而为的卫生措施而非保证；`tests/canary-redaction.Tests.ps1` 对 7 个输出 sink 植入 canary 扫描，共享契约套件对全部 8 个提供者断言 `plaintext-never-in-envelope`。
 
 ## 安装
 
-### 便携版
-
-从 [GitHub Releases](https://github.com/Xxx91n/env-manager/releases) 下载。解压 ZIP 后直接运行 `env-manager.exe`，无需安装。
-
-### 前置要求
-
-> [!IMPORTANT]
-> **便携版**和**仅 CLI** 版本为框架依赖部署：目标机器需要预装 **.NET 10 Desktop Runtime**。
->
-> 从 .NET 官方下载页获取对应架构的运行时：<https://dotnet.microsoft.com/download/dotnet/10.0>
->
-> | 构建类型 | 架构 | .NET 10 运行时 |
-> |---------|------|---------------|
-> | 便携版 / 仅 CLI | x64 | .NET 10 Desktop Runtime x64 |
-> | 便携版 / 仅 CLI | x86 | .NET 10 Desktop Runtime x86 |
-> | 便携版 / 仅 CLI | ARM64 | .NET 10 Desktop Runtime ARM64 |
->
-> **MSI 安装包**在安装时自动检测 .NET 10 并提示安装。
->
-> **WebView2 运行时**（GUI 所需）已预装于 Windows 11，Windows 10 21H2+ 可从 <https://developer.microsoft.com/microsoft-edge/webview/> 下载。
-
-可选的外部机密提供者工具（SOPS、1Password CLI、Vault CLI、AWS CLI、Azure CLI、PowerShell 7）的下载链接和配置说明，请参阅 [机密提供者指南](../../docs/secret-providers-guide.md)。
-
 ### MSI 安装包
 
-运行 `.msi` 文件。自动创建开始菜单快捷方式。支持 x64、x86、ARM64 架构。
+从 [GitHub Releases](https://github.com/Xxx91n/env-manager/releases) 下载 MSI 并运行。自动创建开始菜单快捷方式。提供 x64、x86、ARM64 版本。
+
+### 便携版
+
+从 [GitHub Releases](https://github.com/Xxx91n/env-manager/releases) 下载便携版 ZIP。解压后直接运行 `env-manager.exe`，无需安装。
 
 ### 仅 CLI
 
 下载 CLI-only ZIP 用于无头或脚本场景：`env-manager-cli.exe` 加 `.dll` 文件。无 GUI，不依赖 WebView2。
+
+### 前置要求
+
+> [!IMPORTANT]
+> **便携版**和**仅 CLI** 构建为框架依赖部署：目标机器需要 **.NET 10 Desktop Runtime**——请从官方 [.NET 下载页](https://dotnet.microsoft.com/download/dotnet/10.0)获取。**MSI 安装包**在安装时自动检测 .NET 10 并提示安装。
+>
+> **WebView2 运行时**（GUI 所需）已预装于 Windows 11，Windows 10 21H2+ 可从 [Microsoft](https://developer.microsoft.com/microsoft-edge/webview/)获取。
+
+可选的外部机密提供者工具（SOPS、1Password CLI、Vault CLI、AWS CLI、Azure CLI、PowerShell 7），请参阅[机密提供者指南](../../docs/secret-providers-guide.md)。
 
 ### winget
 
@@ -183,76 +124,60 @@ node scripts/build.mjs --arch x64
 
 需要 .NET 10 SDK、Node.js 20+、Rust 稳定版（MSVC 目标）。详见 [docs/build-and-release.md](../../docs/build-and-release.md)。
 
-
 ## 用法
 
 ### CLI
 
 ```bash
-# 列出所有变量
+# List / get / set
 env-manager-cli.exe list
-
-# 获取变量
 env-manager-cli.exe get PATH
-
-# 设置变量（默认用户范围）
-env-manager-cli.exe set MY_VAR "my_value"
 env-manager-cli.exe set JAVA_HOME "D:\jdk17" --scope system
 
-# 删除变量
-env-manager-cli.exe delete MY_VAR
-
-# 备份所有变量到 JSON
-env-manager-cli.exe backup --output backup.json
-
-# 从备份恢复
-env-manager-cli.exe restore backup.json
-
-# PATH 健康检查
-env-manager-cli.exe path health
-
-# 创建 Launch 配置文件并以隔离环境启动
+# Create a Launch profile and launch with isolated env
 env-manager-cli.exe profile create dev --type launch --target python.exe
 env-manager-cli.exe profile add-secret dev API_KEY "sk-xxx"
 env-manager-cli.exe profile launch dev
 
-# 服务控制
-env-manager-cli.exe service status
-env-manager-cli.exe service ping
+# PATH health
+env-manager-cli.exe path health
 
-# 状态导出/导入（容灾恢复）
+# Backup / restore
+env-manager-cli.exe backup --output backup.json
+env-manager-cli.exe restore backup.json
+
+# Disaster recovery + tamper-evident audit
 env-manager-cli.exe export-state --output state.dpapi
-env-manager-cli.exe import-state --input state.dpapi
-
-# 审计账本
-env-manager-cli.exe audit migrate-audit
 env-manager-cli.exe audit verify --strict
-```
 
-> 启动目标位于 Windows 系统目录（System32）内时会在 profile 保存/启动时被拒绝，以防止 system32 劫持。
+# Service control
+env-manager-cli.exe service status
+```
 
 完整命令参考请见 [docs/cli-commands.md](../../docs/cli-commands.md)。
 
 ### GUI
 
-运行 `env-manager.exe`。GUI 提供实时变量列表（搜索、范围筛选、内联编辑）、PATH 编辑器（拖拽排序、健康徽章）、配置文件管理、机密提供者选择、服务控制面板、审计历史查看器和 10 语言国际化。
-
+运行 `env-manager.exe`。GUI 提供实时变量列表（搜索、范围筛选、内联编辑）、支持拖拽排序的 PATH 编辑器、配置文件管理、机密提供者选择、服务控制面板、审计历史和 10 语言国际化。
 
 ## 架构
 
-四层架构：
+```mermaid
+flowchart LR
+    GUI[Tauri GUI - Svelte] -->|named pipe IPC| SVC[env-manager-service Rust]
+    GUI --> CLI[env-manager-cli C#]
+    SVC --> CLI
+    CLI --> REG[(Registry HKCU/HKLM)]
+    CLI --> SEC[Secret Providers]
+```
 
-1. **CLI 后端**（`src/`）— C# .NET 10 控制台应用，直接读写 Windows 注册表，编译为 `env-manager-cli.exe`；`src/Program.cs` 为薄分发入口（<400 行），各命令域（profile/path/service/audit/agents/update 等）各自独立模块文件
-2. **Tauri 外壳**（`frontend/src-tauri/`）— Rust 应用，内嵌 CLI 为打包资源，生成 CLI 子进程，通过 Tauri IPC 返回 JSON
-3. **Svelte 前端**（`frontend/src/`）— TypeScript + Svelte 4 + TailwindCSS，运行于 WebView2，仅通过 `invoke('run_cli', ...)` 调用 Rust
-4. **服务 crate**（`service/`）— Rust 独立二进制（`env-manager-service.exe`），通过命名管道 IPC 管理机密挂载生命周期
-
-详见 [docs/architecture.md](../../docs/architecture.md)。
-
+- **CLI**：C# .NET 10 单文件可执行程序——协调层与注册表网关。
+- **服务**：独立 Rust 二进制，通过命名管道 IPC 管理机密挂载生命周期。
+- **GUI**：Tauri 2 + Svelte 4 前端，使用同一套 IPC 契约。
 
 ## 机密提供者
 
-8 种提供者后端，均带激活预检 — 失败时在配置文件编辑器中直接显示内联琥珀色横幅：
+8 种提供者后端，均带激活预检——失败时在配置文件编辑器中直接显示内联琥珀色横幅：
 
 | 提供者 | 认证方式 | 定期刷新 | 文档 |
 |---|---|---|---|
@@ -265,44 +190,46 @@ env-manager-cli.exe audit verify --strict
 | 1Password CLI | OP_SERVICE_ACCOUNT_TOKEN | 是 | [指南](../../docs/secret-providers-guide.md) |
 | AWS Secrets Manager | SigV4 + 访问密钥 | 是 | [指南](../../docs/secret-providers-guide.md) |
 
-详见 [docs/secret-providers-guide.md](../../docs/secret-providers-guide.md)。
-
+逐提供者的前置要求、一次性配置和激活错误修复步骤，请参阅 [docs/secret-providers-guide.md](../../docs/secret-providers-guide.md)。
 
 ## 服务模式
 
 `env-manager-service.exe` 是独立 Rust 二进制，通过命名管道 IPC 管理机密挂载生命周期：
 
-- **运行模式**：Service（SCM 管理，开机启动）、Background（用户启动）、Cli（一次性网关）
-- **协调循环**：300s 周期全量扫描，幂等逐项处理，30s 首次延迟
-- **审计账本**（Phase E）：追加式哈希链 `audit-ledger.jsonl`，100MB 轮转，防篡改
+- **RuntimeMode**：Service（SCM 管理，开机启动）、Background（用户启动）、Cli（一次性网关）
+- **协调循环**：300s 周期全量扫描，幂等逐项处理，30s 首次 tick 延迟
+- **审计账本**：追加式哈希链 `audit-ledger.jsonl`，100MB 轮转，防篡改检测
 - **IPC**：防劫持管道标志，65536 字节请求上限，换行分隔 JSON 协议
+- **看门狗**：双层恢复——SCM 自动重启（Service 模式）+ GUI 30s ping 看门狗（Background 模式）
 
-详见 [docs/secret-architecture-blueprint.md](../../docs/secret-architecture-blueprint.md) 和 [docs/secret-architecture-decision-summary.md](../../docs/secret-architecture-decision-summary.md)。
+## 已知限制（Limitations）
 
+- 当前构建未经代码签名 — 首次启动可能触发 SmartScreen 警告（见上方「安全」一节）。
+- winget 分发尚未上线。
+- GUI 需要 WebView2 Runtime；便携版与仅 CLI 构建需要 .NET 10 Desktop Runtime（见「前置要求」）。
+- 仅支持 Windows。
 
 ## 文档
 
 | 文档 | 内容 |
 |---|---|
 | [CHANGELOG.md](../../CHANGELOG.md) | 版本历史（keepachangelog 格式） |
-| [docs/cli-commands.md](../cli-commands.md) | 完整 CLI 命令参考 |
-| [docs/architecture.md](../architecture.md) | 深度架构 |
-| [docs/backup-and-profiles.md](../backup-and-profiles.md) | 备份、还原、配置文件语义 |
-| [docs/secret-providers-guide.md](../secret-providers-guide.md) | 机密提供者设置 |
-| [docs/build-and-release.md](../build-and-release.md) | 构建和发布流程 |
-| [AGENTS.md](../../AGENTS.md) / [AGENTS.cli.md](../../AGENTS.cli.md) | Agent 指南 |
-
+| [docs/cli-commands.md](../../docs/cli-commands.md) | 完整 CLI 命令参考 |
+| [docs/architecture.md](../../docs/architecture.md) | 深度架构 |
+| [docs/plaintext-sinks.md](../../docs/plaintext-sinks.md) | 机密明文可能存在的位置 |
+| [docs/backup-and-profiles.md](../../docs/backup-and-profiles.md) | 备份、还原、配置文件语义 |
+| [docs/secret-providers-guide.md](../../docs/secret-providers-guide.md) | 机密提供者设置 |
+| [docs/build-and-release.md](../../docs/build-and-release.md) | 构建和发布流程 |
+| [AGENTS.md](../../AGENTS.md) / [AGENTS.cli.md](../../AGENTS.cli.md) | 面向 agent 的指南 |
 
 ## 维护者
 
 [@Xxx91n](https://github.com/Xxx91n)
 
-
 ## 贡献
 
-欢迎贡献！请参阅 [CONTRIBUTING.md](../../.github/CONTRIBUTING.md) 了解开发设置、测试和 PR 流程。Bug 报告和功能请求请使用 [Issue 模板](https://github.com/Xxx91n/env-manager/issues)。安全报告请参见 [SECURITY.md](../../SECURITY.md)。
-
+欢迎提交 Issue 和 PR。请先阅读 [AGENTS.md](../../AGENTS.md) 了解架构边界和测试政策。
 
 ## 许可证
 
-Apache-2.0 — 详见 [LICENSE](../../LICENSE)。
+Apache-2.0 © 2026 Env Manager 贡献者。详见 [LICENSE](../../LICENSE)。

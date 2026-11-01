@@ -6,174 +6,230 @@
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="../../docs/assets/logo-dark-theme.png">
   <source media="(prefers-color-scheme: light)" srcset="../../docs/assets/logo-light-theme.png">
-  <img src="../../docs/assets/logo.png" alt="Env Manager 标志" width="120" height="120">
+  <img src="../../docs/assets/logo.png" alt="Логотип Env Manager" width="120" height="120">
 </picture>
-<p align="center">
-  <img src="../../docs/assets/brand/hero.gif" alt="Env Manager mini hero" width="100%">
-</p>
 
+<p align="center">
+  <img src="../../docs/assets/brand/hero.gif" alt="Hero Env Manager: приглашение терминала с трёхвершинным гребнем в цветовых токенах Dev/Staging/Prod" width="100%">
+</p>
 
 # Env Manager
 
-Современный легковесный менеджер переменных окружения Windows — с двумя режимами: CLI и GUI. Вдохновлён Microsoft PowerToys, но автономный и удобный для агентов.
+Менеджер переменных окружения Windows с двумя интерфейсами — CLI на C#, созданный для скриптов и ИИ-агентов, и GUI на Tauri для интерактивного редактирования — поверх единого набора контрактов реестра.
 
 **«Адаптируется безупречно к любому окружению.»**
 
 [![Release](https://img.shields.io/github/v/release/Xxx91n/env-manager)](https://github.com/Xxx91n/env-manager/releases)
 [![License](https://img.shields.io/badge/License-Apache--2.0-yellow.svg)](../../LICENSE)
-[![Platform](https://img.shields.io/badge/Platform-Windows%2010%2B-brightgreen?logo=windows&logoColor=white)](#install)
-[![.NET 10](https://img.shields.io/badge/.NET-10-512BD4?logo=dotnet&logoColor=white)](#prerequisites)
-[![Tauri](https://img.shields.io/badge/Tauri-2-24C8D8?logo=tauri&logoColor=white)](#architecture)
+[![Platform](https://img.shields.io/badge/Platform-Windows%2010%2B-brightgreen?logo=windows&logoColor=white)](#установка)
+[![.NET 10](https://img.shields.io/badge/.NET-10-512BD4?logo=dotnet&logoColor=white)](#предварительные-требования)
+[![Tauri](https://img.shields.io/badge/Tauri-2-24C8D8?logo=tauri&logoColor=white)](#архитектура)
+
+[Установка](#установка) · [Возможности](#возможности) · [Справка по CLI](../../docs/cli-commands.md) · [Архитектура](#архитектура) · [Changelog](../../CHANGELOG.md)
 
 <!-- README-I18N:START -->
-**言語:** [English](../../README.md) · **Русский** · [日本語](README.ja.md) · [한국어](README.ko.md) · [Deutsch](README.de.md) · [Français](README.fr.md) · [Español](README.es.md) · [Português](README.pt.md) · [Русский](README.ru.md) · [العربية](README.ar.md)
+**Языки:** [English](../../README.md) · [简体中文](README.zh_CN.md) · [日本語](README.ja.md) · [한국어](README.ko.md) · [Deutsch](README.de.md) · [Français](README.fr.md) · [Español](README.es.md) · [Português](README.pt.md) · **Русский** · [العربية](README.ar.md)
 <!-- README-I18N:END -->
 
 </div>
 
+## Демонстрация
 
----
-
-
-## Демо
-
-<p align="center">
-  <img src="../../docs/assets/demo.gif" alt="Env Manager CLI demo" width="100%">
-</p>
-
-
-Демо показывает работу команд CLI в режиме только для чтения: agents --summary, path health, get PATH и agents --json. Повторная генерация: `node scripts/demo/capture.mjs`.
-
-*Вывод терминала в демо выше использует смоделированные данные.*
-
-
-### Галерея
+### GUI
 
 | | | |
 |:-:|:-:|:-:|
-| ![Просмотр переменных](../../docs/assets/gallery/01-variables.png)<br>**Переменные** — поиск, область, действия по строкам | ![Область system](../../docs/assets/gallery/02-variables-system.png)<br>**Область system** — защищённые записи заблокированы | ![Редактор PATH](../../docs/assets/gallery/03-path-editor.png)<br>**Редактор PATH** — обнаружение мёртвых и повторных записей |
-| ![Профили](../../docs/assets/gallery/04-profiles.png)<br>**Профили** — применить / запустить / наследовать | ![История и импорт](../../docs/assets/gallery/05-history.png)<br>**История и импорт** — отменяемые изменения | ![Защита](../../docs/assets/gallery/06-protection.png)<br>**Защита** — пользовательские блокировки |
-| ![Журнал аудита](../../docs/assets/gallery/07-audit.png)<br>**Журнал аудита** — хеш-цепочка, проверяемый | ![Диспетчер службы](../../docs/assets/gallery/08-service.png)<br>**Диспетчер службы** — монтирование секретов | ![Настройки](../../docs/assets/gallery/09-settings-i18n.png)<br>**Настройки** — i18n на 10 языках |
-| ![Диалог редактирования](../../docs/assets/gallery/10-edit-dialog.png)<br>**Диалог редактирования** — предпросмотр развёрнутого значения | ![Светлая тема](../../docs/assets/gallery/11-variables-light.png)<br>**Светлая тема** — вариант | ![CLI](../../docs/assets/gallery/12-cli-terminal.png)<br>**CLI** — JSON-first, для агентов |
+| ![Просмотр переменных](../../docs/assets/gallery/01-variables.webp)<br>**Переменные** — поиск, фильтр по области, действия по строкам | ![Область system](../../docs/assets/gallery/02-variables-system.webp)<br>**Область system** — защищённые записи заблокированы | ![Редактор PATH](../../docs/assets/gallery/03-path-editor.webp)<br>**Редактор PATH** — обнаружение мёртвых записей и дубликатов |
+| ![Профили](../../docs/assets/gallery/04-profiles.webp)<br>**Профили** — применить / запустить / наследовать | ![Журнал аудита](../../docs/assets/gallery/07-audit.webp)<br>**Журнал аудита** — хеш-цепочка, проверяемый | ![Диспетчер службы](../../docs/assets/gallery/08-service.webp)<br>**Диспетчер службы** — монтирование секретов |
 
+### CLI
+
+<p align="center">
+  <img src="../../docs/assets/demo.gif" alt="Демо Env Manager CLI: agents, path health и команды get" width="100%">
+</p>
+
+| | |
+|:-:|:-:|
+| ![Терминал CLI](../../docs/assets/gallery/12-cli-terminal.webp)<br>**JSON-first вывод** — `agents --json` отдаёт полную спецификацию команд | CLI — первоклассная поверхность: 18+ команд, каждая пригодна для скриптов и потребляется в JSON. Руководство для агентов поставляется внутри бинарника — выполните `env-manager-cli agents`, чтобы его вывести. Команды только для чтения выше используют смоделированный вывод терминала; перегенерация: `node scripts/demo/capture.mjs`. |
 
 ## Возможности
 
-- CLI, созданный для агентов — 18+ команд с первоклассным машинным контрактом: env-manager-cli agents --json отдаёт структурированную спецификацию команд, а все возможности описаны в руководстве для агентов (AGENTS.cli.md), которое поставляется вместе с бинарником.
-- Профили и конфигурация — глобальные профили применяются к реестру; профили запуска (Launch profiles) внедряют изолированный блок окружения в отдельный процесс (никогда не трогают реестр и не рассылают WM_SETTINGCHANGE). Включены наследование, предпросмотр конфликтов и безопасный откат в обратном порядке.
-- 8 провайдеров секретов — DPAPI, Credential Manager, SecretStore, HashiCorp Vault, SOPS, Azure Key Vault, 1Password, AWS Secrets Manager. Секреты хранятся только в виде зашифрованных конвертов; где именно может оказаться открытый текст, показывает таблица в разделе [Безопасность](#безопасность). Для команд работы с секретами профили хранят только зашифрованные конверты; открытый текст может появляться в документированных временных файлах, процессах/запросах и выводе, а очистка и маскирование выполняются по возможности.
-- Защита по умолчанию — системные переменные и записи PATH нельзя удалить или переименовать; каждая запись — это сериализованный контракт из трёх уровней (mutex + блокировка записи + проверка перед заменой).
-- Проверка PATH — обнаруживает дубликаты и мёртвые записи, с флагами --fix / --dry-run.
-- Журнал аудита — история только на добавление (append-only), скреплённая цепочкой хэшей SHA256, с откатом и экспортом для аварийного восстановления.
-- Два режима: CLI + GUI — CLI на C# для скриптов и CI; нативная GUI на Tauri 2 + Svelte для интерактивного редактирования. Оба проходят через одни и те же контракты реестра. i18n на 10 языках.
+- **Два интерфейса** — `env-manager-cli` для скриптов и CI, `env-manager.exe` (Tauri 2 + Svelte) для интерактивного редактирования. Оба проходят через одни и те же контракты реестра.
+- **Защита по умолчанию** — системные переменные и записи PATH нельзя удалить или переименовать; каждая запись сериализуется через три уровня (mutex + блокировка записи + проверка перед заменой).
+- **Профили** — глобальные профили применяются к реестру; профили запуска внедряют изолированный блок окружения в отдельный процесс, не трогая реестр. Наследование, предпросмотр конфликтов, откат в обратном порядке.
+- **8 провайдеров секретов** — DPAPI, Credential Manager, SecretStore, HashiCorp Vault, SOPS, Azure Key Vault, 1Password, AWS Secrets Manager. Команды работы с секретами сохраняют только конверты с шифротекстом; граница присутствия открытого текста описана в разделе [Безопасность](#безопасность) и в [docs/plaintext-sinks.md](../../docs/plaintext-sinks.md).
+- **Проверка PATH** — `path health` обнаруживает дубликаты и мёртвые записи; `--fix` переписывает, `--dry-run` отчитывается.
+- **Журнал аудита** — история только на добавление (append-only), скреплённая цепочкой хэшей SHA256, с откатом и экспортом для аварийного восстановления.
 
 ## Для ИИ-агентов
 
-Env Manager спроектирован для работы через LLM-агентов, а не только вручную:
+```bash
+env-manager-cli agents            # print the embedded agent manual
+env-manager-cli agents --path     # file path of the manual (AGENTS.cli.md)
+env-manager-cli agents --summary  # one-line machine-readable spec
+env-manager-cli agents --json     # full command table as structured JSON
+```
 
-- AGENTS.md — инструкции уровня репозитория для агентов (архитектура, жёсткие границы, тестирование).
-- AGENTS.cli.md — поставляется вместе с бинарником CLI, чтобы любой агент мог обнаружить контракт во время выполнения.
-- Поверхность для агентов, ограниченная по возможностям — опциональный (opt-in) белый список agentCapabilities в secret-providers.json позволяет развёртываниям отклонять параллельные вызовы set/delete от агентов.
+- [AGENTS.md](../../AGENTS.md) — инструкции уровня репозитория для агентов (архитектура, жёсткие границы, тестирование).
+- [AGENTS.cli.md](../../AGENTS.cli.md) — поставляется внутри бинарника CLI, чтобы агент мог обнаружить контракт во время выполнения.
+- **Поверхность, ограниченная по возможностям** — опциональный (opt-in) белый список `agentCapabilities` в `secret-providers.json` позволяет развёртываниям отклонять параллельные вызовы set/delete от агентов.
 
 ## Безопасность
 
-> Текущие сборки не подписаны кодом. Windows SmartScreen может показать предупреждение о неопознанном приложении при первом запуске — нажмите «Подробнее», затем «Выполнить в любом случае». Мы подали заявку на бесплатную подпись кода для open-source через SignPath Foundation; после одобрения все артефакты релиза (MSI + EXE) будут подписаны.
+> [!WARNING]
+> Текущие сборки **не подписаны кодом**. Windows SmartScreen может показать предупреждение о «нераспознанном приложении» при первом запуске — нажмите «Подробнее», затем «Выполнить в любом случае». Мы подали заявку на бесплатную подпись кода для open-source через SignPath Foundation; после одобрения все артефакты релиза (MSI + EXE) будут подписаны. См. [Политика подписи кода](../../docs/code-signing-policy.md).
 
-Защищённые переменные и записи PATH отключаются перед удалением, а при восстановлении проверяется точный тип значения в реестре. IPC через named pipe использует флаги против перехвата (anti-squatting) и валидацию ввода (максимум 64 аргумента, лимит 32767 символов, отклонение нулевых байтов).
+Защищённые переменные и записи PATH отключаются перед удалением, а при восстановлении проверяется точный тип значения в реестре. IPC через named pipe использует флаги против перехвата (anti-squatting) и валидацию ввода (максимум 64 аргумента, лимит 32767 символов, отклонение нулевых байтов). О сообщении уязвимостей см. [SECURITY.md](../../SECURITY.md).
 
-### Где может существовать открытый текст (таблица границ секретов)
+**Модель угроз.** Противник, от которого мы *не* защищаем, — это любой процесс, запущенный внутри вашей собственной пользовательской сессии Windows: он и так может вызвать `profile reveal-secret`, прочитать блок окружения запущенного дочернего процесса или перехватить временные файлы, создаваемые провайдерами. Что дизайн действительно *ограничивает*: шифротекст DPAPI-CurrentUser нерасшифровываем для другого пользователя или машины, секреты не могут попасть в реестр, и ни одно другое хранилище, кроме предусмотренного пути reveal, не *предназначено* для переноса значения секрета.
 
-| Место | Открытый текст? | Время жизни | Очистка | Основание |
-|---|---|---|---|---|
-| `profiles.json` / `secretMount.json` | Нет для команд секретов — только конверт `{provider, version, createdAt, ciphertext, targetName}` или ссылка `mount:<id>`; общие команды `add-var`/`edit-var` обходят маркер (см. [Жизненный цикл открытого текста](../../docs/architecture.md#v070-dpapi-secrets-runtime)) | Пока секрет не удалён | `profile remove-secret` удаляет конверт и состояние на стороне провайдера | жёсткая граница; контрактная проверка `plaintext-never-in-envelope` |
-| dpapi-current-user | Нет — DPAPI `CryptProtectData`, область CurrentUser | Внутри конверта | Вместе с конвертом | жёсткая граница (v0.7.0) |
-| credential-manager | Нет — blob CredMan сам шифруется DPAPI перед сохранением | До `Delete` провайдера | `Delete` при remove-secret | [руководство по провайдерам](../../docs/secret-providers-guide.md) |
-| powershell-secretmanagement | Файл хранилища SecretStore остаётся зашифрованным — но при каждом вызове открытый текст проходит через аргумент `pwsh -EncodedCommand` (скрипт в base64) | Время жизни процесса pwsh; запись хранилища — до удаления | Аргумент исчезает вместе с процессом; запись хранилища удаляется при remove-secret | жёсткая граница (v0.7.4) |
-| vault-kv2 · azure-keyvault · aws-secretsmanager · 1password | Локально открытого текста нет — профиль хранит лишь ссылку на путь/ID секрета; секрет остаётся в удалённом бэкенде. В локальном профиле нет открытого текста; во время операций провайдера он может временно появляться в аргументах/выводе дочерних процессов и телах запросов.| Политика оператора на стороне бэкенда | `Delete` провайдера; `secret-provider rotate` перешифровывает | [руководство по провайдерам](../../docs/secret-providers-guide.md) |
-| sops | В конверте только шифротекст — **плюс** открытые `secret.json` / `secret.dec.json` в отдельном каталоге для каждого вызова во время шифрования/расшифровки: `%TEMP%\env-manager-sops-*` или, если ротация делегирована, каталог внутри корня, принадлежащего службе. Если вспомогательный процесс удерживает файл дольше окна восстановления, удаление может завершиться ошибкой и scratch-корень останется; очистка выполняется по возможности.| Секунды на вызов | `Directory.Delete` этого каталога. При делегировании служба удаляет весь корень после завершения дочернего процесса CLI — в том числе после остановки, завершившей CLI, — с ограниченным числом повторов и записью в лог уровня error (никогда молча), если удаление всё же не удалось; при ручном запуске удаление выполняется по возможности, и аварийное завершение может оставить каталог осиротевшим. Каталог создаётся с доступом только для владельца (наследование отключено; текущая учётная запись, SYSTEM, Administrators), поэтому осиротевший каталог читаем только этими учётными записями — если только применение этого DACL не завершилось ошибкой; тогда остаётся ACL, который был бы унаследован (от `%TEMP%` или, при делегировании, от scratch-корня службы) | жёсткая граница (v0.7.11); `SopsProvider`, `SecretTempDirectory`, `service/src/sops_scratch.rs` |
-| Память запускающего процесса (`env-manager-cli`) | Да — расшифрованные байты кратковременно находятся в запускающем процессе. Значения могут оставаться в System.String до завершения CLI; SecretString очищает только отдельную копию, а копии GC и промежуточные строки могут сохраняться.| Миллисекунды, до завершения внедрения/reveal | `SecretString` обнуляет свой `char[]` при Dispose — **по возможности**: копии GC и промежуточные строки могут пережить его | Обнуление `SecretString`; [canary-сеть нулевой утечки](../../docs/architecture.md#canary-zero-leak-assertion-net-and-goldensnapshot-layers) |
-| Блок окружения запущенного дочернего процесса | Да — внедрённые переменные окружения открыты внутри дочернего процесса | Время жизни дочернего процесса | Невозможна — по устройству ОС блоки окружения читаемы процессами того же пользователя | Устройство профилей Launch |
-| Стандартный вывод `profile reveal-secret` | Да — **так задумано**; один из двух путей вывода открытого текста (`profile reveal-secret`, `profile show --reveal`) | Пока не очищена история прокрутки терминала ; Потребитель на другом конце pipe может хранить копию до её удаления.| Нет — вызывается пользователем | жёсткая граница; canary-сеть намеренно пропускает эти места |
-| Временные файлы набора восстановления (`envmanager-kit-*.json` в `%TEMP%\env-manager-kit-<guid>\`, `mount-survival-kit.tmp.json`) | Да — кратковременный временный файл с открытым текстом при сборке набора. Файл набора на стороне CLI пишется в `%TEMP%\env-manager-kit-<guid>\` — каталог, создаваемый с доступом только для владельца (наследование отключено; текущая учётная запись, SYSTEM, Administrators), поэтому осиротевший каталог читаем только этими учётными записями — если только применение этого DACL не завершилось ошибкой; тогда остаётся унаследованный ACL `%TEMP%`. `mount-survival-kit.tmp.json` на стороне службы лежит в каталоге ledger, а не в `%TEMP%` | Секунды | Удаление по возможности после шифрования, затем удаление по возможности содержащего его каталога: неудачное удаление каталога оставляет пустой каталог, а если не удалось и удаление файла, сохраняется и файл с открытым текстом — оба удаления по возможности, как в строках sops выше | `AuditLedgerMigration.RunAuditExportSurvivalKit`, `SecretTempDirectory.Create`; `service/src/audit_ledger.rs` |
-| `audit-ledger.jsonl` | В перенесённые события ledger значения секретов не копируются; сохраняются только метаданные и маркеры маскирования, а общие сводки old/new не переносятся. | Только дозапись, ротация на 100MB | Ротация | жёсткая граница (v0.9.13); статическое шифрование `AuditCrypto` |
-| Файл `export-state` | Нет — двойной слой: полезная нагрузка AES-256-GCM + DEK, обёрнутый DPAPI, + HMAC-SHA256 | Пока вы не удалите файл | Управляется пользователем | `AuditCrypto` (v0.9.13) |
-| `logs/env-manager.log` / stderr | Нет по замыслу — текст исключений сначала очищается от 22 шаблонов с секретами; белый список **по возможности**: нераспознанный формат секрета всё же может утечь, ограничено усечением до 512 символов | Срок хранения логов | — | Белый список `ScrubExceptionMessage`; `CanaryRedactionTests` + canary-сеть на 7 местах |
-| GUI (WebView2) / служба на Rust | Нет — GUI показывает заглушки `<encrypted>` и не имеет экрана reveal; служба не сохраняет значения | — | — | граница секретов в архитектуре |
-| Реестр Windows | Нет для команд секретов — профили Launch не могут писать в реестр, и apply их отклоняет; брешь переименования в общих командах может его достичь (см. [Жизненный цикл открытого текста](../../docs/architecture.md#v070-dpapi-secrets-runtime)) | — | — | жёсткая граница; инвариант `launch-env-injection.Tests.ps1` |
-
-Эта таблица — сводка для пользователей; авторитетный белый список по каждой поверхности, включая брешь общих команд, — раздел Plaintext lifecycle в `docs/architecture.md`.
-
-Обнуление памяти и очистка логов — это гигиена по возможности, а не гарантии: та же оговорка, которую Microsoft документирует для `SecureString` (неизменяемые строки, перемещение GC, копии при interop). Там, где утверждение можно проверить, оно проверяется: `tests/canary-redaction.Tests.ps1` сканирует 7 мест вывода на подложенный canary, а общий набор контрактов проверяет `plaintext-never-in-envelope` для всех 8 провайдеров.
+**Граница открытого текста.** Полная матрица по каждому хранилищу — где может существовать открытый текст, как долго и кто его удаляет — находится в [docs/plaintext-sinks.md](../../docs/plaintext-sinks.md); раздел Plaintext lifecycle в `docs/architecture.md` — авторитетный белый список по каждой поверхности. Обнуление памяти и очистка логов — гигиена по возможности, а не гарантии; `tests/canary-redaction.Tests.ps1` сканирует 7 мест вывода на подложенный canary, а общий набор контрактных тестов проверяет `plaintext-never-in-envelope` для всех 8 провайдеров.
 
 ## Установка
 
 ### Установщик MSI
 
-Скачайте MSI из GitHub Releases и запустите его. Ярлыки в меню «Пуск» создаются автоматически. Доступны сборки x64, x86 и ARM64.
+Скачайте MSI из [GitHub Releases](https://github.com/Xxx91n/env-manager/releases) и запустите его. Ярлыки в меню «Пуск» создаются автоматически. Доступны сборки x64, x86 и ARM64.
 
 ### Portable
 
-Скачайте портативный ZIP из GitHub Releases. Распакуйте и запустите env-manager.exe напрямую. Установка не требуется.
+Скачайте портативный ZIP из [GitHub Releases](https://github.com/Xxx91n/env-manager/releases). Распакуйте и запустите `env-manager.exe` напрямую. Установка не требуется.
 
 ### Только CLI
 
-Скачайте ZIP только с CLI для headless-использования или скриптов: env-manager-cli.exe плюс файлы .dll. Без GUI и без зависимости от WebView2.
+Скачайте ZIP только с CLI для headless-использования или скриптов: `env-manager-cli.exe` плюс файлы `.dll`. Без GUI и без зависимости от WebView2.
 
 ### Предварительные требования
 
-> Портативные сборки и сборки только с CLI зависят от framework: им требуется .NET 10 Desktop Runtime на целевой машине. Установщик MSI проверяет наличие .NET 10 при установке и предлагает его автоматически.
-> Среда WebView2 Runtime (для GUI) предустановлена в Windows 11 и доступна для Windows 10 21H2+ от Microsoft.
+> [!IMPORTANT]
+> Сборки **Portable** и **Только CLI** зависят от framework: им требуется **.NET 10 Desktop Runtime** на целевой машине — скачайте его с официальной [страницы загрузки .NET](https://dotnet.microsoft.com/download/dotnet/10.0). **Установщик MSI** проверяет наличие .NET 10 при установке и предлагает его автоматически.
+>
+> **WebView2 Runtime** (для GUI) предустановлен в Windows 11 и доступен для Windows 10 21H2+ от [Microsoft](https://developer.microsoft.com/microsoft-edge/webview/).
 
-По опциональным внешним инструментам провайдеров секретов (SOPS, 1Password CLI, Vault CLI, AWS CLI, Azure CLI, PowerShell 7) см. руководство по провайдерам секретов.
+По опциональным внешним инструментам провайдеров секретов (SOPS, 1Password CLI, Vault CLI, AWS CLI, Azure CLI, PowerShell 7) см. [Руководство по провайдерам секретов](../../docs/secret-providers-guide.md).
 
 ### winget
 
-> Распространение через winget запланировано, но пока недоступно. Следите за обновлениями в GitHub Issues.
+> [!NOTE]
+> Распространение через winget запланировано, но пока недоступно. Следите за обновлениями через GitHub Issues.
 
 ### Из исходного кода
 
-Требуются .NET 10 SDK, Node.js 20+ и стабильный Rust с целевой платформой MSVC.
+```bash
+git clone https://github.com/Xxx91n/env-manager.git
+cd env-manager
+cd frontend && npm ci && cd ..
+node scripts/build.mjs --arch x64
+```
+
+Требуются .NET 10 SDK, Node.js 20+ и стабильный Rust с целевой платформой MSVC. Подробности см. в [docs/build-and-release.md](../../docs/build-and-release.md).
 
 ## Использование
 
 ### CLI
 
-Полную справку по командам см. в docs/cli-commands.md.
+```bash
+# List / get / set
+env-manager-cli.exe list
+env-manager-cli.exe get PATH
+env-manager-cli.exe set JAVA_HOME "D:\jdk17" --scope system
+
+# Create a Launch profile and launch with isolated env
+env-manager-cli.exe profile create dev --type launch --target python.exe
+env-manager-cli.exe profile add-secret dev API_KEY "sk-xxx"
+env-manager-cli.exe profile launch dev
+
+# PATH health
+env-manager-cli.exe path health
+
+# Backup / restore
+env-manager-cli.exe backup --output backup.json
+env-manager-cli.exe restore backup.json
+
+# Disaster recovery + tamper-evident audit
+env-manager-cli.exe export-state --output state.dpapi
+env-manager-cli.exe audit verify --strict
+
+# Service control
+env-manager-cli.exe service status
+```
+
+Полную справку по командам см. в [docs/cli-commands.md](../../docs/cli-commands.md).
 
 ### GUI
 
-Запустите env-manager.exe. GUI предоставляет список переменных в реальном времени с поиском, фильтрацией по области действия, встроенным редактированием, редактором PATH с переупорядочиванием перетаскиванием, управлением профилями, выбором провайдера секретов, панелью управления службой, историей аудита и i18n на 10 языках.
+Запустите `env-manager.exe`. GUI предоставляет список переменных в реальном времени с поиском, фильтрацией по области, встроенным редактированием, редактором PATH с переупорядочиванием перетаскиванием, управлением профилями, выбором провайдера секретов, панелью управления службой, историей аудита и i18n на 10 языках.
 
 ## Архитектура
 
-- CLI: исполняемый файл-одиночка на C# .NET 10 — уровень координации и шлюз к реестру.
-- Служба: автономный бинарник на Rust, управляющий жизненным циклом монтирования секретов через IPC по named pipe.
-- GUI: фронтенд на Tauri 2 + Svelte 4, использующий те же контракты IPC.
+```mermaid
+flowchart LR
+    GUI[Tauri GUI - Svelte] -->|named pipe IPC| SVC[env-manager-service Rust]
+    GUI --> CLI[env-manager-cli C#]
+    SVC --> CLI
+    CLI --> REG[(Registry HKCU/HKLM)]
+    CLI --> SEC[Secret Providers]
+```
+
+- **CLI**: исполняемый файл-одиночка на C# .NET 10 — уровень координации и шлюз к реестру.
+- **Служба**: автономный бинарник на Rust, управляющий жизненным циклом монтирования секретов через IPC по named pipe.
+- **GUI**: фронтенд на Tauri 2 + Svelte 4, использующий те же контракты IPC.
 
 ## Провайдеры секретов
 
-8 бэкендов провайдеров с предварительной проверкой активации — ошибки отображаются встроенными янтарными баннерами прямо в редакторе профилей.
+8 бэкендов провайдеров с предварительной проверкой активации — ошибки отображаются встроенными янтарными баннерами прямо в редакторе профилей:
 
-Требования по каждому провайдеру, разовую настройку и шаги исправления ошибок активации см. в docs/secret-providers-guide.md.
+| Провайдер | Метод аутентификации | Периодическое обновление | Документы |
+|---|---|---|---|
+| DPAPI CurrentUser | Windows DPAPI | Нет (per-user) | [Руководство](../../docs/secret-providers-guide.md) |
+| Windows Credential Manager | CredMan + DPAPI | Нет (per-user) | [Руководство](../../docs/secret-providers-guide.md) |
+| PowerShell SecretManagement | SecretStore vault | По возможности | [Руководство](../../docs/secret-providers-guide.md) |
+| HashiCorp Vault KV v2 | VAULT_TOKEN / AppRole cert | Да | [Руководство](../../docs/secret-providers-guide.md) |
+| SOPS | Age / PGP / KMS | Да | [Руководство](../../docs/secret-providers-guide.md) |
+| Azure Key Vault | SP cert / managed identity | Да | [Руководство](../../docs/secret-providers-guide.md) |
+| 1Password CLI | OP_SERVICE_ACCOUNT_TOKEN | Да | [Руководство](../../docs/secret-providers-guide.md) |
+| AWS Secrets Manager | SigV4 + access keys | Да | [Руководство](../../docs/secret-providers-guide.md) |
+
+Требования по каждому провайдеру, разовую настройку и шаги исправления ошибок активации см. в [docs/secret-providers-guide.md](../../docs/secret-providers-guide.md).
 
 ## Режим службы
 
-env-manager-service.exe — автономный бинарник на Rust, управляющий жизненным циклом монтирования секретов через IPC по named pipe:
+`env-manager-service.exe` — автономный бинарник на Rust, управляющий жизненным циклом монтирования секретов через IPC по named pipe:
 
-- RuntimeMode: Service (под управлением SCM, запуск при загрузке машины), Background (запускается пользователем), Cli (одноразовый шлюз)
-- Цикл согласования: периодическое полное сканирование каждые 300 с, идемпотентный обработчик для каждого элемента, задержка 30 с до первого прохода
-- Журнал аудита: audit-ledger.jsonl только на добавление с цепочкой хэшей, ротацией при 100 МБ и обнаружением вмешательства
-- IPC: флаг named pipe против перехвата, лимит запроса 65536 байт, протокол JSON с разделителем-переводом строки
-- Watchdog: восстановление в два слоя — автоперезапуск SCM (режим Service) + watchdog GUI с ping каждые 30 с (режим Background)
+- **RuntimeMode**: Service (под управлением SCM, запуск при загрузке машины), Background (запускается пользователем), Cli (одноразовый шлюз)
+- **Цикл согласования**: периодическое полное сканирование каждые 300 с, идемпотентный обработчик для каждого элемента, задержка 30 с до первого прохода
+- **Журнал аудита**: `audit-ledger.jsonl` только на добавление с цепочкой хэшей, ротацией при 100 МБ и обнаружением вмешательства
+- **IPC**: флаг named pipe против перехвата, лимит запроса 65536 байт, протокол JSON с разделителем-переводом строки
+- **Watchdog**: восстановление в два слоя — автоперезапуск SCM (режим Service) + watchdog GUI с ping каждые 30 с (режим Background)
+
+## Limitations
+
+- Текущие сборки не подписаны кодом: SmartScreen может показать предупреждение при первом запуске (см. [Безопасность](#безопасность)).
+- Распространение через winget запланировано, но пока недоступно.
+- Для GUI требуется WebView2 Runtime; сборки Portable и «Только CLI» требуют .NET 10 Desktop Runtime (см. «Предварительные требования»).
+- Только Windows.
 
 ## Документация
 
+| Документ | Содержание |
+|---|---|
+| [CHANGELOG.md](../../CHANGELOG.md) | История версий (формат keepachangelog) |
+| [docs/cli-commands.md](../../docs/cli-commands.md) | Полная справка по командам CLI |
+| [docs/architecture.md](../../docs/architecture.md) | Глубокая архитектура |
+| [docs/plaintext-sinks.md](../../docs/plaintext-sinks.md) | Где может существовать открытый текст секретов |
+| [docs/backup-and-profiles.md](../../docs/backup-and-profiles.md) | Резервное копирование, восстановление, семантика профилей |
+| [docs/secret-providers-guide.md](../../docs/secret-providers-guide.md) | Настройка провайдеров секретов |
+| [docs/build-and-release.md](../../docs/build-and-release.md) | Процесс сборки и релиза |
+| [AGENTS.md](../../AGENTS.md) / [AGENTS.cli.md](../../AGENTS.cli.md) | Руководства для агентов |
+
 ## Поддержка
+
+[@Xxx91n](https://github.com/Xxx91n)
 
 ## Вклад в проект
 
-Приветствуются issues и PR. Сначала прочтите AGENTS.md: там описаны границы архитектуры и политика тестирования.
+Приветствуются issues и PR. Сначала прочтите [AGENTS.md](../../AGENTS.md): там описаны границы архитектуры и политика тестирования.
 
 ## Лицензия
 
-Apache-2.0 (c) 2026 Env Manager Contributors.
+Apache-2.0 © 2026 Env Manager Contributors. См. [LICENSE](../../LICENSE).

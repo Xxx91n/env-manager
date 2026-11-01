@@ -6,174 +6,230 @@
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="../../docs/assets/logo-dark-theme.png">
   <source media="(prefers-color-scheme: light)" srcset="../../docs/assets/logo-light-theme.png">
-  <img src="../../docs/assets/logo.png" alt="Env Manager 标志" width="120" height="120">
+  <img src="../../docs/assets/logo.png" alt="Logotipo de Env Manager" width="120" height="120">
 </picture>
-<p align="center">
-  <img src="../../docs/assets/brand/hero.gif" alt="Env Manager mini hero" width="100%">
-</p>
 
+<p align="center">
+  <img src="../../docs/assets/brand/hero.gif" alt="Hero de Env Manager: símbolo del sistema con un emblema de tres picos en los tokens de color Dev/Staging/Prod" width="100%">
+</p>
 
 # Env Manager
 
-Un gestor moderno y ligero de variables de entorno de Windows, con modo dual CLI y GUI, inspirado en Microsoft PowerToys pero independiente y diseñado para agentes.
+Un gestor de variables de entorno de Windows con dos frontends: una CLI en C# creada para scripts y agentes de IA, y una GUI en Tauri para la edición interactiva, sobre un mismo conjunto de contratos de registro.
 
-**"Se adapta sin fisuras a cualquier entorno."**
+**"Se adapta a la perfección a cada entorno."**
 
 [![Release](https://img.shields.io/github/v/release/Xxx91n/env-manager)](https://github.com/Xxx91n/env-manager/releases)
 [![License](https://img.shields.io/badge/License-Apache--2.0-yellow.svg)](../../LICENSE)
-[![Platform](https://img.shields.io/badge/Platform-Windows%2010%2B-brightgreen?logo=windows&logoColor=white)](#install)
-[![.NET 10](https://img.shields.io/badge/.NET-10-512BD4?logo=dotnet&logoColor=white)](#prerequisites)
-[![Tauri](https://img.shields.io/badge/Tauri-2-24C8D8?logo=tauri&logoColor=white)](#architecture)
+[![Platform](https://img.shields.io/badge/Platform-Windows%2010%2B-brightgreen?logo=windows&logoColor=white)](#instalación)
+[![.NET 10](https://img.shields.io/badge/.NET-10-512BD4?logo=dotnet&logoColor=white)](#requisitos-previos)
+[![Tauri](https://img.shields.io/badge/Tauri-2-24C8D8?logo=tauri&logoColor=white)](#arquitectura)
+
+[Instalación](#instalación) · [Características](#características) · [Referencia CLI](../../docs/cli-commands.md) · [Arquitectura](#arquitectura) · [Registro de cambios](../../CHANGELOG.md)
 
 <!-- README-I18N:START -->
-**言語:** [English](../../README.md) · **Español** · [日本語](README.ja.md) · [한국어](README.ko.md) · [Deutsch](README.de.md) · [Français](README.fr.md) · [Español](README.es.md) · [Português](README.pt.md) · [Русский](README.ru.md) · [العربية](README.ar.md)
+**Idiomas:** [English](../../README.md) · [简体中文](README.zh_CN.md) · [日本語](README.ja.md) · [한국어](README.ko.md) · [Deutsch](README.de.md) · [Français](README.fr.md) · **Español** · [Português](README.pt.md) · [Русский](README.ru.md) · [العربية](README.ar.md)
 <!-- README-I18N:END -->
 
 </div>
 
-
----
-
-
 ## Demos
 
-<p align="center">
-  <img src="../../docs/assets/demo.gif" alt="Env Manager CLI demo" width="100%">
-</p>
-
-
-La demo muestra comandos CLI de solo lectura en acción: agents --summary, path health, get PATH y agents --json. Regenera con `node scripts/demo/capture.mjs`.
-
-*La salida del terminal mostrada arriba usa datos simulados.*
-
-
-### Galería
+### GUI
 
 | | | |
 |:-:|:-:|:-:|
-| ![Vista de variables](../../docs/assets/gallery/01-variables.png)<br>**Variables** — búsqueda, alcance, acciones por fila | ![Ámbito de sistema](../../docs/assets/gallery/02-variables-system.png)<br>**Ámbito de sistema** — entradas protegidas bloqueadas | ![Editor de PATH](../../docs/assets/gallery/03-path-editor.png)<br>**Editor de PATH** — detección de entradas muertas y duplicadas |
-| ![Perfiles](../../docs/assets/gallery/04-profiles.png)<br>**Perfiles** — aplicar / lanzar / heredar | ![Historial e importación](../../docs/assets/gallery/05-history.png)<br>**Historial e importación** — cambios reversibles | ![Protección](../../docs/assets/gallery/06-protection.png)<br>**Protección** — bloqueos personalizados |
-| ![Registro de auditoría](../../docs/assets/gallery/07-audit.png)<br>**Registro de auditoría** — encadenado por hash, verificable | ![Gestor de servicios](../../docs/assets/gallery/08-service.png)<br>**Gestor de servicios** — montajes de secretos | ![Configuración](../../docs/assets/gallery/09-settings-i18n.png)<br>**Configuración** — i18n en 10 idiomas |
-| ![Diálogo de edición](../../docs/assets/gallery/10-edit-dialog.png)<br>**Diálogo de edición** — vista previa del valor expandido | ![Tema claro](../../docs/assets/gallery/11-variables-light.png)<br>**Tema claro** — Variante | ![CLI](../../docs/assets/gallery/12-cli-terminal.png)<br>**CLI** — JSON primero, nativo para agentes |
+| ![Vista de variables](../../docs/assets/gallery/01-variables.webp)<br>**Variables** — búsqueda, filtro por ámbito, acciones por fila | ![Ámbito de sistema](../../docs/assets/gallery/02-variables-system.webp)<br>**Ámbito de sistema** — entradas protegidas bloqueadas | ![Editor de PATH](../../docs/assets/gallery/03-path-editor.webp)<br>**Editor de PATH** — detección de entradas muertas y duplicadas |
+| ![Perfiles](../../docs/assets/gallery/04-profiles.webp)<br>**Perfiles** — aplicar / lanzar / heredar | ![Registro de auditoría](../../docs/assets/gallery/07-audit.webp)<br>**Registro de auditoría** — encadenado por hash, verificable | ![Gestor del servicio](../../docs/assets/gallery/08-service.webp)<br>**Gestor del servicio** — montajes de secretos |
 
+### CLI
+
+<p align="center">
+  <img src="../../docs/assets/demo.gif" alt="Demo de la CLI de Env Manager: comandos agents, path health y get" width="100%">
+</p>
+
+| | |
+|:-:|:-:|
+| ![Terminal de la CLI](../../docs/assets/gallery/12-cli-terminal.webp)<br>**Salida JSON-first** — `agents --json` emite la especificación completa de comandos | La CLI es una superficie de primera clase: más de 18 comandos, todos ellos scriptables y consumibles en JSON. El manual para agentes se distribuye dentro del binario: ejecuta `env-manager-cli agents` para imprimirlo. Los comandos de solo lectura anteriores usan salida de terminal simulada; regenéralos con `node scripts/demo/capture.mjs`. |
 
 ## Características
 
-- CLI nativo para agentes — más de 18 comandos con un contrato de máquina de primera clase: env-manager-cli agents --json expone una especificación estructurada de comandos, y cada capacidad está documentada en un manual orientado a agentes (AGENTS.cli.md) que se distribuye con el binario.
-- Perfiles y configuración — los perfiles globales se aplican al registro; los perfiles de lanzamiento (Launch profiles) inyectan un bloque de entorno aislado en un único proceso (nunca tocan el registro ni emiten WM_SETTINGCHANGE). Incluyen herencia, vistas previas de conflictos y reversión segura en orden inverso.
-- 8 proveedores de secretos — DPAPI, Credential Manager, SecretStore, HashiCorp Vault, SOPS, Azure Key Vault, 1Password, AWS Secrets Manager. Los secretos solo se guardan como sobres cifrados; la tabla de [Seguridad](#seguridad) detalla exactamente dónde puede quedar expuesto el texto en claro. Para los comandos de secretos, los perfiles solo guardan sobres cifrados; el texto en claro puede aparecer en archivos temporales, procesos/solicitudes y salidas documentadas, con limpieza y redacción en la medida de lo posible.
-- Protegido por defecto — las variables del sistema y las entradas de PATH no se pueden eliminar ni renombrar; cada escritura es un contrato serializado de tres capas (mutex + bloqueo de escritura + verificación antes del intercambio).
-- Salud de PATH — detecta entradas duplicadas y obsoletas, con --fix / --dry-run.
-- Registro de auditoría — historial de solo añadido (append-only) encadenado por hash SHA256, con reversión y exportación para recuperación ante desastres.
-- Modo dual CLI + GUI — CLI en C# para scripting/CI; GUI nativa Tauri 2 + Svelte para edición interactiva. Ambos pasan por los mismos contratos de registro. i18n en 10 idiomas.
+- **Dos frontends** — `env-manager-cli` para scripting y CI, `env-manager.exe` (Tauri 2 + Svelte) para la edición interactiva. Ambos pasan por los mismos contratos de registro.
+- **Protegido por defecto** — las variables del sistema y las entradas de PATH no se pueden eliminar ni renombrar; cada escritura se serializa a través de tres capas (mutex + bloqueo de escritura + verificación antes del intercambio).
+- **Perfiles** — los perfiles globales se aplican al registro; los perfiles launch inyectan un bloque de entorno aislado en un único proceso sin tocar el registro. Herencia, vista previa de conflictos, reversión en orden inverso.
+- **8 proveedores de secretos** — DPAPI, Credential Manager, SecretStore, HashiCorp Vault, SOPS, Azure Key Vault, 1Password, AWS Secrets Manager. Los verbos de secretos solo persisten sobres cifrados; el límite de exposición del texto en claro está en [Seguridad](#seguridad) y [docs/plaintext-sinks.md](../../docs/plaintext-sinks.md).
+- **Salud de PATH** — `path health` detecta entradas duplicadas y muertas; `--fix` las reescribe, `--dry-run` informa.
+- **Registro de auditoría** — historial de solo añadido (append-only) encadenado por hash SHA256, con reversión y exportación para recuperación ante desastres.
 
 ## Para agentes de IA
 
-Env Manager está diseñado para ser operado por agentes LLM, no solo por humanos:
+```bash
+env-manager-cli agents            # print the embedded agent manual
+env-manager-cli agents --path     # file path of the manual (AGENTS.cli.md)
+env-manager-cli agents --summary  # one-line machine-readable spec
+env-manager-cli agents --json     # full command table as structured JSON
+```
 
-- AGENTS.md — instrucciones a nivel de repositorio para agentes (arquitectura, límites estrictos, pruebas).
-- AGENTS.cli.md — se distribuye con el binario CLI para que cualquier agente pueda descubrir el contrato en tiempo de ejecución.
-- Superficie de agente acotada por capacidades — la lista blanca opcional (opt-in) agentCapabilities en secret-providers.json permite a los despliegues rechazar llamadas paralelas set/delete provenientes de agentes.
+- [AGENTS.md](../../AGENTS.md) — instrucciones a nivel de repositorio para agentes (arquitectura, límites estrictos, pruebas).
+- [AGENTS.cli.md](../../AGENTS.cli.md) — se distribuye dentro del binario de la CLI, de modo que un agente puede descubrir el contrato en tiempo de ejecución.
+- **Superficie acotada por capacidades** — una lista blanca `agentCapabilities` de inclusión voluntaria (opt-in) en `secret-providers.json` permite a los despliegues rechazar llamadas set/delete paralelas provenientes de agentes.
 
 ## Seguridad
 
-> Las compilaciones actuales no están firmadas con código. Windows SmartScreen puede mostrar una advertencia de aplicación no reconocida en el primer inicio: haz clic en Más información y luego en Ejecutar de todos modos. Hemos solicitado la firma gratuita de código para código abierto a través de la SignPath Foundation; una vez aprobada, todos los artefactos de la versión (MSI + EXE) estarán firmados.
+> [!WARNING]
+> Las compilaciones actuales **no están firmadas con código**. Windows SmartScreen puede mostrar una advertencia de "aplicación no reconocida" en el primer inicio: haz clic en "Más información" y luego en "Ejecutar de todos modos". Hemos solicitado la firma de código gratuita para código abierto a través de la SignPath Foundation; una vez aprobada, todos los artefactos de la versión (MSI + EXE) estarán firmados. Consulta la [Política de firma de código](../../docs/code-signing-policy.md).
 
-Las variables protegidas y las entradas de PATH se deshabilitan antes de su eliminación, con verificación exacta del tipo de valor del registro al restaurar. La IPC por named pipe usa indicadores antisquatting y validación de entrada (máximo 64 argumentos, límite de 32767 caracteres, rechazo de bytes nulos).
+Las variables protegidas y las entradas de PATH se deshabilitan antes de su eliminación, con verificación exacta del tipo de valor del registro al restaurar. La IPC por named pipe usa indicadores antisquatting y validación de entrada (máximo 64 argumentos, límite de 32767 caracteres, rechazo de bytes nulos). Consulta [SECURITY.md](../../SECURITY.md) para informar de vulnerabilidades.
 
-### Dónde puede existir texto en claro (tabla de límites de secretos)
+**Modelo de amenaza.** El adversario contra el que *no* defendemos es cualquier proceso que se ejecute dentro de tu propia sesión de usuario de Windows: ya puede llamar a `profile reveal-secret`, leer el bloque de entorno de un proceso hijo lanzado o capturar los archivos temporales transitorios que generan los proveedores. Lo que el diseño *sí* acota: el texto cifrado DPAPI-CurrentUser es indescifrable para otro usuario o máquina, los secretos no pueden llegar al registro, y ningún otro destino aparte de la ruta de revelado prevista está *diseñado* para transportar un valor secreto.
 
-| Destino | ¿Queda texto en claro? | Duración | Limpieza | Fundamento |
-|---|---|---|---|---|
-| `profiles.json` / `secretMount.json` | No para los verbos de secretos: solo el sobre `{provider, version, createdAt, ciphertext, targetName}` o una referencia `mount:<id>`; los verbos genéricos `add-var`/`edit-var` omiten el marcador (ver [Ciclo de vida del texto en claro](../../docs/architecture.md#v070-dpapi-secrets-runtime)) | Hasta que se elimina el secreto | `profile remove-secret` elimina el sobre y el estado del lado del proveedor | límite estricto; aserción de contrato `plaintext-never-in-envelope` |
-| dpapi-current-user | No: DPAPI `CryptProtectData`, ámbito CurrentUser | Dentro del sobre | Junto con el sobre | límite estricto (v0.7.0) |
-| credential-manager | No: el blob de CredMan se cifra con DPAPI antes de persistirse | Hasta el `Delete` del proveedor | `Delete` en remove-secret | [guía de proveedores](../../docs/secret-providers-guide.md) |
-| powershell-secretmanagement | El archivo del almacén SecretStore sigue cifrado, pero el texto en claro pasa por el argumento `pwsh -EncodedCommand` (script en base64) en cada llamada | Vida del proceso pwsh; la entrada del almacén hasta que se elimina | El argumento muere con el proceso; la entrada del almacén se borra con remove-secret | límite estricto (v0.7.4) |
-| vault-kv2 · azure-keyvault · aws-secretsmanager · 1password | Sin texto en claro local: el perfil guarda una referencia de ruta/ID de secreto; el secreto permanece en el backend remoto. El perfil local no contiene texto en claro; puede aparecer temporalmente en argumentos/salida de procesos del proveedor y cuerpos de solicitudes durante sus operaciones.| Política del operador, en el backend | `Delete` del proveedor; `secret-provider rotate` vuelve a cifrar | [guía de proveedores](../../docs/secret-providers-guide.md) |
-| sops | Solo texto cifrado en el sobre, **más** `secret.json` / `secret.dec.json` en claro en un directorio propio de cada llamada durante el cifrado/descifrado: `%TEMP%\env-manager-sops-*`, o un directorio dentro de la raíz propiedad del servicio cuando la rotación se delegó. Si un proceso auxiliar conserva un archivo más allá de la ventana de recuperación, el borrado puede fallar y quedar la raíz scratch; la limpieza es en la medida de lo posible.| Segundos por llamada | `Directory.Delete` de ese directorio. Si lo delega el servicio, el servicio borra toda la raíz cuando el proceso hijo de la CLI ya no existe —incluida una parada que terminó la CLI—, con reintentos acotados y un log de nivel error (nunca en silencio) si el borrado sigue fallando; ejecutado a mano, el borrado es en la medida de lo posible y un cierre inesperado puede dejarlo huérfano. El directorio se crea solo para el propietario (herencia desactivada; identidad actual, SYSTEM, Administrators), así que un huérfano solo es legible por esas identidades, salvo que aplicar esa DACL haya fallado, en cuyo caso conserva la ACL que habría heredado (la de `%TEMP%`, o la de la raíz scratch del servicio en una delegación) | límite estricto (v0.7.11); `SopsProvider`, `SecretTempDirectory`, `service/src/sops_scratch.rs` |
-| Memoria del proceso lanzador (`env-manager-cli`) | Sí: los bytes descifrados existen brevemente en el proceso lanzador. Los valores pueden permanecer en System.String hasta que termine la CLI; SecretString solo limpia su copia separada y pueden persistir copias del GC y cadenas intermedias.| Milisegundos, hasta completar la inyección/reveal | `SecretString` pone a cero su `char[]` en Dispose, en la **medida de lo posible**: copias del GC y cadenas intermedias pueden sobrevivir | Puesta a cero de `SecretString`; [red canary de cero fugas](../../docs/architecture.md#canary-zero-leak-assertion-net-and-goldensnapshot-layers) |
-| Bloque de entorno del proceso hijo lanzado | Sí: las variables inyectadas están en claro dentro del proceso hijo | Vida del proceso hijo | Imposible: por diseño del SO, los bloques de entorno son legibles por el mismo usuario | Diseño de los perfiles Launch |
-| Salida estándar de `profile reveal-secret` | Sí, **por diseño**; una de las dos rutas de salida en claro (`profile reveal-secret`, `profile show --reveal`) | Hasta que se borra el historial del terminal ; Un consumidor posterior de una tubería puede conservar su copia hasta eliminarla.| Ninguna: la invoca el usuario | límite estricto; la red canary omite deliberadamente estos destinos |
-| Archivos temporales del kit de supervivencia (`envmanager-kit-*.json` bajo `%TEMP%\env-manager-kit-<guid>\`, `mount-survival-kit.tmp.json`) | Sí: un breve archivo temporal en claro durante el ensamblado del kit. El archivo del kit del lado de la CLI se escribe dentro de `%TEMP%\env-manager-kit-<guid>\`, un directorio creado solo para el propietario (herencia desactivada; identidad actual, SYSTEM, Administrators), así que un huérfano solo es legible por esas identidades, salvo que aplicar esa DACL haya fallado, en cuyo caso conserva la ACL heredada de `%TEMP%`. El `mount-survival-kit.tmp.json` del lado del servicio está en el directorio del ledger, no bajo `%TEMP%` | Segundos | Borrado en la medida de lo posible tras el cifrado y, después, borrado en la medida de lo posible del directorio que lo contenía: si falla el borrado del directorio queda un directorio vacío, y si también falló el del archivo, el archivo en claro sobrevive igualmente; ambos en la medida de lo posible, como en las filas de sops anteriores | `AuditLedgerMigration.RunAuditExportSurvivalKit`, `SecretTempDirectory.Create`; `service/src/audit_ledger.rs` |
-| `audit-ledger.jsonl` | No se copian valores secretos a eventos de ledger migrados; solo se guardan metadatos y marcas de redacción, y no se migran resúmenes old/new genéricos. | Solo anexado, rotación a 100MB | Rotación | límite estricto (v0.9.13); cifrado estático `AuditCrypto` |
-| Archivo de `export-state` | No: doble capa: carga útil AES-256-GCM + DEK envuelta con DPAPI + HMAC-SHA256 | Hasta que borres el archivo | Gestionado por el usuario | `AuditCrypto` (v0.9.13) |
-| `logs/env-manager.log` / stderr | No por diseño: el texto de las excepciones se depura primero de 22 patrones con secretos; lista de permitidos en la **medida de lo posible**: un formato de secreto no reconocido aún podría filtrarse, acotado por un truncado a 512 caracteres | Retención de logs | — | Lista de permitidos `ScrubExceptionMessage`; `CanaryRedactionTests` + red canary de 7 destinos |
-| GUI (WebView2) / servicio Rust | No: la GUI muestra marcadores `<encrypted>` y no tiene vista de reveal; el servicio no persiste valores | — | — | límite de secretos de la arquitectura |
-| Registro de Windows | No para los verbos de secretos: los perfiles Launch no pueden escribir en el registro y apply los rechaza; la brecha de renombrado de los verbos genéricos puede alcanzarlo (ver [Ciclo de vida del texto en claro](../../docs/architecture.md#v070-dpapi-secrets-runtime)) | — | — | límite estricto; invariante `launch-env-injection.Tests.ps1` |
-
-Esta tabla es el resumen para usuarios; la lista de permitidos autoritativa por superficie, incluida la brecha de los verbos genéricos, es la sección Plaintext lifecycle de `docs/architecture.md`.
-
-La puesta a cero de memoria y la limpieza de logs son higiene en la medida de lo posible, no garantías: la misma salvedad que Microsoft documenta para `SecureString` (cadenas inmutables, reubicación del GC, copias de interop). Donde la afirmación puede probarse, se prueba: `tests/canary-redaction.Tests.ps1` revisa 7 salidas en busca de un canary sembrado, y la suite de contratos compartida verifica `plaintext-never-in-envelope` en los 8 proveedores.
+**Límite de texto en claro.** La matriz completa destino por destino —dónde puede existir texto en claro, durante cuánto tiempo y quién lo limpia— está en [docs/plaintext-sinks.md](../../docs/plaintext-sinks.md); la sección Plaintext lifecycle de `docs/architecture.md` es la lista de permitidos autoritativa por superficie. La puesta a cero de memoria y la depuración de logs son higiene en la medida de lo posible, no garantías; `tests/canary-redaction.Tests.ps1` revisa 7 destinos de salida en busca de un canary sembrado, y la suite de contratos compartida verifica `plaintext-never-in-envelope` en los 8 proveedores.
 
 ## Instalación
 
 ### Instalador MSI
 
-Descarga el MSI desde GitHub Releases y ejecútalo. Crea accesos directos del menú Inicio automáticamente. Disponible en x64, x86 y ARM64.
+Descarga el MSI desde [GitHub Releases](https://github.com/Xxx91n/env-manager/releases) y ejecútalo. Crea accesos directos del menú Inicio automáticamente. Disponible en x64, x86 y ARM64.
 
 ### Portable
 
-Descarga el ZIP portable desde GitHub Releases. Extrae y ejecuta env-manager.exe directamente. No requiere instalación.
+Descarga el ZIP portable desde [GitHub Releases](https://github.com/Xxx91n/env-manager/releases). Extrae y ejecuta `env-manager.exe` directamente. No requiere instalación.
 
 ### Solo CLI
 
-Descarga el ZIP solo CLI para uso sin interfaz o mediante scripting: env-manager-cli.exe más los archivos .dll. Sin GUI, sin dependencia de WebView2.
+Descarga el ZIP solo CLI para uso sin interfaz o mediante scripting: `env-manager-cli.exe` más los archivos `.dll`. Sin GUI, sin dependencia de WebView2.
 
 ### Requisitos previos
 
-> Las compilaciones portable y solo CLI dependen del framework: requieren el .NET 10 Desktop Runtime en la máquina de destino. El instalador MSI comprueba .NET 10 durante la instalación y lo solicita automáticamente.
-> El runtime WebView2 (para la GUI) viene preinstalado en Windows 11 y está disponible para Windows 10 21H2+ desde Microsoft.
+> [!IMPORTANT]
+> Las compilaciones **Portable** y **Solo CLI** dependen del framework: requieren el **.NET 10 Desktop Runtime** en la máquina de destino — descárgalo desde la [página oficial de descargas de .NET](https://dotnet.microsoft.com/download/dotnet/10.0). El **instalador MSI** comprueba .NET 10 durante la instalación y lo solicita automáticamente.
+>
+> El **runtime WebView2** (para la GUI) viene preinstalado en Windows 11 y está disponible para Windows 10 21H2+ desde [Microsoft](https://developer.microsoft.com/microsoft-edge/webview/).
 
-Para las herramientas externas opcionales de proveedores de secretos (SOPS, 1Password CLI, Vault CLI, AWS CLI, Azure CLI, PowerShell 7), consulta la Guía de proveedores de secretos.
+Para las herramientas externas opcionales de proveedores de secretos (SOPS, 1Password CLI, Vault CLI, AWS CLI, Azure CLI, PowerShell 7), consulta la [Guía de proveedores de secretos](../../docs/secret-providers-guide.md).
 
 ### winget
 
+> [!NOTE]
 > La distribución mediante winget está planificada pero aún no disponible. Haz seguimiento de las novedades en GitHub Issues.
 
 ### Desde el código fuente
 
-Requiere .NET 10 SDK, Node.js 20+ y Rust estable con destino MSVC.
+```bash
+git clone https://github.com/Xxx91n/env-manager.git
+cd env-manager
+cd frontend && npm ci && cd ..
+node scripts/build.mjs --arch x64
+```
+
+Requiere .NET 10 SDK, Node.js 20+ y Rust estable con destino MSVC. Consulta [docs/build-and-release.md](../../docs/build-and-release.md) para más detalles.
 
 ## Uso
 
 ### CLI
 
-Consulta docs/cli-commands.md para la referencia completa de comandos.
+```bash
+# List / get / set
+env-manager-cli.exe list
+env-manager-cli.exe get PATH
+env-manager-cli.exe set JAVA_HOME "D:\jdk17" --scope system
+
+# Create a Launch profile and launch with isolated env
+env-manager-cli.exe profile create dev --type launch --target python.exe
+env-manager-cli.exe profile add-secret dev API_KEY "sk-xxx"
+env-manager-cli.exe profile launch dev
+
+# PATH health
+env-manager-cli.exe path health
+
+# Backup / restore
+env-manager-cli.exe backup --output backup.json
+env-manager-cli.exe restore backup.json
+
+# Disaster recovery + tamper-evident audit
+env-manager-cli.exe export-state --output state.dpapi
+env-manager-cli.exe audit verify --strict
+
+# Service control
+env-manager-cli.exe service status
+```
+
+Consulta [docs/cli-commands.md](../../docs/cli-commands.md) para la referencia completa de comandos.
 
 ### GUI
 
-Ejecuta env-manager.exe. La GUI ofrece una lista de variables en tiempo real con búsqueda, filtrado por ámbito, edición en línea, un editor de PATH con reordenación por arrastrar y soltar, gestión de perfiles, selección de proveedores de secretos, panel de control del servicio, historial de auditoría e i18n en 10 idiomas.
+Ejecuta `env-manager.exe`. La GUI ofrece una lista de variables en tiempo real con búsqueda, filtrado por ámbito y edición en línea, un editor de PATH con reordenación por arrastrar y soltar, gestión de perfiles, selección de proveedores de secretos, panel de control del servicio, historial de auditoría e i18n en 10 idiomas.
 
 ## Arquitectura
 
-- CLI: ejecutable de archivo único en C# .NET 10 — la capa de coordinación y la puerta de enlace del registro.
-- Servicio: binario Rust independiente que gestiona el ciclo de vida del montaje de secretos mediante IPC por named pipe.
-- GUI: frontend Tauri 2 + Svelte 4 que usa los mismos contratos IPC.
+```mermaid
+flowchart LR
+    GUI[Tauri GUI - Svelte] -->|named pipe IPC| SVC[env-manager-service Rust]
+    GUI --> CLI[env-manager-cli C#]
+    SVC --> CLI
+    CLI --> REG[(Registry HKCU/HKLM)]
+    CLI --> SEC[Secret Providers]
+```
+
+- **CLI**: ejecutable de archivo único en C# .NET 10 — la capa de coordinación y la puerta de enlace del registro.
+- **Servicio**: binario Rust independiente que gestiona el ciclo de vida del montaje de secretos mediante IPC por named pipe.
+- **GUI**: frontend Tauri 2 + Svelte 4 que usa los mismos contratos IPC.
 
 ## Proveedores de secretos
 
-8 backends de proveedores con comprobación previa de activación: los fallos aparecen como avisos ámbar en línea directamente en el editor de perfiles.
+8 backends de proveedores con comprobación previa de activación — los fallos aparecen como avisos ámbar en línea directamente en el editor de perfiles:
 
-Consulta docs/secret-providers-guide.md para conocer los requisitos previos por proveedor, la configuración inicial única y los pasos para solucionar errores de activación.
+| Proveedor | Método de autenticación | Refresco periódico | Docs |
+|---|---|---|---|
+| DPAPI CurrentUser | Windows DPAPI | No (por usuario) | [Guía](../../docs/secret-providers-guide.md) |
+| Windows Credential Manager | CredMan + DPAPI | No (por usuario) | [Guía](../../docs/secret-providers-guide.md) |
+| PowerShell SecretManagement | Almacén SecretStore | Mejor esfuerzo | [Guía](../../docs/secret-providers-guide.md) |
+| HashiCorp Vault KV v2 | VAULT_TOKEN / cert. de AppRole | Sí | [Guía](../../docs/secret-providers-guide.md) |
+| SOPS | Age / PGP / KMS | Sí | [Guía](../../docs/secret-providers-guide.md) |
+| Azure Key Vault | cert. de SP / identidad administrada | Sí | [Guía](../../docs/secret-providers-guide.md) |
+| 1Password CLI | OP_SERVICE_ACCOUNT_TOKEN | Sí | [Guía](../../docs/secret-providers-guide.md) |
+| AWS Secrets Manager | SigV4 + claves de acceso | Sí | [Guía](../../docs/secret-providers-guide.md) |
+
+Consulta [docs/secret-providers-guide.md](../../docs/secret-providers-guide.md) para conocer los requisitos previos por proveedor, la configuración inicial única y los pasos para solucionar errores de activación.
 
 ## Modo servicio
 
-env-manager-service.exe es un binario Rust independiente que gestiona el ciclo de vida del montaje de secretos mediante IPC por named pipe:
+`env-manager-service.exe` es un binario Rust independiente que gestiona el ciclo de vida del montaje de secretos mediante IPC por named pipe:
 
-- RuntimeMode: Service (gestionado por SCM, arranque de la máquina), Background (iniciado por el usuario), Cli (puerta de enlace de un solo uso)
-- Bucle de reconciliación: escaneo completo periódico cada 300 s, controlador idempotente por elemento, retraso de 30 s en el primer ciclo
-- Registro de auditoría: audit-ledger.jsonl de solo añadido y encadenado por hash, con rotación de 100 MB y detección de manipulación
-- IPC: indicador de pipe antisquatting, límite de 65536 bytes por solicitud, protocolo JSON delimitado por saltos de línea
-- Watchdog: recuperación en dos capas — reinicio automático de SCM (modo Service) + watchdog de ping de 30 s de la GUI (modo Background)
+- **RuntimeMode**: Service (gestionado por SCM, arranque del sistema), Background (iniciado por el usuario), Cli (puerta de enlace de un solo uso)
+- **Bucle de reconciliación**: escaneo completo periódico cada 300 s, controlador idempotente por elemento, retraso de 30 s en el primer ciclo
+- **Registro de auditoría**: `audit-ledger.jsonl` de solo añadido y encadenado por hash, con rotación de 100 MB y detección de manipulación
+- **IPC**: indicador de pipe antisquatting, límite de 65536 bytes por solicitud, protocolo JSON delimitado por saltos de línea
+- **Watchdog**: recuperación en dos capas — reinicio automático de SCM (modo Service) + watchdog de ping de 30 s de la GUI (modo Background)
+
+## Limitations
+
+- Las compilaciones actuales no están firmadas con código: SmartScreen puede advertir en el primer inicio (ver [Seguridad](#seguridad)).
+- La distribución por winget está planificada pero aún no disponible.
+- La GUI requiere WebView2 Runtime; los builds Portable y Solo CLI requieren .NET 10 Desktop Runtime (ver Requisitos previos).
+- Solo Windows.
 
 ## Documentación
 
+| Documento | Contenido |
+|---|---|
+| [CHANGELOG.md](../../CHANGELOG.md) | Historial de versiones (formato keepachangelog) |
+| [docs/cli-commands.md](../../docs/cli-commands.md) | Referencia completa de comandos CLI |
+| [docs/architecture.md](../../docs/architecture.md) | Arquitectura en profundidad |
+| [docs/plaintext-sinks.md](../../docs/plaintext-sinks.md) | Dónde puede existir texto en claro de secretos |
+| [docs/backup-and-profiles.md](../../docs/backup-and-profiles.md) | Copia de seguridad, restauración, semántica de perfiles |
+| [docs/secret-providers-guide.md](../../docs/secret-providers-guide.md) | Configuración de proveedores de secretos |
+| [docs/build-and-release.md](../../docs/build-and-release.md) | Proceso de compilación y publicación |
+| [AGENTS.md](../../AGENTS.md) / [AGENTS.cli.md](../../AGENTS.cli.md) | Guías para agentes |
+
 ## Mantenedores
+
+[@Xxx91n](https://github.com/Xxx91n)
 
 ## Contribuciones
 
-Se aceptan issues y PR. Lee primero AGENTS.md para conocer los límites de arquitectura y la política de pruebas.
+Se aceptan issues y PR. Lee primero [AGENTS.md](../../AGENTS.md) para conocer los límites de arquitectura y la política de pruebas.
 
 ## Licencia
 
-Apache-2.0 (c) 2026 Env Manager Contributors.
+Apache-2.0 © 2026 Env Manager Contributors. Consulta [LICENSE](../../LICENSE).
