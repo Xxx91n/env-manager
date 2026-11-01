@@ -61,7 +61,7 @@
 - **واجهتان** — `env-manager-cli` للنصوص البرمجية وCI، و`env-manager.exe` (Tauri 2 + Svelte) للتحرير التفاعلي. كلاهما يمر عبر عقدي السجل نفسيهما.
 - **محمي افتراضيًا** — لا يمكن حذف متغيرات النظام وإدخالات PATH أو إعادة تسميتها؛ كل كتابة متسلسلة عبر ثلاث طبقات (mutex + قفل كتابة + تحقق قبل الاستبدال).
 - **الملفات الشخصية** — تُطبَّق الملفات الشخصية العامة على السجل؛ بينما تحقن ملفات التشغيل كتلة بيئة معزولة في عملية واحدة دون لمس السجل. وراثة، ومعاينة التعارضات، وتراجع بترتيب عكسي.
-- **8 موفّري أسرار** — DPAPI وCredential Manager وSecretStore وHashiCorp Vault وSOPS وAzure Key Vault و1Password وAWS Secrets Manager. أوامر الأسرار لا تحفظ إلا أغلفة مشفّرة؛ وحدود تعرّض النص الصريح مبيّنة في [الأمان](#الأمان) و[docs/plaintext-sinks.md](../../docs/plaintext-sinks.md).
+- **8 موفّري أسرار** — DPAPI وCredential Manager وSecretStore وHashiCorp Vault وSOPS وAzure Key Vault و1Password وAWS Secrets Manager. أوامر الأسرار لا تحفظ إلا أغلفة مشفّرة أو مراجع `mount:<id>` — وفجوة الأوامر العامة `add-var`/`edit-var` قد تكتب نصًّا صريحًا في السجل؛ وحدود تعرّض النص الصريح مبيّنة في [الأمان](#الأمان) و[docs/plaintext-sinks.md](../../docs/plaintext-sinks.md).
 - **صحة PATH** — يكتشف `path health` الإدخالات المكررة والميتة؛ `--fix` يعيد الكتابة، و`--dry-run` يكتفي بالتقرير.
 - **سجل التدقيق** — تاريخ للإضافة فقط (append-only) مربوط بسلسلة تجزئة SHA256، مع تراجع وتصدير للاسترداد من الكوارث.
 
@@ -85,7 +85,7 @@ env-manager-cli agents --json     # full command table as structured JSON
 
 تُعطَّل المتغيرات المحمية وإدخالات PATH قبل حذفها، مع تحقق دقيق من نوع القيمة في السجل عند الاستعادة. تستخدم IPC عبر named pipe أعلامًا مضادة للاستحواذ (anti-squatting) والتحقق من المدخلات (حد أقصى 64 وسيطًا، وسقف 32767 حرفًا، ورفض البايتات الفارغة). راجع [SECURITY.md](../../SECURITY.md) للإبلاغ عن الثغرات.
 
-**نموذج التهديد.** الخصم الذي *لا* ندافع ضده هو أي عملية تعمل داخل جلسة مستخدم Windows الخاصة بك — فهي تستطيع أصلًا استدعاء `profile reveal-secret`، أو قراءة كتلة بيئة العملية الفرعية المُطلَقة، أو اعتراض الملفات المؤقتة العابرة التي تنتجها الموفّرات. ما *يقيّده* التصميم فعلًا: نص DPAPI-CurrentUser المشفّر غير قابل للفك لمستخدم آخر أو جهاز آخر، والأسرار لا يمكن أن تصل إلى السجل، ولا يوجد أي مصبّ آخر غير مسار الكشف المصمَّم *مقصود* لحمل قيمة سرية.
+**نموذج التهديد.** الخصم الذي *لا* ندافع ضده هو أي عملية تعمل داخل جلسة مستخدم Windows الخاصة بك — فهي تستطيع أصلًا استدعاء `profile reveal-secret`، أو قراءة كتلة بيئة العملية الفرعية المُطلَقة، أو اعتراض الملفات المؤقتة العابرة التي تنتجها الموفّرات. ما *يقيّده* التصميم فعلًا: نص DPAPI-CurrentUser المشفّر غير قابل للفك لمستخدم آخر أو جهاز آخر، وأوامر الأسرار لا يمكن أن توصل سرًّا إلى السجل (باستثناء فجوة الأوامر العامة المذكورة)، ولا يوجد أي مصبّ آخر غير مسار الكشف المصمَّم *مقصود* لحمل قيمة سرية.
 
 **حدود النص الصريح.** المصفوفة الكاملة لكل مصبّ — أين يمكن أن يوجد النص الصريح، ولأي مدة، ومن ينظفه — موجودة في [docs/plaintext-sinks.md](../../docs/plaintext-sinks.md)؛ وقسم Plaintext lifecycle في `docs/architecture.md` هو قائمة السماح المرجعية لكل سطح. تصفير الذاكرة وتنقية السجلات إجراءات نظافة بأفضل جهد لا ضمانات؛ ويفحص `tests/canary-redaction.Tests.ps1` سبعة مواضع إخراج بحثًا عن canary مزروع، وتؤكد مجموعة العقود المشتركة `plaintext-never-in-envelope` على الموفّرين الثمانية جميعًا.
 
@@ -106,7 +106,7 @@ env-manager-cli agents --json     # full command table as structured JSON
 ### المتطلبات المسبقة
 
 > [!IMPORTANT]
-> إصدارات **Portable** و**CLI-Only** تعتمد على framework: تتطلب **.NET 10 Desktop Runtime** على الجهاز المستهدف — نزّله من [صفحة تنزيل .NET الرسمية](https://dotnet.microsoft.com/download/dotnet/10.0). **مثبّت MSI** يتحقق من .NET 10 وقت التثبيت ويطلبه تلقائيًا.
+> إصدارات **Portable** و**CLI-Only** تعتمد على framework: تتطلب **.NET 10 Desktop Runtime** على الجهاز المستهدف — نزّله من [صفحة تنزيل .NET الرسمية](https://dotnet.microsoft.com/download/dotnet/10.0). **مثبّت MSI** لا يتحقق من .NET ولا يثبّته — ثبّت وقت التشغيل بنفسك قبل التشغيل الأول.
 >
 > **بيئة WebView2 Runtime** (للواجهة GUI) مثبتة مسبقًا على Windows 11 ومتاحة لنظام Windows 10 21H2+ من [Microsoft](https://developer.microsoft.com/microsoft-edge/webview/).
 
@@ -126,7 +126,7 @@ cd frontend && npm ci && cd ..
 node scripts/build.mjs --arch x64
 ```
 
-يتطلب .NET 10 SDK وNode.js 20+ وRust مستقرًا مع هدف MSVC. راجع [docs/build-and-release.md](../../docs/build-and-release.md) للتفاصيل.
+يتطلب .NET 10 SDK وNode.js 18+ وRust مستقرًا مع هدف MSVC. راجع [docs/build-and-release.md](../../docs/build-and-release.md) للتفاصيل.
 
 ## الاستخدام
 
@@ -187,9 +187,9 @@ flowchart LR
 |---|---|---|---|
 | DPAPI CurrentUser | Windows DPAPI | لا (لكل مستخدم) | [دليل](../../docs/secret-providers-guide.md) |
 | Windows Credential Manager | CredMan + DPAPI | لا (لكل مستخدم) | [دليل](../../docs/secret-providers-guide.md) |
-| PowerShell SecretManagement | SecretStore vault | بأفضل جهد | [دليل](../../docs/secret-providers-guide.md) |
+| PowerShell SecretManagement | SecretStore vault | لا (CreatedOnly) | [دليل](../../docs/secret-providers-guide.md) |
 | HashiCorp Vault KV v2 | VAULT_TOKEN / AppRole cert | نعم | [دليل](../../docs/secret-providers-guide.md) |
-| SOPS | Age / PGP / KMS | نعم | [دليل](../../docs/secret-providers-guide.md) |
+| SOPS | Age / PGP / KMS | لا (CreatedOnly) | [دليل](../../docs/secret-providers-guide.md) |
 | Azure Key Vault | SP cert / managed identity | نعم | [دليل](../../docs/secret-providers-guide.md) |
 | 1Password CLI | OP_SERVICE_ACCOUNT_TOKEN | نعم | [دليل](../../docs/secret-providers-guide.md) |
 | AWS Secrets Manager | SigV4 + access keys | نعم | [دليل](../../docs/secret-providers-guide.md) |

@@ -57,7 +57,7 @@ Windows 环境变量管理器，提供两个前端——为脚本和 AI agent �
 - **双前端** —— `env-manager-cli` 面向脚本与 CI，`env-manager.exe`（Tauri 2 + Svelte）面向交互式编辑。两者都走同一套注册表契约。
 - **默认受保护** —— 系统变量和 PATH 条目不可删除或改名；每次写入都经三层串行化（互斥锁 + 写锁 + 换前验证）。
 - **配置文件** —— Global 配置文件应用到注册表；Launch 配置文件向单个进程注入隔离的环境块，不触碰注册表。支持继承、冲突预览、逆序回滚。
-- **8 种机密提供者** —— DPAPI、Credential Manager、SecretStore、HashiCorp Vault、SOPS、Azure Key Vault、1Password、AWS Secrets Manager。secret 动词仅持久化密文信封；明文暴露边界见[安全](#安全)和 [docs/plaintext-sinks.md](../../docs/plaintext-sinks.md)。
+- **8 种机密提供者** —— DPAPI、Credential Manager、SecretStore、HashiCorp Vault、SOPS、Azure Key Vault、1Password、AWS Secrets Manager。secret 动词仅持久化密文信封或 `mount:<id>` 引用——通用 `add-var`/`edit-var` 缺口仍可能把明文写入注册表；明文暴露边界见[安全](#安全)和 [docs/plaintext-sinks.md](../../docs/plaintext-sinks.md)。
 - **PATH 健康检查** —— `path health` 检测重复和失效条目；`--fix` 重写，`--dry-run` 仅报告。
 - **审计账本** —— 追加式、SHA256 哈希链历史，支持回滚与容灾恢复导出。
 
@@ -81,7 +81,7 @@ env-manager-cli agents --json     # full command table as structured JSON
 
 受保护的环境变量和 PATH 条目在删除前会被禁用，恢复时进行精确的注册表值类型验证。命名管道 IPC 使用防劫持标志和输入验证（最大 64 参数，32767 字符上限，拒绝空字节）。漏洞报告请参见 [SECURITY.md](../../SECURITY.md)。
 
-**威胁模型。** 本设计*不*设防的对手是运行在你自己 Windows 用户会话内的任何进程——它本就可以调用 `profile reveal-secret`、读取被启动子进程的环境块、或截获提供者产生的临时文件。本设计*真正*约束的是：DPAPI-CurrentUser 密文对其他用户、其他机器不可解密；机密无法落入注册表；除设计内的 reveal 路径外，没有任何 sink *旨在*承载机密值。
+**威胁模型。** 本设计*不*设防的对手是运行在你自己 Windows 用户会话内的任何进程——它本就可以调用 `profile reveal-secret`、读取被启动子进程的环境块、或截获提供者产生的临时文件。本设计*真正*约束的是：DPAPI-CurrentUser 密文对其他用户、其他机器不可解密；secret 命令不会把机密落入注册表（前述通用命令缺口除外）；除设计内的 reveal 路径外，没有任何 sink *旨在*承载机密值。
 
 **明文边界。** 完整的逐 sink 矩阵——明文可能存在于何处、存续多久、由谁清理——见 [docs/plaintext-sinks.md](../../docs/plaintext-sinks.md)；`docs/architecture.md` 的 Plaintext lifecycle 一节是逐表面的权威允许清单。内存清零与日志清洗是尽力而为的卫生措施而非保证；`tests/canary-redaction.Tests.ps1` 对 7 个输出 sink 植入 canary 扫描，共享契约套件对全部 8 个提供者断言 `plaintext-never-in-envelope`。
 
@@ -102,7 +102,7 @@ env-manager-cli agents --json     # full command table as structured JSON
 ### 前置要求
 
 > [!IMPORTANT]
-> **便携版**和**仅 CLI** 构建为框架依赖部署：目标机器需要 **.NET 10 Desktop Runtime**——请从官方 [.NET 下载页](https://dotnet.microsoft.com/download/dotnet/10.0)获取。**MSI 安装包**在安装时自动检测 .NET 10 并提示安装。
+> **便携版**和**仅 CLI** 构建为框架依赖部署：目标机器需要 **.NET 10 Desktop Runtime**——请从官方 [.NET 下载页](https://dotnet.microsoft.com/download/dotnet/10.0)获取。**MSI 安装包**不检测也不安装 .NET——请在首次启动前自行安装运行时。
 >
 > **WebView2 运行时**（GUI 所需）已预装于 Windows 11，Windows 10 21H2+ 可从 [Microsoft](https://developer.microsoft.com/microsoft-edge/webview/)获取。
 
@@ -122,7 +122,7 @@ cd frontend && npm ci && cd ..
 node scripts/build.mjs --arch x64
 ```
 
-需要 .NET 10 SDK、Node.js 20+、Rust 稳定版（MSVC 目标）。详见 [docs/build-and-release.md](../../docs/build-and-release.md)。
+需要 .NET 10 SDK、Node.js 18+、Rust 稳定版（MSVC 目标）。详见 [docs/build-and-release.md](../../docs/build-and-release.md)。
 
 ## 用法
 
@@ -183,9 +183,9 @@ flowchart LR
 |---|---|---|---|
 | DPAPI CurrentUser | Windows DPAPI | 否（用户绑定） | [指南](../../docs/secret-providers-guide.md) |
 | Windows Credential Manager | CredMan + DPAPI | 否（用户绑定） | [指南](../../docs/secret-providers-guide.md) |
-| PowerShell SecretManagement | SecretStore 保险库 | 尽力而为 | [指南](../../docs/secret-providers-guide.md) |
+| PowerShell SecretManagement | SecretStore 保险库 | 否（CreatedOnly）| [指南](../../docs/secret-providers-guide.md) |
 | HashiCorp Vault KV v2 | VAULT_TOKEN / AppRole 证书 | 是 | [指南](../../docs/secret-providers-guide.md) |
-| SOPS | Age / PGP / KMS | 是 | [指南](../../docs/secret-providers-guide.md) |
+| SOPS | Age / PGP / KMS | 否（CreatedOnly）| [指南](../../docs/secret-providers-guide.md) |
 | Azure Key Vault | SP 证书 / 托管标识 | 是 | [指南](../../docs/secret-providers-guide.md) |
 | 1Password CLI | OP_SERVICE_ACCOUNT_TOKEN | 是 | [指南](../../docs/secret-providers-guide.md) |
 | AWS Secrets Manager | SigV4 + 访问密钥 | 是 | [指南](../../docs/secret-providers-guide.md) |

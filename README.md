@@ -54,7 +54,7 @@ A Windows environment-variable manager with two front ends — a C# CLI built fo
 - **Dual front ends** — `env-manager-cli` for scripting and CI, `env-manager.exe` (Tauri 2 + Svelte) for interactive editing. Both route through the same registry contracts.
 - **Protected by default** — system variables and PATH entries cannot be deleted or renamed; every write is serialized through three layers (mutex + write lock + verify-before-swap).
 - **Profiles** — global profiles apply to the registry; launch profiles inject an isolated env block into one process without touching the registry. Inheritance, conflict preview, reverse-order rollback.
-- **8 secret providers** — DPAPI, Credential Manager, SecretStore, HashiCorp Vault, SOPS, Azure Key Vault, 1Password, AWS Secrets Manager. The secret verbs persist only ciphertext envelopes; the plaintext-exposure boundary is in [Security](#security) and [docs/plaintext-sinks.md](docs/plaintext-sinks.md).
+- **8 secret providers** — DPAPI, Credential Manager, SecretStore, HashiCorp Vault, SOPS, Azure Key Vault, 1Password, AWS Secrets Manager. The secret verbs persist only ciphertext envelopes or `mount:<id>` references — the generic `add-var`/`edit-var` gap can still write plaintext to the registry; the full boundary is in [Security](#security) and [docs/plaintext-sinks.md](docs/plaintext-sinks.md).
 - **PATH health** — `path health` detects duplicates and dead entries; `--fix` rewrites, `--dry-run` reports.
 - **Audit ledger** — append-only, SHA256 hash-chained history with rollback and disaster-recovery export.
 
@@ -78,7 +78,7 @@ env-manager-cli agents --json     # full command table as structured JSON
 
 Protected variables and PATH entries are disabled before deletion, with exact registry value-kind verification on restore. Named pipe IPC uses anti-squatting flags and input validation (64 arg max, 32767 char cap, null byte rejection). See [SECURITY.md](SECURITY.md) for vulnerability reporting.
 
-**Threat model.** The adversary we do *not* defend against is any process running inside your own Windows user session — it can already call `profile reveal-secret`, read a launched child's environment block, or catch the transient temp files the providers produce. What the design *does* bound: DPAPI-CurrentUser ciphertext is undecryptable to another user or machine, secrets cannot land in the registry, and no sink other than the designed reveal path is *meant* to carry a secret value.
+**Threat model.** The adversary we do *not* defend against is any process running inside your own Windows user session — it can already call `profile reveal-secret`, read a launched child's environment block, or catch the transient temp files the providers produce. What the design *does* bound: DPAPI-CurrentUser ciphertext is undecryptable to another user or machine, the secret verbs cannot land a secret in the registry (the generic-verb gap above aside), and no sink other than the designed reveal path is *meant* to carry a secret value.
 
 **Plaintext boundary.** The full sink-by-sink matrix — where plaintext can exist, for how long, and who cleans it up — lives in [docs/plaintext-sinks.md](docs/plaintext-sinks.md); the Plaintext lifecycle section of `docs/architecture.md` is the authoritative per-surface allowlist. Memory zeroing and log scrubbing are best-effort hygiene, not guarantees; `tests/canary-redaction.Tests.ps1` scans 7 output sinks for a planted canary and the shared contract suite asserts `plaintext-never-in-envelope` on all 8 providers.
 
@@ -99,7 +99,7 @@ Download the CLI-only ZIP for headless or scripting use: `env-manager-cli.exe` p
 ### Prerequisites
 
 > [!IMPORTANT]
-> **Portable** and **CLI-Only** builds are framework-dependent: they require the **.NET 10 Desktop Runtime** on the target machine — download it from the official [.NET download page](https://dotnet.microsoft.com/download/dotnet/10.0). The **MSI installer** checks for .NET 10 at install time and prompts automatically.
+> **Portable** and **CLI-Only** builds are framework-dependent: they require the **.NET 10 Desktop Runtime** on the target machine — download it from the official [.NET download page](https://dotnet.microsoft.com/download/dotnet/10.0). The **MSI installer** does not check for or install .NET — install the runtime yourself before first launch.
 >
 > **WebView2 Runtime** (for the GUI) is preinstalled on Windows 11 and available for Windows 10 21H2+ from [Microsoft](https://developer.microsoft.com/microsoft-edge/webview/).
 
@@ -119,7 +119,7 @@ cd frontend && npm ci && cd ..
 node scripts/build.mjs --arch x64
 ```
 
-Requires .NET 10 SDK, Node.js 20+, Rust stable with MSVC target. See [docs/build-and-release.md](docs/build-and-release.md) for details.
+Requires .NET 10 SDK, Node.js 18+, Rust stable with MSVC target. See [docs/build-and-release.md](docs/build-and-release.md) for details.
 
 ## Usage
 
@@ -180,9 +180,9 @@ flowchart LR
 |---|---|---|---|
 | DPAPI CurrentUser | Windows DPAPI | No (per-user) | [Guide](docs/secret-providers-guide.md) |
 | Windows Credential Manager | CredMan + DPAPI | No (per-user) | [Guide](docs/secret-providers-guide.md) |
-| PowerShell SecretManagement | SecretStore vault | Best-effort | [Guide](docs/secret-providers-guide.md) |
+| PowerShell SecretManagement | SecretStore vault | No (CreatedOnly) | [Guide](docs/secret-providers-guide.md) |
 | HashiCorp Vault KV v2 | VAULT_TOKEN / AppRole cert | Yes | [Guide](docs/secret-providers-guide.md) |
-| SOPS | Age / PGP / KMS | Yes | [Guide](docs/secret-providers-guide.md) |
+| SOPS | Age / PGP / KMS | No (CreatedOnly) | [Guide](docs/secret-providers-guide.md) |
 | Azure Key Vault | SP cert / managed identity | Yes | [Guide](docs/secret-providers-guide.md) |
 | 1Password CLI | OP_SERVICE_ACCOUNT_TOKEN | Yes | [Guide](docs/secret-providers-guide.md) |
 | AWS Secrets Manager | SigV4 + access keys | Yes | [Guide](docs/secret-providers-guide.md) |

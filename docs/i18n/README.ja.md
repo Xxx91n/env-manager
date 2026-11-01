@@ -57,7 +57,7 @@
 - **デュアルフロントエンド** — スクリプトと CI 用の `env-manager-cli`、対話型編集用の `env-manager.exe` (Tauri 2 + Svelte)。どちらも同じレジストリコントラクトを経由します。
 - **デフォルトで保護** — システム変数と PATH エントリは削除・名前変更できません。すべての書き込みは 3 層の直列化 (mutex + write lock + 検証後スワップ) を通ります。
 - **プロファイル** — グローバルプロファイルはレジストリに適用されます。Launch プロファイルはレジストリに触れずに単一プロセスへ隔離された env ブロックを注入します。継承、競合プレビュー、逆順ロールバックに対応。
-- **8 つのシークレットプロバイダー** — DPAPI、Credential Manager、SecretStore、HashiCorp Vault、SOPS、Azure Key Vault、1Password、AWS Secrets Manager。シークレット系コマンドは暗号文エンベロープのみを永続化します。平文露出の境界は [Security](#security) と [docs/plaintext-sinks.md](../../docs/plaintext-sinks.md) を参照してください。
+- **8 つのシークレットプロバイダー** — DPAPI、Credential Manager、SecretStore、HashiCorp Vault、SOPS、Azure Key Vault、1Password、AWS Secrets Manager。シークレット系コマンドは暗号文エンベロープまたは `mount:<id>` 参照のみを永続化します — 汎用 `add-var`/`edit-var` の抜け穴からは平文がレジストリに書き込まれ得ます。平文露出の境界は [Security](#security) と [docs/plaintext-sinks.md](../../docs/plaintext-sinks.md) を参照してください。
 - **PATH ヘルス** — `path health` が重複や無効なエントリを検出します。`--fix` で書き換え、`--dry-run` でレポート。
 - **監査台帳** — 追記のみ、SHA256 ハッシュチェーンによる履歴。ロールバックと災害復旧エクスポートに対応。
 
@@ -81,7 +81,7 @@ env-manager-cli agents --json     # full command table as structured JSON
 
 保護された変数と PATH エントリは削除前に無効化され、復元時にはレジストリの値の型を厳密に検証します。名前付きパイプ IPC はアンチスクワッティングフラグと入力検証 (引数最大 64、32767 文字上限、null バイト拒否) を採用しています。脆弱性の報告については [SECURITY.md](../../SECURITY.md) を参照してください。
 
-**脅威モデル。** この設計が防御*しない*敵対者は、あなた自身の Windows ユーザーセッション内で動作するあらゆるプロセスです — それは既に `profile reveal-secret` を呼び出したり、起動された子プロセスの環境ブロックを読んだり、プロバイダーが生成する一時的な temp ファイルを捕捉したりできます。この設計が*実際に*制限するもの: DPAPI-CurrentUser の暗号文は他のユーザーやマシンでは復号できず、シークレットがレジストリに書き込まれることはなく、設計された reveal 経路以外の sink がシークレット値を運ぶことは*意図されていません*。
+**脅威モデル。** この設計が防御*しない*敵対者は、あなた自身の Windows ユーザーセッション内で動作するあらゆるプロセスです — それは既に `profile reveal-secret` を呼び出したり、起動された子プロセスの環境ブロックを読んだり、プロバイダーが生成する一時的な temp ファイルを捕捉したりできます。この設計が*実際に*制限するもの: DPAPI-CurrentUser の暗号文は他のユーザーやマシンでは復号できず、シークレット系コマンドがレジストリにシークレットを書き込むことはなく（前述の汎用コマンドの抜け穴を除き）、設計された reveal 経路以外の sink がシークレット値を運ぶことは*意図されていません*。
 
 **平文の境界。** 平文が存在しうる場所、存続期間、クリーンアップ担当を網羅した sink ごとの完全なマトリクスは [docs/plaintext-sinks.md](../../docs/plaintext-sinks.md) にあります。`docs/architecture.md` の Plaintext lifecycle 節がサーフェスごとの正式な許可リストです。メモリのゼロ化とログの除去はベストエフォートの衛生対策であり保証ではありません。`tests/canary-redaction.Tests.ps1` は 7 つの出力 sink に仕込んだ canary をスキャンし、共有契約スイートは 8 つすべてのプロバイダーで `plaintext-never-in-envelope` をアサートします。
 
@@ -102,7 +102,7 @@ env-manager-cli agents --json     # full command table as structured JSON
 ### Prerequisites
 
 > [!IMPORTANT]
-> **ポータブル版**と **CLI 専用**ビルドはフレームワーク依存です: 対象マシンに **.NET 10 Desktop Runtime** が必要です — 公式の [.NET ダウンロードページ](https://dotnet.microsoft.com/download/dotnet/10.0) から入手してください。**MSI インストーラー**はインストール時に .NET 10 をチェックし、自動的にプロンプトを表示します。
+> **ポータブル版**と **CLI 専用**ビルドはフレームワーク依存です: 対象マシンに **.NET 10 Desktop Runtime** が必要です — 公式の [.NET ダウンロードページ](https://dotnet.microsoft.com/download/dotnet/10.0) から入手してください。**MSI インストーラー**は .NET をチェックもインストールもしません — CLI の実行前に手動でインストールしてください。
 >
 > **WebView2 Runtime** (GUI 用) は Windows 11 にプレインストールされており、Windows 10 21H2+ では [Microsoft](https://developer.microsoft.com/microsoft-edge/webview/) から入手できます。
 
@@ -122,7 +122,7 @@ cd frontend && npm ci && cd ..
 node scripts/build.mjs --arch x64
 ```
 
-.NET 10 SDK、Node.js 20+、MSVC ターゲットの Rust stable が必要です。詳細は [docs/build-and-release.md](../../docs/build-and-release.md) を参照してください。
+.NET 10 SDK、Node.js 18+、MSVC ターゲットの Rust stable が必要です。詳細は [docs/build-and-release.md](../../docs/build-and-release.md) を参照してください。
 
 ## Usage
 
@@ -183,9 +183,9 @@ flowchart LR
 |---|---|---|---|
 | DPAPI CurrentUser | Windows DPAPI | なし (ユーザー単位) | [ガイド](../../docs/secret-providers-guide.md) |
 | Windows Credential Manager | CredMan + DPAPI | なし (ユーザー単位) | [ガイド](../../docs/secret-providers-guide.md) |
-| PowerShell SecretManagement | SecretStore vault | ベストエフォート | [ガイド](../../docs/secret-providers-guide.md) |
+| PowerShell SecretManagement | SecretStore vault | なし（CreatedOnly）| [ガイド](../../docs/secret-providers-guide.md) |
 | HashiCorp Vault KV v2 | VAULT_TOKEN / AppRole cert | あり | [ガイド](../../docs/secret-providers-guide.md) |
-| SOPS | Age / PGP / KMS | あり | [ガイド](../../docs/secret-providers-guide.md) |
+| SOPS | Age / PGP / KMS | なし（CreatedOnly）| [ガイド](../../docs/secret-providers-guide.md) |
 | Azure Key Vault | SP cert / managed identity | あり | [ガイド](../../docs/secret-providers-guide.md) |
 | 1Password CLI | OP_SERVICE_ACCOUNT_TOKEN | あり | [ガイド](../../docs/secret-providers-guide.md) |
 | AWS Secrets Manager | SigV4 + access keys | あり | [ガイド](../../docs/secret-providers-guide.md) |

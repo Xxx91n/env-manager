@@ -57,7 +57,7 @@ Ein Manager für Windows-Umgebungsvariablen mit zwei Frontends — einer für Sk
 - **Zwei Frontends** — `env-manager-cli` für Skripting und CI, `env-manager.exe` (Tauri 2 + Svelte) für interaktives Bearbeiten. Beide laufen über dieselben Registrierungsverträge.
 - **Standardmäßig geschützt** — Systemvariablen und PATH-Einträge können nicht gelöscht oder umbenannt werden; jeder Schreibvorgang ist über drei Schichten serialisiert (Mutex + Write Lock + Verifizieren vor dem Austausch).
 - **Profile** — globale Profile werden auf die Registrierung angewendet; Launch-Profile injizieren einen isolierten env-Block in einen einzelnen Prozess, ohne die Registrierung zu berühren. Vererbung, Konfliktvorschau, Rollback in umgekehrter Reihenfolge.
-- **8 Secret-Anbieter** — DPAPI, Credential Manager, SecretStore, HashiCorp Vault, SOPS, Azure Key Vault, 1Password, AWS Secrets Manager. Die Secret-Verben persistieren nur Chiffretext-Umschläge; die Klartext-Expositionsgrenze steht unter [Security](#security) und [docs/plaintext-sinks.md](../../docs/plaintext-sinks.md).
+- **8 Secret-Anbieter** — DPAPI, Credential Manager, SecretStore, HashiCorp Vault, SOPS, Azure Key Vault, 1Password, AWS Secrets Manager. Die Secret-Verben persistieren nur Chiffretext-Umschläge oder `mount:<id>`-Referenzen — die Lücke der generischen `add-var`/`edit-var`-Verben kann Klartext in die Registrierung schreiben; die Klartext-Expositionsgrenze steht unter [Security](#security) und [docs/plaintext-sinks.md](../../docs/plaintext-sinks.md).
 - **PATH-Health** — `path health` erkennt Duplikate und tote Einträge; `--fix` schreibt neu, `--dry-run` berichtet.
 - **Audit-Ledger** — append-only, SHA256-hashverkettete Historie mit Rollback und Export zur Notfallwiederherstellung.
 
@@ -81,7 +81,7 @@ env-manager-cli agents --json     # full command table as structured JSON
 
 Geschützte Variablen und PATH-Einträge werden vor dem Löschen deaktiviert, mit exakter Prüfung des Registrierungswerttyps bei der Wiederherstellung. Named-Pipe-IPC verwendet Anti-Squatting-Flags und Eingabevalidierung (max. 64 Argumente, 32767-Zeichen-Obergrenze, Ablehnung von Null-Bytes). Informationen zum Melden von Sicherheitslücken finden Sie in [SECURITY.md](../../SECURITY.md).
 
-**Bedrohungsmodell.** Der Angreifer, gegen den wir *nicht* verteidigen, ist jeder Prozess, der innerhalb Ihrer eigenen Windows-Benutzersitzung läuft — er kann bereits `profile reveal-secret` aufrufen, den Umgebungsblock eines gestarteten Kindprozesses lesen oder die flüchtigen Temp-Dateien abfangen, die die Anbieter erzeugen. Was das Design *tatsächlich* begrenzt: DPAPI-CurrentUser-Chiffretext ist für einen anderen Benutzer oder ein anderes Gerät unentschlüsselbar, Secrets können nicht in der Registrierung landen, und keine Senke außer dem vorgesehenen Reveal-Pfad ist *dazu bestimmt*, einen Secret-Wert zu tragen.
+**Bedrohungsmodell.** Der Angreifer, gegen den wir *nicht* verteidigen, ist jeder Prozess, der innerhalb Ihrer eigenen Windows-Benutzersitzung läuft — er kann bereits `profile reveal-secret` aufrufen, den Umgebungsblock eines gestarteten Kindprozesses lesen oder die flüchtigen Temp-Dateien abfangen, die die Anbieter erzeugen. Was das Design *tatsächlich* begrenzt: DPAPI-CurrentUser-Chiffretext ist für einen anderen Benutzer oder ein anderes Gerät unentschlüsselbar, die Secret-Verben können kein Secret in der Registrierung landen lassen (abgesehen von der oben genannten Lücke der generischen Verben), und keine Senke außer dem vorgesehenen Reveal-Pfad ist *dazu bestimmt*, einen Secret-Wert zu tragen.
 
 **Klartextgrenze.** Die vollständige Senke-für-Senke-Matrix — wo Klartext existieren kann, für wie lange und wer ihn bereinigt — steht in [docs/plaintext-sinks.md](../../docs/plaintext-sinks.md); der Abschnitt Plaintext lifecycle in `docs/architecture.md` ist die maßgebliche Allow-List je Oberfläche. Speichernullung und Log-Bereinigung sind Hygiene nach bestem Bemühen, keine Garantien; `tests/canary-redaction.Tests.ps1` durchsucht 7 Ausgabesenken nach einem platzierten Canary, und die gemeinsame Vertragssuite prüft `plaintext-never-in-envelope` für alle 8 Anbieter.
 
@@ -102,7 +102,7 @@ Laden Sie das CLI-only-ZIP für den Headless- oder Skripteinsatz herunter: `env-
 ### Prerequisites
 
 > [!IMPORTANT]
-> **Portable**- und **CLI-Only**-Builds sind frameworkabhängig: Sie erfordern die **.NET 10 Desktop Runtime** auf dem Zielrechner — erhältlich auf der offiziellen [.NET-Downloadseite](https://dotnet.microsoft.com/download/dotnet/10.0). Der **MSI-Installer** prüft .NET 10 zur Installationszeit und fragt automatisch nach.
+> **Portable**- und **CLI-Only**-Builds sind frameworkabhängig: Sie erfordern die **.NET 10 Desktop Runtime** auf dem Zielrechner — erhältlich auf der offiziellen [.NET-Downloadseite](https://dotnet.microsoft.com/download/dotnet/10.0). Der **MSI-Installer** prüft .NET nicht und installiert es nicht — installieren Sie die Runtime vor dem ersten Start selbst.
 >
 > Die **WebView2-Runtime** (für die GUI) ist unter Windows 11 vorinstalliert und für Windows 10 21H2+ bei [Microsoft](https://developer.microsoft.com/microsoft-edge/webview/) erhältlich.
 
@@ -122,7 +122,7 @@ cd frontend && npm ci && cd ..
 node scripts/build.mjs --arch x64
 ```
 
-Erfordert .NET 10 SDK, Node.js 20+, Rust stable mit MSVC-Target. Details siehe [docs/build-and-release.md](../../docs/build-and-release.md).
+Erfordert .NET 10 SDK, Node.js 18+, Rust stable mit MSVC-Target. Details siehe [docs/build-and-release.md](../../docs/build-and-release.md).
 
 ## Usage
 
@@ -183,9 +183,9 @@ flowchart LR
 |---|---|---|---|
 | DPAPI CurrentUser | Windows DPAPI | No (per-user) | [Guide](../../docs/secret-providers-guide.md) |
 | Windows Credential Manager | CredMan + DPAPI | No (per-user) | [Guide](../../docs/secret-providers-guide.md) |
-| PowerShell SecretManagement | SecretStore vault | Best-effort | [Guide](../../docs/secret-providers-guide.md) |
+| PowerShell SecretManagement | SecretStore vault | No (CreatedOnly) | [Guide](../../docs/secret-providers-guide.md) |
 | HashiCorp Vault KV v2 | VAULT_TOKEN / AppRole cert | Yes | [Guide](../../docs/secret-providers-guide.md) |
-| SOPS | Age / PGP / KMS | Yes | [Guide](../../docs/secret-providers-guide.md) |
+| SOPS | Age / PGP / KMS | No (CreatedOnly) | [Guide](../../docs/secret-providers-guide.md) |
 | Azure Key Vault | SP cert / managed identity | Yes | [Guide](../../docs/secret-providers-guide.md) |
 | 1Password CLI | OP_SERVICE_ACCOUNT_TOKEN | Yes | [Guide](../../docs/secret-providers-guide.md) |
 | AWS Secrets Manager | SigV4 + access keys | Yes | [Guide](../../docs/secret-providers-guide.md) |

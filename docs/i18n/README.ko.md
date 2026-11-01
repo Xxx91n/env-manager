@@ -57,7 +57,7 @@
 - **듀얼 프런트엔드** — 스크립팅과 CI를 위한 `env-manager-cli`, 대화형 편집을 위한 `env-manager.exe`(Tauri 2 + Svelte). 둘 다 동일한 레지스트리 계약을 거칩니다.
 - **기본적으로 보호** — 시스템 변수와 PATH 항목은 삭제하거나 이름을 바꿀 수 없습니다. 모든 쓰기는 세 계층(mutex + write lock + 검증 후 교체)을 통해 직렬화됩니다.
 - **프로필** — 글로벌 프로필은 레지스트리에 적용되고, launch 프로필은 레지스트리를 건드리지 않고 단일 프로세스에 격리된 env 블록을 주입합니다. 상속, 충돌 미리보기, 역순 롤백을 지원합니다.
-- **8가지 시크릿 공급자** — DPAPI, Credential Manager, SecretStore, HashiCorp Vault, SOPS, Azure Key Vault, 1Password, AWS Secrets Manager. secret 명령군은 암호문 엔벨로프만 저장하며, 평문 노출 경계는 [Security](#security)와 [docs/plaintext-sinks.md](../../docs/plaintext-sinks.md)에 정리되어 있습니다.
+- **8가지 시크릿 공급자** — DPAPI, Credential Manager, SecretStore, HashiCorp Vault, SOPS, Azure Key Vault, 1Password, AWS Secrets Manager. secret 명령군은 암호문 엔벨로프 또는 `mount:<id>` 참조만 저장하며 — 일반 `add-var`/`edit-var` 갭은 평문을 레지스트리에 기록할 수 있습니다 — 평문 노출 경계는 [Security](#security)와 [docs/plaintext-sinks.md](../../docs/plaintext-sinks.md)에 정리되어 있습니다.
 - **PATH 상태 검사** — `path health`가 중복 및 유효하지 않은 항목을 감지합니다. `--fix`는 다시 쓰고 `--dry-run`은 보고만 합니다.
 - **감사 원장** — 롤백과 재해 복구 내보내기를 지원하는 추가 전용 SHA256 해시 체인 히스토리.
 
@@ -81,7 +81,7 @@ env-manager-cli agents --json     # full command table as structured JSON
 
 보호된 변수와 PATH 항목은 삭제 전에 비활성화되며, 복원 시 레지스트리 값 종류를 정확히 검증합니다. 명명된 파이프 IPC는 안티 스쿼팅 플래그와 입력 검증(인수 최대 64개, 32767자 상한, null 바이트 거부)을 사용합니다. 취약점 보고는 [SECURITY.md](../../SECURITY.md)를 참조하세요.
 
-**위협 모델.** 우리가 방어하지 *않는* 상대는 사용자 자신의 Windows 세션 안에서 실행되는 모든 프로세스입니다 — 그런 프로세스는 이미 `profile reveal-secret`을 호출하거나, 실행된 자식 프로세스의 환경 블록을 읽거나, 공급자가 만들어 내는 임시 파일을 가로챌 수 있습니다. 설계가 실제로 제한하는 것은: DPAPI-CurrentUser 암호문은 다른 사용자나 머신에서 복호화할 수 없고, 시크릿은 레지스트리에 기록될 수 없으며, 설계된 reveal 경로 이외의 어떤 싱크도 시크릿 값을 담도록 *의도되지* 않았다는 점입니다.
+**위협 모델.** 우리가 방어하지 *않는* 상대는 사용자 자신의 Windows 세션 안에서 실행되는 모든 프로세스입니다 — 그런 프로세스는 이미 `profile reveal-secret`을 호출하거나, 실행된 자식 프로세스의 환경 블록을 읽거나, 공급자가 만들어 내는 임시 파일을 가로챌 수 있습니다. 설계가 실제로 제한하는 것은: DPAPI-CurrentUser 암호문은 다른 사용자나 머신에서 복호화할 수 없고, 시크릿 명령은 시크릿을 레지스트리에 기록할 수 없으며(위의 일반 명령 갭은 예외), 설계된 reveal 경로 이외의 어떤 싱크도 시크릿 값을 담도록 *의도되지* 않았다는 점입니다.
 
 **평문 경계.** 평문이 어디에 존재할 수 있는지, 얼마나 오래 남는지, 누가 정리하는지를 정리한 싱크별 전체 매트릭스는 [docs/plaintext-sinks.md](../../docs/plaintext-sinks.md)에 있으며, `docs/architecture.md`의 Plaintext lifecycle 절이 표면별 공식 허용 목록입니다. 메모리 제로화와 로그 정리는 최선 노력의 위생 조치이지 보장이 아닙니다. `tests/canary-redaction.Tests.ps1`은 7개 출력 싱크에서 심어 둔 canary를 검사하고, 공유 계약 스위트는 8개 공급자 모두에 대해 `plaintext-never-in-envelope`를 단언합니다.
 
@@ -102,7 +102,7 @@ env-manager-cli agents --json     # full command table as structured JSON
 ### Prerequisites
 
 > [!IMPORTANT]
-> **휴대용** 및 **CLI 전용** 빌드는 프레임워크 종속적입니다. 대상 머신에 **.NET 10 Desktop Runtime**이 필요합니다 — 공식 [.NET 다운로드 페이지](https://dotnet.microsoft.com/download/dotnet/10.0)에서 받으세요. **MSI 설치 관리자**는 설치 시 .NET 10을 확인하고 자동으로 프롬프트를 표시합니다.
+> **휴대용** 및 **CLI 전용** 빌드는 프레임워크 종속적입니다. 대상 머신에 **.NET 10 Desktop Runtime**이 필요합니다 — 공식 [.NET 다운로드 페이지](https://dotnet.microsoft.com/download/dotnet/10.0)에서 받으세요. **MSI 설치 관리자**는 .NET을 확인하거나 설치하지 않습니다 — CLI 실행 전에 수동으로 설치하세요.
 >
 > **WebView2 Runtime**(GUI용)은 Windows 11에 사전 설치되어 있으며, Windows 10 21H2+에서는 [Microsoft](https://developer.microsoft.com/microsoft-edge/webview/)에서 제공됩니다.
 
@@ -122,7 +122,7 @@ cd frontend && npm ci && cd ..
 node scripts/build.mjs --arch x64
 ```
 
-.NET 10 SDK, Node.js 20+, MSVC 타깃의 Rust stable이 필요합니다. 자세한 내용은 [docs/build-and-release.md](../../docs/build-and-release.md)를 참조하세요.
+.NET 10 SDK, Node.js 18+, MSVC 타깃의 Rust stable이 필요합니다. 자세한 내용은 [docs/build-and-release.md](../../docs/build-and-release.md)를 참조하세요.
 
 ## Usage
 
@@ -183,9 +183,9 @@ flowchart LR
 |---|---|---|---|
 | DPAPI CurrentUser | Windows DPAPI | 아니오 (사용자별) | [가이드](../../docs/secret-providers-guide.md) |
 | Windows Credential Manager | CredMan + DPAPI | 아니오 (사용자별) | [가이드](../../docs/secret-providers-guide.md) |
-| PowerShell SecretManagement | SecretStore vault | 최선 노력 | [가이드](../../docs/secret-providers-guide.md) |
+| PowerShell SecretManagement | SecretStore vault | 없음 (CreatedOnly) | [가이드](../../docs/secret-providers-guide.md) |
 | HashiCorp Vault KV v2 | VAULT_TOKEN / AppRole cert | 예 | [가이드](../../docs/secret-providers-guide.md) |
-| SOPS | Age / PGP / KMS | 예 | [가이드](../../docs/secret-providers-guide.md) |
+| SOPS | Age / PGP / KMS | 없음 (CreatedOnly) | [가이드](../../docs/secret-providers-guide.md) |
 | Azure Key Vault | SP cert / managed identity | 예 | [가이드](../../docs/secret-providers-guide.md) |
 | 1Password CLI | OP_SERVICE_ACCOUNT_TOKEN | 예 | [가이드](../../docs/secret-providers-guide.md) |
 | AWS Secrets Manager | SigV4 + access keys | 예 | [가이드](../../docs/secret-providers-guide.md) |
