@@ -81,7 +81,7 @@ env-manager-cli agents --json     # full command table as structured JSON
 
 Las variables protegidas y las entradas de PATH se deshabilitan antes de su eliminación, con verificación exacta del tipo de valor del registro al restaurar. La IPC por named pipe usa indicadores antisquatting y validación de entrada (máximo 64 argumentos, límite de 32767 caracteres, rechazo de bytes nulos). Consulta [SECURITY.md](../../SECURITY.md) para informar de vulnerabilidades.
 
-**Modelo de amenaza.** El adversario contra el que *no* defendemos es cualquier proceso que se ejecute dentro de tu propia sesión de usuario de Windows: ya puede llamar a `profile reveal-secret`, leer el bloque de entorno de un proceso hijo lanzado o capturar los archivos temporales transitorios que generan los proveedores. Lo que el diseño *sí* acota: el texto cifrado DPAPI-CurrentUser es indescifrable para otro usuario o máquina, los verbos de secretos no pueden llevar un secreto al registro (salvo por la brecha de verbos genéricos mencionada), y ningún otro destino aparte de la ruta de revelado prevista está *diseñado* para transportar un valor secreto.
+**Modelo de amenaza.** El adversario contra el que *no* defendemos es cualquier proceso que se ejecute dentro de tu propia sesión de usuario de Windows: ya puede llamar a `profile reveal-secret`, leer el bloque de entorno de un proceso hijo lanzado o capturar los archivos temporales transitorios que generan los proveedores. Lo que el diseño *sí* acota: el texto cifrado DPAPI-CurrentUser es indescifrable para otro usuario o máquina, los verbos de secretos no pueden llevar un secreto al registro (salvo por la brecha de verbos genéricos mencionada), y los únicos destinos *diseñados* para transportar un valor secreto son los previstos y documentados en la matriz de texto en claro enlazada más abajo.
 
 **Límite de texto en claro.** La matriz completa destino por destino —dónde puede existir texto en claro, durante cuánto tiempo y quién lo limpia— está en [docs/plaintext-sinks.md](../../docs/plaintext-sinks.md); la sección Plaintext lifecycle de `docs/architecture.md` es la lista de permitidos autoritativa por superficie. La puesta a cero de memoria y la depuración de logs son higiene en la medida de lo posible, no garantías; `tests/canary-redaction.Tests.ps1` revisa 7 destinos de salida en busca de un canary sembrado, y la suite de contratos compartida verifica `plaintext-never-in-envelope` en los 8 proveedores.
 
@@ -122,7 +122,7 @@ cd frontend && npm ci && cd ..
 node scripts/build.mjs --arch x64
 ```
 
-Requiere .NET 10 SDK, Node.js 18+ y Rust estable con destino MSVC. Consulta [docs/build-and-release.md](../../docs/build-and-release.md) para más detalles.
+Requiere .NET 10 SDK, Node.js 18+ y Rust estable con destino MSVC o GNU. Consulta [docs/build-and-release.md](../../docs/build-and-release.md) para más detalles.
 
 ## Uso
 

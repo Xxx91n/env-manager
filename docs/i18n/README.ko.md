@@ -81,7 +81,7 @@ env-manager-cli agents --json     # full command table as structured JSON
 
 보호된 변수와 PATH 항목은 삭제 전에 비활성화되며, 복원 시 레지스트리 값 종류를 정확히 검증합니다. 명명된 파이프 IPC는 안티 스쿼팅 플래그와 입력 검증(인수 최대 64개, 32767자 상한, null 바이트 거부)을 사용합니다. 취약점 보고는 [SECURITY.md](../../SECURITY.md)를 참조하세요.
 
-**위협 모델.** 우리가 방어하지 *않는* 상대는 사용자 자신의 Windows 세션 안에서 실행되는 모든 프로세스입니다 — 그런 프로세스는 이미 `profile reveal-secret`을 호출하거나, 실행된 자식 프로세스의 환경 블록을 읽거나, 공급자가 만들어 내는 임시 파일을 가로챌 수 있습니다. 설계가 실제로 제한하는 것은: DPAPI-CurrentUser 암호문은 다른 사용자나 머신에서 복호화할 수 없고, 시크릿 명령은 시크릿을 레지스트리에 기록할 수 없으며(위의 일반 명령 갭은 예외), 설계된 reveal 경로 이외의 어떤 싱크도 시크릿 값을 담도록 *의도되지* 않았다는 점입니다.
+**위협 모델.** 우리가 방어하지 *않는* 상대는 사용자 자신의 Windows 세션 안에서 실행되는 모든 프로세스입니다 — 그런 프로세스는 이미 `profile reveal-secret`을 호출하거나, 실행된 자식 프로세스의 환경 블록을 읽거나, 공급자가 만들어 내는 임시 파일을 가로챌 수 있습니다. 설계가 실제로 제한하는 것은: DPAPI-CurrentUser 암호문은 다른 사용자나 머신에서 복호화할 수 없고, 시크릿 명령은 시크릿을 레지스트리에 기록할 수 없으며(위의 일반 명령 갭은 예외), 시크릿 값을 담도록 *의도된* 싱크는 평문 경계 매트릭스에 문서화된 설계상의 것뿐이라는 점입니다.
 
 **평문 경계.** 평문이 어디에 존재할 수 있는지, 얼마나 오래 남는지, 누가 정리하는지를 정리한 싱크별 전체 매트릭스는 [docs/plaintext-sinks.md](../../docs/plaintext-sinks.md)에 있으며, `docs/architecture.md`의 Plaintext lifecycle 절이 표면별 공식 허용 목록입니다. 메모리 제로화와 로그 정리는 최선 노력의 위생 조치이지 보장이 아닙니다. `tests/canary-redaction.Tests.ps1`은 7개 출력 싱크에서 심어 둔 canary를 검사하고, 공유 계약 스위트는 8개 공급자 모두에 대해 `plaintext-never-in-envelope`를 단언합니다.
 
@@ -122,7 +122,7 @@ cd frontend && npm ci && cd ..
 node scripts/build.mjs --arch x64
 ```
 
-.NET 10 SDK, Node.js 18+, MSVC 타깃의 Rust stable이 필요합니다. 자세한 내용은 [docs/build-and-release.md](../../docs/build-and-release.md)를 참조하세요.
+.NET 10 SDK, Node.js 18+, MSVC 또는 GNU 타깃의 Rust stable이 필요합니다. 자세한 내용은 [docs/build-and-release.md](../../docs/build-and-release.md)를 참조하세요.
 
 ## Usage
 

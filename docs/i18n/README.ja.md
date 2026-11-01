@@ -81,7 +81,7 @@ env-manager-cli agents --json     # full command table as structured JSON
 
 保護された変数と PATH エントリは削除前に無効化され、復元時にはレジストリの値の型を厳密に検証します。名前付きパイプ IPC はアンチスクワッティングフラグと入力検証 (引数最大 64、32767 文字上限、null バイト拒否) を採用しています。脆弱性の報告については [SECURITY.md](../../SECURITY.md) を参照してください。
 
-**脅威モデル。** この設計が防御*しない*敵対者は、あなた自身の Windows ユーザーセッション内で動作するあらゆるプロセスです — それは既に `profile reveal-secret` を呼び出したり、起動された子プロセスの環境ブロックを読んだり、プロバイダーが生成する一時的な temp ファイルを捕捉したりできます。この設計が*実際に*制限するもの: DPAPI-CurrentUser の暗号文は他のユーザーやマシンでは復号できず、シークレット系コマンドがレジストリにシークレットを書き込むことはなく（前述の汎用コマンドの抜け穴を除き）、設計された reveal 経路以外の sink がシークレット値を運ぶことは*意図されていません*。
+**脅威モデル。** この設計が防御*しない*敵対者は、あなた自身の Windows ユーザーセッション内で動作するあらゆるプロセスです — それは既に `profile reveal-secret` を呼び出したり、起動された子プロセスの環境ブロックを読んだり、プロバイダーが生成する一時的な temp ファイルを捕捉したりできます。この設計が*実際に*制限するもの: DPAPI-CurrentUser の暗号文は他のユーザーやマシンでは復号できず、シークレット系コマンドがレジストリにシークレットを書き込むことはなく（前述の汎用コマンドの抜け穴を除き）、シークレット値を運ぶことが*意図されている* sink は、平文境界マトリクスに記載された設計上のものだけです。
 
 **平文の境界。** 平文が存在しうる場所、存続期間、クリーンアップ担当を網羅した sink ごとの完全なマトリクスは [docs/plaintext-sinks.md](../../docs/plaintext-sinks.md) にあります。`docs/architecture.md` の Plaintext lifecycle 節がサーフェスごとの正式な許可リストです。メモリのゼロ化とログの除去はベストエフォートの衛生対策であり保証ではありません。`tests/canary-redaction.Tests.ps1` は 7 つの出力 sink に仕込んだ canary をスキャンし、共有契約スイートは 8 つすべてのプロバイダーで `plaintext-never-in-envelope` をアサートします。
 
@@ -122,7 +122,7 @@ cd frontend && npm ci && cd ..
 node scripts/build.mjs --arch x64
 ```
 
-.NET 10 SDK、Node.js 18+、MSVC ターゲットの Rust stable が必要です。詳細は [docs/build-and-release.md](../../docs/build-and-release.md) を参照してください。
+.NET 10 SDK、Node.js 18+、MSVC または GNU ターゲットの Rust stable が必要です。詳細は [docs/build-and-release.md](../../docs/build-and-release.md) を参照してください。
 
 ## Usage
 

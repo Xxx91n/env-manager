@@ -81,7 +81,7 @@ env-manager-cli agents --json     # full command table as structured JSON
 
 受保护的环境变量和 PATH 条目在删除前会被禁用，恢复时进行精确的注册表值类型验证。命名管道 IPC 使用防劫持标志和输入验证（最大 64 参数，32767 字符上限，拒绝空字节）。漏洞报告请参见 [SECURITY.md](../../SECURITY.md)。
 
-**威胁模型。** 本设计*不*设防的对手是运行在你自己 Windows 用户会话内的任何进程——它本就可以调用 `profile reveal-secret`、读取被启动子进程的环境块、或截获提供者产生的临时文件。本设计*真正*约束的是：DPAPI-CurrentUser 密文对其他用户、其他机器不可解密；secret 命令不会把机密落入注册表（前述通用命令缺口除外）；除设计内的 reveal 路径外，没有任何 sink *旨在*承载机密值。
+**威胁模型。** 本设计*不*设防的对手是运行在你自己 Windows 用户会话内的任何进程——它本就可以调用 `profile reveal-secret`、读取被启动子进程的环境块、或截获提供者产生的临时文件。本设计*真正*约束的是：DPAPI-CurrentUser 密文对其他用户、其他机器不可解密；secret 命令不会把机密落入注册表（前述通用命令缺口除外）；除明文边界矩阵中记录在案的设计性 sink 外，没有任何 sink *旨在*承载机密值。
 
 **明文边界。** 完整的逐 sink 矩阵——明文可能存在于何处、存续多久、由谁清理——见 [docs/plaintext-sinks.md](../../docs/plaintext-sinks.md)；`docs/architecture.md` 的 Plaintext lifecycle 一节是逐表面的权威允许清单。内存清零与日志清洗是尽力而为的卫生措施而非保证；`tests/canary-redaction.Tests.ps1` 对 7 个输出 sink 植入 canary 扫描，共享契约套件对全部 8 个提供者断言 `plaintext-never-in-envelope`。
 
@@ -122,7 +122,7 @@ cd frontend && npm ci && cd ..
 node scripts/build.mjs --arch x64
 ```
 
-需要 .NET 10 SDK、Node.js 18+、Rust 稳定版（MSVC 目标）。详见 [docs/build-and-release.md](../../docs/build-and-release.md)。
+需要 .NET 10 SDK、Node.js 18+、Rust 稳定版（MSVC 或 GNU 目标）。详见 [docs/build-and-release.md](../../docs/build-and-release.md)。
 
 ## 用法
 

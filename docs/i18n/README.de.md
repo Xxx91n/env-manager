@@ -81,7 +81,7 @@ env-manager-cli agents --json     # full command table as structured JSON
 
 Geschützte Variablen und PATH-Einträge werden vor dem Löschen deaktiviert, mit exakter Prüfung des Registrierungswerttyps bei der Wiederherstellung. Named-Pipe-IPC verwendet Anti-Squatting-Flags und Eingabevalidierung (max. 64 Argumente, 32767-Zeichen-Obergrenze, Ablehnung von Null-Bytes). Informationen zum Melden von Sicherheitslücken finden Sie in [SECURITY.md](../../SECURITY.md).
 
-**Bedrohungsmodell.** Der Angreifer, gegen den wir *nicht* verteidigen, ist jeder Prozess, der innerhalb Ihrer eigenen Windows-Benutzersitzung läuft — er kann bereits `profile reveal-secret` aufrufen, den Umgebungsblock eines gestarteten Kindprozesses lesen oder die flüchtigen Temp-Dateien abfangen, die die Anbieter erzeugen. Was das Design *tatsächlich* begrenzt: DPAPI-CurrentUser-Chiffretext ist für einen anderen Benutzer oder ein anderes Gerät unentschlüsselbar, die Secret-Verben können kein Secret in der Registrierung landen lassen (abgesehen von der oben genannten Lücke der generischen Verben), und keine Senke außer dem vorgesehenen Reveal-Pfad ist *dazu bestimmt*, einen Secret-Wert zu tragen.
+**Bedrohungsmodell.** Der Angreifer, gegen den wir *nicht* verteidigen, ist jeder Prozess, der innerhalb Ihrer eigenen Windows-Benutzersitzung läuft — er kann bereits `profile reveal-secret` aufrufen, den Umgebungsblock eines gestarteten Kindprozesses lesen oder die flüchtigen Temp-Dateien abfangen, die die Anbieter erzeugen. Was das Design *tatsächlich* begrenzt: DPAPI-CurrentUser-Chiffretext ist für einen anderen Benutzer oder ein anderes Gerät unentschlüsselbar, die Secret-Verben können kein Secret in der Registrierung landen lassen (abgesehen von der oben genannten Lücke der generischen Verben), und die einzigen Senken, die *dazu bestimmt* sind, einen Secret-Wert zu tragen, sind die in der unten verlinkten Klartext-Matrix dokumentierten, vorgesehenen.
 
 **Klartextgrenze.** Die vollständige Senke-für-Senke-Matrix — wo Klartext existieren kann, für wie lange und wer ihn bereinigt — steht in [docs/plaintext-sinks.md](../../docs/plaintext-sinks.md); der Abschnitt Plaintext lifecycle in `docs/architecture.md` ist die maßgebliche Allow-List je Oberfläche. Speichernullung und Log-Bereinigung sind Hygiene nach bestem Bemühen, keine Garantien; `tests/canary-redaction.Tests.ps1` durchsucht 7 Ausgabesenken nach einem platzierten Canary, und die gemeinsame Vertragssuite prüft `plaintext-never-in-envelope` für alle 8 Anbieter.
 
@@ -122,7 +122,7 @@ cd frontend && npm ci && cd ..
 node scripts/build.mjs --arch x64
 ```
 
-Erfordert .NET 10 SDK, Node.js 18+, Rust stable mit MSVC-Target. Details siehe [docs/build-and-release.md](../../docs/build-and-release.md).
+Erfordert .NET 10 SDK, Node.js 18+, Rust stable mit MSVC- oder GNU-Target. Details siehe [docs/build-and-release.md](../../docs/build-and-release.md).
 
 ## Usage
 

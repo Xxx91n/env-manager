@@ -81,7 +81,7 @@ env-manager-cli agents --json     # full command table as structured JSON
 
 Variáveis protegidas e entradas do PATH são desabilitadas antes da exclusão, com verificação exata do tipo de valor do registro na restauração. A IPC por named pipe usa sinalizadores anti-squatting e validação de entrada (máximo de 64 argumentos, limite de 32767 caracteres, rejeição de bytes nulos). Consulte [SECURITY.md](../../SECURITY.md) para relatar vulnerabilidades.
 
-**Modelo de ameaças.** O adversário contra o qual *não* defendemos é qualquer processo em execução dentro da sua própria sessão de usuário do Windows — ele já pode chamar `profile reveal-secret`, ler o bloco de ambiente de um processo filho iniciado ou capturar os arquivos temporários transitórios que os provedores produzem. O que o design *realmente* limita: o texto cifrado DPAPI-CurrentUser é indecriptável para outro usuário ou máquina, os verbos de segredos não podem levar um segredo ao registro (à parte a lacuna dos verbos genéricos citada) e nenhum destino além do caminho de reveal projetado *deve* carregar um valor secreto.
+**Modelo de ameaças.** O adversário contra o qual *não* defendemos é qualquer processo em execução dentro da sua própria sessão de usuário do Windows — ele já pode chamar `profile reveal-secret`, ler o bloco de ambiente de um processo filho iniciado ou capturar os arquivos temporários transitórios que os provedores produzem. O que o design *realmente* limita: o texto cifrado DPAPI-CurrentUser é indecriptável para outro usuário ou máquina, os verbos de segredos não podem levar um segredo ao registro (à parte a lacuna dos verbos genéricos citada) e os únicos destinos *projetados* para carregar um valor secreto são os previstos e documentados na matriz de texto simples ligada abaixo.
 
 **Limite do texto simples.** A matriz completa destino a destino — onde o texto simples pode existir, por quanto tempo e quem o limpa — está em [docs/plaintext-sinks.md](../../docs/plaintext-sinks.md); a seção Plaintext lifecycle de `docs/architecture.md` é a lista de permissões autoritativa por superfície. A zeragem de memória e a limpeza de logs são higiene na medida do possível, não garantias; `tests/canary-redaction.Tests.ps1` varre 7 destinos de saída em busca de um canary plantado, e a suíte de contratos compartilhada verifica `plaintext-never-in-envelope` nos 8 provedores.
 
@@ -102,7 +102,7 @@ Baixe o ZIP somente CLI para uso headless ou em scripts: `env-manager-cli.exe` m
 ### Pré-requisitos
 
 > [!IMPORTANT]
-> Os builds **portátil** e **somente CLI** dependem do framework: exigem o **.NET 10 Desktop Runtime** na máquina de destino — baixe-o na [página oficial de download do .NET](https://dotnet.microsoft.com/download/dotnet/10.0). O **instalador MSI** não verifica nem instala o .NET — instale o runtime você mesmo antes da primeira execução.
+> Os builds **Portable** e **Somente CLI** dependem do framework: exigem o **.NET 10 Desktop Runtime** na máquina de destino — baixe-o na [página oficial de download do .NET](https://dotnet.microsoft.com/download/dotnet/10.0). O **instalador MSI** não verifica nem instala o .NET — instale o runtime você mesmo antes da primeira execução.
 >
 > O **WebView2 Runtime** (para a GUI) vem pré-instalado no Windows 11 e está disponível para Windows 10 21H2+ pela [Microsoft](https://developer.microsoft.com/microsoft-edge/webview/).
 
@@ -122,7 +122,7 @@ cd frontend && npm ci && cd ..
 node scripts/build.mjs --arch x64
 ```
 
-Requer .NET 10 SDK, Node.js 18+ e Rust estável com destino MSVC. Consulte [docs/build-and-release.md](../../docs/build-and-release.md) para detalhes.
+Requer .NET 10 SDK, Node.js 18+ e Rust estável com destino MSVC ou GNU. Consulte [docs/build-and-release.md](../../docs/build-and-release.md) para detalhes.
 
 ## Uso
 

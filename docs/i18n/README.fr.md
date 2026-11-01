@@ -81,7 +81,7 @@ env-manager-cli agents --json     # full command table as structured JSON
 
 Les variables protégées et les entrées PATH sont désactivées avant suppression, avec vérification exacte du type de valeur du registre lors de la restauration. L'IPC par named pipe utilise des indicateurs anti-squatting et une validation des entrées (64 arguments max, limite de 32767 caractères, rejet des octets nuls). Voir [SECURITY.md](../../SECURITY.md) pour le signalement des vulnérabilités.
 
-**Modèle de menace.** L'adversaire contre lequel nous ne défendons *pas* est tout processus s'exécutant dans votre propre session utilisateur Windows — il peut déjà appeler `profile reveal-secret`, lire le bloc d'environnement d'un processus enfant lancé ou intercepter les fichiers temporaires éphémères produits par les fournisseurs. Ce que la conception *borne* réellement : le chiffré DPAPI-CurrentUser est indéchiffrable pour un autre utilisateur ou une autre machine, les verbes de secrets ne peuvent pas déposer un secret dans le registre (à l’écart de la faille des verbes génériques ci-dessus), et aucune autre sortie que le chemin de reveal prévu n'est *censée* transporter une valeur secrète.
+**Modèle de menace.** L'adversaire contre lequel nous ne défendons *pas* est tout processus s'exécutant dans votre propre session utilisateur Windows — il peut déjà appeler `profile reveal-secret`, lire le bloc d'environnement d'un processus enfant lancé ou intercepter les fichiers temporaires éphémères produits par les fournisseurs. Ce que la conception *borne* réellement : le chiffré DPAPI-CurrentUser est indéchiffrable pour un autre utilisateur ou une autre machine, les verbes de secrets ne peuvent pas déposer un secret dans le registre (à l’écart de la faille des verbes génériques ci-dessus), et les seuls puits *censés* transporter une valeur secrète sont ceux, prévus, documentés dans la matrice de frontière du texte en clair ci-dessous.
 
 **Frontière du texte en clair.** La matrice complète des points de chute — où le texte en clair peut exister, pendant combien de temps et qui le nettoie — se trouve dans [docs/plaintext-sinks.md](../../docs/plaintext-sinks.md) ; la section Plaintext lifecycle de `docs/architecture.md` constitue la liste d'autorisation de référence par surface. La mise à zéro de la mémoire et le nettoyage des journaux sont des mesures d'hygiène au mieux, pas des garanties ; `tests/canary-redaction.Tests.ps1` analyse 7 sorties à la recherche d'un canary planté et la suite de contrats partagée vérifie `plaintext-never-in-envelope` sur les 8 fournisseurs.
 
@@ -122,7 +122,7 @@ cd frontend && npm ci && cd ..
 node scripts/build.mjs --arch x64
 ```
 
-Nécessite le SDK .NET 10, Node.js 18+ et Rust stable avec cible MSVC. Voir [docs/build-and-release.md](../../docs/build-and-release.md) pour les détails.
+Nécessite le SDK .NET 10, Node.js 18+ et Rust stable avec cible MSVC ou GNU. Voir [docs/build-and-release.md](../../docs/build-and-release.md) pour les détails.
 
 ## Usage
 
