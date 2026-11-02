@@ -80,17 +80,18 @@ const TREE_KILL_BUDGET: Duration = Duration::from_secs(5);
 ///
 /// `cargo test` runs all tests in this binary concurrently across worker threads, while
 /// `ROTATIONS_IN_FLIGHT` is a process-global `AtomicUsize` (one service owns one mount file in
-/// production). Tests that drive `rotate_mount_at` take a shared read lock - so they still run
-/// in parallel with each other, including `rotate_lock_tests`'s overlapping pair - and a test
-/// that pins the quiescent `rotation_in_flight() == false` path takes an exclusive write lock
-/// so no sibling thread can raise the count underneath it.
+/// production). Tests that only need a rotation in flight (or do not care whether another test
+/// also has one) take a shared read lock - so they still run in parallel with each other,
+/// including `rotate_lock_tests`'s overlapping pair - while tests that assert the quiescent
+/// `rotation_in_flight() == false` path (including the post-rotation recovery tick) take an
+/// exclusive write lock so no sibling thread can hold the count above zero underneath them.
 pub(crate) static ROTATION_SUITE_GATE: tokio::sync::RwLock<()> =
     tokio::sync::RwLock::const_new(());
 
 /// A temp `secretMount.json` holding one un-rotated mount, deleted with the file.
-/// Shared with `rotate_writeback_tests`, which drives the completed-rotation file states
-/// against the same fixture shape, and with `rotate_hang_tests`, which needs the untouched
-/// bytes to prove a budget expiry wrote nothing.
+/// Shared across the `rotate_*_tests` suites (`rotate_writeback_tests`, `rotate_hang_tests`,
+/// `rotate_lock_tests`) so every path - stop, hang budget, write-back, and reconcile tick -
+/// measures the same `Periodic` mount shape.
 pub(crate) struct MountFixture {
     pub(crate) path: PathBuf,
     pub(crate) original: String,

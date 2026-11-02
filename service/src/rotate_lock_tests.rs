@@ -112,8 +112,8 @@ async fn a_slow_rotation_does_not_hold_the_reconcile_lock() {
     );
 }
 
-/// Scenario for #161: the *other* writer of the mount file stands down instead of saving a
-/// snapshot it took before the child rewrote the envelopes.
+/// Scenario for #161: `refresh_mount`, one of the two other writers of the mount file, stands
+/// down instead of saving a snapshot it took before the child rewrote the envelopes.
 ///
 /// Driven through a real rotation rather than a test-only marker, so what is asserted is the
 /// production path: the rotation gets a temp mount file, and `refresh_mount` answers before it
@@ -254,6 +254,7 @@ async fn tick_stands_down_while_a_rotation_is_in_flight() {
 #[tokio::test]
 async fn tick_stamps_due_periodic_mount_when_no_rotation_is_in_flight() {
     let _quiet = ROTATION_SUITE_GATE.write().await;
+    let floor = chrono::Utc::now() - Duration::from_secs(1);
     let fixture = MountFixture::new("tick-due");
 
     // 1) Initial Periodic mount with no `lastFetchedAt` (exact fixture the stand-down test used):
@@ -273,8 +274,13 @@ async fn tick_stamps_due_periodic_mount_when_no_rotation_is_in_flight() {
     let first_stamp = first_mounts[0]["lastFetchedAt"]
         .as_str()
         .expect("tick must write a string lastFetchedAt timestamp");
-    chrono::DateTime::parse_from_rfc3339(first_stamp)
-        .expect("lastFetchedAt written by tick must be valid RFC3339");
+    let first_parsed = chrono::DateTime::parse_from_rfc3339(first_stamp)
+        .expect("lastFetchedAt written by tick must be valid RFC3339")
+        .with_timezone(&chrono::Utc);
+    assert!(
+        first_parsed >= floor,
+        "first tick stamp {first_stamp} predates this test run"
+    );
 
     // 2) A second tick before `refreshIntervalSeconds` (300s) elapses must leave the freshly
     //    stamped file byte-for-byte untouched.
@@ -322,15 +328,22 @@ async fn tick_stamps_due_periodic_mount_when_no_rotation_is_in_flight() {
         .expect("tick on an expired Periodic mount must succeed");
 
     let updated = fixture.mounts();
+    assert_eq!(
+        updated.len(),
+        2,
+        "saving refreshed mounts must preserve every sibling entry in secretMount.json"
+    );
     let renewed = updated[0]["lastFetchedAt"]
         .as_str()
         .expect("expired Periodic mount must keep a string lastFetchedAt");
-    assert_ne!(
-        renewed, "2020-01-01T00:00:00Z",
-        "an expired Periodic mount must have its lastFetchedAt advanced by the tick"
+    let renewed_parsed = chrono::DateTime::parse_from_rfc3339(renewed)
+        .expect("renewed lastFetchedAt must be valid RFC3339")
+        .with_timezone(&chrono::Utc);
+    assert!(
+        renewed_parsed >= floor,
+        "an expired Periodic mount must have its lastFetchedAt advanced to the current run, got {renewed}"
     );
-    chrono::DateTime::parse_from_rfc3339(renewed)
-        .expect("renewed lastFetchedAt must be valid RFC3339");
+    assert_eq!(updated[1]["id"], "mount-2");
     assert_eq!(
         updated[1]["lastFetchedAt"],
         serde_json::Value::Null,
