@@ -231,6 +231,15 @@ pub async fn run_server(
         return ServerExit::Requested;
     }
 
+    // Startup sweep of leftover sops plaintext roots (#219), in the only placement that
+    // satisfies both constraints at once: after the RUNNING report (a slow sweep must not
+    // push the report past ServicesPipeTimeout, the #149 red line) and before the spawns
+    // below. The reconcile loop and the IPC handlers are the only writers of new scratch
+    // roots, so sweeping here makes "a root this instance created is never swept" true by
+    // ordering rather than by timestamp judgement; the 24h threshold in `sops_scratch` is
+    // a second guard, not the mechanism.
+    sops_scratch::sweep_stale_roots(&env::temp_dir(), sops_scratch::SWEEP_MIN_AGE);
+
     let reconcile = tokio::spawn(reconcile::reconcile_loop(shutdown.clone()));
     let ipc = tokio::spawn(ipc::serve(pipe_name, first, shutdown.clone()));
     run_until_exit(reconcile, ipc, &shutdown).await
