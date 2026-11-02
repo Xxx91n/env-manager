@@ -19,7 +19,7 @@ use std::time::Duration;
 use tokio_util::sync::CancellationToken;
 
 use crate::reconcile::{rotate_mount_at, run_cli_child, ChildOutcome};
-use crate::rotate_stop_tests::{pid_is_running, MountFixture};
+use crate::rotate_stop_tests::{pid_is_running, MountFixture, ROTATION_SUITE_GATE};
 
 /// The stub "CLI" that never exits on its own: `ping.exe` doing 3000 one-second round trips.
 /// Same fixture family as the stop-path suite, opposite intent - there the stop ends it, here
@@ -85,6 +85,7 @@ async fn a_hung_child_is_terminated_and_reaped_at_the_hang_budget() {
 /// rotation that never completed is replayed, never recorded.
 #[tokio::test]
 async fn a_hung_rotation_fails_with_its_own_message_and_leaves_the_mount_alone() {
+    let _suite = ROTATION_SUITE_GATE.read().await;
     let fixture = MountFixture::new("hang-budget");
     let shutdown = CancellationToken::new();
 

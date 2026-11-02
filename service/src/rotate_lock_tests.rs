@@ -7,9 +7,11 @@
 // slow rotation in flight plus one fast rotation that has to complete in the meantime.
 //
 // Separate module from `rotate_stop_tests` on purpose: that file pins how a rotation ends
-// when a stop lands, this one pins only what the lock covers while it runs - that a second
-// rotation is not blocked behind the first one's child, and that the other writer of the same
-// file (`refresh_mount`) refuses instead of saving a pre-rotation snapshot over it.
+// when a stop lands, this one pins only what the lock and the in-flight gate cover while it
+// runs - that a second rotation is not blocked behind the first one's child, and that the
+// other two writers of the same file (`refresh_mount` and `run_reconcile_tick_at`) stand down
+// instead of saving a pre-rotation snapshot over it, then resume stamping once no rotation is
+// in flight (#193).
 //
 // Isolation: temp mount files under `%TEMP%`, removed on drop; no registry, no real
 // `%LOCALAPPDATA%\EnvManager` or `ProgramData\EnvManager` state.
@@ -18,8 +20,10 @@ use std::time::Duration;
 
 use tokio_util::sync::CancellationToken;
 
-use crate::reconcile::{refresh_mount, rotate_mount_at, ROTATE_HANG_BUDGET};
-use crate::rotate_stop_tests::MountFixture;
+use crate::reconcile::{
+    refresh_mount, rotate_mount_at, run_reconcile_tick_at, ROTATE_HANG_BUDGET,
+};
+use crate::rotate_stop_tests::{MountFixture, ROTATION_SUITE_GATE};
 use crate::SHUTDOWN_DRAIN;
 
 /// The rotation that is already in flight: one `ping.exe` doing 30 one-second round trips,
@@ -42,6 +46,7 @@ const LOCK_FREE_BUDGET: Duration = Duration::from_secs(10);
 /// property the tick depends on.
 #[tokio::test]
 async fn a_slow_rotation_does_not_hold_the_reconcile_lock() {
+    let _suite = ROTATION_SUITE_GATE.read().await;
     let slow = MountFixture::new("lock-slow");
     let fast = MountFixture::new("lock-fast");
     let slow_shutdown = CancellationToken::new();
@@ -119,6 +124,7 @@ async fn a_slow_rotation_does_not_hold_the_reconcile_lock() {
 /// until it died.
 #[tokio::test]
 async fn refresh_stands_down_while_a_rotation_is_in_flight() {
+    let _suite = ROTATION_SUITE_GATE.read().await;
     let slow = MountFixture::new("refresh-stand-down");
     let shutdown = CancellationToken::new();
     let token = shutdown.clone();
@@ -154,4 +160,180 @@ async fn refresh_stands_down_while_a_rotation_is_in_flight() {
     let _ = tokio::time::timeout(SHUTDOWN_DRAIN, in_flight)
         .await
         .expect("the stop must terminate and reap the slow child inside SHUTDOWN_DRAIN");
+}
+
+/// Scenario for #193: the reconcile tick is the third writer of `secretMount.json`, and like
+/// `refresh_mount` it saves a whole snapshot. While a delegated rotation is in flight, the tick
+/// must skip the interval without touching the file at all - byte-identical on disk and no
+/// `lastFetchedAt` stamp - and without blocking behind the child wait; once the rotation ends and
+/// releases `RotationInFlight`, the next tick stamps `lastFetchedAt` as usual.
+#[tokio::test]
+async fn tick_stands_down_while_a_rotation_is_in_flight() {
+    let _quiet = ROTATION_SUITE_GATE.write().await;
+    let fixture = MountFixture::new("tick-stand-down");
+    let shutdown = CancellationToken::new();
+    let token = shutdown.clone();
+    let mount_path = fixture.path.clone();
+
+    let in_flight = tokio::spawn(async move {
+        rotate_mount_at(
+            &mount_path,
+            STUB_EXE,
+            &STUB_SLOW_ARGS,
+            "mount-1",
+            &token,
+            ROTATE_HANG_BUDGET,
+        )
+        .await
+    });
+
+    // Same ordering as the two sibling tests above: the rotation has reached its child wait and
+    // holds `RotationInFlight`, while `RECONCILE_LOCK` has been released.
+    tokio::time::sleep(Duration::from_millis(300)).await;
+
+    tokio::time::timeout(LOCK_FREE_BUDGET, run_reconcile_tick_at(&fixture.path))
+        .await
+        .expect("a tick must skip promptly, not queue behind a rotation's child wait")
+        .expect("standing down for an in-flight rotation is a clean skip, not a tick error");
+
+    assert!(
+        !in_flight.is_finished(),
+        "the rotation must still be in flight when the tick returns, otherwise this test never \
+         exercised the stand-down branch"
+    );
+    assert_eq!(
+        std::fs::read_to_string(&fixture.path).expect("read the mount file back"),
+        fixture.original,
+        "a tick that stands down for an in-flight rotation must leave the mount file \
+         byte-for-byte untouched"
+    );
+    let mounts = fixture.mounts();
+    assert_eq!(
+        mounts[0]["lastFetchedAt"],
+        serde_json::Value::Null,
+        "a skipped tick must not stamp lastFetchedAt"
+    );
+
+    // End the slow rotation instead of waiting the 30s stub out, then prove the gate released:
+    // the next tick on the same untouched file stamps `lastFetchedAt` as usual.
+    shutdown.cancel();
+    let err = tokio::time::timeout(SHUTDOWN_DRAIN, in_flight)
+        .await
+        .expect("the stop must terminate and reap the slow child inside SHUTDOWN_DRAIN")
+        .expect("the rotate task must not panic")
+        .expect_err("an interrupted rotation must fail for its caller");
+    assert!(
+        err.contains("interrupted by service stop"),
+        "the slow rotation must end as interrupted, got: {err}"
+    );
+    assert_eq!(
+        std::fs::read_to_string(&fixture.path).expect("read the mount file after stop"),
+        fixture.original,
+        "ending the interrupted rotation must still leave the mount file untouched"
+    );
+
+    run_reconcile_tick_at(&fixture.path)
+        .await
+        .expect("the tick after the rotation ends must succeed");
+    let after = fixture.mounts();
+    let stamped = after[0]["lastFetchedAt"]
+        .as_str()
+        .expect("once the rotation ends, the next tick must stamp lastFetchedAt");
+    chrono::DateTime::parse_from_rfc3339(stamped)
+        .expect("stamped lastFetchedAt must be valid RFC3339");
+}
+
+/// Scenario for #193: when no delegated rotation is in flight, `run_reconcile_tick_at` stamps
+/// due `Periodic` mounts (`lastFetchedAt` absent or older than `refreshIntervalSeconds`) and
+/// leaves fresh or `CreatedOnly` mounts untouched.
+///
+/// Starts from the exact `MountFixture` shape used in `tick_stands_down_while_a_rotation_is_in_flight`
+/// so the two tests form a controlled pair: the only difference between "file untouched" above
+/// and "stamp written" here is `ROTATIONS_IN_FLIGHT`. Holds the exclusive `ROTATION_SUITE_GATE`
+/// write lock so no parallel `cargo test` worker can raise the process-wide counter mid-call.
+#[tokio::test]
+async fn tick_stamps_due_periodic_mount_when_no_rotation_is_in_flight() {
+    let _quiet = ROTATION_SUITE_GATE.write().await;
+    let fixture = MountFixture::new("tick-due");
+
+    // 1) Initial Periodic mount with no `lastFetchedAt` (exact fixture the stand-down test used):
+    //    one quiescent tick must stamp it.
+    tokio::time::timeout(LOCK_FREE_BUDGET, run_reconcile_tick_at(&fixture.path))
+        .await
+        .expect("a quiescent tick must complete promptly")
+        .expect("tick on a valid temp mount file must succeed");
+
+    let after_first_raw =
+        std::fs::read_to_string(&fixture.path).expect("read the mount file after first tick");
+    assert_ne!(
+        after_first_raw, fixture.original,
+        "a due Periodic mount must be written when no rotation is in flight"
+    );
+    let first_mounts = fixture.mounts();
+    let first_stamp = first_mounts[0]["lastFetchedAt"]
+        .as_str()
+        .expect("tick must write a string lastFetchedAt timestamp");
+    chrono::DateTime::parse_from_rfc3339(first_stamp)
+        .expect("lastFetchedAt written by tick must be valid RFC3339");
+
+    // 2) A second tick before `refreshIntervalSeconds` (300s) elapses must leave the freshly
+    //    stamped file byte-for-byte untouched.
+    run_reconcile_tick_at(&fixture.path)
+        .await
+        .expect("tick on a fresh Periodic mount must succeed");
+    assert_eq!(
+        std::fs::read_to_string(&fixture.path).expect("read the mount file after fresh tick"),
+        after_first_raw,
+        "a Periodic mount whose interval has not elapsed must be skipped without rewriting"
+    );
+
+    // 3) Backdating `lastFetchedAt` past `refreshIntervalSeconds` makes the Periodic mount due
+    //    again, while a `CreatedOnly` sibling in the same file must stay untouched.
+    let expired_and_created_only = serde_json::json!([
+        {
+            "id": "mount-1",
+            "provider": "vault-kv2",
+            "name": "TEST_TOKEN",
+            "scope": "user",
+            "refreshPolicy": "Periodic",
+            "refreshIntervalSeconds": 300,
+            "lastFetchedAt": "2020-01-01T00:00:00Z",
+            "createdAt": "2020-01-01T00:00:00Z",
+            "schemaVersion": 1
+        },
+        {
+            "id": "mount-2",
+            "provider": "dpapi-current-user",
+            "name": "LOCAL_SECRET",
+            "scope": "user",
+            "refreshPolicy": "CreatedOnly",
+            "createdAt": "2020-01-01T00:00:00Z",
+            "schemaVersion": 1
+        }
+    ]);
+    std::fs::write(
+        &fixture.path,
+        serde_json::to_string_pretty(&expired_and_created_only).unwrap(),
+    )
+    .expect("write the expired + CreatedOnly fixture");
+
+    run_reconcile_tick_at(&fixture.path)
+        .await
+        .expect("tick on an expired Periodic mount must succeed");
+
+    let updated = fixture.mounts();
+    let renewed = updated[0]["lastFetchedAt"]
+        .as_str()
+        .expect("expired Periodic mount must keep a string lastFetchedAt");
+    assert_ne!(
+        renewed, "2020-01-01T00:00:00Z",
+        "an expired Periodic mount must have its lastFetchedAt advanced by the tick"
+    );
+    chrono::DateTime::parse_from_rfc3339(renewed)
+        .expect("renewed lastFetchedAt must be valid RFC3339");
+    assert_eq!(
+        updated[1]["lastFetchedAt"],
+        serde_json::Value::Null,
+        "a CreatedOnly mount must be ignored by the reconcile tick"
+    );
 }

@@ -190,7 +190,19 @@ pub async fn reconcile_loop(shutdown: Arc<CancellationToken>) {
     }
 }
 
+/// Production entry called by `reconcile_loop`: binds `run_reconcile_tick_at` to
+/// `crate::secret_mount_path()`. That one-line binding stays covered by inspection until
+/// `reconcile_loop` itself takes warmup and mount-path parameters (#193).
 async fn run_reconcile_tick() -> Result<(), String> {
+    run_reconcile_tick_at(&crate::secret_mount_path()).await
+}
+
+/// `run_reconcile_tick` with the mount file taken as a parameter (#193).
+///
+/// Same seam shape as `rotate_mount_at`: production resolves `crate::secret_mount_path()`,
+/// while tests pass a temp file under `%TEMP%` so exercising the tick never touches real
+/// `%LOCALAPPDATA%` or `ProgramData` state.
+pub(crate) async fn run_reconcile_tick_at(mount_path: &Path) -> Result<(), String> {
     // Phase 4C: Acquire global lock for the entire tick to prevent TOCTOU with CLI mutations.
     let _guard = RECONCILE_LOCK.lock().await;
     // A delegated rotation owns the envelopes in the mount file while its child runs (#161):
@@ -205,8 +217,7 @@ async fn run_reconcile_tick() -> Result<(), String> {
     }
     tracing::info!("reconcile tick: scanning secretMount.json");
 
-    let path = crate::secret_mount_path();
-    let mut mounts = load_mounts(&path);
+    let mut mounts = load_mounts(mount_path);
 
     if mounts.is_empty() {
         tracing::info!("reconcile tick: no mounts found, skipping");
@@ -254,7 +265,7 @@ async fn run_reconcile_tick() -> Result<(), String> {
     }
 
     if changed {
-        save_mounts(&path, &mounts)?;
+        save_mounts(mount_path, &mounts)?;
     }
 
     tracing::info!(

@@ -227,13 +227,13 @@ fn ipc_schema_compliance_under_faults() {
     }
 }
 
-/// Reconcile warmup (30s) prevents SCM timeout on boot. Pinned as documentation
-/// only for now: driving the real reconcile_loop requires >31s wall time and its
-/// tick resolves secret_mount_path() against LOCALAPPDATA, which conflicts with
-/// the CI user-state isolation discipline (architecture-recovery).
-/// Replace with a real loop-level assertion if the warmup becomes seam-parameterized.
+/// Reconcile warmup (30s) prevents SCM timeout on boot. Only the loop-level warmup
+/// remains documentation-only here (the tick itself runs on `%TEMP%` via
+/// `reconcile::run_reconcile_tick_at` in `rotate_lock_tests`, #193): driving the real
+/// `reconcile_loop` still requires >31s wall time and resolves `secret_mount_path()`
+/// against `LOCALAPPDATA` until `reconcile_loop` itself takes warmup/path parameters.
 #[test]
-#[ignore = "30s warmup needs >31s wall time and touches LOCALAPPDATA (isolation); pin via seam if warmup becomes configurable"]
+#[ignore = "30s warmup on reconcile_loop needs >31s wall time and resolves LOCALAPPDATA; tick itself is covered via run_reconcile_tick_at"]
 fn reconcile_warmup_constant_pinned() {
     // Contract (reconcile.rs): 30s warmup before first tick, 300s interval.
     // Expected assertion once seamable: no tick before 30s, tick at 30s.
