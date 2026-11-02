@@ -56,6 +56,9 @@ public partial class Widget
     public static int MultiLine(
         string value,
         int count = 1) => count;
+    public void ConstraintMethod<T, U>() where T : class where U : struct { }
+    public System.Collections.Generic.IEnumerable<int> RecordQuery =>
+        from record in new[] { 1 } select record;
     string IContract.ContractMethod() => "";
     public static Widget operator +(Widget left, Widget right) => left;
 
@@ -102,14 +105,14 @@ $widget = @($decls | Where-Object { $_.Type -ceq 'Widget' } | ForEach-Object { $
 foreach ($name in @(
     'Instance', 'first', 'second', 'initialized', 'afterInitializer', 'Name', 'Changed',
     'ExpressionBodied', 'Item', 'Widget', 'Make', 'Echo', 'Pair', 'MultiLine',
-    'ContractMethod', 'op_Addition', 'Body', 'CalledOnly', 'Nested', 'SiblingOnly',
+    'ContractMethod', 'ConstraintMethod', 'RecordQuery', 'op_Addition', 'Body', 'CalledOnly', 'Nested', 'SiblingOnly',
     'Text', 'Verbatim', 'Raw', 'Interpolated', 'EmbeddedQuote', 'NestedInterpolation',
     'CharHole', 'Compiled', 'leftComparison', 'rightComparison', 'Initialized', 'AfterOptions', 'Attributed'
 )) { Assert-Contains $widget $name "Widget declares $name" }
 foreach ($name in @(
     'CommentOnly', 'BlockOnly', 'StringOnly', 'VerbatimOnly', 'RawOnly', 'InterpolatedOnly',
     'EmbeddedQuoteOnly', 'NestedInterpolationOnly', 'RegexOptions',
-    'LocalOnly', 'InitializerOnly', 'NestedOnly', 'OtherOnly', 'value', 'count', 'index', 'object'
+    'LocalOnly', 'InitializerOnly', 'NestedOnly', 'OtherOnly', 'value', 'count', 'index', 'object', 'where', 'in'
 )) { Assert-Missing $widget $name "Widget does not declare $name" }
 $mode = @($decls | Where-Object { $_.Type -ceq 'Mode' } | ForEach-Object { $_.Name })
 foreach ($name in @('First', 'Second', 'Third')) { Assert-Contains $mode $name "enum Mode declares $name" }
@@ -126,6 +129,7 @@ try {
         @{ Name = 'real-named-file'; Text = '`ProfileCommand.ProfileShow` and `DpapiHelper.DecryptSecret`'; Exit = 0; Pattern = 'PASS: docs checks clean' },
         @{ Name = 'real-partial-fallback'; Text = '`Program.SecretStore` and `Program.ScrubExceptionMessage`'; Exit = 0; Pattern = 'PASS: docs checks clean' },
         @{ Name = 'real-multiline-tuple'; Text = '`SecretProviderManager.RotateAll`'; Exit = 0; Pattern = 'PASS: docs checks clean' },
+        @{ Name = 'real-partial-migration'; Text = '`Program.MigrateSecretsToMounts`'; Exit = 0; Pattern = 'PASS: docs checks clean' },
         @{ Name = 'unknown-type-skipped'; Text = '`NoSuchTypeAtAll.Foo`'; Exit = 0; Pattern = 'PASS: docs checks clean' },
         @{ Name = 'bare-filename-not-member'; Text = '`ProfileCommand.cs`'; Exit = 0; Pattern = 'PASS: docs checks clean' },
         # The first three negatives below OCCUR in the resolved file, so the old
@@ -138,6 +142,12 @@ try {
         @{ Name = 'fake-named-file-comment'; Text = '`Program.CommandLineToArgvW`'; Exit = 1; Pattern = 'cited member not found: Program.CommandLineToArgvW' },
         # A constructor argument in the named file, not a member declaration:
         @{ Name = 'fake-named-file-constructor-argument'; Text = '`ExpandCommand.RegexOptions`'; Exit = 1; Pattern = 'cited member not found: ExpandCommand.RegexOptions' },
+        # The named file declares PreflightResult, but the member belongs to Program:
+        @{ Name = 'fake-named-file-other-type'; Text = '`PreflightResult.GetEffectiveProfileVariables`'; Exit = 1; Pattern = 'cited member not found: PreflightResult.GetEffectiveProfileVariables' },
+        # SecretMount.cs declares SecretMount, but the migration method belongs to Program:
+        @{ Name = 'fake-named-file-secretmount'; Text = '`SecretMount.MigrateSecretsToMounts`'; Exit = 1; Pattern = 'cited member not found: SecretMount.MigrateSecretsToMounts' },
+        # Capitalized extension-like member names are not lowercase filename citations:
+        @{ Name = 'fake-extension-case-member'; Text = '`Program.Json`'; Exit = 1; Pattern = 'cited member not found: Program.Json' },
         # Genuinely absent member (typo of the real SecretStore):
         @{ Name = 'missing-member'; Text = '`Program.SecretStorXYZ`'; Exit = 1; Pattern = 'cited member not found: Program.SecretStorXYZ' }
     )

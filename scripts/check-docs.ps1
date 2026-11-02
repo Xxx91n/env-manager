@@ -33,6 +33,7 @@ $failures = New-Object System.Collections.Generic.List[string]
 $script:memberCache = @{}
 $script:partialCache = @{}
 $script:declarationCache = @{}
+$script:typeNameCache = @{}
 
 function Add-Failure([string]$Message) { $script:failures.Add($Message) | Out-Null }
 
@@ -91,16 +92,30 @@ function Get-CachedDeclarations([string]$Path) {
     return $declarations
 }
 
+function Test-CSharpTypeInFile([string]$Path, [string]$Type) {
+    if (-not $script:typeNameCache.ContainsKey($Path)) {
+        $full = Join-Path $root $Path
+        $names = @()
+        if (Test-Path -LiteralPath $full -PathType Leaf) {
+            $source = [System.IO.File]::ReadAllText($full, [System.Text.Encoding]::UTF8)
+            $names = @(Get-CSharpTypeSpans (Get-MaskedCSharpSource $source) | ForEach-Object { $_.Name })
+        }
+        $script:typeNameCache[$Path] = $names
+    }
+    return @($script:typeNameCache[$Path] | Where-Object { $_ -ceq $Type }).Count -gt 0
+}
+
 function Find-MemberFiles([string[]]$Files, [string]$Type, [string]$Member, [switch]$TypeScoped) {
     $found = New-Object System.Collections.Generic.List[string]
     foreach ($file in $Files) {
+        # If the candidate file actually declares the cited type, attribute
+        # members only to that type. Otherwise keep the filename-as-module
+        # convention (ProfileCommand.cs holds members of partial Program).
+        # The partial fallback is always type-scoped.
+        $scope = $TypeScoped -or (Test-CSharpTypeInFile $file $Type)
         foreach ($declaration in @(Get-CachedDeclarations $file)) {
-            # The named-file arm keeps the repository's filename-as-module
-            # convention (ProfileCommand.cs holds members of partial Program).
-            # The partial fallback is different: it expands the search to many
-            # files, so there the declaring type must match the cited type.
             if ($declaration.Name -ceq $Member -and
-                (-not $TypeScoped -or $declaration.Type -ceq $Type)) {
+                (-not $scope -or $declaration.Type -ceq $Type)) {
                 $found.Add($file)
                 break
             }
@@ -204,7 +219,9 @@ try {
                 # Class.Member to the regex. It is a file citation, not a claim
                 # that the type declares a member named "cs"; leave it to the
                 # path gate (which only validates repo-rooted paths today).
-                if ($m.Value -match $pathPattern) { continue }
+                # Case-sensitive: `Output.Json` is a member claim, not the
+                # lowercase filename extension `Output.json`.
+                if ($m.Value -cmatch $pathPattern) { continue }
                 $left = $m.Groups[1].Value
                 $right = $m.Groups[2].Value
                 $declaring = Resolve-SymbolFiles $left

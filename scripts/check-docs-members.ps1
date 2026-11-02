@@ -308,7 +308,11 @@ function Get-CSharpMemberNames([string]$Header, [string]$Kind) {
         if ($entry.Success) { return @($entry.Groups['name'].Value) }
         return @()
     }
-    $nested = [regex]::Match($Header, '\b(?:class|struct|interface|enum|record(?:\s+(?:class|struct))?)\s+(?<name>[A-Za-z_][A-Za-z0-9_]*)\b')
+    # Only the prefix before a parameter list, initializer or body can name a
+    # nested type. Generic constraints (`where T : class where U : struct`) and
+    # expression bodies (`from record in ...`) are not type declarations.
+    $typePrefix = [regex]::Replace($Header, '(?s)[(={].*$', '')
+    $nested = [regex]::Match($typePrefix, '\b(?:class|struct|interface|enum|record(?:\s+(?:class|struct))?)\s+(?<name>[A-Za-z_][A-Za-z0-9_]*)\b')
     if ($nested.Success) { return @($nested.Groups['name'].Value) }
     if ($Header -match '\bthis\s*\[') { return @('Item') }
     $operator = [regex]::Match($Header, '\boperator\s+(?<op>\+\+|--|==|!=|<=|>=|<<|>>|[-+*/%&|^!~<>]|true|false)\s*\(')
