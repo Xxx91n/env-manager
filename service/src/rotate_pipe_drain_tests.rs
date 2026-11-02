@@ -12,8 +12,8 @@
 // Both budgets are injected through `run_cli_child` and `rotate_mount_at_with_pipe_drain`,
 // the same convention `hang_budget` uses: a bounded wait CI cannot shorten is a bounded
 // wait CI cannot test. The two mid-drain race tests additionally synchronize on
-// `LatchedPipeDrain` (#205), awaiting a one-shot signal fired right before
-// `drain_pipes_on_exit` instead of sleeping a wall-clock guess. The stop / hang /
+// `LatchedPipeDrain` (#205), holding `drain_pipes_on_exit` on a two-way handshake before its
+// deadline starts instead of sleeping a wall-clock guess. The stop / hang /
 // write-back fixtures pass the production default explicitly and keep every assertion they
 // had, so those assertions are not weakened.
 //
@@ -50,12 +50,10 @@ const FAST_ARGS: [&str; 4] = ["/d", "/s", "/c", "echo rotated"];
 /// Injected post-exit drain: long enough for `ping` to start and hold the handles,
 /// short enough that CI never waits the 30s helper out.
 const SHORT_PIPE_DRAIN: Duration = Duration::from_millis(400);
-/// A longer injected drain for the recovery test: under the exclusive
-/// `ROTATION_SUITE_GATE` write lock and deterministic `LatchedPipeDrain` entry (#205),
-/// 1s gives `refresh_mount_at` ample uncontended headroom to observe `ROTATIONS_IN_FLIGHT`
-/// while the delegation is parked in `drain_pipes_on_exit` without asking CI to wait a
-/// real duration.
-const RECOVERY_DRAIN: Duration = Duration::from_secs(1);
+/// Injected post-exit drain for the recovery test once `LatchedPipeDrain` releases the
+/// deadline (#205): stand-down probes run while the two-way gate holds the drain open, so
+/// the post-release budget only needs to expire promptly without waiting the 30s helper out.
+const RECOVERY_DRAIN: Duration = SHORT_PIPE_DRAIN;
 
 /// Every wait in this file is bounded, so a regression fails the test instead of
 /// wedging the runner until the job timeout. 20s is far short of the 30s helper.
@@ -69,9 +67,21 @@ const LOCK_FREE_BUDGET: Duration = Duration::from_secs(10);
 /// cancellation race the call would sit here for 10s.
 const LONG_DRAIN_FOR_STOP: Duration = Duration::from_secs(10);
 /// Ceiling for a drain that a stop ended at once, measured from `shutdown.cancel()`
-/// after the drain-entry latch resolves (reap is already done; only reader abort, job
-/// drop and scratch reclaim remain).
+/// after the drain-entry latch resolves and releases into the active drain (reap is
+/// already done; only reader abort, job drop and scratch reclaim remain).
 const CANCEL_PATH_BUDGET: Duration = Duration::from_secs(4);
+
+/// Coordinates the WARN capture test against sibling tests in this module that also hit the
+/// `post-exit pipe drain` warn callsite without a thread-local subscriber (#205).
+///
+/// When only one scoped `Dispatch` is registered, `tracing-core`'s `Dispatchers::has_just_one`
+/// takes `Rebuilder::JustOne` on first-time `DefaultCallsite::register()` and evaluates the
+/// registering thread's default (`NoSubscriber`), caching `INTEREST_NEVER` on the callsite.
+/// Taking an exclusive write lock around `capture_warns` while the other `PIPE_HOLDING_ARGS`
+/// emitters hold shared read locks guarantees no `NoSubscriber` thread races callsite
+/// registration or capture. Lock order when combined with `ROTATION_SUITE_GATE`: always
+/// `ROTATION_SUITE_GATE` -> `DRAIN_WARN_GATE` -> `CAPTURE_GUARD` -> `LOG_BYTES`.
+static DRAIN_WARN_GATE: tokio::sync::RwLock<()> = tokio::sync::RwLock::const_new(());
 
 /// The WARN+ buffer is process-global. Only the held-handle test captures WARNs today, but
 /// `capture_warns` keeps `CAPTURE_GUARD` across the clear, the callback and the read so a
@@ -110,16 +120,6 @@ fn capture_warns<T>(f: impl FnOnce() -> T) -> (T, String) {
         .lock()
         .expect("the log buffer must not be poisoned")
         .clear();
-    // Keep a second scoped `Dispatch` alive across `with_default` so `tracing-core`'s
-    // `Dispatchers::has_just_one` stays `false` for the whole capture window. When only one
-    // scoped `Dispatch` is registered, a sibling test thread whose own default is
-    // `NoSubscriber` (such as `a_stop_during_the_post_exit_drain_ends_it_at_once`, which
-    // reaches the post-exit warn in milliseconds once #205 removed its fixed sleep) can win
-    // first-time `DefaultCallsite::register()`, hit `Rebuilder::JustOne`, evaluate
-    // `NoSubscriber` on *that* thread, and cache `INTEREST_NEVER` on the warn callsite for
-    // this thread too. Pairing `NoSubscriber` with the WARN subscriber forces per-thread
-    // `Interest::sometimes()` evaluation across every callsite registered mid-capture.
-    let _interest_anchor = tracing::Dispatch::new(tracing::subscriber::NoSubscriber::default());
     let subscriber = tracing_subscriber::fmt()
         .with_max_level(tracing::Level::WARN)
         .with_ansi(false)
@@ -139,11 +139,12 @@ fn capture_warns<T>(f: impl FnOnce() -> T) -> (T, String) {
 /// service log - distinguishable from the stop drain and from a hang-budget expiry.
 #[test]
 fn an_exited_child_with_open_pipes_returns_within_the_drain_budget() {
+    let rt = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .expect("build the test runtime");
+    let _warn_quiet = rt.block_on(DRAIN_WARN_GATE.write());
     let ((outcome, elapsed), log) = capture_warns(|| {
-        let rt = tokio::runtime::Builder::new_current_thread()
-            .enable_all()
-            .build()
-            .expect("build the test runtime");
         rt.block_on(async {
             let shutdown = CancellationToken::new();
             let started = tokio::time::Instant::now();
@@ -239,6 +240,7 @@ async fn a_child_that_closes_its_pipes_keeps_complete_output() {
 #[tokio::test]
 async fn an_incomplete_diagnostic_does_not_fail_a_completed_rotation() {
     let _suite = ROTATION_SUITE_GATE.read().await;
+    let _warn_shared = DRAIN_WARN_GATE.read().await;
     let fixture = MountFixture::new("pipe-incomplete");
     let shutdown = CancellationToken::new();
 
@@ -274,7 +276,7 @@ async fn an_incomplete_diagnostic_does_not_fail_a_completed_rotation() {
 }
 
 /// Wait for `LatchedPipeDrain` to report that `child.wait()` has won the outer `select!`
-/// and `spawn_cli_child` is entering `drain_pipes_on_exit` (#205).
+/// and `drain_pipes_on_exit` is holding before its deadline starts (#205).
 ///
 /// Every wait stays bounded (`ALWAYS_TOO_LONG` for child exit, `DRAIN_PATH_BUDGET` to
 /// collect an early task result or converge on failure), so a regression fails fast with
@@ -310,6 +312,7 @@ async fn await_drain_entry<T: std::fmt::Debug>(
 #[tokio::test]
 async fn the_in_flight_gate_recovers_after_the_drain_budget() {
     let _quiet = ROTATION_SUITE_GATE.write().await;
+    let _warn_shared = DRAIN_WARN_GATE.read().await;
     assert!(
         !rotation_in_flight(),
         "exclusive ROTATION_SUITE_GATE must start with no rotation in flight"
@@ -319,6 +322,7 @@ async fn the_in_flight_gate_recovers_after_the_drain_budget() {
     let token = shutdown.clone();
     let path = fixture.path.clone();
     let (drain_tx, drain_rx) = oneshot::channel();
+    let (release_tx, release_rx) = oneshot::channel();
     let mut in_flight = tokio::spawn(async move {
         rotate_mount_at_with_pipe_drain(
             &path,
@@ -330,14 +334,17 @@ async fn the_in_flight_gate_recovers_after_the_drain_budget() {
             LatchedPipeDrain {
                 budget: RECOVERY_DRAIN,
                 entered: drain_tx,
+                release: release_rx,
             },
         )
         .await
     });
 
     // Synchronize deterministically on entry into `drain_pipes_on_exit` (#205): by the
-    // time this returns, `child.wait()` has already won the outer `select!` and the
-    // delegation is parked in the post-exit drain while still holding `RotationInFlight`.
+    // time this returns, `child.wait()` has won the outer `select!` and the two-way latch
+    // holds the drain open before its deadline starts while `RotationInFlight` is still
+    // held, so scheduler jitter cannot expire `RECOVERY_DRAIN` before `refresh_mount_at`
+    // probes the gate.
     await_drain_entry(drain_rx, &shutdown, &mut in_flight).await;
 
     let err = tokio::time::timeout(LOCK_FREE_BUDGET, refresh_mount_at(&fixture.path, "mount-1"))
@@ -353,6 +360,8 @@ async fn the_in_flight_gate_recovers_after_the_drain_budget() {
         "our own delegation must still be inside its post-exit drain after refresh stood \
          down, proving the drain itself kept ROTATIONS_IN_FLIGHT non-zero"
     );
+
+    let _ = release_tx.send(());
 
     let info = tokio::time::timeout(ALWAYS_TOO_LONG, in_flight)
         .await
@@ -388,16 +397,20 @@ fn the_production_pipe_drain_is_bounded() {
 /// arm of the outer `select!` has won, a stop that lands during the post-exit drain must
 /// still end the wait *at once*. The child is already gone, so the answer stays `Finished`
 /// with the exit status intact. Awaiting `LatchedPipeDrain` guarantees `child.wait()` has
-/// already won before `shutdown.cancel()` fires, so a slow runner spawning `cmd.exe` can
-/// never turn `Finished` into `Interrupted`. Without the inner cancellation race this call
-/// sits in the injected 10s drain until its deadline. The warn's shape is already pinned
-/// by `an_exited_child_with_open_pipes_returns_within_the_drain_budget`, so this test
-/// keeps its assertions strictly on the behavioural stop outcome.
+/// already won and holds the drain before its deadline starts; releasing and yielding lets
+/// `drain_pipes_on_exit` enter `timeout_at` on `LONG_DRAIN_FOR_STOP` before `shutdown.cancel()`
+/// fires, so neither spawn jitter nor post-entry stalls can turn `Finished` into `Interrupted`
+/// or expire the drain early. Without the inner cancellation race this call sits in the
+/// injected 10s drain until its deadline. The warn's shape is already pinned by
+/// `an_exited_child_with_open_pipes_returns_within_the_drain_budget`, so this test keeps its
+/// assertions strictly on the behavioural stop outcome.
 #[tokio::test]
 async fn a_stop_during_the_post_exit_drain_ends_it_at_once() {
+    let _warn_shared = DRAIN_WARN_GATE.read().await;
     let shutdown = CancellationToken::new();
     let token = shutdown.clone();
     let (drain_tx, drain_rx) = oneshot::channel();
+    let (release_tx, release_rx) = oneshot::channel();
     let mut in_flight = tokio::spawn(async move {
         run_cli_child(
             STUB_EXE,
@@ -407,12 +420,15 @@ async fn a_stop_during_the_post_exit_drain_ends_it_at_once() {
             LatchedPipeDrain {
                 budget: LONG_DRAIN_FOR_STOP,
                 entered: drain_tx,
+                release: release_rx,
             },
         )
         .await
     });
 
     await_drain_entry(drain_rx, &shutdown, &mut in_flight).await;
+    let _ = release_tx.send(());
+    tokio::task::yield_now().await;
 
     let stop_started = tokio::time::Instant::now();
     shutdown.cancel();

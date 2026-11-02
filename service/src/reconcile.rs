@@ -531,16 +531,18 @@ async fn refresh_mount_internal(_provider: &str) -> Result<(), String> {
     Ok(())
   }
 
-/// Post-exit pipe drain budget paired with a one-shot latch that resolves immediately
-/// before `drain_pipes_on_exit` begins (#205).
+/// Post-exit pipe drain budget paired with a two-way test handshake right before
+/// `drain_pipes_on_exit` starts its deadline (#205).
 ///
-/// Only compiled under `cfg(test)` (#163): tests use it to align stimuli (`shutdown.cancel()`
-/// and `refresh_mount_at`) with deterministic entry into the post-exit drain rather than
-/// with fixed wall-clock sleeps, while assertions remain strictly on external outcomes.
+/// Only compiled under `cfg(test)` (#163): `entered` fires once `child.wait()` has won the
+/// outer `select!` and `drain_pipes_on_exit` has begun, and `release` holds the drain before
+/// its deadline starts until the test finishes its mid-drain setup or stand-down probes.
+/// Assertions remain strictly on external outcomes.
 #[cfg(test)]
 pub(crate) struct LatchedPipeDrain {
     pub(crate) budget: Duration,
     pub(crate) entered: oneshot::Sender<()>,
+    pub(crate) release: oneshot::Receiver<()>,
 }
 
 /// Post-exit pipe drain configuration passed into `run_cli_child` and
@@ -549,13 +551,13 @@ pub(crate) struct LatchedPipeDrain {
 /// Fields stay private so callers construct it only via `From<Duration>` (production and
 /// unlatched tests) or `#[cfg(test)] From<LatchedPipeDrain>` (mid-drain race tests). In
 /// non-test builds this compiles to a single `Duration` with zero extra state or runtime
-/// cost; under `cfg(test)` it optionally carries the one-shot sender consumed by `enter`
-/// right before `drain_pipes_on_exit` runs, so a child stopped or hung in another `select!`
-/// arm drops the sender without firing it.
+/// cost; under `cfg(test)` it optionally carries the two-way handshake consumed inside
+/// `drain_pipes_on_exit` before starting the deadline, while a child stopped or hung in
+/// another `select!` arm drops it without firing `entered`.
 pub(crate) struct PipeDrain {
     budget: Duration,
     #[cfg(test)]
-    entered: Option<oneshot::Sender<()>>,
+    latch: Option<(oneshot::Sender<()>, oneshot::Receiver<()>)>,
 }
 
 impl From<Duration> for PipeDrain {
@@ -564,31 +566,19 @@ impl From<Duration> for PipeDrain {
         Self {
             budget,
             #[cfg(test)]
-            entered: None,
+            latch: None,
         }
     }
 }
 
 #[cfg(test)]
 impl From<LatchedPipeDrain> for PipeDrain {
-    /// Arm the drain budget with a test-only phase-entry sender (#205).
+    /// Arm the drain budget with a test-only two-way phase-entry gate (#205).
     fn from(drain: LatchedPipeDrain) -> Self {
         Self {
             budget: drain.budget,
-            entered: Some(drain.entered),
+            latch: Some((drain.entered, drain.release)),
         }
-    }
-}
-
-impl PipeDrain {
-    /// Notify any armed test waiter that `child.wait()` has won the outer `select!` and
-    /// `drain_pipes_on_exit` is about to start, returning the drain budget (#205).
-    fn enter(self) -> Duration {
-        #[cfg(test)]
-        if let Some(tx) = self.entered {
-            let _ = tx.send(());
-        }
-        self.budget
     }
 }
 
@@ -845,10 +835,10 @@ async fn spawn_cli_child(
             // cancelled at the same instant; a pending drain loses to the stop. The child
             // has already exited, so the answer stays `Finished` with the exit status
             // intact - there is nothing left to kill or replay.
-            // `pipe_drain.enter()` fires any `#[cfg(test)]` drain-entry latch only now,
-            // after `child.wait()` has won the outer `select!` and immediately before
-            // `drain_pipes_on_exit` starts (#205).
-            let pipe_drain = pipe_drain.enter();
+            // `drain_pipes_on_exit` consumes `pipe_drain`, firing any `#[cfg(test)]`
+            // drain-entry latch after `child.wait()` has won the outer `select!` and
+            // waiting for test release before starting its deadline (#205).
+            let drain_budget = pipe_drain.budget;
             let (stdout_closed, stderr_closed, cause): (bool, bool, &'static str) =
                 tokio::select! {
                     biased;
@@ -879,7 +869,7 @@ async fn spawn_cli_child(
                     "post-exit pipe drain: CLI rotate child {} exited but its {} did not close cleanly (budget {:?}: {}); keeping the output captured so far and deciding the rotation by its exit status",
                     pid_label(pid),
                     unclosed_pipes(stdout_closed, stderr_closed),
-                    pipe_drain,
+                    drain_budget,
                     cause
                 );
             }
@@ -942,19 +932,26 @@ async fn spawn_cli_child(
     })
 }
 
-/// Wait for both pipe readers to reach a real EOF, but no longer than one shared `budget`
-/// (#192). Returns `(stdout_eof, stderr_eof, reader_failed)`: a reader that ended on an I/O
-/// error or a panic is *not* a closed pipe, so it counts as incomplete output just like a
-/// deadline expiry. `timeout_at` over `&mut` `JoinHandle`s keeps the handles so they can
-/// still be aborted: dropping a handle detaches its task, and a reader parked on a pipe
-/// whose writer never closes would otherwise live until the runtime shuts down. The second
-/// wait uses the same deadline as the first, so two pipes cannot cost two budgets.
+/// Wait for both pipe readers to reach a real EOF, but no longer than one shared
+/// `pipe_drain.budget` (#192). Returns `(stdout_eof, stderr_eof, reader_failed)`: a reader
+/// that ended on an I/O error or a panic is *not* a closed pipe, so it counts as incomplete
+/// output just like a deadline expiry. `timeout_at` over `&mut` `JoinHandle`s keeps the
+/// handles so they can still be aborted: dropping a handle detaches its task, and a reader
+/// parked on a pipe whose writer never closes would otherwise live until the runtime shuts
+/// down. The second wait uses the same deadline as the first, so two pipes cannot cost two
+/// budgets. Under `cfg(test)`, an armed `LatchedPipeDrain` signals entry and waits for test
+/// release before computing `deadline` (#205).
 async fn drain_pipes_on_exit(
     read_stdout: &mut tokio::task::JoinHandle<bool>,
     read_stderr: &mut tokio::task::JoinHandle<bool>,
-    budget: Duration,
+    pipe_drain: PipeDrain,
 ) -> (bool, bool, bool) {
-    let deadline = tokio::time::Instant::now() + budget;
+    #[cfg(test)]
+    if let Some((entered, release)) = pipe_drain.latch {
+        let _ = entered.send(());
+        let _ = release.await;
+    }
+    let deadline = tokio::time::Instant::now() + pipe_drain.budget;
     let stdout = tokio::time::timeout_at(deadline, &mut *read_stdout).await;
     let stderr = tokio::time::timeout_at(deadline, &mut *read_stderr).await;
     let stdout_eof = matches!(&stdout, Ok(Ok(true)));
