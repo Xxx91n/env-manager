@@ -42,7 +42,8 @@ async fn provider_managed_periodic_mount_without_envelope_is_skipped_without_sta
         mounts[0]["lastFetchedAt"] = serde_json::json!("2026-01-02T00:00:00Z");
         std::fs::write(&fixture.path, serde_json::to_string_pretty(&mounts).unwrap())
             .expect("write a provider-managed Periodic mount");
-        let before = std::fs::read_to_string(&fixture.path).expect("read the original mount file");
+        let before = std::fs::read_to_string(&fixture.path)
+            .expect("read the original mount file");
         let shutdown = CancellationToken::new();
 
         let info = tokio::time::timeout(
