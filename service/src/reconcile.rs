@@ -431,7 +431,9 @@ pub(crate) async fn rotate_mount_at_with_pipe_drain(
             Some(m) => m,
             None => return Err(format!("mount not found: {}", mount_id)),
         };
-        if mount.refreshPolicy == "Periodic" && mount.envelope.is_none() {
+        if mount.refreshPolicy.eq_ignore_ascii_case("Periodic")
+            && mount.envelope.as_deref().map_or(true, str::is_empty)
+        {
             // This mount's value lives in its provider backend; the delegated CLI rotate
             // only re-encrypts locally-held envelopes. Report an observable non-failure skip
             // and, critically, do not claim the mount was rotated or advance either timestamp.
