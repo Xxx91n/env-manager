@@ -264,6 +264,33 @@ async fn an_incomplete_diagnostic_does_not_fail_a_completed_rotation() {
     assert_ne!(mounts[0]["lastFetchedAt"], serde_json::Value::Null);
 }
 
+/// Wait for `LatchedPipeDrain` to report that `child.wait()` has won the outer `select!`
+/// and `spawn_cli_child` is entering `drain_pipes_on_exit` (#205).
+///
+/// Every wait stays bounded (`ALWAYS_TOO_LONG` for child exit, `DRAIN_PATH_BUDGET` to
+/// collect an early task result or converge on failure), so a regression fails fast with
+/// the task's outcome instead of wedging the runner.
+async fn await_drain_entry<T: std::fmt::Debug>(
+    drain_rx: oneshot::Receiver<()>,
+    shutdown: &CancellationToken,
+    in_flight: &mut tokio::task::JoinHandle<T>,
+) {
+    match tokio::time::timeout(ALWAYS_TOO_LONG, drain_rx).await {
+        Ok(Ok(())) => {}
+        Ok(Err(_)) => {
+            let early = tokio::time::timeout(DRAIN_PATH_BUDGET, in_flight).await;
+            panic!("delegation ended before entering the post-exit pipe drain: {early:?}");
+        }
+        Err(_) => {
+            shutdown.cancel();
+            let _ = tokio::time::timeout(DRAIN_PATH_BUDGET, in_flight).await;
+            panic!(
+                "the child did not exit and reach the post-exit drain inside {ALWAYS_TOO_LONG:?}"
+            );
+        }
+    }
+}
+
 /// The liveness half of #192: the RAII marker is dropped when the call returns, so the
 /// shared gate that both `run_reconcile_tick` and `refresh_mount` consult stops standing
 /// down. `refresh` is driven against the temp fixture; the tick reads the same
@@ -277,7 +304,7 @@ async fn the_in_flight_gate_recovers_after_the_drain_budget() {
     let token = shutdown.clone();
     let path = fixture.path.clone();
     let (drain_tx, drain_rx) = oneshot::channel();
-    let in_flight = tokio::spawn(async move {
+    let mut in_flight = tokio::spawn(async move {
         rotate_mount_at_with_drain_latch(
             &path,
             STUB_EXE,
@@ -294,16 +321,9 @@ async fn the_in_flight_gate_recovers_after_the_drain_budget() {
     });
 
     // Synchronize deterministically on entry into `drain_pipes_on_exit` (#205): by the
-    // time this resolves, `child.wait()` has already won the outer `select!` and the
+    // time this returns, `child.wait()` has already won the outer `select!` and the
     // delegation is parked in the post-exit drain while still holding `RotationInFlight`.
-    if tokio::time::timeout(ALWAYS_TOO_LONG, drain_rx)
-        .await
-        .expect("the child must exit and reach the post-exit drain inside ALWAYS_TOO_LONG")
-        .is_err()
-    {
-        let early = in_flight.await;
-        panic!("delegation ended before entering the post-exit pipe drain: {early:?}");
-    }
+    await_drain_entry(drain_rx, &shutdown, &mut in_flight).await;
 
     let err = tokio::time::timeout(LOCK_FREE_BUDGET, refresh_mount_at(&fixture.path, "mount-1"))
         .await
@@ -331,7 +351,8 @@ async fn the_in_flight_gate_recovers_after_the_drain_budget() {
     while tokio::time::Instant::now() < deadline {
         if !rotation_in_flight() {
             match refresh_mount_at(&fixture.path, "mount-1").await {
-                Ok(_) => {
+                Ok(refreshed) => {
+                    assert_eq!(refreshed["refreshed"], true);
                     recovered = true;
                     break;
                 }
@@ -374,7 +395,7 @@ async fn a_stop_during_the_post_exit_drain_ends_it_at_once() {
     let shutdown = CancellationToken::new();
     let token = shutdown.clone();
     let (drain_tx, drain_rx) = oneshot::channel();
-    let in_flight = tokio::spawn(async move {
+    let mut in_flight = tokio::spawn(async move {
         run_cli_child_with_drain_latch(
             STUB_EXE,
             &PIPE_HOLDING_ARGS,
@@ -388,14 +409,7 @@ async fn a_stop_during_the_post_exit_drain_ends_it_at_once() {
         .await
     });
 
-    if tokio::time::timeout(ALWAYS_TOO_LONG, drain_rx)
-        .await
-        .expect("the child must exit and reach the post-exit drain inside ALWAYS_TOO_LONG")
-        .is_err()
-    {
-        let early = in_flight.await;
-        panic!("child ended before entering the post-exit pipe drain: {early:?}");
-    }
+    await_drain_entry(drain_rx, &shutdown, &mut in_flight).await;
 
     let stop_started = tokio::time::Instant::now();
     shutdown.cancel();
