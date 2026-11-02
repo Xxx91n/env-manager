@@ -17,7 +17,7 @@ use std::time::Duration;
 
 use tokio_util::sync::CancellationToken;
 
-use crate::reconcile::{rotate_mount_at, ROTATE_ARGS, ROTATE_HANG_BUDGET};
+use crate::reconcile::{delegated_rotate_argv, rotate_mount_at, ROTATE_HANG_BUDGET};
 use crate::rotate_stop_tests::{MountFixture, ROTATION_SUITE_GATE};
 
 /// Every wait here is bounded, so a regression fails the test instead of wedging the runner
@@ -300,15 +300,16 @@ async fn completed_rotation_reports_an_unreadable_mount_file() {
 /// The delegation shape pinned by the #195 contract: `rotate <mountId>` re-encrypts the
 /// whole store, so the command handed to the CLI must not carry a mount id. A mount filter
 /// in the CLI (option 1) or a service-side mount -> profile mapping (option 2) were both
-/// rejected in favour of the whole-store contract, and this assertion is the guard that a
-/// per-mount argument never sneaks into the delegation argv.
+/// rejected in favour of the whole-store contract. The assertion targets the production
+/// assembly `rotate_mount` hands down (not a copy of the constant), so a mount argument
+/// appended at that call site cannot evade the guard.
 #[test]
 fn delegated_rotation_command_carries_no_mount_id() {
     assert_eq!(
-        ROTATE_ARGS,
-        ["profile", "secret-provider", "rotate"],
+        delegated_rotate_argv(),
+        vec!["profile", "secret-provider", "rotate"],
         "the delegated rotation must stay unscoped: the CLI's RotateAll re-encrypts every \
-         profile's secrets, and the IPC mount id only names the stamp target"
+         profile's locally-held envelopes, and the IPC mount id only names the stamp target"
     );
 }
 

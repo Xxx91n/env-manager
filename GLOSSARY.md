@@ -45,7 +45,7 @@ The service-side loop that refreshes `Periodic` mounts, default off. Only `CanRo
 _Avoid_: refresh daemon, sync loop, agent process
 
 **Delegated Rotation**:
-A `rotate` the service hands to `env-manager-cli.exe` as a child process (`profile secret-provider rotate`) instead of performing it in-process. The unit that owns everything the child touches: its process tree (the per-delegation job object), the sops scratch root, and the in-flight marker that keeps the other mount-file writers off the file. "Delegation" alone means the same act. The delegated command is unscoped, so a delegation is whole-store by contract (#195): an IPC `rotate <mountId>` re-encrypts every profile's secrets and the service stamps `lastRotatedAt`/`lastFetchedAt` only on the mount the call named - the mount id is a stamp target, never a filter.
+A `rotate` the service hands to `env-manager-cli.exe` as a child process (`profile secret-provider rotate`) instead of performing it in-process. The unit that owns everything the child touches: its process tree (the per-delegation job object), the sops scratch root, and the in-flight marker that keeps the other mount-file writers off the file. "Delegation" alone means the same act. The delegated command is unscoped, so a delegation is whole-store by contract (#195): an IPC `rotate <mountId>` re-encrypts every profile's locally-held envelopes and the service stamps `lastRotatedAt`/`lastFetchedAt` only on the mount the call named - the mount id is a stamp target, never a filter.
 _Avoid_: service-side rotate (ambiguous with the CLI's own `rotate`), subprocess rotate, background rotation (that names a runtime mode, not an ownership boundary)
 
 **Interrupted Rotation**:

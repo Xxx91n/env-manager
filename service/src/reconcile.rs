@@ -80,11 +80,19 @@ pub(crate) const ROTATE_HANG_BUDGET: Duration = Duration::from_secs(15 * 60);
 /// one-shot write of profiles.json, not an IPC back into the service. `--json` is absent
 /// because CLI rotate does not support it (it exits non-zero). The command deliberately
 /// carries **no** mount id (#195): the CLI's `RotateAll` re-encrypts every profile's
-/// secrets, so an IPC `rotate <mountId>` is whole-store re-encryption with a stamp on the
-/// named mount only. A per-mount rotation would need a mount filter in the CLI contract
-/// (or a mount -> profile mapping the service does not have), both rejected in favour of
-/// the whole-store contract. Exposed for the test that pins this shape.
-pub(crate) const ROTATE_ARGS: [&str; 3] = ["profile", "secret-provider", "rotate"];
+/// locally-held envelopes, so an IPC `rotate <mountId>` is whole-store re-encryption with a
+/// stamp on the named mount only. A per-mount rotation would need a mount filter in the CLI
+/// contract (or a mount -> profile mapping the service does not have), both rejected in
+/// favour of the whole-store contract.
+const ROTATE_ARGS: [&str; 3] = ["profile", "secret-provider", "rotate"];
+
+/// The argv `rotate_mount` actually hands down, built in exactly one place so the #195
+/// contract test pins the production assembly instead of a copy of the constant. Deliberately
+/// takes no mount id: the id validates existence and names the stamp target, it never filters
+/// the rotation.
+pub(crate) fn delegated_rotate_argv() -> Vec<&'static str> {
+    ROTATE_ARGS.to_vec()
+}
 
 /// SecretMount mirror of the C# SecretMount class.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -363,7 +371,7 @@ pub async fn rotate_mount(
     rotate_mount_at(
         &crate::secret_mount_path(),
         &cli_exe,
-        &ROTATE_ARGS,
+        &delegated_rotate_argv(),
         mount_id,
         shutdown,
         ROTATE_HANG_BUDGET,
