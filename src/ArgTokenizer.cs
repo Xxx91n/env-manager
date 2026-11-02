@@ -162,49 +162,80 @@ static partial class LenientArgs
     /// The program path may be quoted (possibly containing spaces) or unquoted
     /// (up to the first whitespace). Returns the index just past the path
     /// and any trailing whitespace.
+    /// Thin shell: leading spaces, then the quoted or unquoted path body,
+    /// then trailing spaces.
     /// </summary>
     private static int SkipProgramPath(string raw)
     {
-        int i = 0;
-        while (i < raw.Length && raw[i] == ' ') i++;
+        int i = SkipSpaces(raw, 0);
         if (i >= raw.Length) return i;
+        if (raw[i] == '"') i = SkipQuotedProgramPath(raw, i);
+        else i = SkipUnquotedProgramPath(raw, i);
+        return SkipSpaces(raw, i);
+    }
 
-        if (raw[i] == '"')
+    /// <summary>
+    /// Advance past a run of spaces starting at the given index.
+    /// </summary>
+    private static int SkipSpaces(string raw, int i)
+    {
+        while (i < raw.Length && raw[i] == ' ') i++;
+        return i;
+    }
+
+    /// <summary>
+    /// Advance past an unquoted program path: up to the first space.
+    /// </summary>
+    private static int SkipUnquotedProgramPath(string raw, int i)
+    {
+        while (i < raw.Length && raw[i] != ' ') i++;
+        return i;
+    }
+
+    /// <summary>
+    /// Advance past a quoted program path starting at the opening quote.
+    /// Returns the index just past the closing quote (or the end of the
+    /// command line when the quote is unterminated).
+    /// </summary>
+    private static int SkipQuotedProgramPath(string raw, int i)
+    {
+        i++; // skip opening quote
+        while (i < raw.Length && raw[i] != '"')
         {
-            i++; // skip opening quote
-            while (i < raw.Length && raw[i] != '"')
+            if (raw[i] == '\\')
             {
-                // Backslash-quote inside program path: per CommandLineToArgvW
-                // odd run = escaped quote, even run = terminator. Keep it simple
-                // here - skip until the matching closing quote.
-                if (raw[i] == '\\')
-                {
-                    int runStart = i;
-                    while (i < raw.Length && raw[i] == '\\') i++;
-                    if (i < raw.Length && raw[i] == '"')
-                    {
-                        int run = i - runStart;
-                        if ((run & 1) == 1)
-                        {
-                            // odd run: escaped quote, keep going
-                            i++;
-                            continue;
-                        }
-                        // even run: terminator
-                        break;
-                    }
-                    continue;
-                }
+                i = SkipBackslashRunInQuotedPath(raw, i);
+                continue;
+            }
+            i++;
+        }
+        if (i < raw.Length && raw[i] == '"') i++; // skip closing quote
+        return i;
+    }
+
+    /// <summary>
+    /// Advance past a backslash run inside a quoted program path.
+    /// Backslash-quote inside program path: per CommandLineToArgvW
+    /// odd run = escaped quote, even run = terminator. Keep it simple
+    /// here - skip until the matching closing quote.
+    /// Returns the index just past an escaped quote (odd run), or the
+    /// index of the terminating quote (even run / plain run), leaving the
+    /// caller's loop condition to stop there.
+    /// </summary>
+    private static int SkipBackslashRunInQuotedPath(string raw, int i)
+    {
+        int runStart = i;
+        while (i < raw.Length && raw[i] == '\\') i++;
+        if (i < raw.Length && raw[i] == '"')
+        {
+            int run = i - runStart;
+            if ((run & 1) == 1)
+            {
+                // odd run: escaped quote, keep going
                 i++;
             }
-            if (i < raw.Length && raw[i] == '"') i++; // skip closing quote
+            // even run: terminator - leave i on the quote
         }
-        else
-        {
-            while (i < raw.Length && raw[i] != ' ') i++;
-        }
-
-        while (i < raw.Length && raw[i] == ' ') i++;
         return i;
     }
 }
