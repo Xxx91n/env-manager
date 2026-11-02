@@ -535,15 +535,25 @@ async fn refresh_mount_internal(_provider: &str) -> Result<(), String> {
 /// `drain_pipes_on_exit` starts its deadline (#205).
 ///
 /// Only compiled under `cfg(test)` (#163): `entered` fires once `child.wait()` has won the
-/// outer `select!` and `drain_pipes_on_exit` has begun, and `release` holds the drain before
-/// its deadline starts until the test finishes its mid-drain setup or stand-down probes.
+/// outer `select!` and `drain_pipes_on_exit` has begun, `release` holds the drain before its
+/// deadline starts until the test finishes its mid-drain setup or stand-down probes, and
+/// `started` optionally acknowledges the first `Poll::Pending` inside `timeout_at` so a stop
+/// test proves cancellation interrupts an active drain wait without relying on `yield_now()`.
 /// Assertions remain strictly on external outcomes.
 #[cfg(test)]
 pub(crate) struct LatchedPipeDrain {
     pub(crate) budget: Duration,
     pub(crate) entered: oneshot::Sender<()>,
     pub(crate) release: oneshot::Receiver<()>,
+    pub(crate) started: Option<oneshot::Sender<()>>,
 }
+
+#[cfg(test)]
+type PipeDrainLatch = (
+    oneshot::Sender<()>,
+    oneshot::Receiver<()>,
+    Option<oneshot::Sender<()>>,
+);
 
 /// Post-exit pipe drain configuration passed into `run_cli_child` and
 /// `rotate_mount_at_with_pipe_drain` (#192, #205).
@@ -557,7 +567,7 @@ pub(crate) struct LatchedPipeDrain {
 pub(crate) struct PipeDrain {
     budget: Duration,
     #[cfg(test)]
-    latch: Option<(oneshot::Sender<()>, oneshot::Receiver<()>)>,
+    latch: Option<PipeDrainLatch>,
 }
 
 impl From<Duration> for PipeDrain {
@@ -577,7 +587,7 @@ impl From<LatchedPipeDrain> for PipeDrain {
     fn from(drain: LatchedPipeDrain) -> Self {
         Self {
             budget: drain.budget,
-            latch: Some((drain.entered, drain.release)),
+            latch: Some((drain.entered, drain.release, drain.started)),
         }
     }
 }
@@ -939,26 +949,69 @@ async fn spawn_cli_child(
 /// handles so they can still be aborted: dropping a handle detaches its task, and a reader
 /// parked on a pipe whose writer never closes would otherwise live until the runtime shuts
 /// down. The second wait uses the same deadline as the first, so two pipes cannot cost two
-/// budgets. Under `cfg(test)`, an armed `LatchedPipeDrain` signals entry and waits for test
-/// release before computing `deadline` (#205).
+/// budgets. Under `cfg(test)`, an armed `LatchedPipeDrain` signals entry, waits for test
+/// release before computing `deadline`, and optionally acknowledges the first active
+/// `timeout_at` poll (#205).
 async fn drain_pipes_on_exit(
     read_stdout: &mut tokio::task::JoinHandle<bool>,
     read_stderr: &mut tokio::task::JoinHandle<bool>,
     pipe_drain: PipeDrain,
 ) -> (bool, bool, bool) {
     #[cfg(test)]
-    if let Some((entered, release)) = pipe_drain.latch {
+    let mut started = if let Some((entered, release, started)) = pipe_drain.latch {
         let _ = entered.send(());
         let _ = release.await;
-    }
+        started
+    } else {
+        None
+    };
     let deadline = tokio::time::Instant::now() + pipe_drain.budget;
-    let stdout = tokio::time::timeout_at(deadline, &mut *read_stdout).await;
-    let stderr = tokio::time::timeout_at(deadline, &mut *read_stderr).await;
+    let stdout = await_pipe_with_deadline(
+        &mut *read_stdout,
+        deadline,
+        #[cfg(test)]
+        &mut started,
+    )
+    .await;
+    let stderr = await_pipe_with_deadline(
+        &mut *read_stderr,
+        deadline,
+        #[cfg(test)]
+        &mut started,
+    )
+    .await;
     let stdout_eof = matches!(&stdout, Ok(Ok(true)));
     let stderr_eof = matches!(&stderr, Ok(Ok(true)));
     let reader_failed = matches!(&stdout, Ok(Ok(false)) | Ok(Err(_)))
         || matches!(&stderr, Ok(Ok(false)) | Ok(Err(_)));
     (stdout_eof, stderr_eof, reader_failed)
+}
+
+/// Await a single pipe reader up to `deadline` without consuming its `JoinHandle`, firing
+/// any armed `cfg(test)` active-wait acknowledgement once `timeout_at` registers `Pending`.
+async fn await_pipe_with_deadline(
+    reader: &mut tokio::task::JoinHandle<bool>,
+    deadline: tokio::time::Instant,
+    #[cfg(test)] started: &mut Option<oneshot::Sender<()>>,
+) -> Result<Result<bool, tokio::task::JoinError>, tokio::time::error::Elapsed> {
+    #[cfg(not(test))]
+    {
+        tokio::time::timeout_at(deadline, reader).await
+    }
+    #[cfg(test)]
+    {
+        let mut wait = std::pin::pin!(tokio::time::timeout_at(deadline, reader));
+        std::future::poll_fn(|cx| {
+            let poll = std::future::Future::poll(wait.as_mut(), cx);
+            if poll.is_pending() {
+                if let Some(tx) = started.take() {
+                    let _ = tx.send(());
+                }
+            }
+            poll
+        })
+        .await
+    }
 }
 
 /// Which pipes the warn has to name. Called only when at least one did not close; the

@@ -275,29 +275,29 @@ async fn an_incomplete_diagnostic_does_not_fail_a_completed_rotation() {
     assert_ne!(mounts[0]["lastFetchedAt"], serde_json::Value::Null);
 }
 
-/// Wait for `LatchedPipeDrain` to report that `child.wait()` has won the outer `select!`
-/// and `drain_pipes_on_exit` is holding before its deadline starts (#205).
+/// Wait for a `LatchedPipeDrain` phase signal (`entered` or `started`) within `budget`
+/// (#205).
 ///
 /// Every wait stays bounded (`ALWAYS_TOO_LONG` for child exit, `DRAIN_PATH_BUDGET` to
-/// collect an early task result or converge on failure), so a regression fails fast with
-/// the task's outcome instead of wedging the runner.
-async fn await_drain_entry<T: std::fmt::Debug>(
-    drain_rx: oneshot::Receiver<()>,
+/// enter the active `timeout_at` poll or collect an early task result), so a regression
+/// fails fast with the task's outcome instead of wedging the runner.
+async fn await_drain_signal<T: std::fmt::Debug>(
+    rx: oneshot::Receiver<()>,
+    budget: Duration,
+    phase: &'static str,
     shutdown: &CancellationToken,
     in_flight: &mut tokio::task::JoinHandle<T>,
 ) {
-    match tokio::time::timeout(ALWAYS_TOO_LONG, drain_rx).await {
+    match tokio::time::timeout(budget, rx).await {
         Ok(Ok(())) => {}
         Ok(Err(_)) => {
             let early = tokio::time::timeout(DRAIN_PATH_BUDGET, in_flight).await;
-            panic!("delegation ended before entering the post-exit pipe drain: {early:?}");
+            panic!("delegation ended before {phase}: {early:?}");
         }
         Err(_) => {
             shutdown.cancel();
             let _ = tokio::time::timeout(DRAIN_PATH_BUDGET, in_flight).await;
-            panic!(
-                "the child did not exit and reach the post-exit drain inside {ALWAYS_TOO_LONG:?}"
-            );
+            panic!("delegation did not {phase} inside {budget:?}");
         }
     }
 }
@@ -335,6 +335,7 @@ async fn the_in_flight_gate_recovers_after_the_drain_budget() {
                 budget: RECOVERY_DRAIN,
                 entered: drain_tx,
                 release: release_rx,
+                started: None,
             },
         )
         .await
@@ -345,7 +346,14 @@ async fn the_in_flight_gate_recovers_after_the_drain_budget() {
     // holds the drain open before its deadline starts while `RotationInFlight` is still
     // held, so scheduler jitter cannot expire `RECOVERY_DRAIN` before `refresh_mount_at`
     // probes the gate.
-    await_drain_entry(drain_rx, &shutdown, &mut in_flight).await;
+    await_drain_signal(
+        drain_rx,
+        ALWAYS_TOO_LONG,
+        "entering the post-exit pipe drain",
+        &shutdown,
+        &mut in_flight,
+    )
+    .await;
 
     let err = tokio::time::timeout(LOCK_FREE_BUDGET, refresh_mount_at(&fixture.path, "mount-1"))
         .await
@@ -396,14 +404,14 @@ fn the_production_pipe_drain_is_bounded() {
 /// CodeRabbit finding 1 (#192 review, deterministic sync in #205): once the child-exit
 /// arm of the outer `select!` has won, a stop that lands during the post-exit drain must
 /// still end the wait *at once*. The child is already gone, so the answer stays `Finished`
-/// with the exit status intact. Awaiting `LatchedPipeDrain` guarantees `child.wait()` has
-/// already won and holds the drain before its deadline starts; releasing and yielding lets
-/// `drain_pipes_on_exit` enter `timeout_at` on `LONG_DRAIN_FOR_STOP` before `shutdown.cancel()`
-/// fires, so neither spawn jitter nor post-entry stalls can turn `Finished` into `Interrupted`
-/// or expire the drain early. Without the inner cancellation race this call sits in the
-/// injected 10s drain until its deadline. The warn's shape is already pinned by
-/// `an_exited_child_with_open_pipes_returns_within_the_drain_budget`, so this test keeps its
-/// assertions strictly on the behavioural stop outcome.
+/// with the exit status intact. `LatchedPipeDrain` first confirms `child.wait()` has won
+/// while holding before the deadline starts, and after `release` its `started` signal
+/// confirms `drain_pipes_on_exit` has parked inside `timeout_at` on `LONG_DRAIN_FOR_STOP`
+/// before `shutdown.cancel()` fires, so neither spawn jitter nor post-entry stalls can turn
+/// `Finished` into `Interrupted` or skip the active drain wait. Without the inner
+/// cancellation race this call sits in the injected 10s drain until its deadline. The warn's
+/// shape is already pinned by `an_exited_child_with_open_pipes_returns_within_the_drain_budget`,
+/// so this test keeps its assertions strictly on the behavioural stop outcome.
 #[tokio::test]
 async fn a_stop_during_the_post_exit_drain_ends_it_at_once() {
     let _warn_shared = DRAIN_WARN_GATE.read().await;
@@ -411,6 +419,7 @@ async fn a_stop_during_the_post_exit_drain_ends_it_at_once() {
     let token = shutdown.clone();
     let (drain_tx, drain_rx) = oneshot::channel();
     let (release_tx, release_rx) = oneshot::channel();
+    let (started_tx, started_rx) = oneshot::channel();
     let mut in_flight = tokio::spawn(async move {
         run_cli_child(
             STUB_EXE,
@@ -421,14 +430,29 @@ async fn a_stop_during_the_post_exit_drain_ends_it_at_once() {
                 budget: LONG_DRAIN_FOR_STOP,
                 entered: drain_tx,
                 release: release_rx,
+                started: Some(started_tx),
             },
         )
         .await
     });
 
-    await_drain_entry(drain_rx, &shutdown, &mut in_flight).await;
+    await_drain_signal(
+        drain_rx,
+        ALWAYS_TOO_LONG,
+        "entering the post-exit pipe drain",
+        &shutdown,
+        &mut in_flight,
+    )
+    .await;
     let _ = release_tx.send(());
-    tokio::task::yield_now().await;
+    await_drain_signal(
+        started_rx,
+        DRAIN_PATH_BUDGET,
+        "parking in the active timeout_at drain wait",
+        &shutdown,
+        &mut in_flight,
+    )
+    .await;
 
     let stop_started = tokio::time::Instant::now();
     shutdown.cancel();
