@@ -168,10 +168,10 @@ impl Drop for RotationInFlight {
     }
 }
 
-/// Whether a delegated rotation currently owns the mount file's envelopes (#161). Only
-/// meaningful while holding `RECONCILE_LOCK`, which is where every caller reads it; a test
-/// may also take it as a relaxed snapshot after a delegation returns, to prove the RAII
-/// marker was dropped (#192). No test-only accessor is added for the static itself.
+/// Whether a delegated rotation currently owns the mount file's envelopes (#161). Production
+/// callers read it while holding `RECONCILE_LOCK`; tests also poll it as a readiness / drain
+/// snapshot (#192, #193), keeping `ROTATIONS_IN_FLIGHT` itself private with no test-only
+/// accessor on the static.
 pub(crate) fn rotation_in_flight() -> bool {
     ROTATIONS_IN_FLIGHT.load(Ordering::SeqCst) > 0
 }
@@ -212,7 +212,19 @@ pub async fn reconcile_loop(shutdown: Arc<CancellationToken>) {
     }
 }
 
+/// Production entry called by `reconcile_loop`: binds `run_reconcile_tick_at` to
+/// `crate::secret_mount_path()`. That one-line binding stays covered by inspection until
+/// `reconcile_loop` itself takes warmup and mount-path parameters (#193).
 async fn run_reconcile_tick() -> Result<(), String> {
+    run_reconcile_tick_at(&crate::secret_mount_path()).await
+}
+
+/// `run_reconcile_tick` with the mount file taken as a parameter (#193).
+///
+/// Same seam shape as `rotate_mount_at`: production resolves `crate::secret_mount_path()`,
+/// while tests pass a temp file under `%TEMP%` so exercising the tick never touches real
+/// `%LOCALAPPDATA%` or `ProgramData` state.
+pub(crate) async fn run_reconcile_tick_at(mount_path: &Path) -> Result<(), String> {
     // Phase 4C: Acquire global lock for the entire tick to prevent TOCTOU with CLI mutations.
     let _guard = RECONCILE_LOCK.lock().await;
     // A delegated rotation owns the envelopes in the mount file while its child runs (#161):
@@ -227,8 +239,7 @@ async fn run_reconcile_tick() -> Result<(), String> {
     }
     tracing::info!("reconcile tick: scanning secretMount.json");
 
-    let path = crate::secret_mount_path();
-    let mut mounts = load_mounts(&path);
+    let mut mounts = load_mounts(mount_path);
 
     if mounts.is_empty() {
         tracing::info!("reconcile tick: no mounts found, skipping");
@@ -276,7 +287,7 @@ async fn run_reconcile_tick() -> Result<(), String> {
     }
 
     if changed {
-        save_mounts(&path, &mounts)?;
+        save_mounts(mount_path, &mounts)?;
     }
 
     tracing::info!(

@@ -27,7 +27,7 @@ use crate::reconcile::{
     refresh_mount_at, rotate_mount_at_with_pipe_drain, rotation_in_flight, run_cli_child,
     ChildOutcome, PIPE_DRAIN_ON_EXIT, ROTATE_HANG_BUDGET,
 };
-use crate::rotate_stop_tests::MountFixture;
+use crate::rotate_stop_tests::{MountFixture, ROTATION_SUITE_GATE};
 
 /// The stub "CLI": `cmd.exe` starts a `ping` grandchild in the background and exits.
 /// `/s` makes cmd strip the quotes Rust puts around the command string; `/d` keeps
@@ -223,6 +223,7 @@ async fn a_child_that_closes_its_pipes_keeps_complete_output() {
 /// looking untouched and tell the IPC client that completed work failed.
 #[tokio::test]
 async fn an_incomplete_diagnostic_does_not_fail_a_completed_rotation() {
+    let _suite = ROTATION_SUITE_GATE.read().await;
     let fixture = MountFixture::new("pipe-incomplete");
     let shutdown = CancellationToken::new();
 
@@ -260,11 +261,11 @@ async fn an_incomplete_diagnostic_does_not_fail_a_completed_rotation() {
 /// The liveness half of #192: the RAII marker is dropped when the call returns, so the
 /// shared gate that both `run_reconcile_tick` and `refresh_mount` consult stops standing
 /// down. `refresh` is driven against the temp fixture; the tick reads the same
-/// `rotation_in_flight()` under the same lock, so pinning the gate pins what it checks.
-/// An end-to-end tick assertion needs the mount-path seam tracked separately (#193) -
-/// this ticket deliberately does not widen its scope to add it.
+/// `rotation_in_flight()` under the same lock, and its end-to-end `%TEMP%` assertion lives in
+/// `rotate_lock_tests` via `run_reconcile_tick_at` (#193).
 #[tokio::test]
 async fn the_in_flight_gate_recovers_after_the_drain_budget() {
+    let _suite = ROTATION_SUITE_GATE.read().await;
     let fixture = MountFixture::new("pipe-inflight");
     let shutdown = CancellationToken::new();
     let token = shutdown.clone();
