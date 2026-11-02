@@ -43,10 +43,11 @@ const STDERR_DRAIN_ON_STOP: Duration = Duration::from_millis(200);
 /// 200ms is the same size as the stop drain: long enough for a normal pipe to close in the
 /// instant after `wait()` reaps the child, short enough that a held handle cannot turn a
 /// completed rotation into a permanent one. It does not widen the stop window - the budget
-/// lives only in the `child.wait()` branch of the `select!`, a cancellation still wins its
-/// own branch immediately, and `SHUTDOWN_DRAIN + RUNTIME_DRAIN < STOP_WAIT_HINT_MS` is
-/// unchanged. In the race where the child exits and a stop is cancelled together, the extra
-/// 200ms sits inside the `SHUTDOWN_DRAIN` window the accept-loop join already allows.
+/// lives only in the `child.wait()` branch of the outer `select!`, a cancellation still
+/// wins its own branch immediately, and *inside that branch* the drain is also raced
+/// against `shutdown.cancelled()`, so a stop that lands mid-drain ends it at once instead
+/// of costing the remaining 200ms. `SHUTDOWN_DRAIN + RUNTIME_DRAIN < STOP_WAIT_HINT_MS`
+/// is unchanged; the accept-loop join already allows a `SHUTDOWN_DRAIN` window.
 pub(crate) const PIPE_DRAIN_ON_EXIT: Duration = Duration::from_millis(200);
 
 /// How long a delegated rotation may stay inside its CLI child before the service treats it
@@ -757,24 +758,47 @@ async fn spawn_cli_child(
             // open. That was a permanent `run_cli_child`, a permanent
             // `ROTATIONS_IN_FLIGHT == 1`, a tick that skipped every 300s and a `refresh`
             // that never stopped answering "in flight". Both readers now share one
-            // deadline, so the exit path is bounded by a single number; a panicking
-            // reader still only costs the diagnostic text.
-            let (stdout_closed, stderr_closed) =
-                drain_pipes_on_exit(&mut read_stdout, &mut read_stderr, pipe_drain).await;
+            // deadline, so the exit path is bounded by a single number; a reader that
+            // panics or errors is reported as incomplete output, not a closed pipe.
+            // A stop still wins *immediately* even after this arm of the outer `select!`
+            // has won: the drain is raced against `shutdown.cancelled()`, not just given
+            // its budget (#192 review). `biased` polls the drain first, so a child whose
+            // pipes are already closed cannot be spuriously marked incomplete by a stop
+            // cancelled at the same instant; a pending drain loses to the stop. The child
+            // has already exited, so the answer stays `Finished` with the exit status
+            // intact - there is nothing left to kill or replay.
+            let (stdout_closed, stderr_closed, cause): (bool, bool, &'static str) =
+                tokio::select! {
+                    biased;
+                    drained =
+                        drain_pipes_on_exit(&mut read_stdout, &mut read_stderr, pipe_drain) =>
+                    {
+                        let cause = if drained.2 {
+                            "a pipe reader failed before EOF"
+                        } else {
+                            "the drain deadline expired"
+                        };
+                        (drained.0, drained.1, cause)
+                    }
+                    _ = shutdown.cancelled() => {
+                        (false, false, "a service stop interrupted the drain")
+                    }
+                };
             let output_complete = stdout_closed && stderr_closed;
             if !output_complete {
                 // Distinguishable from the stop drain ("... after it was terminated") and
                 // from a hang budget ("outlived its ... hang budget"): this one says the
                 // child *finished* and only its output did not. The phrase is what an
-                // operator greps for; the pid and the pipe name say which delegation and
-                // which diagnostic went missing.
+                // operator greps for; the pid, the pipe name, the budget and the cause say
+                // which delegation lost which diagnostic, and why.
                 read_stdout.abort();
                 read_stderr.abort();
                 tracing::warn!(
-                    "post-exit pipe drain: CLI rotate child {} exited but its {} did not close within {:?}; keeping the output captured so far and deciding the rotation by its exit status",
+                    "post-exit pipe drain: CLI rotate child {} exited but its {} did not close cleanly (budget {:?}: {}); keeping the output captured so far and deciding the rotation by its exit status",
                     pid_label(pid),
                     unclosed_pipes(stdout_closed, stderr_closed),
-                    pipe_drain
+                    pipe_drain,
+                    cause
                 );
             }
             let stdout = take_seen(&stdout_seen);
@@ -836,21 +860,26 @@ async fn spawn_cli_child(
     })
 }
 
-/// Wait for both pipe readers to reach EOF, but no longer than one shared `budget` (#192).
-/// Returns which readers closed; the caller aborts the rest. `timeout_at` over `&mut`
-/// `JoinHandle`s keeps the handles so they can still be aborted: dropping a handle detaches
-/// its task, and a reader parked on a pipe whose writer never closes would otherwise live
-/// until the runtime shuts down. The second wait uses the same deadline as the first, so
-/// two pipes cannot cost two budgets.
+/// Wait for both pipe readers to reach a real EOF, but no longer than one shared `budget`
+/// (#192). Returns `(stdout_eof, stderr_eof, reader_failed)`: a reader that ended on an I/O
+/// error or a panic is *not* a closed pipe, so it counts as incomplete output just like a
+/// deadline expiry. `timeout_at` over `&mut` `JoinHandle`s keeps the handles so they can
+/// still be aborted: dropping a handle detaches its task, and a reader parked on a pipe
+/// whose writer never closes would otherwise live until the runtime shuts down. The second
+/// wait uses the same deadline as the first, so two pipes cannot cost two budgets.
 async fn drain_pipes_on_exit(
-    read_stdout: &mut tokio::task::JoinHandle<()>,
-    read_stderr: &mut tokio::task::JoinHandle<()>,
+    read_stdout: &mut tokio::task::JoinHandle<bool>,
+    read_stderr: &mut tokio::task::JoinHandle<bool>,
     budget: Duration,
-) -> (bool, bool) {
+) -> (bool, bool, bool) {
     let deadline = tokio::time::Instant::now() + budget;
-    let stdout_closed = tokio::time::timeout_at(deadline, &mut *read_stdout).await.is_ok();
-    let stderr_closed = tokio::time::timeout_at(deadline, &mut *read_stderr).await.is_ok();
-    (stdout_closed, stderr_closed)
+    let stdout = tokio::time::timeout_at(deadline, &mut *read_stdout).await;
+    let stderr = tokio::time::timeout_at(deadline, &mut *read_stderr).await;
+    let stdout_eof = matches!(&stdout, Ok(Ok(true)));
+    let stderr_eof = matches!(&stderr, Ok(Ok(true)));
+    let reader_failed = matches!(&stdout, Ok(Ok(false)) | Ok(Err(_)))
+        || matches!(&stderr, Ok(Ok(false)) | Ok(Err(_)));
+    (stdout_eof, stderr_eof, reader_failed)
 }
 
 /// Which pipes the warn has to name. Called only when at least one did not close; the
@@ -873,8 +902,8 @@ fn unclosed_pipes(stdout_closed: bool, stderr_closed: bool) -> &'static str {
 /// to stop" from "this child wedged".
 async fn converge_killed_child(
     child: &mut tokio::process::Child,
-    read_stdout: tokio::task::JoinHandle<()>,
-    read_stderr: tokio::task::JoinHandle<()>,
+    read_stdout: tokio::task::JoinHandle<bool>,
+    read_stderr: tokio::task::JoinHandle<bool>,
     stderr_seen: &Arc<std::sync::Mutex<Vec<u8>>>,
     reason: &str,
 ) -> Result<(), String> {
@@ -930,16 +959,22 @@ async fn converge_killed_child(
 /// "To the end" is a best effort, not a promise - a helper that inherited the handle can
 /// keep the pipe open past the child's exit, which is exactly why both callers bound this
 /// read (`STDERR_DRAIN_ON_STOP` on the stop path, `PIPE_DRAIN_ON_EXIT` after an exit).
-async fn read_pipe_into<R: tokio::io::AsyncRead + Unpin>(
+///
+/// Returns `true` only on a real EOF. A read error is *not* a closed pipe (#192): it ends
+/// the reader with truncated output, so the exit drain must report incomplete output and
+/// keep its warn instead of silently calling the diagnostics complete. `pub(crate)` so the
+/// #192 drain fixture can inject a failing reader into this exact function.
+pub(crate) async fn read_pipe_into<R: tokio::io::AsyncRead + Unpin>(
     pipe: &mut R,
     seen: Arc<std::sync::Mutex<Vec<u8>>>,
-) {
+) -> bool {
     let mut buf = [0u8; 4096];
     // A child that is gone normally closes its end; an inheriting helper may not. Either
     // way the caller owns a budget for this read, so an absent EOF costs a warn, not a hang.
     loop {
         match pipe.read(&mut buf).await {
-            Ok(0) | Err(_) => return,
+            Ok(0) => return true,
+            Err(_) => return false,
             Ok(n) => {
                 if let Ok(mut out) = seen.lock() {
                     out.extend_from_slice(&buf[..n]);

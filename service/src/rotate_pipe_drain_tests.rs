@@ -18,7 +18,7 @@
 // the fixture path, so no real `%LOCALAPPDATA%` / `ProgramData` state is read or written.
 
 use std::io::Write;
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use tokio_util::sync::CancellationToken;
@@ -62,6 +62,13 @@ const LOCK_FREE_BUDGET: Duration = Duration::from_secs(10);
 /// it. Poll for our own contribution to be gone instead of asserting on one read.
 const RECOVERY_BUDGET: Duration = Duration::from_secs(10);
 const POLL_STEP: Duration = Duration::from_millis(100);
+/// A drain long enough that a stop landing inside it is unmistakable: without the
+/// cancellation race the call would sit here for 10s.
+const LONG_DRAIN_FOR_STOP: Duration = Duration::from_secs(10);
+/// The child is gone well before this; the injected drain is still running.
+const CANCEL_AFTER: Duration = Duration::from_millis(800);
+/// Ceiling for a drain that a stop ended at once (plus spawn, reap and scratch reclaim).
+const CANCEL_PATH_BUDGET: Duration = Duration::from_secs(4);
 
 /// A thread-local WARN+ buffer. One plain `#[test]` owns a current-thread runtime and
 /// wraps the whole delegation in `tracing::subscriber::with_default`, so every service
@@ -155,8 +162,8 @@ fn an_exited_child_with_open_pipes_returns_within_the_drain_budget() {
         "the service log needs its own warn for a pipe that stayed open after exit, got: {log}"
     );
     assert!(
-        log.contains("did not close within"),
-        "the warn must name the budget that expired, got: {log}"
+        log.contains("did not close cleanly") && log.contains("the drain deadline expired"),
+        "the warn must name the shortfall cause, got: {log}"
     );
     assert!(
         !log.contains("after it was terminated") && !log.contains("hang budget"),
@@ -316,5 +323,96 @@ fn the_production_pipe_drain_is_bounded() {
     assert!(
         PIPE_DRAIN_ON_EXIT <= Duration::from_secs(1),
         "the exit drain must stay a short liveness bound, got {PIPE_DRAIN_ON_EXIT:?}"
+    );
+}
+
+/// CodeRabbit finding 1 (#192 review): once the child-exit arm of the outer `select!` has
+/// won, a stop that lands during the post-exit drain must still end the wait *at once*.
+/// The child is already gone, so the answer stays `Finished` with the exit status intact.
+/// Without the race this call sits in the injected 10s drain until its deadline.
+#[test]
+fn a_stop_during_the_post_exit_drain_ends_it_at_once() {
+    let ((outcome, elapsed), log) = capture_warns(|| {
+        let rt = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .expect("build the test runtime");
+        rt.block_on(async {
+            let shutdown = CancellationToken::new();
+            let cancel = shutdown.clone();
+            tokio::spawn(async move {
+                tokio::time::sleep(CANCEL_AFTER).await;
+                cancel.cancel();
+            });
+            let started = tokio::time::Instant::now();
+            let outcome = tokio::time::timeout(
+                ALWAYS_TOO_LONG,
+                run_cli_child(
+                    STUB_EXE,
+                    &PIPE_HOLDING_ARGS,
+                    &shutdown,
+                    ROTATE_HANG_BUDGET,
+                    LONG_DRAIN_FOR_STOP,
+                ),
+            )
+            .await;
+            (outcome, started.elapsed())
+        })
+    });
+
+    let outcome = outcome
+        .expect("the drain must be bounded by the stop, not by the test's own timeout")
+        .expect("spawn the pipe-holding stub");
+    assert!(
+        matches!(
+            outcome,
+            ChildOutcome::Finished {
+                success: true,
+                output_complete: false,
+                ..
+            }
+        ),
+        "a completed child stays a successful rotation even when a stop cuts its drain short"
+    );
+    assert!(
+        elapsed < CANCEL_PATH_BUDGET,
+        "the stop took {elapsed:?}; a {LONG_DRAIN_FOR_STOP:?} drain was not interrupted"
+    );
+    assert!(
+        log.contains("a service stop interrupted the drain"),
+        "the shortfall cause must say why the drain ended, got: {log}"
+    );
+}
+
+/// A reader that fails before EOF, so `read_pipe_into` cannot report a clean close (#192
+/// review finding 2). An I/O error is truncated output, not "the pipe closed".
+struct FailingReader;
+
+impl tokio::io::AsyncRead for FailingReader {
+    fn poll_read(
+        self: std::pin::Pin<&mut Self>,
+        _cx: &mut std::task::Context<'_>,
+        _buf: &mut tokio::io::ReadBuf<'_>,
+    ) -> std::task::Poll<std::io::Result<()>> {
+        std::task::Poll::Ready(Err(std::io::Error::new(
+            std::io::ErrorKind::Other,
+            "injected pipe read failure",
+        )))
+    }
+}
+
+#[tokio::test]
+async fn a_pipe_reader_error_is_not_reported_as_a_clean_eof() {
+    let mut reader = FailingReader;
+    let seen = Arc::new(Mutex::new(Vec::<u8>::new()));
+    let reached_eof =
+        crate::reconcile::read_pipe_into(&mut reader, Arc::clone(&seen)).await;
+    assert!(
+        !reached_eof,
+        "a read error must count as incomplete output, not as a closed pipe"
+    );
+    assert!(
+        seen.lock().expect("the capture buffer must not be poisoned").is_empty(),
+        "nothing was read before the injected failure"
     );
 }
