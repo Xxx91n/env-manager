@@ -30,6 +30,26 @@ const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 /// helper holding the handle open cannot extend the stop.
 const STDERR_DRAIN_ON_STOP: Duration = Duration::from_millis(200);
 
+/// How long the *exit* path waits for the two pipe readers after the child itself has gone
+/// (#192). Same shape as `STDERR_DRAIN_ON_STOP` - a bounded `timeout` over a `JoinHandle`,
+/// then abort - but applied to both readers against one shared deadline, because the exit
+/// branch used to `await` them without any bound at all. It relied on "a provider helper
+/// cannot keep the handle open, because each one redirects its own std handles", an assumption
+/// no test pinned: one helper that inherits stdout/stderr (`UseShellExecute`, a future adapter,
+/// anything the CLI spawns without redirecting) leaves the CLI gone and both pipes open, so
+/// `run_cli_child` never returned and `ROTATIONS_IN_FLIGHT` stayed at 1 forever - the tick
+/// skipped every 300s and `refresh` answered "a delegated rotation is in flight" forever.
+///
+/// 200ms is the same size as the stop drain: long enough for a normal pipe to close in the
+/// instant after `wait()` reaps the child, short enough that a held handle cannot turn a
+/// completed rotation into a permanent one. It does not widen the stop window - the budget
+/// lives only in the `child.wait()` branch of the outer `select!`, a cancellation still
+/// wins its own branch immediately, and *inside that branch* the drain is also raced
+/// against `shutdown.cancelled()`, so a stop that lands mid-drain ends it at once instead
+/// of costing the remaining 200ms. `SHUTDOWN_DRAIN + RUNTIME_DRAIN < STOP_WAIT_HINT_MS`
+/// is unchanged; the accept-loop join already allows a `SHUTDOWN_DRAIN` window.
+pub(crate) const PIPE_DRAIN_ON_EXIT: Duration = Duration::from_millis(200);
+
 /// How long a delegated rotation may stay inside its CLI child before the service treats it
 /// as hung, terminates it and reaps it (#161).
 ///
@@ -149,8 +169,10 @@ impl Drop for RotationInFlight {
 }
 
 /// Whether a delegated rotation currently owns the mount file's envelopes (#161). Only
-/// meaningful while holding `RECONCILE_LOCK`, which is where every caller reads it.
-fn rotation_in_flight() -> bool {
+/// meaningful while holding `RECONCILE_LOCK`, which is where every caller reads it; a test
+/// may also take it as a relaxed snapshot after a delegation returns, to prove the RAII
+/// marker was dropped (#192). No test-only accessor is added for the static itself.
+pub(crate) fn rotation_in_flight() -> bool {
     ROTATIONS_IN_FLIGHT.load(Ordering::SeqCst) > 0
 }
 
@@ -266,16 +288,29 @@ async fn run_reconcile_tick() -> Result<(), String> {
 
 /// Refresh a single mount by ID (IPC `refresh` method).
 pub async fn refresh_mount(mount_id: &str) -> Result<serde_json::Value, String> {
+    let path = crate::secret_mount_path();
+    refresh_mount_at(&path, mount_id).await
+}
+
+/// `refresh_mount` with the mount file taken as a parameter - the same seam
+/// `rotate_mount_at` already has. The in-flight gate is read before any file is touched,
+/// so a test can pin "stands down, then recovers" on a `%TEMP%` fixture instead of the
+/// real `%LOCALAPPDATA%` / `ProgramData` state (#192). Production behaviour is unchanged.
+pub(crate) async fn refresh_mount_at(
+    path: &Path,
+    mount_id: &str,
+) -> Result<serde_json::Value, String> {
     let _guard = RECONCILE_LOCK.lock().await; // Phase 4C: TOCTOU protection
     // Same reason as the reconcile tick (#161): while a rotation's child is rewriting the
     // mount file, the snapshot loaded below predates those writes and saving it would undo
     // them. Failing fast also beats what the old lock did here - block until the delegation
-    // finished, which for a wedged child meant until the process died.
+    // finished, which for a wedged child meant until the process died. Both this call and
+    // `run_reconcile_tick` consult the same `rotation_in_flight()` gate under this lock,
+    // so pinning the gate here pins what the tick reads too.
     if rotation_in_flight() {
         return Err("a delegated rotation is in flight; retry once it completes".to_string());
     }
-    let path = crate::secret_mount_path();
-    let mut mounts = load_mounts(&path);
+    let mut mounts = load_mounts(path);
     let mount = mounts
         .iter()
         .find(|m| m.id == mount_id)
@@ -288,7 +323,7 @@ pub async fn refresh_mount(mount_id: &str) -> Result<serde_json::Value, String> 
     if let Some(m) = mounts.iter_mut().find(|m| m.id == mount_id) {
         m.lastFetchedAt = Some(now.clone());
     }
-    save_mounts(&path, &mounts)?;
+    save_mounts(path, &mounts)?;
 
     Ok(serde_json::json!({
         "mountId": mount_id,
@@ -326,7 +361,9 @@ pub async fn rotate_mount(
 /// held while the child runs (#161). See `RECONCILE_LOCK` for what that trades away.
 ///
 /// `hang_budget` is passed through to `run_cli_child` and is a parameter for the same reason
-/// it is there: the tests inject a short one, production passes `ROTATE_HANG_BUDGET`.
+/// it is there: the tests inject a short one, production passes `ROTATE_HANG_BUDGET`. The
+/// post-exit pipe drain is fixed here at `PIPE_DRAIN_ON_EXIT` and only injectable through
+/// `rotate_mount_at_with_pipe_drain` (#192).
 pub(crate) async fn rotate_mount_at(
     mount_path: &Path,
     cli_exe: &str,
@@ -334,6 +371,33 @@ pub(crate) async fn rotate_mount_at(
     mount_id: &str,
     shutdown: &CancellationToken,
     hang_budget: Duration,
+) -> Result<serde_json::Value, String> {
+    rotate_mount_at_with_pipe_drain(
+        mount_path,
+        cli_exe,
+        cli_args,
+        mount_id,
+        shutdown,
+        hang_budget,
+        PIPE_DRAIN_ON_EXIT,
+    )
+    .await
+}
+
+/// `rotate_mount_at` with the post-exit pipe budget injected (#192); see `run_cli_child`.
+/// Production always goes through the wrapper so every delegation gets the same bound;
+/// only the tests that pin the held-handle path shorten it.
+/// The wrapper keeps every existing stop / hang / write-back fixture on the same default
+/// budget; the fixtures state it explicitly at their `run_cli_child` call sites, but no
+/// assertion in them changed.
+pub(crate) async fn rotate_mount_at_with_pipe_drain(
+    mount_path: &Path,
+    cli_exe: &str,
+    cli_args: &[&str],
+    mount_id: &str,
+    shutdown: &CancellationToken,
+    hang_budget: Duration,
+    pipe_drain: Duration,
 ) -> Result<serde_json::Value, String> {
     // Check-then-delegate, with the lock released for the delegation itself (#161). The child
     // wait is the only long part of a rotation, and holding the lock across it made one slow
@@ -361,7 +425,7 @@ pub(crate) async fn rotate_mount_at(
     // recovery semantics: the mount still reads as un-rotated, so the next `rotate` or the
     // reconcile tick does the work again, and re-rotating is harmless (`RotateAll` decrypts
     // then re-encrypts per secret, `src/Secrets/Manager/SecretProviderManager.cs`).
-    let result = call_cli_rotate(cli_exe, cli_args, shutdown, hang_budget).await?;
+    let result = call_cli_rotate(cli_exe, cli_args, shutdown, hang_budget, pipe_drain).await?;
     let now = Utc::now().to_rfc3339();
 
     // Re-acquired for the write-back only, so the read below and the save it feeds cannot be
@@ -456,11 +520,27 @@ async fn refresh_mount_internal(_provider: &str) -> Result<(), String> {
 
 /// How a delegated CLI child ended.
 pub(crate) enum ChildOutcome {
-    /// The child ran to completion; its whole output is attached.
+    /// The child ran to completion; whatever its pipes yielded before the post-exit drain
+    /// ended is attached.
+    ///
+    /// `output_complete` is false when a reader did not reach EOF inside
+    /// `PIPE_DRAIN_ON_EXIT` (#192): a process that inherited the CLI's std handles kept
+    /// one open after the CLI exited. **The exit status, not the completeness of stdout,
+    /// decides whether this rotation succeeded**, and that is the answer the ticket asked
+    /// for. `RotateAll` writes the rotated envelopes into `secretMount.json` before it
+    /// exits, so a zero status means the work is already on disk; only `stdout` (the
+    /// `rotateResult` the client sees) and `stderr` (the provider's fallback warning) can
+    /// be truncated. Reporting a *failure* for a truncated diagnostic would leave the
+    /// mount unstamped although its secrets were rotated - breaking the "unstamped = not
+    /// rotated" replay rule the stop path relies on - and would tell the IPC client that
+    /// completed work failed. The alternative ("failure, replay it") buys no recovery the
+    /// child has not already performed, and re-rotating is only harmless, not free.
+    /// The distinguishable warn at the drain deadline is what makes the loss visible.
     Finished {
         success: bool,
         stdout: String,
         stderr: String,
+        output_complete: bool,
     },
     /// A stop was requested while the child was still running. By the time this variant
     /// is returned the child has been terminated *and reaped* (#153), and the job object
@@ -537,17 +617,30 @@ impl Ending {
 /// an exit converge the same way. The budget is a parameter rather than a constant so the
 /// tests can inject a short one and never wait a real 15 minutes on a CI runner; production
 /// passes `ROTATE_HANG_BUDGET`, which documents why the value is what it is.
+///
+/// The exit branch has its own bound (#192): `pipe_drain` caps the wait for the two pipe
+/// readers after the child is gone, so a helper that inherited the std handles cannot keep
+/// `run_cli_child`, and with it `ROTATIONS_IN_FLIGHT`, alive forever. A child that exited 0
+/// is still a successful rotation; only its diagnostic text can be incomplete. See
+/// `ChildOutcome::Finished` for why that answer, not "failure", is the chosen one.
+///
+/// Both budgets are parameters for the same reason `hang_budget` always was: a bounded wait
+/// CI cannot shorten is a bounded wait CI cannot test. Production passes
+/// `ROTATE_HANG_BUDGET` and `PIPE_DRAIN_ON_EXIT`; the held-handle fixtures inject a short
+/// pipe drain so CI never waits the helper out. No test-only accessor is added.
 pub(crate) async fn run_cli_child(
     cli_exe: &str,
     args: &[&str],
     shutdown: &CancellationToken,
     hang_budget: Duration,
+    pipe_drain: Duration,
 ) -> Result<ChildOutcome, String> {
     // Created before the spawn and reclaimed after the outcome is known, so no early
     // return inside `spawn_cli_child` - a failed spawn, a missing pipe, a failed wait -
     // can skip the delete.
     let scratch = SopsScratch::create();
-    let outcome = spawn_cli_child(cli_exe, args, shutdown, hang_budget, scratch.as_ref()).await;
+    let outcome =
+        spawn_cli_child(cli_exe, args, shutdown, hang_budget, pipe_drain, scratch.as_ref()).await;
     if let Some(scratch) = scratch {
         scratch.reclaim().await;
     }
@@ -564,6 +657,7 @@ async fn spawn_cli_child(
     args: &[&str],
     shutdown: &CancellationToken,
     hang_budget: Duration,
+    pipe_drain: Duration,
     scratch: Option<&SopsScratch>,
 ) -> Result<ChildOutcome, String> {
     // One job per delegation, never a process-wide singleton: the handle lives exactly as
@@ -627,17 +721,20 @@ async fn spawn_cli_child(
     // Output is drained while the child runs, never after the wait: a child that fills a
     // pipe buffer would otherwise block on write and never observe the kill. Each reader
     // pushes what it sees into a shared buffer as it arrives, so a caller that stops
-    // waiting for EOF - the stop drain below - keeps the text instead of losing it inside
-    // the task it aborts.
+    // waiting for EOF - the stop drain below, or the post-exit drain in the exit branch
+    // (#192) - keeps the text instead of losing it inside the task it aborts. The handles
+    // are `mut` because both bounded drains await them through `&mut`: dropping a
+    // `JoinHandle` detaches its task without stopping it, and a reader parked on a pipe
+    // whose writer never closes would otherwise outlive the delegation.
     let mut stdout = child.stdout.take().ok_or("CLI rotate child has no stdout pipe")?;
     let mut stderr = child.stderr.take().ok_or("CLI rotate child has no stderr pipe")?;
     let stdout_seen = Arc::new(std::sync::Mutex::new(Vec::<u8>::new()));
     let stderr_seen = Arc::new(std::sync::Mutex::new(Vec::<u8>::new()));
-    let read_stdout = tokio::spawn({
+    let mut read_stdout = tokio::spawn({
         let seen = Arc::clone(&stdout_seen);
         async move { read_pipe_into(&mut stdout, seen).await }
     });
-    let read_stderr = tokio::spawn({
+    let mut read_stderr = tokio::spawn({
         let seen = Arc::clone(&stderr_seen);
         async move { read_pipe_into(&mut stderr, seen).await }
     });
@@ -652,12 +749,58 @@ async fn spawn_cli_child(
         status = child.wait() => {
             let status = status
                 .map_err(|e| format!("failed to wait for the CLI rotate child: {}", e))?;
-            // The child exited, so its end of both pipes is closed and the readers reach
-            // EOF: a provider helper cannot keep the handle open, because each one
-            // redirects its own std handles (`src/Secrets/Providers/`). A panicking reader
-            // only costs the diagnostic text.
-            let _ = read_stdout.await;
-            let _ = read_stderr.await;
+            // The child's own ends of the pipes are closed, but EOF is not a fact to wait
+            // on forever (#192). The old unconditional `await` on both readers assumed a
+            // provider helper cannot inherit the CLI's std handles; the C# providers do
+            // redirect theirs today (`src/Secrets/Providers/`), yet nothing pinned that,
+            // and one helper that does not - a future adapter, `UseShellExecute`, anything
+            // the CLI spawns without redirecting - leaves the CLI gone and both pipes
+            // open. That was a permanent `run_cli_child`, a permanent
+            // `ROTATIONS_IN_FLIGHT == 1`, a tick that skipped every 300s and a `refresh`
+            // that never stopped answering "in flight". Both readers now share one
+            // deadline, so the exit path is bounded by a single number; a reader that
+            // panics or errors is reported as incomplete output, not a closed pipe.
+            // A stop still wins *immediately* even after this arm of the outer `select!`
+            // has won: the drain is raced against `shutdown.cancelled()`, not just given
+            // its budget (#192 review). `biased` polls the drain first, so a child whose
+            // pipes are already closed cannot be spuriously marked incomplete by a stop
+            // cancelled at the same instant; a pending drain loses to the stop. The child
+            // has already exited, so the answer stays `Finished` with the exit status
+            // intact - there is nothing left to kill or replay.
+            let (stdout_closed, stderr_closed, cause): (bool, bool, &'static str) =
+                tokio::select! {
+                    biased;
+                    drained =
+                        drain_pipes_on_exit(&mut read_stdout, &mut read_stderr, pipe_drain) =>
+                    {
+                        let cause = if drained.2 {
+                            "a pipe reader failed before EOF"
+                        } else {
+                            "the drain deadline expired"
+                        };
+                        (drained.0, drained.1, cause)
+                    }
+                    _ = shutdown.cancelled() => {
+                        (false, false, "a service stop interrupted the drain")
+                    }
+                };
+            let output_complete = stdout_closed && stderr_closed;
+            if !output_complete {
+                // Distinguishable from the stop drain ("... after it was terminated") and
+                // from a hang budget ("outlived its ... hang budget"): this one says the
+                // child *finished* and only its output did not. The phrase is what an
+                // operator greps for; the pid, the pipe name, the budget and the cause say
+                // which delegation lost which diagnostic, and why.
+                read_stdout.abort();
+                read_stderr.abort();
+                tracing::warn!(
+                    "post-exit pipe drain: CLI rotate child {} exited but its {} did not close cleanly (budget {:?}: {}); keeping the output captured so far and deciding the rotation by its exit status",
+                    pid_label(pid),
+                    unclosed_pipes(stdout_closed, stderr_closed),
+                    pipe_drain,
+                    cause
+                );
+            }
             let stdout = take_seen(&stdout_seen);
             let stderr = take_seen(&stderr_seen);
             // A child that exits 0 and still wrote to stderr is where the provider's own
@@ -682,6 +825,7 @@ async fn spawn_cli_child(
                 success: status.success(),
                 stdout,
                 stderr,
+                output_complete,
             });
         }
         _ = shutdown.cancelled() => Ending::Stopped,
@@ -716,6 +860,39 @@ async fn spawn_cli_child(
     })
 }
 
+/// Wait for both pipe readers to reach a real EOF, but no longer than one shared `budget`
+/// (#192). Returns `(stdout_eof, stderr_eof, reader_failed)`: a reader that ended on an I/O
+/// error or a panic is *not* a closed pipe, so it counts as incomplete output just like a
+/// deadline expiry. `timeout_at` over `&mut` `JoinHandle`s keeps the handles so they can
+/// still be aborted: dropping a handle detaches its task, and a reader parked on a pipe
+/// whose writer never closes would otherwise live until the runtime shuts down. The second
+/// wait uses the same deadline as the first, so two pipes cannot cost two budgets.
+async fn drain_pipes_on_exit(
+    read_stdout: &mut tokio::task::JoinHandle<bool>,
+    read_stderr: &mut tokio::task::JoinHandle<bool>,
+    budget: Duration,
+) -> (bool, bool, bool) {
+    let deadline = tokio::time::Instant::now() + budget;
+    let stdout = tokio::time::timeout_at(deadline, &mut *read_stdout).await;
+    let stderr = tokio::time::timeout_at(deadline, &mut *read_stderr).await;
+    let stdout_eof = matches!(&stdout, Ok(Ok(true)));
+    let stderr_eof = matches!(&stderr, Ok(Ok(true)));
+    let reader_failed = matches!(&stdout, Ok(Ok(false)) | Ok(Err(_)))
+        || matches!(&stderr, Ok(Ok(false)) | Ok(Err(_)));
+    (stdout_eof, stderr_eof, reader_failed)
+}
+
+/// Which pipes the warn has to name. Called only when at least one did not close; the
+/// both-closed arm keeps the match exhaustive rather than making the caller unwrap.
+fn unclosed_pipes(stdout_closed: bool, stderr_closed: bool) -> &'static str {
+    match (stdout_closed, stderr_closed) {
+        (false, false) => "stdout and stderr pipes",
+        (false, true) => "stdout pipe",
+        (true, false) => "stderr pipe",
+        (true, true) => "pipes",
+    }
+}
+
 /// End a rotation whose child the caller has decided not to wait for: terminate, reap, and
 /// salvage whatever its stderr already said.
 ///
@@ -725,16 +902,18 @@ async fn spawn_cli_child(
 /// to stop" from "this child wedged".
 async fn converge_killed_child(
     child: &mut tokio::process::Child,
-    read_stdout: tokio::task::JoinHandle<()>,
-    read_stderr: tokio::task::JoinHandle<()>,
+    read_stdout: tokio::task::JoinHandle<bool>,
+    read_stderr: tokio::task::JoinHandle<bool>,
     stderr_seen: &Arc<std::sync::Mutex<Vec<u8>>>,
     reason: &str,
 ) -> Result<(), String> {
     // `Child::kill` is TerminateProcess followed by `wait`, so the child is reaped here
     // rather than left as an orphan of a service the SCM already calls Stopped. The two pipe
     // readers are then handled differently - stdout is aborted, stderr is drained (below) -
-    // and neither path may depend on a pipe reaching EOF, even though both do: provider
-    // helpers redirect their own std handles (`src/Secrets/Providers/`).
+    // and neither path may depend on a pipe reaching EOF. The C# providers redirect their
+    // own std handles today (`src/Secrets/Providers/`), but that is not a guarantee this
+    // crate can vouch for: a helper that inherits them keeps the pipe open, which is why
+    // the drain below is bounded and why the exit branch has its own budget (#192).
     child
         .kill()
         .await
@@ -743,10 +922,10 @@ async fn converge_killed_child(
     // stderr is drained instead of aborted: the provider's fallback warning is written before
     // it does any work, so dropping it would erase the one line that explains why the reclaim
     // that follows may find nothing to delete. Bounded, because the stop path must not depend
-    // on a pipe reaching EOF - even though it does, since the child is reaped above and
-    // provider helpers redirect their own std handles (`src/Secrets/Providers/`). The reader
-    // accumulates as bytes arrive, so giving up at the budget keeps what was already captured;
-    // only bytes written after the budget are lost.
+    // on a pipe reaching EOF: reaping the child closes its own handles, but a helper that
+    // inherited them can still hold the pipe open (#192). The reader accumulates as bytes
+    // arrive, so giving up at the budget keeps what was already captured; only bytes written
+    // after the budget are lost.
     let mut stderr_reader = read_stderr;
     let closed = tokio::time::timeout(STDERR_DRAIN_ON_STOP, &mut stderr_reader).await;
     if closed.is_err() {
@@ -774,18 +953,28 @@ async fn converge_killed_child(
 }
 
 /// Read a child pipe to the end, appending each chunk to `seen` as it arrives. The
-/// incremental append is what lets the stop drain keep partial text: the reader task can
+/// incremental append is what lets a bounded drain keep partial text: the reader task can
 /// be aborted mid-pipe, and what it already read stays in `seen`. Bytes accumulate raw and
 /// are decoded once, so a multi-byte character split across two reads is not corrupted.
-async fn read_pipe_into<R: tokio::io::AsyncRead + Unpin>(
+/// "To the end" is a best effort, not a promise - a helper that inherited the handle can
+/// keep the pipe open past the child's exit, which is exactly why both callers bound this
+/// read (`STDERR_DRAIN_ON_STOP` on the stop path, `PIPE_DRAIN_ON_EXIT` after an exit).
+///
+/// Returns `true` only on a real EOF. A read error is *not* a closed pipe (#192): it ends
+/// the reader with truncated output, so the exit drain must report incomplete output and
+/// keep its warn instead of silently calling the diagnostics complete. `pub(crate)` so the
+/// #192 drain fixture can inject a failing reader into this exact function.
+pub(crate) async fn read_pipe_into<R: tokio::io::AsyncRead + Unpin>(
     pipe: &mut R,
     seen: Arc<std::sync::Mutex<Vec<u8>>>,
-) {
+) -> bool {
     let mut buf = [0u8; 4096];
-    // A terminated child closes its end, so this reaches EOF rather than failing.
+    // A child that is gone normally closes its end; an inheriting helper may not. Either
+    // way the caller owns a budget for this read, so an absent EOF costs a warn, not a hang.
     loop {
         match pipe.read(&mut buf).await {
-            Ok(0) | Err(_) => return,
+            Ok(0) => return true,
+            Err(_) => return false,
             Ok(n) => {
                 if let Ok(mut out) = seen.lock() {
                     out.extend_from_slice(&buf[..n]);
@@ -809,8 +998,12 @@ async fn call_cli_rotate(
     cli_args: &[&str],
     shutdown: &CancellationToken,
     hang_budget: Duration,
+    pipe_drain: Duration,
 ) -> Result<String, String> {
-    match run_cli_child(cli_exe, cli_args, shutdown, hang_budget).await? {
+    match run_cli_child(cli_exe, cli_args, shutdown, hang_budget, pipe_drain).await? {
+        // `output_complete` is deliberately not consulted here: an exited-0 child is a
+        // successful rotation even when a helper kept a pipe open, and the warn at the
+        // drain deadline is where that loss is reported. See `ChildOutcome::Finished`.
         ChildOutcome::Finished {
             success: true,
             stdout,
