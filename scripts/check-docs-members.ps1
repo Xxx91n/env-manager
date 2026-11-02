@@ -441,6 +441,13 @@ function Get-CSharpDeclarations([string]$Source) {
         $header = ''
         for ($i = $begin; $i -lt $type.End; $i++) {
             $c = $masked[$i]
+            # A member attribute is metadata, not a body. Skip it whole so a
+            # collection initializer inside an argument cannot leak a type name
+            # as a member (e.g. [Attr(new List<int> { 1 })] public int Real;).
+            if ($c -eq '[' -and $header.Trim().Length -eq 0) {
+                $attributeEnd = Get-CSharpClosingIndex $masked $i '[' ']'
+                if ($attributeEnd -ge 0) { $i = $attributeEnd; continue }
+            }
             if ($c -eq '{') {
                 $close = Get-CSharpClosingIndex $masked $i '{' '}'
                 if ($close -lt 0) { break }

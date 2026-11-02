@@ -42,6 +42,8 @@ public partial class Widget
     private int initialized = Make(), afterInitializer = 3;
     private int leftComparison = 1 > 0, rightComparison = 2 < 3;
     private Options Initialized = new Options { InitializerOnly = true }, AfterOptions = null;
+    [Attr(new object[] { 1, 2 })]
+    public int Attributed;
     public string? Name { get; set; }
     public event EventHandler? Changed;
     public int ExpressionBodied => Make();
@@ -102,12 +104,12 @@ foreach ($name in @(
     'ExpressionBodied', 'Item', 'Widget', 'Make', 'Echo', 'Pair', 'MultiLine',
     'ContractMethod', 'op_Addition', 'Body', 'CalledOnly', 'Nested', 'SiblingOnly',
     'Text', 'Verbatim', 'Raw', 'Interpolated', 'EmbeddedQuote', 'NestedInterpolation',
-    'CharHole', 'Compiled', 'leftComparison', 'rightComparison', 'Initialized', 'AfterOptions'
+    'CharHole', 'Compiled', 'leftComparison', 'rightComparison', 'Initialized', 'AfterOptions', 'Attributed'
 )) { Assert-Contains $widget $name "Widget declares $name" }
 foreach ($name in @(
     'CommentOnly', 'BlockOnly', 'StringOnly', 'VerbatimOnly', 'RawOnly', 'InterpolatedOnly',
     'EmbeddedQuoteOnly', 'NestedInterpolationOnly', 'RegexOptions',
-    'LocalOnly', 'InitializerOnly', 'NestedOnly', 'OtherOnly', 'value', 'count', 'index'
+    'LocalOnly', 'InitializerOnly', 'NestedOnly', 'OtherOnly', 'value', 'count', 'index', 'object'
 )) { Assert-Missing $widget $name "Widget does not declare $name" }
 $mode = @($decls | Where-Object { $_.Type -ceq 'Mode' } | ForEach-Object { $_.Name })
 foreach ($name in @('First', 'Second', 'Third')) { Assert-Contains $mode $name "enum Mode declares $name" }
