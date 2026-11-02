@@ -23,7 +23,9 @@ use std::path::{Path, PathBuf};
 use std::time::Duration;
 use tokio_util::sync::CancellationToken;
 
-use crate::reconcile::{rotate_mount_at, run_cli_child, ChildOutcome, ROTATE_HANG_BUDGET};
+use crate::reconcile::{
+    rotate_mount_at, run_cli_child, ChildOutcome, PIPE_DRAIN_ON_EXIT, ROTATE_HANG_BUDGET,
+};
 use crate::SHUTDOWN_DRAIN;
 
 /// The stub "CLI": one `ping.exe` process doing 30 one-second round trips, so it is
@@ -90,8 +92,8 @@ pub(crate) static ROTATION_SUITE_GATE: tokio::sync::RwLock<()> =
 
 /// A temp `secretMount.json` holding one un-rotated mount, deleted with the file.
 /// Shared across the `rotate_*_tests` suites (`rotate_writeback_tests`, `rotate_hang_tests`,
-/// `rotate_lock_tests`) so every path - stop, hang budget, write-back, and reconcile tick -
-/// measures the same `Periodic` mount shape.
+/// `rotate_lock_tests`, `rotate_pipe_drain_tests`) so every path - stop, hang budget, post-exit
+/// pipe drain, write-back, and reconcile tick - measures the same `Periodic` mount shape.
 pub(crate) struct MountFixture {
     pub(crate) path: PathBuf,
     pub(crate) original: String,
@@ -148,7 +150,14 @@ async fn stop_terminates_and_reaps_the_rotate_child() {
     let shutdown = std::sync::Arc::new(CancellationToken::new());
     let token = shutdown.clone();
     let in_flight = tokio::spawn(async move {
-        run_cli_child(STUB_EXE, &STUB_SLOW_ARGS, &token, ROTATE_HANG_BUDGET).await
+        run_cli_child(
+            STUB_EXE,
+            &STUB_SLOW_ARGS,
+            &token,
+            ROTATE_HANG_BUDGET,
+            PIPE_DRAIN_ON_EXIT,
+        )
+        .await
     });
 
     // Let the child get going, then time only the stop: everything between the cancel and
@@ -368,7 +377,14 @@ async fn stop_kills_the_helper_tree_not_just_the_direct_child() {
     let in_flight = tokio::spawn(async move {
         let args = tree_stub_args(&report_path);
         let argv: Vec<&str> = args.iter().map(|a| a.as_str()).collect();
-        run_cli_child(TREE_STUB_EXE, &argv, &token, ROTATE_HANG_BUDGET).await
+        run_cli_child(
+            TREE_STUB_EXE,
+            &argv,
+            &token,
+            ROTATE_HANG_BUDGET,
+            PIPE_DRAIN_ON_EXIT,
+        )
+        .await
     });
 
     // The helper has to be up before the stop lands, otherwise "the pid disappeared" would
