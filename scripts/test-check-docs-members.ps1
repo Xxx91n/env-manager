@@ -120,6 +120,10 @@ $record = @($decls | Where-Object { $_.Type -ceq 'RecordOnly' } | ForEach-Object
 foreach ($name in @('RecordName', 'RecordCount')) { Assert-Contains $record $name "record declares $name" }
 $derived = @($decls | Where-Object { $_.Type -ceq 'DerivedRecord' } | ForEach-Object { $_.Name })
 Assert-Missing $derived 'BaseArg' 'record base-constructor argument is not a positional member'
+$nestedMember = @($decls | Where-Object { $_.Type -ceq 'Nested' -and $_.Name -ceq 'NestedOnly' })
+$checks++
+if ($nestedMember.Count -eq 1 -and $nestedMember[0].IsNested) { Write-Host '  ok: nested type member is recorded and marked IsNested' }
+else { $failures.Add('nested type member NestedOnly was not recorded with IsNested=true') }
 
 # End-to-end through the real gate, against the tracked C# in this checkout.
 $temp = Join-Path ([System.IO.Path]::GetTempPath()) ("check-docs-members-" + [guid]::NewGuid().ToString('N'))
@@ -130,6 +134,7 @@ try {
         @{ Name = 'real-partial-fallback'; Text = '`Program.SecretStore` and `Program.ScrubExceptionMessage`'; Exit = 0; Pattern = 'PASS: docs checks clean' },
         @{ Name = 'real-multiline-tuple'; Text = '`SecretProviderManager.RotateAll`'; Exit = 0; Pattern = 'PASS: docs checks clean' },
         @{ Name = 'real-partial-migration'; Text = '`Program.MigrateSecretsToMounts`'; Exit = 0; Pattern = 'PASS: docs checks clean' },
+        @{ Name = 'real-nested-type-member'; Text = '`PreflightResult.HasErrors`'; Exit = 0; Pattern = 'PASS: docs checks clean' },
         @{ Name = 'unknown-type-skipped'; Text = '`NoSuchTypeAtAll.Foo`'; Exit = 0; Pattern = 'PASS: docs checks clean' },
         @{ Name = 'bare-filename-not-member'; Text = '`ProfileCommand.cs`'; Exit = 0; Pattern = 'PASS: docs checks clean' },
         # The first three negatives below OCCUR in the resolved file, so the old
@@ -146,6 +151,8 @@ try {
         @{ Name = 'fake-named-file-other-type'; Text = '`PreflightResult.GetEffectiveProfileVariables`'; Exit = 1; Pattern = 'cited member not found: PreflightResult.GetEffectiveProfileVariables' },
         # SecretMount.cs declares SecretMount, but the migration method belongs to Program:
         @{ Name = 'fake-named-file-secretmount'; Text = '`SecretMount.MigrateSecretsToMounts`'; Exit = 1; Pattern = 'cited member not found: SecretMount.MigrateSecretsToMounts' },
+        # A nested type member must not be attributed to its containing type:
+        @{ Name = 'fake-nested-member-parent-type'; Text = '`Program.HasErrors`'; Exit = 1; Pattern = 'cited member not found: Program.HasErrors' },
         # Capitalized extension-like member names are not lowercase filename citations:
         @{ Name = 'fake-extension-case-member'; Text = '`Program.Json`'; Exit = 1; Pattern = 'cited member not found: Program.Json' },
         # Genuinely absent member (typo of the real SecretStore):

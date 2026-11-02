@@ -115,7 +115,8 @@ function Find-MemberFiles([string[]]$Files, [string]$Type, [string]$Member, [swi
         $scope = $TypeScoped -or (Test-CSharpTypeInFile $file $Type)
         foreach ($declaration in @(Get-CachedDeclarations $file)) {
             if ($declaration.Name -ceq $Member -and
-                (-not $scope -or $declaration.Type -ceq $Type)) {
+                ((-not $scope -and -not $declaration.IsNested) -or
+                 ($scope -and $declaration.Type -ceq $Type))) {
                 $found.Add($file)
                 break
             }

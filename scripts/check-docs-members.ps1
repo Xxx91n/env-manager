@@ -1,9 +1,10 @@
 # Declaration-aware C# member lookup shared by both check-docs search arms.
 # This is a deliberately small heuristic, not a C# compiler. It masks comments
 # and literals, walks top-level type bodies, and reads direct member headers.
-# Method/property bodies, object initializers and nested type members therefore
-# cannot impersonate members of the containing type. Nested type names count as
-# members; their own members do not. No dependency on dotnet or an SDK is needed.
+# Method/property bodies and object initializers therefore cannot impersonate
+# members of the containing type. Nested type names count as members of the
+# parent; nested type members are recorded separately with IsNested and only
+# match type-scoped lookup. No dependency on dotnet or an SDK is needed.
 
 # --- Source masking ---------------------------------------------------------
 # Comments and every string form are replaced with spaces (offsets and newlines
@@ -400,7 +401,10 @@ function Get-CSharpDeclarations([string]$Source) {
         $nestedIn = @($types | Where-Object {
             $_.Start -lt $type.Start -and $_.BodyStart -ge 0 -and $_.End -gt $type.Start
         })
-        if ($nestedIn.Count -gt 0) { continue }
+        # Nested type members are real members of the nested type, but they must
+        # not leak into the unscoped filename-as-module arm. Keep them with an
+        # IsNested marker so only type-scoped lookup can use them.
+        $isNested = $nestedIn.Count -gt 0
         $kind = if ($type.Kind -eq 'enum') { 'enum' } else { 'type' }
         if ($type.Kind -like 'record*') {
             # Only a parameter list immediately after the record name (and any
@@ -425,7 +429,7 @@ function Get-CSharpDeclarations([string]$Source) {
                     $parameters = $masked.Substring($open + 1, $close - $open - 1)
                     foreach ($parameter in @(Split-CSharpTopLevel $parameters)) {
                         foreach ($name in @(Get-CSharpMemberNames $parameter 'field')) {
-                            $result.Add([pscustomobject]@{ Type = $type.Name; Name = $name })
+                            $result.Add([pscustomobject]@{ Type = $type.Name; Name = $name; IsNested = $isNested })
                         }
                     }
                 }
@@ -436,7 +440,7 @@ function Get-CSharpDeclarations([string]$Source) {
             $body = $masked.Substring($type.BodyStart + 1, $type.End - $type.BodyStart - 1)
             foreach ($entry in @(Split-CSharpTopLevel $body -EnumMembers)) {
                 foreach ($name in @(Get-CSharpMemberNames $entry $kind)) {
-                    $result.Add([pscustomobject]@{ Type = $type.Name; Name = $name })
+                    $result.Add([pscustomobject]@{ Type = $type.Name; Name = $name; IsNested = $isNested })
                 }
             }
             continue
@@ -458,7 +462,7 @@ function Get-CSharpDeclarations([string]$Source) {
                 $header += ' {} '
                 $i = $close
                 foreach ($name in @(Get-CSharpMemberNames $header $kind)) {
-                    $result.Add([pscustomobject]@{ Type = $type.Name; Name = $name })
+                    $result.Add([pscustomobject]@{ Type = $type.Name; Name = $name; IsNested = $isNested })
                 }
                 # Blocks in field initializers/expression bodies belong to the
                 # declaration and must not hide a following comma declarator.
@@ -468,7 +472,7 @@ function Get-CSharpDeclarations([string]$Source) {
                 # An initializer after an accessor body is not a new member.
                 if ($header -notmatch '^\s*=') {
                     foreach ($name in @(Get-CSharpMemberNames $header $kind)) {
-                        $result.Add([pscustomobject]@{ Type = $type.Name; Name = $name })
+                        $result.Add([pscustomobject]@{ Type = $type.Name; Name = $name; IsNested = $isNested })
                     }
                 }
                 $header = ''
