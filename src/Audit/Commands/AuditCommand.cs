@@ -33,79 +33,9 @@ partial class Program
         switch (sub)
         {
             case "encrypt-file":
-                {
-                    string? inputPath = null;
-                    string? outputPath = null;
-                    for (int i = 2; i < args.Length - 1; i++)
-                    {
-                        if (args[i] == "--input" && i + 1 < args.Length) inputPath = args[++i];
-                        else if (args[i] == "--output" && i + 1 < args.Length) outputPath = args[++i];
-                    }
-                    if (inputPath == null || outputPath == null)
-                    {
-                        Console.Error.WriteLine("Error: --input and --output required");
-                        return 1;
-                    }
-                   if (!File.Exists(inputPath))
-                   {
-                       Console.Error.WriteLine("Error: input file not found: " + inputPath);
-                       return 1;
-                   }
-                    // Path validation: reject system directories and enforce 50MB cap (same as backup validation)
-                    string inputFull = Path.GetFullPath(inputPath);
-                    string outputFull = Path.GetFullPath(outputPath);
-                    string root = Path.GetPathRoot(outputFull) ?? "";
-                    string[] blockedDirs = { "Windows", "Program Files", "Program Files (x86)" };
-                    foreach (var blocked in blockedDirs)
-                    {
-                        string blockedPath = Path.Combine(root, blocked);
-                        if (outputFull.StartsWith(blockedPath, StringComparison.OrdinalIgnoreCase))
-                        {
-                            Console.Error.WriteLine("Error: cannot write to system directory: " + blockedPath);
-                            return 1;
-                        }
-                    }
-                    var inputInfo = new FileInfo(inputFull);
-                    if (inputInfo.Length > 50 * 1024 * 1024)
-                    {
-                        Console.Error.WriteLine("Error: input file exceeds 50 MB limit");
-                        return 1;
-                    }
-                   using var plainSecret = new SecretString(File.ReadAllText(inputPath));
-                   string cipherBase64 = SecretStore.Mount(plainSecret.ToString(), "audit-survival-kit");
-                   WriteAtomicUtf8(outputPath, cipherBase64);
-                    Console.WriteLine("Encrypted: " + outputPath + " (" + cipherBase64.Length + " chars)");
-                    return 0;
-                }
-
+                return AuditCommandHelpers.RunEncryptFile(args);
             case "list":
-                {
-                    // List audit.json entries (existing audit system).
-                    // The ledger migration from audit.json to audit-ledger.jsonl
-                    // happens in v1.0.0; for now, list the existing audit entries.
-                    string auditPath = Path.Combine(
-                        LocalAppDataRoot,
-                        "EnvManager", "audit.json");
-                    if (!File.Exists(auditPath))
-                    {
-                        Console.WriteLine("[]");
-                        return 0;
-                    }
-                    if (args.Contains("--json"))
-                    {
-                        Console.WriteLine(File.ReadAllText(auditPath));
-                    }
-                    else
-                    {
-                        var entries = JsonSerializer.Deserialize<List<JsonElement>>(File.ReadAllText(auditPath)) ?? new();
-                        foreach (var e in entries)
-                        {
-                            Console.WriteLine($"{e.GetProperty("timestamp")} | {e.GetProperty("command")} | {(e.TryGetProperty("scope", out var s) ? s.GetString() : "")}");
-                        }
-                    }
-                    return 0;
-                }
-
+                return AuditCommandHelpers.RunList(args);
             case "migrate-audit":
                 return RunAuditMigrate(args);
             case "verify-ledger":
@@ -238,6 +168,100 @@ partial class Program
         AtomicWriteJson(AuditFilePath, history);
     }
 
+
+}
+
+/// <summary>
+/// Decision logic extracted from Program.RunAuditCommand (#209, T03 of #82; behavior-preserving):
+/// the encrypt-file and list subcommand bodies, moved verbatim (indentation normalized).
+/// RunAuditCommand stays on Program as a thin shell (usage + subcommand routing); these
+/// helpers hold the branch-local decisions. Program method budget untouched (helpers live
+/// on this sibling class, not on Program). No new unit tests for the helpers: covered
+/// indirectly via the CLI command path (ComplexityRampCharacterizationTests -> RunAuditCommand).
+/// </summary>
+static class AuditCommandHelpers
+{
+    internal static int RunEncryptFile(string[] args)
+    {
+        string? inputPath = null;
+        string? outputPath = null;
+        for (int i = 2; i < args.Length - 1; i++)
+        {
+            if (args[i] == "--input" && i + 1 < args.Length) inputPath = args[++i];
+            else if (args[i] == "--output" && i + 1 < args.Length) outputPath = args[++i];
+        }
+        if (inputPath == null || outputPath == null)
+        {
+            Console.Error.WriteLine("Error: --input and --output required");
+            return 1;
+        }
+        if (!File.Exists(inputPath))
+        {
+            Console.Error.WriteLine("Error: input file not found: " + inputPath);
+            return 1;
+        }
+        // Path validation: reject system directories and enforce 50MB cap (same as backup validation)
+        string inputFull = Path.GetFullPath(inputPath);
+        string outputFull = Path.GetFullPath(outputPath);
+        if (IsBlockedSystemDirectory(outputFull)) return 1;
+        var inputInfo = new FileInfo(inputFull);
+        if (inputInfo.Length > 50 * 1024 * 1024)
+        {
+            Console.Error.WriteLine("Error: input file exceeds 50 MB limit");
+            return 1;
+        }
+        using var plainSecret = new Program.SecretString(File.ReadAllText(inputPath));
+        string cipherBase64 = Program.SecretStore.Mount(plainSecret.ToString(), "audit-survival-kit");
+        Program.WriteAtomicUtf8(outputPath, cipherBase64);
+        Console.WriteLine("Encrypted: " + outputPath + " (" + cipherBase64.Length + " chars)");
+        return 0;
+    }
+
+    // Extracted from RunEncryptFile (#209): the blocked-system-directory check for the
+    // encrypt-file output path. Prints the same error line and returns true when blocked.
+    static bool IsBlockedSystemDirectory(string outputFull)
+    {
+        string root = Path.GetPathRoot(outputFull) ?? "";
+        string[] blockedDirs = { "Windows", "Program Files", "Program Files (x86)" };
+        foreach (var blocked in blockedDirs)
+        {
+            string blockedPath = Path.Combine(root, blocked);
+            if (outputFull.StartsWith(blockedPath, StringComparison.OrdinalIgnoreCase))
+            {
+                Console.Error.WriteLine("Error: cannot write to system directory: " + blockedPath);
+                return true;
+            }
+        }
+        return false;
+    }
+
+    internal static int RunList(string[] args)
+    {
+        // List audit.json entries (existing audit system).
+        // The ledger migration from audit.json to audit-ledger.jsonl
+        // happens in v1.0.0; for now, list the existing audit entries.
+        string auditPath = Path.Combine(
+            Program.LocalAppDataRoot,
+            "EnvManager", "audit.json");
+        if (!File.Exists(auditPath))
+        {
+            Console.WriteLine("[]");
+            return 0;
+        }
+        if (args.Contains("--json"))
+        {
+            Console.WriteLine(File.ReadAllText(auditPath));
+        }
+        else
+        {
+            var entries = JsonSerializer.Deserialize<List<JsonElement>>(File.ReadAllText(auditPath)) ?? new();
+            foreach (var e in entries)
+            {
+                Console.WriteLine($"{e.GetProperty("timestamp")} | {e.GetProperty("command")} | {(e.TryGetProperty("scope", out var s) ? s.GetString() : "")}");
+            }
+        }
+        return 0;
+    }
 }
 
 class AuditEntry

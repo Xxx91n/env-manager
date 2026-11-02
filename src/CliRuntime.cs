@@ -390,7 +390,7 @@ static void AtomicWriteJson<T>(string path, T value)
     /// Atomically write a UTF-8 string to a file: temp + fsync + rename.
     /// Same pattern as AtomicWriteJson but accepts pre-serialized text.
     /// </summary>
-    static void WriteAtomicUtf8(string path, string content)
+    internal static void WriteAtomicUtf8(string path, string content)
     {
         string temp = path + ".tmp." + Environment.ProcessId;
         using (var fs = File.Create(temp))
