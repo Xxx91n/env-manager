@@ -80,6 +80,8 @@ public class ComplexityRampCharacterizationTests : IDisposable
 
     sealed class Captured
     {
+        public TextWriter PreviousOut = Console.Out;
+        public TextWriter PreviousErr = Console.Error;
         public StringWriter Stdout = new();
         public StringWriter Stderr = new();
     }
@@ -93,11 +95,11 @@ public class ComplexityRampCharacterizationTests : IDisposable
         return cap;
     }
 
-    /// <summary>Point the console at inert writers so later output never leaks between tests.</summary>
-    static void ReleaseConsole()
+    /// <summary>Restore the console writers that were active before the capture (xUnit v2 does not restore them itself).</summary>
+    static void ReleaseConsole(Captured cap)
     {
-        Console.SetOut(new StringWriter());
-        Console.SetError(new StringWriter());
+        Console.SetOut(cap.PreviousOut);
+        Console.SetError(cap.PreviousErr);
     }
 
     // ---- history undo: the profile branch (TryUndoProfileAudit) ------------------
@@ -115,7 +117,7 @@ public class ComplexityRampCharacterizationTests : IDisposable
         var cap = CaptureConsole();
         int exit;
         try { exit = Invoke("RunHistoryCommand", "history", "undo", entry.Id); }
-        finally { ReleaseConsole(); }
+        finally { ReleaseConsole(cap); }
         Assert.Equal(0, exit);
         Assert.Contains("\"undone\"", cap.Stdout.ToString());
         Assert.Contains("em_ramp_a", cap.Stdout.ToString());
@@ -136,7 +138,7 @@ public class ComplexityRampCharacterizationTests : IDisposable
         var cap = CaptureConsole();
         int exit;
         try { exit = Invoke("RunHistoryCommand", "history", "undo", deleteEntry!.Id); }
-        finally { ReleaseConsole(); }
+        finally { ReleaseConsole(cap); }
         Assert.Equal(0, exit);
         Assert.Contains(Program.LoadProfiles(), p => p.Name == "em_ramp_b");
     }
@@ -151,7 +153,7 @@ public class ComplexityRampCharacterizationTests : IDisposable
         var cap = CaptureConsole();
         int exit;
         try { exit = Invoke("RunHistoryCommand", "history", "undo", history[0].Id); }
-        finally { ReleaseConsole(); }
+        finally { ReleaseConsole(cap); }
         Assert.Equal(1, exit);
         Assert.Contains("has no undo path", cap.Stderr.ToString());
         Assert.Contains("cannot be undone", cap.Stderr.ToString());
@@ -164,7 +166,7 @@ public class ComplexityRampCharacterizationTests : IDisposable
         var cap = CaptureConsole();
         int exit;
         try { exit = Invoke("RunHistoryCommand", "history", "undo", "no-such-entry"); }
-        finally { ReleaseConsole(); }
+        finally { ReleaseConsole(cap); }
         Assert.Equal(1, exit);
         Assert.Contains("Error: Audit entry not found", cap.Stderr.ToString());
     }
@@ -178,7 +180,7 @@ public class ComplexityRampCharacterizationTests : IDisposable
         var cap = CaptureConsole();
         int exit;
         try { exit = Invoke("RunProtectionCommand", "protection", "list"); }
-        finally { ReleaseConsole(); }
+        finally { ReleaseConsole(cap); }
         Assert.Equal(0, exit);
         using var doc = JsonDocument.Parse(cap.Stdout.ToString());
         var vars = doc.RootElement.GetProperty("protectedVars");
@@ -195,7 +197,7 @@ public class ComplexityRampCharacterizationTests : IDisposable
         var cap = CaptureConsole();
         int add;
         try { add = Invoke("RunProtectionCommand", "protection", "add-var", "EM_RAMP_X"); }
-        finally { ReleaseConsole(); }
+        finally { ReleaseConsole(cap); }
         Assert.Equal(0, add);
         Assert.Contains("Added protected variable: EM_RAMP_X", cap.Stdout.ToString());
         Assert.True(File.Exists(Path.Combine(_dir, "protected-vars.json")));
@@ -203,7 +205,7 @@ public class ComplexityRampCharacterizationTests : IDisposable
         cap = CaptureConsole();
         int remove;
         try { remove = Invoke("RunProtectionCommand", "protection", "remove-var", "EM_RAMP_X"); }
-        finally { ReleaseConsole(); }
+        finally { ReleaseConsole(cap); }
         Assert.Equal(0, remove);
         Assert.Contains("Removed protected variable: EM_RAMP_X", cap.Stdout.ToString());
     }
@@ -215,14 +217,14 @@ public class ComplexityRampCharacterizationTests : IDisposable
         var cap = CaptureConsole();
         int add;
         try { add = Invoke("RunProtectionCommand", "protection", "add-path", "C:\\em-ramp\\dir"); }
-        finally { ReleaseConsole(); }
+        finally { ReleaseConsole(cap); }
         Assert.Equal(0, add);
         Assert.Contains("Added protected PATH entry: C:\\em-ramp\\dir", cap.Stdout.ToString());
 
         cap = CaptureConsole();
         int remove;
         try { remove = Invoke("RunProtectionCommand", "protection", "remove-path", "C:\\em-ramp\\dir"); }
-        finally { ReleaseConsole(); }
+        finally { ReleaseConsole(cap); }
         Assert.Equal(0, remove);
         Assert.Contains("Removed protected PATH entry: C:\\em-ramp\\dir", cap.Stdout.ToString());
     }
@@ -234,7 +236,7 @@ public class ComplexityRampCharacterizationTests : IDisposable
         var cap = CaptureConsole();
         int exit;
         try { exit = Invoke("RunProtectionCommand", "protection", "remove-var", "windir"); }
-        finally { ReleaseConsole(); }
+        finally { ReleaseConsole(cap); }
         Assert.Equal(1, exit);
         Assert.Contains("Cannot remove built-in protected variable", cap.Stderr.ToString());
     }
@@ -246,7 +248,7 @@ public class ComplexityRampCharacterizationTests : IDisposable
         var cap = CaptureConsole();
         int exit;
         try { exit = Invoke("RunProtectionCommand", "protection", "add-path", "C:\\a;b"); }
-        finally { ReleaseConsole(); }
+        finally { ReleaseConsole(cap); }
         Assert.Equal(1, exit);
         Assert.Contains("Invalid PATH entry", cap.Stderr.ToString());
     }
@@ -258,7 +260,7 @@ public class ComplexityRampCharacterizationTests : IDisposable
         var cap = CaptureConsole();
         int exit;
         try { exit = Invoke("RunProtectionCommand", "protection", "bogus"); }
-        finally { ReleaseConsole(); }
+        finally { ReleaseConsole(cap); }
         Assert.Equal(1, exit);
         Assert.Contains("Usage: env-manager protection", cap.Stderr.ToString());
     }
@@ -272,7 +274,7 @@ public class ComplexityRampCharacterizationTests : IDisposable
         var cap = CaptureConsole();
         int exit;
         try { exit = Invoke("RunAuditCommand", "audit"); }
-        finally { ReleaseConsole(); }
+        finally { ReleaseConsole(cap); }
         Assert.Equal(1, exit);
         Assert.Contains("Usage: env-manager audit", cap.Stderr.ToString());
     }
@@ -284,7 +286,7 @@ public class ComplexityRampCharacterizationTests : IDisposable
         var cap = CaptureConsole();
         int exit;
         try { exit = Invoke("RunAuditCommand", "audit", "bogus"); }
-        finally { ReleaseConsole(); }
+        finally { ReleaseConsole(cap); }
         Assert.Equal(1, exit);
         Assert.Contains("Unknown audit subcommand: bogus", cap.Stderr.ToString());
     }
@@ -297,7 +299,7 @@ public class ComplexityRampCharacterizationTests : IDisposable
         var cap = CaptureConsole();
         int exit;
         try { exit = Invoke("RunAuditCommand", "audit", "verify", "--ledger", ledger); }
-        finally { ReleaseConsole(); }
+        finally { ReleaseConsole(cap); }
         Assert.Equal(0, exit);
         using var doc = JsonDocument.Parse(cap.Stdout.ToString());
         Assert.True(doc.RootElement.GetProperty("verified").GetBoolean());
@@ -313,7 +315,7 @@ public class ComplexityRampCharacterizationTests : IDisposable
         var cap = CaptureConsole();
         int exit;
         try { exit = Invoke("RunAuditCommand", "audit", "verify", "--ledger", ledger); }
-        finally { ReleaseConsole(); }
+        finally { ReleaseConsole(cap); }
         // Non-strict verify reports the breakage but still exits zero.
         Assert.Equal(0, exit);
         using var doc = JsonDocument.Parse(cap.Stdout.ToString());
