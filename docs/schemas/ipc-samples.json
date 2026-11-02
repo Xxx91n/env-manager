@@ -114,6 +114,21 @@
       }
     },
     {
+      "name": "ok_rotate_provider_managed_skipped",
+      "note": "A Periodic mount with no local envelope is an observable skip; neither timestamp is advanced.",
+      "payload": {
+        "data": {
+          "mountId": "vault-team",
+          "rotated": false,
+          "skipped": true,
+          "skipReason": "providerManaged",
+          "lastRotatedAt": null,
+          "lastFetchedAt": "2026-08-31T10:00:00+00:00"
+        },
+        "ok": true
+      }
+    },
+    {
       "name": "ok_reload",
       "payload": {
         "data": {

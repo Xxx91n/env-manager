@@ -25,6 +25,49 @@ use crate::rotate_stop_tests::{MountFixture, ROTATION_SUITE_GATE};
 /// stop-path suite uses for real child processes.
 const WRITEBACK_TIMEOUT: Duration = Duration::from_secs(20);
 
+/// A provider-managed Periodic mount has no local envelope for the delegated CLI to rotate.
+/// The service reports a visible skip without launching a child or advancing rotation/fetch
+/// stamps; otherwise an exit-0 no-op would falsely claim that the provider value was rotated.
+#[tokio::test]
+async fn provider_managed_periodic_mount_is_skipped_without_stamping_or_delegating() {
+    let _quiet = ROTATION_SUITE_GATE.write().await;
+    let fixture = MountFixture::new("provider-managed-skip");
+    let mut mounts = fixture.mounts();
+    mounts[0]["envelope"] = serde_json::Value::Null;
+    mounts[0]["lastRotatedAt"] = serde_json::json!("2026-01-01T00:00:00Z");
+    mounts[0]["lastFetchedAt"] = serde_json::json!("2026-01-02T00:00:00Z");
+    std::fs::write(&fixture.path, serde_json::to_string_pretty(&mounts).unwrap())
+        .expect("write a provider-managed Periodic mount");
+    let before = std::fs::read_to_string(&fixture.path).expect("read the original mount file");
+    let shutdown = CancellationToken::new();
+
+    let info = tokio::time::timeout(
+        WRITEBACK_TIMEOUT,
+        rotate_mount_at(
+            &fixture.path,
+            "must-not-be-launched.exe",
+            &[],
+            "mount-1",
+            &shutdown,
+            ROTATE_HANG_BUDGET,
+        ),
+    )
+    .await
+    .expect("skipping a provider-managed mount must be immediate")
+    .expect("a provider-managed mount is a skip, not an error");
+
+    assert_eq!(info["rotated"], false);
+    assert_eq!(info["skipped"], true);
+    assert_eq!(info["skipReason"], "providerManaged");
+    assert_eq!(info["lastRotatedAt"], "2026-01-01T00:00:00Z");
+    assert_eq!(info["lastFetchedAt"], "2026-01-02T00:00:00Z");
+    assert_eq!(
+        std::fs::read_to_string(&fixture.path).expect("read the mount file after skip"),
+        before,
+        "a skipped mount must remain byte-for-byte unchanged"
+    );
+}
+
 /// A temp PowerShell script that stands in for the delegated CLI's side effect on the mount
 /// file, removed on drop. Driving the real rotation would need a working provider; the script
 /// reproduces exactly the file states the service has to cope with after the child exits.

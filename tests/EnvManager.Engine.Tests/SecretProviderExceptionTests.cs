@@ -335,11 +335,12 @@ Assert.True(ex.Message.Length <= 514, "message must stay at the 512-char cap (+2
             };
 
             var failures = new Dictionary<string, int>();
-            var (total, rotated, failed) = SecretProviderManager.RotateAll(profiles, failures, new InlineOnlyEnvelopes());
+            var (total, rotated, failed, skipped) = SecretProviderManager.RotateAll(profiles, failures, new InlineOnlyEnvelopes());
 
             Assert.Equal(2, total);
             Assert.Equal(0, rotated);
             Assert.Equal(2, failed);
+            Assert.Equal(0, skipped);
             Assert.Equal(1, failures[SecretProviderErrors.CatAuthFailed]);
             Assert.Equal(1, failures[SecretProviderErrors.CatUnknown]);
             // skip-and-count invariant: the failed secret values are never mutated or removed.

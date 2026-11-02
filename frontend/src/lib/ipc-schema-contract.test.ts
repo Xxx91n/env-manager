@@ -66,6 +66,16 @@ describe('IPC schema contract (golden samples from Rust service)', () => {
     expect(parsed.message).toContain('not_running')
   })
 
+  it('provider-managed rotate skip is a successful, explicit non-rotation response', () => {
+    const sample = samples.responses.find((s) => s.name === 'ok_rotate_provider_managed_skipped')
+    expect(sample).toBeDefined()
+    const parsed = parseServiceResponse(JSON.stringify(sample!.payload))
+    expect(parsed.ok).toBe(true)
+    expect(parsed.data).toMatchObject({ rotated: false, skipped: true, skipReason: 'providerManaged' })
+    expect(parsed.data).toHaveProperty('lastRotatedAt', null)
+    expect(parsed.data).toHaveProperty('lastFetchedAt', '2026-08-31T10:00:00+00:00')
+  })
+
   it('ok_ping sample carries pong=true', () => {
     const sample = samples.responses.find((s) => s.name === 'ok_ping')
     expect(sample).toBeDefined()

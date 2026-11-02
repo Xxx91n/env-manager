@@ -424,6 +424,7 @@
   "settings.service.unhealthy": "Com problemas",
   "settings.service.refreshBtn": "Atualizar",
   "settings.service.rotated": "Montagem rotacionada",
+  "settings.service.rotateSkipped": "Montagem gerenciada pelo provedor ignorada; não há envelope local para rotacionar",
   "settings.service.rotateBtn": "Rotacionar",
   "settings.service.notRunningHint": "Serviço não está em execução. Ping para verificar, ou iniciar via CLI: env-manager service status",
   "settings.audit.title": "Histórico de auditoria",

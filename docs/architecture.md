@@ -399,10 +399,10 @@ Phase 1 (Versioned Envelopes) and Phase 2 (Windows Credential Manager) are imple
 
 Phase 3 (Key Rotation + Secret Export/Import) is implemented in `src/Secrets/Manager/SecretProviderManager.cs`:
 
-- **Rotation**: `SecretProviderManager.RotateAll(profiles, failureCounts, envelopeHolder)` iterates all profiles and all secret variables, decrypts each with its original provider, re-encrypts with the active provider. A value stored as a `mount:<id>` reference is resolved through the holder and the rotated envelope is committed back to that mount, because the mount - not the profile - owns it. Failed decryptions (including a reference with no mount behind it) are counted and skipped (not deleted). CLI: `profile secret-provider rotate`.
+- **Rotation**: `SecretProviderManager.RotateAll(profiles, failureCounts, envelopeHolder)` iterates all profiles and all secret variables, decrypts each locally-held envelope with its original provider, and re-encrypts with the active provider. A value stored as a `mount:<id>` reference is resolved through the holder and the rotated envelope is committed back to that mount, because the mount - not the profile - owns it. Real provider/decryption errors (including a reference with no mount behind it) increment `failed`; a valid `Periodic` mount with no local envelope is provider-managed and increments a separate, user-visible `skipped` count. The aggregate invariant is `rotated + failed + skipped == total`; skips do not update `lastRotatedAt`. CLI: `profile secret-provider rotate`.
 - **Export**: `SecretProviderManager.ExportSecrets(profile)` serializes all secrets from a profile to JSON, DPAPI-encrypts the entire blob, and writes to a file. The export is portable within the same user account regardless of the provider used. CLI: `profile export-secrets <profile> <file>`.
 - **Import**: `SecretProviderManager.ImportSecrets(profile, encryptedBackup)` decrypts the backup with DPAPI, parses the JSON, verifies each secret by trial-decryption, then writes verified secrets to the profile. CLI: `profile import-secrets <profile> <file>`.
-- **Audit**: Rotation, export, and import all create audit entries with the operation name, file path (for export/import), and success/failure counts. No plaintext or ciphertext values are ever recorded.
+- **Audit**: Successful secret mutations and export/import create audit entries with the operation name, file path (for export/import), and outcome counts, including the separate provider-managed skip count when a pass also rotates a secret. A skip-only pass is reported directly in the CLI/service response and does not create a mutation audit event. No plaintext or ciphertext values are ever recorded.
 
 ### Phase 4-5 Implementation Status
 
@@ -510,7 +510,12 @@ Architecture-recovery (spec Phase 6 story 22) turns `ProfileData` (`src/Models.c
   (mount-first, profile-second). The service-side delegation must re-read that file after
   the child exits rather than save the snapshot it took before the call
   (`service/src/reconcile.rs`), otherwise the stamp would put the pre-rotation envelopes
-  back.
+  back. A `Periodic` mount whose `envelope` is null is intentionally provider-managed, not a
+  malformed local envelope: CLI rotate reports it as `skipped` (not `failed`) with a separate
+  visible count. The service's per-mount rotate endpoint returns the same skip classification
+  without delegating to the CLI and leaves `lastRotatedAt` / `lastFetchedAt` unchanged. This is
+  deliberately not provider-side rotation: the existing `ISecretProvider.Rotate(oldEnvelope)`
+  contract requires an envelope, and provider-native rotation APIs have different semantics.
 - **Call-site migration**: `ProfileCommand.cs` (create/import/show/apply/rename/var/path/
   set-inherits), `ProfileLaunchCommand.cs` (set-launch), `ProfileSecretCommand.cs`
   (secret add/edit/remove) and the test fixtures (`ProfileCommandCharacterizationTests`,

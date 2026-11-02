@@ -26,7 +26,7 @@ internal sealed class SecretProviderManager : ISecretStore
     // --- ISecretStore domain facade: thin delegates over the routing core ---
     string ISecretStore.Mount(string plaintext, string? context) => Encrypt(plaintext, context);
     string ISecretStore.Reveal(string envelope, string? context) => Decrypt(envelope, context);
-    (int total, int rotated, int failed) ISecretStore.Rotate(List<ProfileData> profiles, ISecretEnvelopeHolder envelopeHolder) => RotateAll(profiles, null, envelopeHolder);
+    (int total, int rotated, int failed, int skipped) ISecretStore.Rotate(List<ProfileData> profiles, ISecretEnvelopeHolder envelopeHolder) => RotateAll(profiles, null, envelopeHolder);
     string ISecretStore.Export(ProfileData profile) => ExportSecrets(profile);
     List<(string name, bool success)> ISecretStore.Import(ProfileData profile, string encryptedBackup) => ImportSecrets(profile, encryptedBackup);
 
@@ -234,13 +234,13 @@ internal sealed class SecretProviderManager : ISecretStore
         File.WriteAllText(GetConfigPath(), json);
     }
 
-    // Phase 3: Key Rotation - re-encrypt all secrets in all profiles with the active provider
-    // Returns (totalSecrets, rotatedCount, failedCount).
-    // Failures are also classified by the typed SecretProviderException family
-    // (failureCounts: authFailed/notFound/permissionDenied/unavailable/timeout/invalidEnvelope/
-    // unknown). The (total, rotated, failed) signature and the failed++ skip-and-count
-    // semantics are pinned by the frontend source gate (secret-regression.test.ts) and
-    // must not change - a failed secret is never deleted, only counted.
+    // Phase 3: Key Rotation - re-encrypt all locally-held envelopes in all profiles with the active provider.
+    // Returns (totalSecrets, rotatedCount, failedCount, skippedCount). Failure categories remain
+    // classified by the typed SecretProviderException family (failureCounts: authFailed/notFound/
+    // permissionDenied/unavailable/timeout/invalidEnvelope/unknown). A Periodic mount with no local
+    // envelope is provider-managed: count it as skipped and report that separately, not as a failed
+    // provider operation. `total` still includes it, so rotated + failed + skipped == total.
+    // Failed secrets are never deleted, only counted.
     //
     // Both stored forms are rotated: a profile holds either the envelope itself or a
     // "mount:<id>" reference into secretMount.json. The reference form is resolved through
@@ -249,10 +249,10 @@ internal sealed class SecretProviderManager : ISecretStore
     // hand the bare "mount:<id>" string to the provider, which cannot parse it as an
     // envelope, so every mount-referenced secret failed the pass and was never re-encrypted.
     // The value stayed readable, which is why nobody noticed: it just never rotated.
-    public static (int total, int rotated, int failed) RotateAll(System.Collections.Generic.List<ProfileData> profiles, System.Collections.Generic.Dictionary<string, int>? failureCounts, ISecretEnvelopeHolder envelopeHolder)
+    public static (int total, int rotated, int failed, int skipped) RotateAll(System.Collections.Generic.List<ProfileData> profiles, System.Collections.Generic.Dictionary<string, int>? failureCounts, ISecretEnvelopeHolder envelopeHolder)
     {
         var provider = GetActiveProvider();
-        int total = 0, rotated = 0, failed = 0;
+        int total = 0, rotated = 0, failed = 0, skipped = 0;
 
         foreach (var profile in profiles)
         {
@@ -266,16 +266,22 @@ internal sealed class SecretProviderManager : ISecretStore
                     RotateStoredValue(profile, v, envelopeHolder);
                     rotated++;
                 }
+                catch (ProviderManagedSecretMountException)
+                {
+                    // Expected non-applicability: the provider owns this Periodic value, while
+                    // this command only re-encrypts local envelopes. Keep it visible separately.
+                    skipped++;
+                }
                 catch (Exception ex)
                 {
-                    // Decryption failed (wrong provider, deleted CredMan entry, dangling mount
-                    // reference, etc.): skip + count, never delete.
+                    // Actual provider/decryption failure (wrong provider, deleted CredMan entry,
+                    // dangling mount reference, etc.): count it, never delete the secret.
                     failed++;
                     RecordFailure(failureCounts, ex);
                 }
             }
         }
-        return (total, rotated, failed);
+        return (total, rotated, failed, skipped);
     }
 
     // Re-encrypt one stored secret value and put it back where it came from: a profile holds

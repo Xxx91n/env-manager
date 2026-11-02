@@ -123,6 +123,7 @@
     try {
       const result = await serviceRotateMount(mountId)
       if (!result.ok) serviceError = result.message || 'rotate failed'
+      else if (result.data?.skipped) { showToast(getStore(tStore)('settings.service.rotateSkipped'), 'info') }
       else { showToast(getStore(tStore)('settings.service.rotated'), 'success') }
       await refreshServiceStatus()
      } catch (err) { serviceError = err instanceof Error ? err.message : String(err); void frontendLog('error', '[ServicePage] ' + (err instanceof Error ? err.message : String(err))).catch(() => {}) }

@@ -19,8 +19,9 @@ internal interface ISecretStore
     // A stored value is either an envelope or a "mount:<id>" reference; the holder resolves
     // the references and receives the rotated envelopes back, so the store never needs to
     // know where an envelope lives.
-    // Returns (totalSecrets, rotatedCount, failedCount).
-    (int total, int rotated, int failed) Rotate(List<ProfileData> profiles, ISecretEnvelopeHolder envelopeHolder);
+    // Returns (totalSecrets, rotatedCount, failedCount, skippedCount). Provider-managed
+    // Periodic mounts without local envelopes are observable skips, not failures.
+    (int total, int rotated, int failed, int skipped) Rotate(List<ProfileData> profiles, ISecretEnvelopeHolder envelopeHolder);
 
     // Serialize all secrets of a profile into a DPAPI-encrypted export blob.
     string Export(ProfileData profile);
