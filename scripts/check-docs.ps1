@@ -8,9 +8,10 @@
 #   1. scripts/check-bare-ids.ps1  (production scan)
 #   2. git diff --check            (whitespace errors)
 #   3. backticked repo-relative file paths exist
-#   4. backticked Class.Member citations resolve to a real member
+#   4. backticked Class.Member citations resolve to a declared member
 #      (types/namespaces with no local class or file are skipped; a member
-#      declared in a sibling `partial class` file still counts)
+#      declared in a sibling `partial class` file still counts. Comments,
+#      literals, calls, initializers and local variables are not declarations.)
 #   5. banned stale claims that keep coming back ("only plaintext output path",
 #      "唯一明文输出路径", "Plaintext is NEVER written to")
 #
@@ -26,10 +27,13 @@ param([string[]]$Paths)
 
 $ErrorActionPreference = 'Continue'
 $root = Split-Path -Parent $PSScriptRoot
+. (Join-Path $PSScriptRoot 'check-docs-members.ps1')
 Push-Location $root
 $failures = New-Object System.Collections.Generic.List[string]
 $script:memberCache = @{}
 $script:partialCache = @{}
+$script:declarationCache = @{}
+$script:typeNameCache = @{}
 
 function Add-Failure([string]$Message) { $script:failures.Add($Message) | Out-Null }
 
@@ -74,6 +78,51 @@ function Resolve-PartialFiles([string]$Left) {
     # hit - the same dilution this gate exists to prevent.
     $pattern = ('^[[:space:]]*([a-z]+[[:space:]]+)*partial[[:space:]]+class[[:space:]]+{0}\b' -f $Left)
     return @(Resolve-CachedFiles $script:partialCache $Left $pattern)
+}
+
+function Get-CachedDeclarations([string]$Path) {
+    if ($script:declarationCache.ContainsKey($Path)) { return $script:declarationCache[$Path] }
+    $full = Join-Path $root $Path
+    $declarations = @()
+    if (Test-Path -LiteralPath $full -PathType Leaf) {
+        $source = [System.IO.File]::ReadAllText($full, [System.Text.Encoding]::UTF8)
+        $declarations = @(Get-CSharpDeclarations $source)
+    }
+    $script:declarationCache[$Path] = $declarations
+    return $declarations
+}
+
+function Test-CSharpTypeInFile([string]$Path, [string]$Type) {
+    if (-not $script:typeNameCache.ContainsKey($Path)) {
+        $full = Join-Path $root $Path
+        $names = @()
+        if (Test-Path -LiteralPath $full -PathType Leaf) {
+            $source = [System.IO.File]::ReadAllText($full, [System.Text.Encoding]::UTF8)
+            $names = @(Get-CSharpTypeSpans (Get-MaskedCSharpSource $source) | ForEach-Object { $_.Name })
+        }
+        $script:typeNameCache[$Path] = $names
+    }
+    return @($script:typeNameCache[$Path] | Where-Object { $_ -ceq $Type }).Count -gt 0
+}
+
+function Find-MemberFiles([string[]]$Files, [string]$Type, [string]$Member, [switch]$TypeScoped) {
+    $found = New-Object System.Collections.Generic.List[string]
+    foreach ($file in $Files) {
+        # If the candidate file actually declares the cited type, attribute
+        # members only to that type. Otherwise keep the filename-as-module
+        # convention (ProfileCommand.cs holds members of partial Program).
+        # The partial fallback is always type-scoped.
+        $scope = $TypeScoped -or (Test-CSharpTypeInFile $file $Type)
+        foreach ($declaration in @(Get-CachedDeclarations $file)) {
+            if ($declaration.Name -ceq $Member -and
+                ((-not $scope -and -not $declaration.IsNested) -or
+                 ($scope -and $declaration.Type -ceq $Type))) {
+                $found.Add($file)
+                break
+            }
+        }
+    }
+    return $found.ToArray()
 }
 
 try {
@@ -167,26 +216,30 @@ try {
 
             # 4. cited Class.Member symbols
             foreach ($m in [regex]::Matches($line, $symbolPattern)) {
+                # A bare filename such as `ProfileCommand.cs` also looks like
+                # Class.Member to the regex. It is a file citation, not a claim
+                # that the type declares a member named "cs"; leave it to the
+                # path gate (which only validates repo-rooted paths today).
+                # Case-sensitive: `Output.Json` is a member claim, not the
+                # lowercase filename extension `Output.json`.
+                if ($m.Value -cmatch $pathPattern) { continue }
                 $left = $m.Groups[1].Value
                 $right = $m.Groups[2].Value
                 $declaring = Resolve-SymbolFiles $left
                 if ($declaring.Count -eq 0) { continue }
-                $memberPattern = ('\b{0}\b' -f $right)
-                $found = @($declaring | Where-Object {
-                        $null -ne (& git grep -l -E $memberPattern -- $_ 2>$null)
-                    })
+                $found = @(Find-MemberFiles $declaring $left $right)
                 if ($found.Count -eq 0) {
                     # A partial class keeps the member in a sibling declaration
                     # (Program spans src/Program.cs and src/CliRuntime.cs): retry
                     # across those before calling the citation dead. This arm is
                     # only reachable once a declaring file resolved and missed,
                     # so the "no local class or file, skip it" leniency above
-                    # stays exactly as it was.
+                    # stays exactly as it was. Both arms share the same
+                    # declaration-aware reader; an identifier occurrence in a
+                    # comment, literal, call or initializer is not a member.
                     $partialFiles = @(Resolve-PartialFiles $left)
                     if ($partialFiles.Count -gt 0) {
-                        # One grep over every partial declaration rather than one
-                        # per file: Program alone spans 24.
-                        $found = @(& git grep -l -E $memberPattern -- $partialFiles 2>$null)
+                        $found = @(Find-MemberFiles $partialFiles $left $right -TypeScoped)
                     }
                 }
                 if ($found.Count -eq 0) {

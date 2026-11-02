@@ -35,6 +35,10 @@ jobs:
         shell: pwsh
         run: ./scripts/check-bare-ids.ps1
 
+      - name: Class.Member declaration-matcher self-test (proves the docs gate rejects false citations)
+        shell: pwsh
+        run: ./scripts/test-check-docs-members.ps1
+
       - name: Enforce line-ending policy
         shell: powershell
         run: |
