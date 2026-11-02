@@ -60,6 +60,7 @@ public class ComplexityRampCharacterizationTests : IDisposable
         return (int)mi.Invoke(null, new object[] { args })!;
     }
 
+    /// <summary>Read the encrypted audit history through the production loader.</summary>
     static List<AuditEntry> LoadHistory()
     {
         var mi = typeof(Program).GetMethod("LoadAuditHistory",
@@ -68,6 +69,7 @@ public class ComplexityRampCharacterizationTests : IDisposable
         return (List<AuditEntry>)mi.Invoke(null, null)!;
     }
 
+    /// <summary>Seed one profile-scoped audit entry through the real recorder (encrypted at rest).</summary>
     static void RecordProfileAudit(string command, string profileName)
     {
         var mi = typeof(Program).GetMethod("RecordProfileAudit",
@@ -82,6 +84,7 @@ public class ComplexityRampCharacterizationTests : IDisposable
         public StringWriter Stderr = new();
     }
 
+    /// <summary>Redirect stdout/stderr into string writers for the duration of one command invocation.</summary>
     static Captured CaptureConsole()
     {
         var cap = new Captured();
@@ -90,6 +93,7 @@ public class ComplexityRampCharacterizationTests : IDisposable
         return cap;
     }
 
+    /// <summary>Point the console at inert writers so later output never leaks between tests.</summary>
     static void ReleaseConsole()
     {
         Console.SetOut(new StringWriter());
@@ -98,6 +102,7 @@ public class ComplexityRampCharacterizationTests : IDisposable
 
     // ---- history undo: the profile branch (TryUndoProfileAudit) ------------------
 
+    /// <summary>Undoing a profile-create audit entry deletes the profile and exits zero.</summary>
     [Fact]
     public void Undo_ProfileCreate_DeletesProfileAndExitsZero()
     {
@@ -117,6 +122,7 @@ public class ComplexityRampCharacterizationTests : IDisposable
         Assert.DoesNotContain(Program.LoadProfiles(), p => p.Name == "em_ramp_a");
     }
 
+    /// <summary>Undoing a profile-delete audit entry restores the profile from its captured summary.</summary>
     [Fact]
     public void Undo_ProfileDelete_RestoresProfileFromCapturedState()
     {
@@ -135,6 +141,7 @@ public class ComplexityRampCharacterizationTests : IDisposable
         Assert.Contains(Program.LoadProfiles(), p => p.Name == "em_ramp_b");
     }
 
+    /// <summary>A non-undoable profile command refuses with the explicit no-undo-path error copy.</summary>
     [Fact]
     public void Undo_NonUndoableProfileCommand_RefusesWithClearError()
     {
@@ -150,6 +157,7 @@ public class ComplexityRampCharacterizationTests : IDisposable
         Assert.Contains("cannot be undone", cap.Stderr.ToString());
     }
 
+    /// <summary>Undoing an unknown audit id exits one with the not-found error copy.</summary>
     [Fact]
     public void Undo_UnknownEntry_ExitsOneWithNotFoundCopy()
     {
@@ -163,6 +171,7 @@ public class ComplexityRampCharacterizationTests : IDisposable
 
     // ---- protection dispatcher ----------------------------------------------------
 
+    /// <summary>A fresh store lists seeded built-ins with empty custom collections.</summary>
     [Fact]
     public void Protection_List_FreshStore_EmitsBuiltInsAndEmptyCustom()
     {
@@ -179,6 +188,7 @@ public class ComplexityRampCharacterizationTests : IDisposable
         Assert.Equal(0, paths.GetProperty("custom").GetArrayLength());
     }
 
+    /// <summary>add-var then remove-var round-trips the custom protected-variable store.</summary>
     [Fact]
     public void Protection_AddVar_ThenRemoveVar_RoundTripsCustomStore()
     {
@@ -198,6 +208,7 @@ public class ComplexityRampCharacterizationTests : IDisposable
         Assert.Contains("Removed protected variable: EM_RAMP_X", cap.Stdout.ToString());
     }
 
+    /// <summary>add-path then remove-path round-trips the custom protected-PATH store.</summary>
     [Fact]
     public void Protection_AddPath_ThenRemovePath_RoundTripsCustomStore()
     {
@@ -216,6 +227,7 @@ public class ComplexityRampCharacterizationTests : IDisposable
         Assert.Contains("Removed protected PATH entry: C:\\em-ramp\\dir", cap.Stdout.ToString());
     }
 
+    /// <summary>Removing a built-in protected variable is rejected with the cannot-remove copy.</summary>
     [Fact]
     public void Protection_RemoveVar_BuiltIn_Rejected()
     {
@@ -227,6 +239,7 @@ public class ComplexityRampCharacterizationTests : IDisposable
         Assert.Contains("Cannot remove built-in protected variable", cap.Stderr.ToString());
     }
 
+    /// <summary>Adding a PATH entry containing a semicolon is rejected as invalid.</summary>
     [Fact]
     public void Protection_AddPath_InvalidEntry_Rejected()
     {
@@ -238,6 +251,7 @@ public class ComplexityRampCharacterizationTests : IDisposable
         Assert.Contains("Invalid PATH entry", cap.Stderr.ToString());
     }
 
+    /// <summary>An unknown protection subcommand exits one with the usage line.</summary>
     [Fact]
     public void Protection_UnknownSub_UsageError()
     {
@@ -251,6 +265,7 @@ public class ComplexityRampCharacterizationTests : IDisposable
 
     // ---- audit dispatcher ----------------------------------------------------------
 
+    /// <summary>Bare audit exits one with the subcommand usage block.</summary>
     [Fact]
     public void Audit_NoSubcommand_UsageError()
     {
@@ -262,6 +277,7 @@ public class ComplexityRampCharacterizationTests : IDisposable
         Assert.Contains("Usage: env-manager audit", cap.Stderr.ToString());
     }
 
+    /// <summary>An unknown audit subcommand exits one naming the subcommand.</summary>
     [Fact]
     public void Audit_UnknownSubcommand_Rejected()
     {
@@ -273,6 +289,7 @@ public class ComplexityRampCharacterizationTests : IDisposable
         Assert.Contains("Unknown audit subcommand: bogus", cap.Stderr.ToString());
     }
 
+    /// <summary>verify with no ledger file reports verified=true, events=0, exit zero.</summary>
     [Fact]
     public void Audit_Verify_NoLedger_ReportsZeroEvents()
     {
@@ -287,6 +304,7 @@ public class ComplexityRampCharacterizationTests : IDisposable
         Assert.Equal(0, doc.RootElement.GetProperty("events").GetInt32());
     }
 
+    /// <summary>verify on an unparseable ledger reports the breakage and still exits zero non-strict.</summary>
     [Fact]
     public void Audit_Verify_BrokenLedger_ReportsBreakageNonStrict()
     {
