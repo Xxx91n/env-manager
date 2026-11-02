@@ -36,6 +36,8 @@ mod rotate_writeback_tests;
 mod rotate_lock_tests;
 #[cfg(test)]
 mod rotate_hang_tests;
+#[cfg(test)]
+mod rotate_pipe_drain_tests;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RuntimeMode {

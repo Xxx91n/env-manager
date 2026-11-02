@@ -23,7 +23,9 @@ use std::path::{Path, PathBuf};
 use std::time::Duration;
 use tokio_util::sync::CancellationToken;
 
-use crate::reconcile::{rotate_mount_at, run_cli_child, ChildOutcome, ROTATE_HANG_BUDGET};
+use crate::reconcile::{
+    rotate_mount_at, run_cli_child, ChildOutcome, PIPE_DRAIN_ON_EXIT, ROTATE_HANG_BUDGET,
+};
 use crate::SHUTDOWN_DRAIN;
 
 /// The stub "CLI": one `ping.exe` process doing 30 one-second round trips, so it is
@@ -136,7 +138,14 @@ async fn stop_terminates_and_reaps_the_rotate_child() {
     let shutdown = std::sync::Arc::new(CancellationToken::new());
     let token = shutdown.clone();
     let in_flight = tokio::spawn(async move {
-        run_cli_child(STUB_EXE, &STUB_SLOW_ARGS, &token, ROTATE_HANG_BUDGET).await
+        run_cli_child(
+            STUB_EXE,
+            &STUB_SLOW_ARGS,
+            &token,
+            ROTATE_HANG_BUDGET,
+            PIPE_DRAIN_ON_EXIT,
+        )
+        .await
     });
 
     // Let the child get going, then time only the stop: everything between the cancel and
@@ -354,7 +363,14 @@ async fn stop_kills_the_helper_tree_not_just_the_direct_child() {
     let in_flight = tokio::spawn(async move {
         let args = tree_stub_args(&report_path);
         let argv: Vec<&str> = args.iter().map(|a| a.as_str()).collect();
-        run_cli_child(TREE_STUB_EXE, &argv, &token, ROTATE_HANG_BUDGET).await
+        run_cli_child(
+            TREE_STUB_EXE,
+            &argv,
+            &token,
+            ROTATE_HANG_BUDGET,
+            PIPE_DRAIN_ON_EXIT,
+        )
+        .await
     });
 
     // The helper has to be up before the stop lands, otherwise "the pid disappeared" would

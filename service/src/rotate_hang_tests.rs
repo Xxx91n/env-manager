@@ -18,7 +18,7 @@ use std::time::Duration;
 
 use tokio_util::sync::CancellationToken;
 
-use crate::reconcile::{rotate_mount_at, run_cli_child, ChildOutcome};
+use crate::reconcile::{rotate_mount_at, run_cli_child, ChildOutcome, PIPE_DRAIN_ON_EXIT};
 use crate::rotate_stop_tests::{pid_is_running, MountFixture};
 
 /// The stub "CLI" that never exits on its own: `ping.exe` doing 3000 one-second round trips.
@@ -50,7 +50,13 @@ async fn a_hung_child_is_terminated_and_reaped_at_the_hang_budget() {
 
     let outcome = tokio::time::timeout(
         ALWAYS_TOO_LONG,
-        run_cli_child(STUB_EXE, &STUB_HUNG_ARGS, &shutdown, SHORT_HANG_BUDGET),
+        run_cli_child(
+            STUB_EXE,
+            &STUB_HUNG_ARGS,
+            &shutdown,
+            SHORT_HANG_BUDGET,
+            PIPE_DRAIN_ON_EXIT,
+        ),
     )
     .await
     .expect("the hang budget must end the child, not the test's own timeout")
