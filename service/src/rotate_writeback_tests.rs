@@ -17,7 +17,7 @@ use std::time::Duration;
 
 use tokio_util::sync::CancellationToken;
 
-use crate::reconcile::{rotate_mount_at, ROTATE_HANG_BUDGET};
+use crate::reconcile::{delegated_rotate_argv, rotate_mount_at, ROTATE_HANG_BUDGET};
 use crate::rotate_stop_tests::{MountFixture, ROTATION_SUITE_GATE};
 
 /// Every wait here is bounded, so a regression fails the test instead of wedging the runner
@@ -294,5 +294,179 @@ async fn completed_rotation_reports_an_unreadable_mount_file() {
     assert!(
         err.contains("did not parse"),
         "the client must be told the mount file could not be read, got: {err}"
+    );
+}
+
+/// The delegation shape pinned by the #195 contract: `rotate <mountId>` re-encrypts the
+/// whole store, so the command handed to the CLI must not carry a mount id. A mount filter
+/// in the CLI (option 1) or a service-side mount -> profile mapping (option 2) were both
+/// rejected in favour of the whole-store contract. The assertion targets the production
+/// assembly `rotate_mount` hands down (not a copy of the constant), so a mount argument
+/// appended at that call site cannot evade the guard.
+#[test]
+fn delegated_rotation_command_carries_no_mount_id() {
+    assert_eq!(
+        delegated_rotate_argv(),
+        vec!["profile", "secret-provider", "rotate"],
+        "the delegated rotation must stay unscoped: the CLI's RotateAll re-encrypts every \
+         profile's locally-held envelopes, and the IPC mount id only names the stamp target"
+    );
+}
+
+/// A two-mount mount file so the stamp-scope assertion can prove the #195 contract: the
+/// child's rewrite lands on **both** envelopes (whole-store re-encryption), while the
+/// service stamps `lastRotatedAt` only on the mount the IPC call named.
+struct TwoMountFixture {
+    path: PathBuf,
+}
+
+impl TwoMountFixture {
+    fn new() -> Self {
+        let path = std::env::temp_dir().join(format!(
+            "env-manager-rotate-two-mount-{}.json",
+            uuid::Uuid::new_v4()
+        ));
+        let mounts = serde_json::json!([
+            {
+                "id": "mount-1",
+                "provider": "vault-kv2",
+                "name": "TEST_TOKEN",
+                "scope": "user",
+                "refreshPolicy": "Periodic",
+                "refreshIntervalSeconds": 300,
+                "createdAt": "2026-01-01T00:00:00Z",
+                "schemaVersion": 2,
+                "envelope": "{\"provider\":\"vault-kv2\",\"version\":1,\"targetName\":\"env-manager/token-1\"}"
+            },
+            {
+                "id": "mount-2",
+                "provider": "vault-kv2",
+                "name": "TEST_TOKEN",
+                "scope": "user",
+                "refreshPolicy": "Periodic",
+                "refreshIntervalSeconds": 300,
+                "createdAt": "2026-01-01T00:00:00Z",
+                "schemaVersion": 2,
+                "envelope": "{\"provider\":\"vault-kv2\",\"version\":1,\"targetName\":\"env-manager/token-2\"}"
+            }
+        ]);
+        let original = serde_json::to_string_pretty(&mounts).unwrap();
+        std::fs::write(&path, &original).expect("write the temp two-mount fixture");
+        Self { path }
+    }
+
+    fn mounts(&self) -> Vec<serde_json::Value> {
+        let raw = std::fs::read_to_string(&self.path).expect("read the mount file back");
+        serde_json::from_str(&raw).expect("the mount file must stay whole JSON")
+    }
+}
+
+impl Drop for TwoMountFixture {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_file(&self.path);
+    }
+}
+
+/// The stamp-scope half of the whole-store contract (#195): an IPC `rotate <mountId>`
+/// re-encrypts every profile's locally-held envelopes - the child rewrites both envelopes
+/// in place - but the service owns the `lastRotatedAt`/`lastFetchedAt` stamps only on the
+/// mount the call named. The child reproduces the real CLI write-back
+/// (`SecretMountEnvelopeHolder` stamps `LastRotatedAt` on every mount it rotates and never
+/// writes `LastFetchedAt`), so the assertions can pin both halves: the named mount's stamp
+/// is overwritten with the service's own now, and the other mount's CLI stamp passes
+/// through untouched.
+const CHILD_STAMP: &str = "2026-01-02T03:04:05Z";
+
+#[tokio::test]
+async fn completed_rotation_stamps_only_the_named_mount() {
+    let _suite = ROTATION_SUITE_GATE.read().await;
+    let fixture = TwoMountFixture::new();
+    let shutdown = std::sync::Arc::new(CancellationToken::new());
+    let rewritten = serde_json::json!([
+        {
+            "id": "mount-1",
+            "provider": "vault-kv2",
+            "name": "TEST_TOKEN",
+            "scope": "user",
+            "refreshPolicy": "Periodic",
+            "refreshIntervalSeconds": 300,
+            "createdAt": "2026-01-01T00:00:00Z",
+            "schemaVersion": 2,
+            "envelope": "{\"provider\":\"vault-kv2\",\"version\":1,\"targetName\":\"env-manager/token-1-rotated\"}",
+            "lastRotatedAt": CHILD_STAMP
+        },
+        {
+            "id": "mount-2",
+            "provider": "vault-kv2",
+            "name": "TEST_TOKEN",
+            "scope": "user",
+            "refreshPolicy": "Periodic",
+            "refreshIntervalSeconds": 300,
+            "createdAt": "2026-01-01T00:00:00Z",
+            "schemaVersion": 2,
+            "envelope": "{\"provider\":\"vault-kv2\",\"version\":1,\"targetName\":\"env-manager/token-2-rotated\"}",
+            "lastRotatedAt": CHILD_STAMP
+        }
+    ]);
+    let script = RewriteScript::writing(&fixture.path, &serde_json::to_string(&rewritten).unwrap());
+    let args = script.args();
+    let arg_refs: Vec<&str> = args.iter().map(|a| a.as_str()).collect();
+
+    let info = tokio::time::timeout(
+        WRITEBACK_TIMEOUT,
+        rotate_mount_at(
+            &fixture.path,
+            "powershell.exe",
+            &arg_refs,
+            "mount-1",
+            &shutdown,
+            ROTATE_HANG_BUDGET,
+        ),
+    )
+    .await
+    .expect("a child that finishes must not be held by the stop path")
+    .expect("a child that exits 0 completes the rotation");
+    assert_eq!(info["rotated"], true);
+
+    let mounts = fixture.mounts();
+    assert_eq!(
+        mounts.len(),
+        2,
+        "the child's whole-store rewrite must survive the metadata stamp"
+    );
+    assert_eq!(
+        mounts[0]["envelope"],
+        "{\"provider\":\"vault-kv2\",\"version\":1,\"targetName\":\"env-manager/token-1-rotated\"}",
+        "the named mount keeps the envelope the rotation child wrote"
+    );
+    assert_ne!(
+        mounts[0]["lastRotatedAt"],
+        serde_json::Value::Null,
+        "the mount named by the IPC call is stamped"
+    );
+    assert_ne!(
+        mounts[0]["lastRotatedAt"], CHILD_STAMP,
+        "the service owns the named mount's stamp: it overwrites the value the CLI child \
+         wrote with its own now"
+    );
+    assert_ne!(
+        mounts[0]["lastFetchedAt"],
+        serde_json::Value::Null,
+        "the service writes the second half of the stamp pair the CLI never sets"
+    );
+    assert_eq!(
+        mounts[1]["envelope"],
+        "{\"provider\":\"vault-kv2\",\"version\":1,\"targetName\":\"env-manager/token-2-rotated\"}",
+        "the whole-store re-encryption also lands on the other mount's envelope"
+    );
+    assert_eq!(
+        mounts[1]["lastRotatedAt"], CHILD_STAMP,
+        "the CLI child stamps every mount it rotates, and the service must preserve that \
+         value on a mount the call did not name - neither clearing nor overwriting it"
+    );
+    assert_eq!(
+        mounts[1]["lastFetchedAt"],
+        serde_json::Value::Null,
+        "neither half of the service-owned stamp lands on a mount the call did not name"
     );
 }
