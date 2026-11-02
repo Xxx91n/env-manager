@@ -78,8 +78,13 @@ pub(crate) const ROTATE_HANG_BUDGET: Duration = Duration::from_secs(15 * 60);
 
 /// The CLI argv a rotation delegates to. Rotation is not a circular dependency: it is a
 /// one-shot write of profiles.json, not an IPC back into the service. `--json` is absent
-/// because CLI rotate does not support it (it exits non-zero).
-const ROTATE_ARGS: [&str; 3] = ["profile", "secret-provider", "rotate"];
+/// because CLI rotate does not support it (it exits non-zero). The command deliberately
+/// carries **no** mount id (#195): the CLI's `RotateAll` re-encrypts every profile's
+/// secrets, so an IPC `rotate <mountId>` is whole-store re-encryption with a stamp on the
+/// named mount only. A per-mount rotation would need a mount filter in the CLI contract
+/// (or a mount -> profile mapping the service does not have), both rejected in favour of
+/// the whole-store contract. Exposed for the test that pins this shape.
+pub(crate) const ROTATE_ARGS: [&str; 3] = ["profile", "secret-provider", "rotate"];
 
 /// SecretMount mirror of the C# SecretMount class.
 #[derive(Debug, Clone, Serialize, Deserialize)]
