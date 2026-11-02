@@ -34,6 +34,7 @@ public class ComplexityRampCharacterizationTests : IDisposable
     public ComplexityRampCharacterizationTests()
     {
         Directory.CreateDirectory(_dir);
+        Environment.SetEnvironmentVariable("ENVMANAGER_LOCALAPPDATA", _dir);
         Program.SetAppDataDirectoryForTests(_dir);
         Program.SetProfilesFilePathForTests(Path.Combine(_dir, "profiles.json"));
         Program.SetAuditFilePathForTests(Path.Combine(_dir, "audit.json"));
@@ -42,6 +43,7 @@ public class ComplexityRampCharacterizationTests : IDisposable
 
     public void Dispose()
     {
+        Environment.SetEnvironmentVariable("ENVMANAGER_LOCALAPPDATA", null);
         Program.SetAppDataDirectoryForTests(null);
         Program.SetProfilesFilePathForTests(null);
         Program.SetAuditFilePathForTests(null);
@@ -370,7 +372,9 @@ public class ComplexityRampCharacterizationTests : IDisposable
     [Fact]
     public void Audit_List_JsonFlag_EchoesRawContent()
     {
-        string auditPath = Path.Combine(_dir, "audit.json");
+        string auditDir = Path.Combine(_dir, "EnvManager");
+        Directory.CreateDirectory(auditDir);
+        string auditPath = Path.Combine(auditDir, "audit.json");
         File.WriteAllText(auditPath, "[{\"command\":\"set\",\"timestamp\":\"2026-01-01T00:00:00Z\"}]");
         var cap = CaptureConsole();
         int exit;
