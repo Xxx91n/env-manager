@@ -486,3 +486,219 @@ fn drop_logs_when_the_last_attempt_also_fails() {
     drop(guard);
     let _ = std::fs::remove_dir_all(&root);
 }
+
+// Startup sweep of leftovers (#219). Evidence seam: `sops_scratch::sweep_stale_roots`
+// driven against real directories under `%TEMP%`, plus one leg through `run_server` itself,
+// because the property under test is what a service start does to directories a previous
+// instance left behind. The race half of the ticket - "this instance's own roots are never
+// swept" - is not a timestamp property here but an ordering property, pinned by the call's
+// placement between the RUNNING report and the task spawns; the run_server leg below
+// exercises that exact sequence on a stale and a fresh fixture.
+
+/// The two prefixes the sweep owns, spelled out so a rename in `sops_scratch` fails these
+/// tests instead of silently orphaning one family.
+const ROOT_PREFIX: &str = "env-manager-rotate-scratch-";
+const LEGACY_PREFIX: &str = "env-manager-sops-";
+
+/// Create a fixture root with plaintext inside, the shape both families take on disk.
+fn make_root(prefix: &str, label: &str) -> PathBuf {
+    let path = std::env::temp_dir().join(format!("{prefix}{}-{label}", uuid::Uuid::new_v4()));
+    std::fs::create_dir_all(&path).expect("create the fixture root");
+    std::fs::write(path.join("secret.json"), "{\"value\":\"probe\"}")
+        .expect("write the fixture plaintext");
+    path
+}
+
+/// Backdate a fixture's creation time past the sweep threshold. PowerShell's
+/// `SetCreationTimeUtc` is the lever that needs no new dependency; the callers assert on
+/// the effect (a deletion or a survival), so a broken lever fails the test rather than
+/// passing it vacuously.
+fn backdate_creation(path: &Path, hours_ago: i64) {
+    let script = format!(
+        "[System.IO.Directory]::SetCreationTimeUtc('{}', (Get-Date).ToUniversalTime().AddHours(-{}))",
+        path.display().to_string().replace('\'', "''"),
+        hours_ago
+    );
+    let status = std::process::Command::new("powershell.exe")
+        .args(["-NoProfile", "-NonInteractive", "-Command", &script])
+        .status()
+        .expect("run the backdating PowerShell");
+    assert!(status.success(), "backdating the fixture creation time");
+}
+
+/// One production-shaped sweep call over the real `%TEMP%`, so each test reads as the
+/// behaviour it pins rather than as argument plumbing.
+fn sweep_now() {
+    crate::sops_scratch::sweep_stale_roots(
+        &std::env::temp_dir(),
+        crate::sops_scratch::SWEEP_MIN_AGE,
+    );
+}
+
+/// Scenario for the ticket's evidence criterion, stale half: an expired service root and an
+/// expired pre-#177 provider directory are both gone after one sweep. The legacy family is
+/// the one no code path ever reclaimed, which is why it gets its own fixture instead of
+/// sharing the service root's.
+#[test]
+fn sweep_removes_stale_roots_of_both_families() {
+    let stale_root = make_root(ROOT_PREFIX, "sweep-stale");
+    let stale_legacy = make_root(LEGACY_PREFIX, "sweep-stale");
+    backdate_creation(&stale_root, 25);
+    backdate_creation(&stale_legacy, 25);
+
+    sweep_now();
+
+    assert!(
+        !stale_root.exists(),
+        "an expired service scratch root must be removed by the startup sweep: {}",
+        stale_root.display()
+    );
+    assert!(
+        !stale_legacy.exists(),
+        "an expired pre-#177 provider directory must be removed by the same sweep: {}",
+        stale_legacy.display()
+    );
+}
+
+/// The threshold half: roots inside the 24h window survive, because a root younger than a
+/// live delegation's maximum lifetime cannot be assumed orphaned.
+#[test]
+fn sweep_spares_roots_inside_the_threshold() {
+    let fresh_root = make_root(ROOT_PREFIX, "sweep-fresh");
+    let fresh_legacy = make_root(LEGACY_PREFIX, "sweep-fresh");
+
+    sweep_now();
+
+    assert!(
+        fresh_root.exists(),
+        "a root inside the age threshold must survive the sweep: {}",
+        fresh_root.display()
+    );
+    assert!(
+        fresh_legacy.exists(),
+        "the threshold applies to the legacy family too: {}",
+        fresh_legacy.display()
+    );
+
+    let _ = std::fs::remove_dir_all(&fresh_root);
+    let _ = std::fs::remove_dir_all(&fresh_legacy);
+}
+
+/// "跳过占用中": a stale root whose plaintext file is held open without sharing is skipped,
+/// and the skip is logged at error level with the path - the sweep runs at startup where no
+/// window closes behind it, so it does not retry what the next start can sweep again.
+#[test]
+fn sweep_skips_an_occupied_stale_root_and_logs_it() {
+    use std::os::windows::fs::OpenOptionsExt;
+
+    let root = make_root(ROOT_PREFIX, "sweep-occupied");
+    let file = root.join("secret.json");
+    let held = std::fs::OpenOptions::new()
+        .read(true)
+        .share_mode(0)
+        .open(&file)
+        .expect("hold the plaintext file open without sharing");
+    // Backdate only after the handle is held: from that moment every sweep - this one and
+    // any running concurrently in the test binary - sees a stale root it cannot delete, so
+    // no parallel runner can remove the fixture out from under this test. Backdating first
+    // would leave a window where the fixture is stale and unheld, and another test's
+    // `run_server` sweep could delete it whole.
+    backdate_creation(&root, 25);
+
+    let sink = LogSink(Arc::new(Mutex::new(Vec::new())));
+    let guard = tracing::subscriber::set_default(
+        tracing_subscriber::fmt()
+            .with_writer(sink.clone())
+            .with_ansi(false)
+            .finish(),
+    );
+
+    sweep_now();
+
+    let captured = String::from_utf8_lossy(&sink.0.lock().expect("the log sink lock")).to_string();
+    assert!(
+        captured.contains("ERROR"),
+        "the spec asks for an error-level trace; the line must not downgrade to warn/info; \
+         got: {captured}"
+    );
+    assert!(
+        captured.contains("could not be removed at startup"),
+        "an occupied leftover must leave a trace naming the path, never a silent skip; \
+         got: {captured}"
+    );
+    assert!(
+        root.exists(),
+        "the occupied root must survive the sweep: the assertion above is about the \
+         leftover this test creates on purpose, and removing it anyway would measure nothing"
+    );
+
+    drop(held);
+    drop(guard);
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+/// The sweep is a prefix scanner over a shared directory, so its blast radius is pinned:
+/// a directory outside the two families (the shape `StubReport` uses for its marker files)
+/// and a non-directory carrying a swept prefix both survive untouched.
+#[test]
+fn sweep_leaves_unrelated_names_alone() {
+    let unrelated = make_root("env-manager-scratch-sweep-guard-", "unrelated");
+    let prefixed_file = std::env::temp_dir().join(format!("{LEGACY_PREFIX}{}.txt", uuid::Uuid::new_v4()));
+    std::fs::write(&prefixed_file, "not a plaintext root")
+        .expect("write the same-prefixed file fixture");
+
+    sweep_now();
+
+    assert!(
+        unrelated.exists(),
+        "a directory outside the two swept families must never be touched: {}",
+        unrelated.display()
+    );
+    assert!(
+        prefixed_file.exists(),
+        "a file with a swept prefix is not a plaintext root and must not be deleted: {}",
+        prefixed_file.display()
+    );
+
+    let _ = std::fs::remove_dir_all(&unrelated);
+    let _ = std::fs::remove_file(&prefixed_file);
+}
+
+/// The run_server leg: a service start removes a stale root and spares a fresh one, through
+/// the same body the SCM drives. This is also the only test that observes the placement the
+/// ordering guarantee rests on - the sweep runs inside the body, between the report point
+/// and the task spawns, so the deletion happens without any test-side prodding.
+#[tokio::test]
+async fn service_start_sweeps_stale_roots_and_spares_fresh_ones() {
+    let stale = make_root(ROOT_PREFIX, "sweep-startup");
+    let fresh = make_root(ROOT_PREFIX, "sweep-startup-fresh");
+    backdate_creation(&stale, 25);
+
+    let shutdown = Arc::new(CancellationToken::new());
+    let server = tokio::spawn(crate::run_server(
+        r"\\.\pipe\EnvManager.TestSweepStartup",
+        shutdown.clone(),
+        || true,
+    ));
+
+    poll_until(ALWAYS_TOO_LONG, || (!stale.exists()).then_some(()))
+        .await
+        .expect("the service start never removed the stale root; the sweep did not run");
+
+    assert!(
+        fresh.exists(),
+        "a root inside the age threshold must survive a service start: {}",
+        fresh.display()
+    );
+
+    shutdown.cancel();
+    assert_eq!(
+        tokio::time::timeout(ALWAYS_TOO_LONG, server)
+            .await
+            .expect("the server body must return after shutdown")
+            .expect("server task"),
+        crate::ServerExit::Requested,
+    );
+
+    let _ = std::fs::remove_dir_all(&fresh);
+}
