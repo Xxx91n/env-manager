@@ -16,6 +16,8 @@ use std::sync::atomic::{AtomicUsize, Ordering}; // in-flight delegations, read u
 use tokio::io::AsyncReadExt; // draining the CLI child's pipes while it runs
 use std::process::Stdio; // piped stdout/stderr on the CLI child (tokio takes std's type)
 use tokio::sync::Mutex; // Phase 4C: TOCTOU protection
+#[cfg(test)]
+use tokio::sync::oneshot; // phase-entry latch for post-exit pipe drain tests (#205)
 
 use crate::job_object::KillOnCloseJob; // kill-on-close tree containment for the CLI child
 use crate::sops_scratch::{SopsScratch, SCRATCH_ENV}; // service-owned sops working root (#177)
@@ -363,7 +365,7 @@ pub async fn rotate_mount(
 /// `hang_budget` is passed through to `run_cli_child` and is a parameter for the same reason
 /// it is there: the tests inject a short one, production passes `ROTATE_HANG_BUDGET`. The
 /// post-exit pipe drain is fixed here at `PIPE_DRAIN_ON_EXIT` and only injectable through
-/// `rotate_mount_at_with_pipe_drain` (#192).
+/// `rotate_mount_at_with_pipe_drain` (#192) or its `#[cfg(test)]` drain-latch variant (#205).
 pub(crate) async fn rotate_mount_at(
     mount_path: &Path,
     cli_exe: &str,
@@ -398,6 +400,57 @@ pub(crate) async fn rotate_mount_at_with_pipe_drain(
     shutdown: &CancellationToken,
     hang_budget: Duration,
     pipe_drain: Duration,
+) -> Result<serde_json::Value, String> {
+    rotate_mount_at_inner(
+        mount_path,
+        cli_exe,
+        cli_args,
+        mount_id,
+        shutdown,
+        hang_budget,
+        PipeDrain::bounded(pipe_drain),
+    )
+    .await
+}
+
+/// `rotate_mount_at_with_pipe_drain` paired with a one-shot drain-entry latch (#205).
+///
+/// Only compiled for tests so production carries no extra entry point; `the_in_flight_gate_recovers_after_the_drain_budget`
+/// awaits the latch before probing `refresh_mount_at`, proving that the delegation still
+/// holds `ROTATIONS_IN_FLIGHT` while parked inside `drain_pipes_on_exit` without relying on
+/// a fixed wall-clock sleep.
+#[cfg(test)]
+pub(crate) async fn rotate_mount_at_with_drain_latch(
+    mount_path: &Path,
+    cli_exe: &str,
+    cli_args: &[&str],
+    mount_id: &str,
+    shutdown: &CancellationToken,
+    hang_budget: Duration,
+    pipe_drain: LatchedPipeDrain,
+) -> Result<serde_json::Value, String> {
+    rotate_mount_at_inner(
+        mount_path,
+        cli_exe,
+        cli_args,
+        mount_id,
+        shutdown,
+        hang_budget,
+        PipeDrain::latched(pipe_drain),
+    )
+    .await
+}
+
+/// Shared implementation of `rotate_mount_at_with_pipe_drain` and its `#[cfg(test)]`
+/// latched variant (#161, #192, #205).
+async fn rotate_mount_at_inner(
+    mount_path: &Path,
+    cli_exe: &str,
+    cli_args: &[&str],
+    mount_id: &str,
+    shutdown: &CancellationToken,
+    hang_budget: Duration,
+    pipe_drain: PipeDrain,
 ) -> Result<serde_json::Value, String> {
     // Check-then-delegate, with the lock released for the delegation itself (#161). The child
     // wait is the only long part of a rotation, and holding the lock across it made one slow
@@ -518,7 +571,80 @@ async fn refresh_mount_internal(_provider: &str) -> Result<(), String> {
     Ok(())
   }
 
+/// Post-exit pipe drain budget paired with a one-shot latch that resolves immediately
+/// before `drain_pipes_on_exit` begins (#205).
+///
+/// Only compiled under `cfg(test)` (#163): tests use it to align stimuli (`shutdown.cancel()`
+/// and `refresh_mount_at`) with deterministic entry into the post-exit drain rather than
+/// with fixed wall-clock sleeps, while assertions remain strictly on external outcomes.
+#[cfg(test)]
+pub(crate) struct LatchedPipeDrain {
+    pub(crate) budget: Duration,
+    pub(crate) entered: oneshot::Sender<()>,
+}
+
+/// Internal post-exit pipe drain configuration (#192, #205).
+///
+/// In non-test builds this is a plain `Duration` wrapper with zero extra state or runtime
+/// cost. Under `cfg(test)` it optionally carries the one-shot sender consumed by `enter`
+/// right before `drain_pipes_on_exit` runs, so a child stopped or hung in another `select!`
+/// arm drops the sender without firing it.
+struct PipeDrain {
+    budget: Duration,
+    #[cfg(test)]
+    entered: Option<oneshot::Sender<()>>,
+}
+
+impl PipeDrain {
+    /// Unlatched drain budget used by production and by tests that do not synchronize on
+    /// post-exit drain entry.
+    fn bounded(budget: Duration) -> Self {
+        Self {
+            budget,
+            #[cfg(test)]
+            entered: None,
+        }
+    }
+
+    /// Arm the drain budget with a test-only phase-entry sender (#205).
+    #[cfg(test)]
+    fn latched(drain: LatchedPipeDrain) -> Self {
+        Self {
+            budget: drain.budget,
+            entered: Some(drain.entered),
+        }
+    }
+
+    /// Whether this drain carries an armed test latch (`false` in non-test builds).
+    fn is_latched(&self) -> bool {
+        #[cfg(test)]
+        {
+            self.entered.is_some()
+        }
+        #[cfg(not(test))]
+        {
+            false
+        }
+    }
+
+    /// Read the drain budget when delegating through the unlatched `run_cli_child` entry.
+    fn budget(&self) -> Duration {
+        self.budget
+    }
+
+    /// Notify any armed test waiter that `child.wait()` has won the outer `select!` and
+    /// `drain_pipes_on_exit` is about to start, returning the drain budget (#205).
+    fn enter(self) -> Duration {
+        #[cfg(test)]
+        if let Some(tx) = self.entered {
+            let _ = tx.send(());
+        }
+        self.budget
+    }
+}
+
 /// How a delegated CLI child ended.
+#[derive(Debug)]
 pub(crate) enum ChildOutcome {
     /// The child ran to completion; whatever its pipes yielded before the post-exit drain
     /// ended is attached.
@@ -627,13 +753,60 @@ impl Ending {
 /// Both budgets are parameters for the same reason `hang_budget` always was: a bounded wait
 /// CI cannot shorten is a bounded wait CI cannot test. Production passes
 /// `ROTATE_HANG_BUDGET` and `PIPE_DRAIN_ON_EXIT`; the held-handle fixtures inject a short
-/// pipe drain so CI never waits the helper out. No test-only accessor is added.
+/// pipe drain so CI never waits the helper out. No private lock or job-handle accessor is
+/// added (#163); the two mid-drain race tests synchronize on drain entry through
+/// `#[cfg(test)]` `run_cli_child_with_drain_latch` / `rotate_mount_at_with_drain_latch`
+/// (#205), which compile out completely in non-test builds.
 pub(crate) async fn run_cli_child(
     cli_exe: &str,
     args: &[&str],
     shutdown: &CancellationToken,
     hang_budget: Duration,
     pipe_drain: Duration,
+) -> Result<ChildOutcome, String> {
+    run_cli_child_inner(
+        cli_exe,
+        args,
+        shutdown,
+        hang_budget,
+        PipeDrain::bounded(pipe_drain),
+    )
+    .await
+}
+
+/// `run_cli_child` paired with a one-shot latch that resolves right before
+/// `drain_pipes_on_exit` begins (#205).
+///
+/// Only compiled for tests: `a_stop_during_the_post_exit_drain_ends_it_at_once` awaits the
+/// latch before calling `shutdown.cancel()`, guaranteeing the stop lands inside the
+/// post-exit drain rather than racing `child.wait()` in the outer `select!` on slow CI
+/// runners.
+#[cfg(test)]
+pub(crate) async fn run_cli_child_with_drain_latch(
+    cli_exe: &str,
+    args: &[&str],
+    shutdown: &CancellationToken,
+    hang_budget: Duration,
+    pipe_drain: LatchedPipeDrain,
+) -> Result<ChildOutcome, String> {
+    run_cli_child_inner(
+        cli_exe,
+        args,
+        shutdown,
+        hang_budget,
+        PipeDrain::latched(pipe_drain),
+    )
+    .await
+}
+
+/// Shared body of `run_cli_child` and `run_cli_child_with_drain_latch`: owns the sops
+/// scratch directory across every exit path of `spawn_cli_child` (#177, #205).
+async fn run_cli_child_inner(
+    cli_exe: &str,
+    args: &[&str],
+    shutdown: &CancellationToken,
+    hang_budget: Duration,
+    pipe_drain: PipeDrain,
 ) -> Result<ChildOutcome, String> {
     // Created before the spawn and reclaimed after the outcome is known, so no early
     // return inside `spawn_cli_child` - a failed spawn, a missing pipe, a failed wait -
@@ -657,7 +830,7 @@ async fn spawn_cli_child(
     args: &[&str],
     shutdown: &CancellationToken,
     hang_budget: Duration,
-    pipe_drain: Duration,
+    pipe_drain: PipeDrain,
     scratch: Option<&SopsScratch>,
 ) -> Result<ChildOutcome, String> {
     // One job per delegation, never a process-wide singleton: the handle lives exactly as
@@ -767,6 +940,10 @@ async fn spawn_cli_child(
             // cancelled at the same instant; a pending drain loses to the stop. The child
             // has already exited, so the answer stays `Finished` with the exit status
             // intact - there is nothing left to kill or replay.
+            // `pipe_drain.enter()` fires any `#[cfg(test)]` drain-entry latch only now,
+            // after `child.wait()` has won the outer `select!` and immediately before
+            // `drain_pipes_on_exit` starts (#205).
+            let pipe_drain = pipe_drain.enter();
             let (stdout_closed, stderr_closed, cause): (bool, bool, &'static str) =
                 tokio::select! {
                     biased;
@@ -993,14 +1170,27 @@ fn take_seen(seen: &Arc<std::sync::Mutex<Vec<u8>>>) -> String {
     }
 }
 
+/// Run a delegated CLI rotation and map its `ChildOutcome` to the IPC caller's `Result`.
 async fn call_cli_rotate(
     cli_exe: &str,
     cli_args: &[&str],
     shutdown: &CancellationToken,
     hang_budget: Duration,
-    pipe_drain: Duration,
+    pipe_drain: PipeDrain,
 ) -> Result<String, String> {
-    match run_cli_child(cli_exe, cli_args, shutdown, hang_budget, pipe_drain).await? {
+    let outcome = if pipe_drain.is_latched() {
+        run_cli_child_inner(cli_exe, cli_args, shutdown, hang_budget, pipe_drain).await?
+    } else {
+        run_cli_child(
+            cli_exe,
+            cli_args,
+            shutdown,
+            hang_budget,
+            pipe_drain.budget(),
+        )
+        .await?
+    };
+    match outcome {
         // `output_complete` is deliberately not consulted here: an exited-0 child is a
         // successful rotation even when a helper kept a pipe open, and the warn at the
         // drain deadline is where that loss is reported. See `ChildOutcome::Finished`.

@@ -1,4 +1,4 @@
-// Post-exit pipe drain of a delegated CLI rotate (#192).
+// Post-exit pipe drain of a delegated CLI rotate (#192, #205).
 //
 // The exit branch of `reconcile::run_cli_child` used to `await` both pipe readers without
 // any bound, on the untested assumption that a provider helper cannot inherit the CLI's
@@ -11,8 +11,11 @@
 //
 // Both budgets are injected through `run_cli_child` and `rotate_mount_at_with_pipe_drain`,
 // the same convention `hang_budget` uses: a bounded wait CI cannot shorten is a bounded
-// wait CI cannot test. The stop / hang / write-back fixtures pass the production default
-// explicitly and keep every assertion they had, so those assertions are not weakened.
+// wait CI cannot test. The two mid-drain race tests additionally synchronize on
+// `LatchedPipeDrain` (#205), awaiting a one-shot signal fired right before
+// `drain_pipes_on_exit` instead of sleeping a wall-clock guess. The stop / hang /
+// write-back fixtures pass the production default explicitly and keep every assertion they
+// had, so those assertions are not weakened.
 //
 // Isolation: temp mount files under `%TEMP%`, removed on drop. `refresh_mount_at` takes
 // the fixture path, so no real `%LOCALAPPDATA%` / `ProgramData` state is read or written.
@@ -21,11 +24,13 @@ use std::io::Write;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
+use tokio::sync::oneshot;
 use tokio_util::sync::CancellationToken;
 
 use crate::reconcile::{
-    refresh_mount_at, rotate_mount_at_with_pipe_drain, rotation_in_flight, run_cli_child,
-    ChildOutcome, PIPE_DRAIN_ON_EXIT, ROTATE_HANG_BUDGET,
+    refresh_mount_at, rotate_mount_at_with_drain_latch, rotate_mount_at_with_pipe_drain,
+    rotation_in_flight, run_cli_child, run_cli_child_with_drain_latch, ChildOutcome,
+    LatchedPipeDrain, PIPE_DRAIN_ON_EXIT, ROTATE_HANG_BUDGET,
 };
 use crate::rotate_stop_tests::MountFixture;
 
@@ -46,9 +51,11 @@ const FAST_ARGS: [&str; 4] = ["/d", "/s", "/c", "echo rotated"];
 /// Injected post-exit drain: long enough for `ping` to start and hold the handles,
 /// short enough that CI never waits the 30s helper out.
 const SHORT_PIPE_DRAIN: Duration = Duration::from_millis(400);
-/// A longer injected drain for the recovery test, so the "stands down" half has a
-/// measurable window without asking CI to wait a real duration either.
-const RECOVERY_DRAIN: Duration = Duration::from_secs(1);
+/// A longer injected drain for the recovery test: once the drain-entry latch resolves,
+/// `refresh_mount_at` has ample headroom on loaded runners to observe `ROTATIONS_IN_FLIGHT`
+/// while the delegation is still parked in `drain_pipes_on_exit` (#205), without asking CI
+/// to wait a real duration either.
+const RECOVERY_DRAIN: Duration = Duration::from_secs(2);
 
 /// Every wait in this file is bounded, so a regression fails the test instead of
 /// wedging the runner until the job timeout. 20s is far short of the 30s helper.
@@ -65,9 +72,9 @@ const POLL_STEP: Duration = Duration::from_millis(100);
 /// A drain long enough that a stop landing inside it is unmistakable: without the
 /// cancellation race the call would sit here for 10s.
 const LONG_DRAIN_FOR_STOP: Duration = Duration::from_secs(10);
-/// The child is gone well before this; the injected drain is still running.
-const CANCEL_AFTER: Duration = Duration::from_millis(800);
-/// Ceiling for a drain that a stop ended at once (plus spawn, reap and scratch reclaim).
+/// Ceiling for a drain that a stop ended at once, measured from `shutdown.cancel()`
+/// after the drain-entry latch resolves (reap is already done; only reader abort, job
+/// drop and scratch reclaim remain).
 const CANCEL_PATH_BUDGET: Duration = Duration::from_secs(4);
 
 /// The WARN+ buffer is process-global. Only the held-handle test captures WARNs today, but
@@ -269,29 +276,47 @@ async fn the_in_flight_gate_recovers_after_the_drain_budget() {
     let shutdown = CancellationToken::new();
     let token = shutdown.clone();
     let path = fixture.path.clone();
+    let (drain_tx, drain_rx) = oneshot::channel();
     let in_flight = tokio::spawn(async move {
-        rotate_mount_at_with_pipe_drain(
+        rotate_mount_at_with_drain_latch(
             &path,
             STUB_EXE,
             &PIPE_HOLDING_ARGS,
             "mount-1",
             &token,
             ROTATE_HANG_BUDGET,
-            RECOVERY_DRAIN,
+            LatchedPipeDrain {
+                budget: RECOVERY_DRAIN,
+                entered: drain_tx,
+            },
         )
         .await
     });
 
-    // The child has exited and the post-exit drain is running: the delegation still
-    // owns the gate. 300ms is nothing against the injected 1s drain.
-    tokio::time::sleep(Duration::from_millis(300)).await;
+    // Synchronize deterministically on entry into `drain_pipes_on_exit` (#205): by the
+    // time this resolves, `child.wait()` has already won the outer `select!` and the
+    // delegation is parked in the post-exit drain while still holding `RotationInFlight`.
+    if tokio::time::timeout(ALWAYS_TOO_LONG, drain_rx)
+        .await
+        .expect("the child must exit and reach the post-exit drain inside ALWAYS_TOO_LONG")
+        .is_err()
+    {
+        let early = in_flight.await;
+        panic!("delegation ended before entering the post-exit pipe drain: {early:?}");
+    }
+
     let err = tokio::time::timeout(LOCK_FREE_BUDGET, refresh_mount_at(&fixture.path, "mount-1"))
         .await
         .expect("a refresh must answer, not queue behind a delegation")
-        .expect_err("a refresh must stand down while the delegation owns the mount file");
+        .expect_err("a refresh must stand down while the post-exit drain owns the mount file");
     assert!(
         err.contains("in flight"),
         "the refusal has to say why, got: {err}"
+    );
+    assert!(
+        !in_flight.is_finished(),
+        "our own delegation must still be inside its post-exit drain after refresh stood \
+         down, proving the drain itself kept ROTATIONS_IN_FLIGHT non-zero"
     );
 
     let info = tokio::time::timeout(ALWAYS_TOO_LONG, in_flight)
@@ -334,47 +359,56 @@ fn the_production_pipe_drain_is_bounded() {
     );
 }
 
-/// CodeRabbit finding 1 (#192 review): once the child-exit arm of the outer `select!` has
-/// won, a stop that lands during the post-exit drain must still end the wait *at once*.
-/// The child is already gone, so the answer stays `Finished` with the exit status intact.
-/// Without the race this call sits in the injected 10s drain until its deadline. The warn's
-/// shape is pinned by `an_exited_child_with_open_pipes_returns_within_the_drain_budget`;
-/// this test deliberately does not capture logs, because a thread-local tracing default is
-/// not a stable seam when the harness runs 53 tests in parallel (the first CI run showed an
-/// empty capture here while every behavioural assertion passed).
-#[test]
-fn a_stop_during_the_post_exit_drain_ends_it_at_once() {
-    let (outcome, elapsed) = {
-        let rt = tokio::runtime::Builder::new_current_thread()
-            .enable_all()
-            .build()
-            .expect("build the test runtime");
-        rt.block_on(async {
-            let shutdown = CancellationToken::new();
-            let cancel = shutdown.clone();
-            tokio::spawn(async move {
-                tokio::time::sleep(CANCEL_AFTER).await;
-                cancel.cancel();
-            });
-            let started = tokio::time::Instant::now();
-            let outcome = tokio::time::timeout(
-                ALWAYS_TOO_LONG,
-                run_cli_child(
-                    STUB_EXE,
-                    &PIPE_HOLDING_ARGS,
-                    &shutdown,
-                    ROTATE_HANG_BUDGET,
-                    LONG_DRAIN_FOR_STOP,
-                ),
-            )
-            .await;
-            (outcome, started.elapsed())
-        })
-    };
+/// CodeRabbit finding 1 (#192 review, deterministic sync in #205): once the child-exit
+/// arm of the outer `select!` has won, a stop that lands during the post-exit drain must
+/// still end the wait *at once*. The child is already gone, so the answer stays `Finished`
+/// with the exit status intact. Awaiting `LatchedPipeDrain` guarantees `child.wait()` has
+/// already won before `shutdown.cancel()` fires, so a slow runner spawning `cmd.exe` can
+/// never turn `Finished` into `Interrupted`. Without the inner cancellation race this call
+/// sits in the injected 10s drain until its deadline. The warn's shape is pinned by
+/// `an_exited_child_with_open_pipes_returns_within_the_drain_budget`; this test
+/// deliberately does not capture logs, because a thread-local tracing default is not a
+/// stable seam when the harness runs 53 tests in parallel.
+#[tokio::test]
+async fn a_stop_during_the_post_exit_drain_ends_it_at_once() {
+    let shutdown = CancellationToken::new();
+    let token = shutdown.clone();
+    let (drain_tx, drain_rx) = oneshot::channel();
+    let in_flight = tokio::spawn(async move {
+        run_cli_child_with_drain_latch(
+            STUB_EXE,
+            &PIPE_HOLDING_ARGS,
+            &token,
+            ROTATE_HANG_BUDGET,
+            LatchedPipeDrain {
+                budget: LONG_DRAIN_FOR_STOP,
+                entered: drain_tx,
+            },
+        )
+        .await
+    });
 
-    let outcome = outcome
-        .expect("the drain must be bounded by the stop, not by the test's own timeout")
+    if tokio::time::timeout(ALWAYS_TOO_LONG, drain_rx)
+        .await
+        .expect("the child must exit and reach the post-exit drain inside ALWAYS_TOO_LONG")
+        .is_err()
+    {
+        let early = in_flight.await;
+        panic!("child ended before entering the post-exit pipe drain: {early:?}");
+    }
+
+    let stop_started = tokio::time::Instant::now();
+    shutdown.cancel();
+    let outcome = tokio::time::timeout(CANCEL_PATH_BUDGET, in_flight)
+        .await
+        .expect(
+            "a stop during the post-exit drain must end it inside CANCEL_PATH_BUDGET, not \
+             wait out LONG_DRAIN_FOR_STOP",
+        )
+        .expect("the child task must not panic")
         .expect("spawn the pipe-holding stub");
+    let elapsed = stop_started.elapsed();
+
     assert!(
         matches!(
             outcome,
@@ -384,7 +418,7 @@ fn a_stop_during_the_post_exit_drain_ends_it_at_once() {
                 ..
             }
         ),
-        "a completed child stays a successful rotation even when a stop cuts its drain short"
+        "a completed child stays a successful rotation even when a stop cuts its drain short, got {outcome:?}"
     );
     assert!(
         elapsed < CANCEL_PATH_BUDGET,
