@@ -98,6 +98,8 @@ impl Write for LogWriter {
     }
 }
 
+/// Run `f` under a thread-local WARN subscriber backed by `LOG_BYTES` while holding
+/// `CAPTURE_GUARD`, returning `(f(), captured_warns)`.
 fn capture_warns<T>(f: impl FnOnce() -> T) -> (T, String) {
     // Held for the whole capture, not just the clear: a second caller must not start its
     // delegation (and its own clear) while the first is still writing warns here.
@@ -108,6 +110,16 @@ fn capture_warns<T>(f: impl FnOnce() -> T) -> (T, String) {
         .lock()
         .expect("the log buffer must not be poisoned")
         .clear();
+    // Keep a second scoped `Dispatch` alive across `with_default` so `tracing-core`'s
+    // `Dispatchers::has_just_one` stays `false` for the whole capture window. When only one
+    // scoped `Dispatch` is registered, a sibling test thread whose own default is
+    // `NoSubscriber` (such as `a_stop_during_the_post_exit_drain_ends_it_at_once`, which
+    // reaches the post-exit warn in milliseconds once #205 removed its fixed sleep) can win
+    // first-time `DefaultCallsite::register()`, hit `Rebuilder::JustOne`, evaluate
+    // `NoSubscriber` on *that* thread, and cache `INTEREST_NEVER` on the warn callsite for
+    // this thread too. Pairing `NoSubscriber` with the WARN subscriber forces per-thread
+    // `Interest::sometimes()` evaluation across every callsite registered mid-capture.
+    let _interest_anchor = tracing::Dispatch::new(tracing::subscriber::NoSubscriber::default());
     let subscriber = tracing_subscriber::fmt()
         .with_max_level(tracing::Level::WARN)
         .with_ansi(false)
@@ -378,10 +390,9 @@ fn the_production_pipe_drain_is_bounded() {
 /// with the exit status intact. Awaiting `LatchedPipeDrain` guarantees `child.wait()` has
 /// already won before `shutdown.cancel()` fires, so a slow runner spawning `cmd.exe` can
 /// never turn `Finished` into `Interrupted`. Without the inner cancellation race this call
-/// sits in the injected 10s drain until its deadline. The warn's shape is pinned by
-/// `an_exited_child_with_open_pipes_returns_within_the_drain_budget`; this test
-/// deliberately does not capture logs, because a thread-local tracing default is not a
-/// stable seam when the harness runs 53 tests in parallel.
+/// sits in the injected 10s drain until its deadline. The warn's shape is already pinned
+/// by `an_exited_child_with_open_pipes_returns_within_the_drain_budget`, so this test
+/// keeps its assertions strictly on the behavioural stop outcome.
 #[tokio::test]
 async fn a_stop_during_the_post_exit_drain_ends_it_at_once() {
     let shutdown = CancellationToken::new();
