@@ -34,6 +34,7 @@ public class ComplexityRampCharacterizationTests : IDisposable
     public ComplexityRampCharacterizationTests()
     {
         Directory.CreateDirectory(_dir);
+        Environment.SetEnvironmentVariable("ENVMANAGER_LOCALAPPDATA", _dir);
         Program.SetAppDataDirectoryForTests(_dir);
         Program.SetProfilesFilePathForTests(Path.Combine(_dir, "profiles.json"));
         Program.SetAuditFilePathForTests(Path.Combine(_dir, "audit.json"));
@@ -42,6 +43,7 @@ public class ComplexityRampCharacterizationTests : IDisposable
 
     public void Dispose()
     {
+        Environment.SetEnvironmentVariable("ENVMANAGER_LOCALAPPDATA", null);
         Program.SetAppDataDirectoryForTests(null);
         Program.SetProfilesFilePathForTests(null);
         Program.SetAuditFilePathForTests(null);
@@ -322,5 +324,63 @@ public class ComplexityRampCharacterizationTests : IDisposable
         Assert.False(doc.RootElement.GetProperty("verified").GetBoolean());
         Assert.Equal(0, doc.RootElement.GetProperty("events").GetInt32());
         Assert.Equal(1, doc.RootElement.GetProperty("breakages").GetArrayLength());
+    }
+
+    // ---- audit encrypt-file branch (#209 CodeRabbit: CLI-path coverage) -------------
+
+    /// <summary>encrypt-file without --input/--output exits one with the required-args error.</summary>
+    [Fact]
+    public void Audit_EncryptFile_MissingArgs_RequiredError()
+    {
+        var cap = CaptureConsole();
+        int exit;
+        try { exit = Invoke("RunAuditCommand", "audit", "encrypt-file"); }
+        finally { ReleaseConsole(cap); }
+        Assert.Equal(1, exit);
+        Assert.Contains("Error: --input and --output required", cap.Stderr.ToString());
+    }
+
+    /// <summary>encrypt-file with a non-existent input file exits one with the not-found error.</summary>
+    [Fact]
+    public void Audit_EncryptFile_InputNotFound_FileNotFoundError()
+    {
+        string missing = Path.Combine(_dir, "no-such-file.txt");
+        string output = Path.Combine(_dir, "out.enc");
+        var cap = CaptureConsole();
+        int exit;
+        try { exit = Invoke("RunAuditCommand", "audit", "encrypt-file", "--input", missing, "--output", output); }
+        finally { ReleaseConsole(cap); }
+        Assert.Equal(1, exit);
+        Assert.Contains("Error: input file not found: " + missing, cap.Stderr.ToString());
+    }
+
+    // ---- audit list branch (#209 CodeRabbit: CLI-path coverage) ----------------------
+
+    /// <summary>list with no audit.json present outputs empty brackets and exits zero.</summary>
+    [Fact]
+    public void Audit_List_NoAuditFile_EmptyBrackets()
+    {
+        var cap = CaptureConsole();
+        int exit;
+        try { exit = Invoke("RunAuditCommand", "audit", "list"); }
+        finally { ReleaseConsole(cap); }
+        Assert.Equal(0, exit);
+        Assert.Equal("[]", cap.Stdout.ToString().Trim());
+    }
+
+    /// <summary>list --json with an audit.json file echoes the raw file content.</summary>
+    [Fact]
+    public void Audit_List_JsonFlag_EchoesRawContent()
+    {
+        string auditDir = Path.Combine(_dir, "EnvManager");
+        Directory.CreateDirectory(auditDir);
+        string auditPath = Path.Combine(auditDir, "audit.json");
+        File.WriteAllText(auditPath, "[{\"command\":\"set\",\"timestamp\":\"2026-01-01T00:00:00Z\"}]");
+        var cap = CaptureConsole();
+        int exit;
+        try { exit = Invoke("RunAuditCommand", "audit", "list", "--json"); }
+        finally { ReleaseConsole(cap); }
+        Assert.Equal(0, exit);
+        Assert.Contains("\"command\":\"set\"", cap.Stdout.ToString());
     }
 }
