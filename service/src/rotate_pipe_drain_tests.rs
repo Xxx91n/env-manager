@@ -28,11 +28,10 @@ use tokio::sync::oneshot;
 use tokio_util::sync::CancellationToken;
 
 use crate::reconcile::{
-    refresh_mount_at, rotate_mount_at_with_drain_latch, rotate_mount_at_with_pipe_drain,
-    rotation_in_flight, run_cli_child, run_cli_child_with_drain_latch, ChildOutcome,
-    LatchedPipeDrain, PIPE_DRAIN_ON_EXIT, ROTATE_HANG_BUDGET,
+    refresh_mount_at, rotate_mount_at_with_pipe_drain, rotation_in_flight, run_cli_child,
+    ChildOutcome, LatchedPipeDrain, PIPE_DRAIN_ON_EXIT, ROTATE_HANG_BUDGET,
 };
-use crate::rotate_stop_tests::MountFixture;
+use crate::rotate_stop_tests::{MountFixture, ROTATION_SUITE_GATE};
 
 /// The stub "CLI": `cmd.exe` starts a `ping` grandchild in the background and exits.
 /// `/s` makes cmd strip the quotes Rust puts around the command string; `/d` keeps
@@ -51,11 +50,12 @@ const FAST_ARGS: [&str; 4] = ["/d", "/s", "/c", "echo rotated"];
 /// Injected post-exit drain: long enough for `ping` to start and hold the handles,
 /// short enough that CI never waits the 30s helper out.
 const SHORT_PIPE_DRAIN: Duration = Duration::from_millis(400);
-/// A longer injected drain for the recovery test: once the drain-entry latch resolves,
-/// `refresh_mount_at` has ample headroom on loaded runners to observe `ROTATIONS_IN_FLIGHT`
-/// while the delegation is still parked in `drain_pipes_on_exit` (#205), without asking CI
-/// to wait a real duration either.
-const RECOVERY_DRAIN: Duration = Duration::from_secs(2);
+/// A longer injected drain for the recovery test: under the exclusive
+/// `ROTATION_SUITE_GATE` write lock and deterministic `LatchedPipeDrain` entry (#205),
+/// 1s gives `refresh_mount_at` ample uncontended headroom to observe `ROTATIONS_IN_FLIGHT`
+/// while the delegation is parked in `drain_pipes_on_exit` without asking CI to wait a
+/// real duration.
+const RECOVERY_DRAIN: Duration = Duration::from_secs(1);
 
 /// Every wait in this file is bounded, so a regression fails the test instead of
 /// wedging the runner until the job timeout. 20s is far short of the 30s helper.
@@ -65,10 +65,6 @@ const ALWAYS_TOO_LONG: Duration = Duration::from_secs(20);
 const DRAIN_PATH_BUDGET: Duration = Duration::from_secs(5);
 /// How long a second rotation / refresh may take to get through the lock.
 const LOCK_FREE_BUDGET: Duration = Duration::from_secs(10);
-/// `ROTATIONS_IN_FLIGHT` is process-wide, so another suite's rotation can briefly hold
-/// it. Poll for our own contribution to be gone instead of asserting on one read.
-const RECOVERY_BUDGET: Duration = Duration::from_secs(10);
-const POLL_STEP: Duration = Duration::from_millis(100);
 /// A drain long enough that a stop landing inside it is unmistakable: without the
 /// cancellation race the call would sit here for 10s.
 const LONG_DRAIN_FOR_STOP: Duration = Duration::from_secs(10);
@@ -230,6 +226,7 @@ async fn a_child_that_closes_its_pipes_keeps_complete_output() {
 /// looking untouched and tell the IPC client that completed work failed.
 #[tokio::test]
 async fn an_incomplete_diagnostic_does_not_fail_a_completed_rotation() {
+    let _suite = ROTATION_SUITE_GATE.read().await;
     let fixture = MountFixture::new("pipe-incomplete");
     let shutdown = CancellationToken::new();
 
@@ -294,18 +291,24 @@ async fn await_drain_entry<T: std::fmt::Debug>(
 /// The liveness half of #192: the RAII marker is dropped when the call returns, so the
 /// shared gate that both `run_reconcile_tick` and `refresh_mount` consult stops standing
 /// down. `refresh` is driven against the temp fixture; the tick reads the same
-/// `rotation_in_flight()` under the same lock, so pinning the gate pins what it checks.
-/// An end-to-end tick assertion needs the mount-path seam tracked separately (#193) -
-/// this ticket deliberately does not widen its scope to add it.
+/// `rotation_in_flight()` under the same lock, and its end-to-end `%TEMP%` assertion lives in
+/// `rotate_lock_tests` via `run_reconcile_tick_at` (#193). Holds the exclusive
+/// `ROTATION_SUITE_GATE` write lock so no sibling `cargo test` worker can raise the
+/// process-wide `ROTATIONS_IN_FLIGHT` counter while this test proves quiescent recovery.
 #[tokio::test]
 async fn the_in_flight_gate_recovers_after_the_drain_budget() {
+    let _quiet = ROTATION_SUITE_GATE.write().await;
+    assert!(
+        !rotation_in_flight(),
+        "exclusive ROTATION_SUITE_GATE must start with no rotation in flight"
+    );
     let fixture = MountFixture::new("pipe-inflight");
     let shutdown = CancellationToken::new();
     let token = shutdown.clone();
     let path = fixture.path.clone();
     let (drain_tx, drain_rx) = oneshot::channel();
     let mut in_flight = tokio::spawn(async move {
-        rotate_mount_at_with_drain_latch(
+        rotate_mount_at_with_pipe_drain(
             &path,
             STUB_EXE,
             &PIPE_HOLDING_ARGS,
@@ -346,28 +349,17 @@ async fn the_in_flight_gate_recovers_after_the_drain_budget() {
         .expect("an exited-0 child completes the rotation");
     assert_eq!(info["rotated"], true);
 
-    let deadline = tokio::time::Instant::now() + RECOVERY_BUDGET;
-    let mut recovered = false;
-    while tokio::time::Instant::now() < deadline {
-        if !rotation_in_flight() {
-            match refresh_mount_at(&fixture.path, "mount-1").await {
-                Ok(refreshed) => {
-                    assert_eq!(refreshed["refreshed"], true);
-                    recovered = true;
-                    break;
-                }
-                // Another suite's rotation started between the snapshot and the call.
-                Err(e) if e.contains("in flight") => {}
-                Err(e) => panic!("refresh must succeed once the gate is free, got: {e}"),
-            }
-        }
-        tokio::time::sleep(POLL_STEP).await;
-    }
     assert!(
-        recovered,
+        !rotation_in_flight(),
         "ROTATIONS_IN_FLIGHT never returned to zero: the tick would skip every interval \
          and refresh would answer 'in flight' forever"
     );
+    let refreshed =
+        tokio::time::timeout(LOCK_FREE_BUDGET, refresh_mount_at(&fixture.path, "mount-1"))
+            .await
+            .expect("a refresh after drain recovery must complete promptly")
+            .expect("refresh must succeed once the gate is free");
+    assert_eq!(refreshed["refreshed"], true);
 }
 
 /// The production default is the bound, not a second unbounded wait. Keeps a future
@@ -396,7 +388,7 @@ async fn a_stop_during_the_post_exit_drain_ends_it_at_once() {
     let token = shutdown.clone();
     let (drain_tx, drain_rx) = oneshot::channel();
     let mut in_flight = tokio::spawn(async move {
-        run_cli_child_with_drain_latch(
+        run_cli_child(
             STUB_EXE,
             &PIPE_HOLDING_ARGS,
             &token,

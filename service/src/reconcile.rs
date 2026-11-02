@@ -170,10 +170,10 @@ impl Drop for RotationInFlight {
     }
 }
 
-/// Whether a delegated rotation currently owns the mount file's envelopes (#161). Only
-/// meaningful while holding `RECONCILE_LOCK`, which is where every caller reads it; a test
-/// may also take it as a relaxed snapshot after a delegation returns, to prove the RAII
-/// marker was dropped (#192). No test-only accessor is added for the static itself.
+/// Whether a delegated rotation currently owns the mount file's envelopes (#161). Production
+/// callers read it while holding `RECONCILE_LOCK`; tests also poll it as a readiness / drain
+/// snapshot (#192, #193), keeping `ROTATIONS_IN_FLIGHT` itself private with no test-only
+/// accessor on the static.
 pub(crate) fn rotation_in_flight() -> bool {
     ROTATIONS_IN_FLIGHT.load(Ordering::SeqCst) > 0
 }
@@ -214,7 +214,19 @@ pub async fn reconcile_loop(shutdown: Arc<CancellationToken>) {
     }
 }
 
+/// Production entry called by `reconcile_loop`: binds `run_reconcile_tick_at` to
+/// `crate::secret_mount_path()`. That one-line binding stays covered by inspection until
+/// `reconcile_loop` itself takes warmup and mount-path parameters (#193).
 async fn run_reconcile_tick() -> Result<(), String> {
+    run_reconcile_tick_at(&crate::secret_mount_path()).await
+}
+
+/// `run_reconcile_tick` with the mount file taken as a parameter (#193).
+///
+/// Same seam shape as `rotate_mount_at`: production resolves `crate::secret_mount_path()`,
+/// while tests pass a temp file under `%TEMP%` so exercising the tick never touches real
+/// `%LOCALAPPDATA%` or `ProgramData` state.
+pub(crate) async fn run_reconcile_tick_at(mount_path: &Path) -> Result<(), String> {
     // Phase 4C: Acquire global lock for the entire tick to prevent TOCTOU with CLI mutations.
     let _guard = RECONCILE_LOCK.lock().await;
     // A delegated rotation owns the envelopes in the mount file while its child runs (#161):
@@ -229,8 +241,7 @@ async fn run_reconcile_tick() -> Result<(), String> {
     }
     tracing::info!("reconcile tick: scanning secretMount.json");
 
-    let path = crate::secret_mount_path();
-    let mut mounts = load_mounts(&path);
+    let mut mounts = load_mounts(mount_path);
 
     if mounts.is_empty() {
         tracing::info!("reconcile tick: no mounts found, skipping");
@@ -278,7 +289,7 @@ async fn run_reconcile_tick() -> Result<(), String> {
     }
 
     if changed {
-        save_mounts(&path, &mounts)?;
+        save_mounts(mount_path, &mounts)?;
     }
 
     tracing::info!(
@@ -365,7 +376,7 @@ pub async fn rotate_mount(
 /// `hang_budget` is passed through to `run_cli_child` and is a parameter for the same reason
 /// it is there: the tests inject a short one, production passes `ROTATE_HANG_BUDGET`. The
 /// post-exit pipe drain is fixed here at `PIPE_DRAIN_ON_EXIT` and only injectable through
-/// `rotate_mount_at_with_pipe_drain` (#192) or its `#[cfg(test)]` drain-latch variant (#205).
+/// `rotate_mount_at_with_pipe_drain` (#192, #205).
 pub(crate) async fn rotate_mount_at(
     mount_path: &Path,
     cli_exe: &str,
@@ -386,12 +397,11 @@ pub(crate) async fn rotate_mount_at(
     .await
 }
 
-/// `rotate_mount_at` with the post-exit pipe budget injected (#192); see `run_cli_child`.
-/// Production always goes through the wrapper so every delegation gets the same bound;
-/// only the tests that pin the held-handle path shorten it.
-/// The wrapper keeps every existing stop / hang / write-back fixture on the same default
-/// budget; the fixtures state it explicitly at their `run_cli_child` call sites, but no
-/// assertion in them changed.
+/// `rotate_mount_at` with the post-exit pipe budget injected (#192, #205); see
+/// `run_cli_child`. Production always goes through `rotate_mount_at` so every delegation gets
+/// the same bound; the held-handle tests pass a shortened `Duration` or a `#[cfg(test)]`
+/// `LatchedPipeDrain` (#205). Every existing stop / hang / write-back fixture stays on the
+/// production default with no assertion changed.
 pub(crate) async fn rotate_mount_at_with_pipe_drain(
     mount_path: &Path,
     cli_exe: &str,
@@ -399,59 +409,9 @@ pub(crate) async fn rotate_mount_at_with_pipe_drain(
     mount_id: &str,
     shutdown: &CancellationToken,
     hang_budget: Duration,
-    pipe_drain: Duration,
+    pipe_drain: impl Into<PipeDrain>,
 ) -> Result<serde_json::Value, String> {
-    rotate_mount_at_inner(
-        mount_path,
-        cli_exe,
-        cli_args,
-        mount_id,
-        shutdown,
-        hang_budget,
-        PipeDrain::bounded(pipe_drain),
-    )
-    .await
-}
-
-/// `rotate_mount_at_with_pipe_drain` paired with a one-shot drain-entry latch (#205).
-///
-/// Only compiled for tests so production carries no extra entry point; `the_in_flight_gate_recovers_after_the_drain_budget`
-/// awaits the latch before probing `refresh_mount_at`, proving that the delegation still
-/// holds `ROTATIONS_IN_FLIGHT` while parked inside `drain_pipes_on_exit` without relying on
-/// a fixed wall-clock sleep.
-#[cfg(test)]
-pub(crate) async fn rotate_mount_at_with_drain_latch(
-    mount_path: &Path,
-    cli_exe: &str,
-    cli_args: &[&str],
-    mount_id: &str,
-    shutdown: &CancellationToken,
-    hang_budget: Duration,
-    pipe_drain: LatchedPipeDrain,
-) -> Result<serde_json::Value, String> {
-    rotate_mount_at_inner(
-        mount_path,
-        cli_exe,
-        cli_args,
-        mount_id,
-        shutdown,
-        hang_budget,
-        PipeDrain::latched(pipe_drain),
-    )
-    .await
-}
-
-/// Shared implementation of `rotate_mount_at_with_pipe_drain` and its `#[cfg(test)]`
-/// latched variant (#161, #192, #205).
-async fn rotate_mount_at_inner(
-    mount_path: &Path,
-    cli_exe: &str,
-    cli_args: &[&str],
-    mount_id: &str,
-    shutdown: &CancellationToken,
-    hang_budget: Duration,
-    pipe_drain: PipeDrain,
-) -> Result<serde_json::Value, String> {
+    let pipe_drain: PipeDrain = pipe_drain.into();
     // Check-then-delegate, with the lock released for the delegation itself (#161). The child
     // wait is the only long part of a rotation, and holding the lock across it made one slow
     // or wedged child stall every later `rotate`/`refresh` and the 300s reconcile tick, which
@@ -583,55 +543,44 @@ pub(crate) struct LatchedPipeDrain {
     pub(crate) entered: oneshot::Sender<()>,
 }
 
-/// Internal post-exit pipe drain configuration (#192, #205).
+/// Post-exit pipe drain configuration passed into `run_cli_child` and
+/// `rotate_mount_at_with_pipe_drain` (#192, #205).
 ///
-/// In non-test builds this is a plain `Duration` wrapper with zero extra state or runtime
-/// cost. Under `cfg(test)` it optionally carries the one-shot sender consumed by `enter`
+/// Fields stay private so callers construct it only via `From<Duration>` (production and
+/// unlatched tests) or `#[cfg(test)] From<LatchedPipeDrain>` (mid-drain race tests). In
+/// non-test builds this compiles to a single `Duration` with zero extra state or runtime
+/// cost; under `cfg(test)` it optionally carries the one-shot sender consumed by `enter`
 /// right before `drain_pipes_on_exit` runs, so a child stopped or hung in another `select!`
 /// arm drops the sender without firing it.
-struct PipeDrain {
+pub(crate) struct PipeDrain {
     budget: Duration,
     #[cfg(test)]
     entered: Option<oneshot::Sender<()>>,
 }
 
-impl PipeDrain {
-    /// Unlatched drain budget used by production and by tests that do not synchronize on
-    /// post-exit drain entry.
-    fn bounded(budget: Duration) -> Self {
+impl From<Duration> for PipeDrain {
+    /// Wrap a plain drain budget with no test latch attached.
+    fn from(budget: Duration) -> Self {
         Self {
             budget,
             #[cfg(test)]
             entered: None,
         }
     }
+}
 
+#[cfg(test)]
+impl From<LatchedPipeDrain> for PipeDrain {
     /// Arm the drain budget with a test-only phase-entry sender (#205).
-    #[cfg(test)]
-    fn latched(drain: LatchedPipeDrain) -> Self {
+    fn from(drain: LatchedPipeDrain) -> Self {
         Self {
             budget: drain.budget,
             entered: Some(drain.entered),
         }
     }
+}
 
-    /// Whether this drain carries an armed test latch (`false` in non-test builds).
-    fn is_latched(&self) -> bool {
-        #[cfg(test)]
-        {
-            self.entered.is_some()
-        }
-        #[cfg(not(test))]
-        {
-            false
-        }
-    }
-
-    /// Read the drain budget when delegating through the unlatched `run_cli_child` entry.
-    fn budget(&self) -> Duration {
-        self.budget
-    }
-
+impl PipeDrain {
     /// Notify any armed test waiter that `child.wait()` has won the outer `select!` and
     /// `drain_pipes_on_exit` is about to start, returning the drain budget (#205).
     fn enter(self) -> Duration {
@@ -754,60 +703,16 @@ impl Ending {
 /// CI cannot shorten is a bounded wait CI cannot test. Production passes
 /// `ROTATE_HANG_BUDGET` and `PIPE_DRAIN_ON_EXIT`; the held-handle fixtures inject a short
 /// pipe drain so CI never waits the helper out. No private lock or job-handle accessor is
-/// added (#163); the two mid-drain race tests synchronize on drain entry through
-/// `#[cfg(test)]` `run_cli_child_with_drain_latch` / `rotate_mount_at_with_drain_latch`
-/// (#205), which compile out completely in non-test builds.
+/// added (#163); the two mid-drain race tests pass `#[cfg(test)]` `LatchedPipeDrain` (#205),
+/// which compiles out completely in non-test builds.
 pub(crate) async fn run_cli_child(
     cli_exe: &str,
     args: &[&str],
     shutdown: &CancellationToken,
     hang_budget: Duration,
-    pipe_drain: Duration,
+    pipe_drain: impl Into<PipeDrain>,
 ) -> Result<ChildOutcome, String> {
-    run_cli_child_inner(
-        cli_exe,
-        args,
-        shutdown,
-        hang_budget,
-        PipeDrain::bounded(pipe_drain),
-    )
-    .await
-}
-
-/// `run_cli_child` paired with a one-shot latch that resolves right before
-/// `drain_pipes_on_exit` begins (#205).
-///
-/// Only compiled for tests: `a_stop_during_the_post_exit_drain_ends_it_at_once` awaits the
-/// latch before calling `shutdown.cancel()`, guaranteeing the stop lands inside the
-/// post-exit drain rather than racing `child.wait()` in the outer `select!` on slow CI
-/// runners.
-#[cfg(test)]
-pub(crate) async fn run_cli_child_with_drain_latch(
-    cli_exe: &str,
-    args: &[&str],
-    shutdown: &CancellationToken,
-    hang_budget: Duration,
-    pipe_drain: LatchedPipeDrain,
-) -> Result<ChildOutcome, String> {
-    run_cli_child_inner(
-        cli_exe,
-        args,
-        shutdown,
-        hang_budget,
-        PipeDrain::latched(pipe_drain),
-    )
-    .await
-}
-
-/// Shared body of `run_cli_child` and `run_cli_child_with_drain_latch`: owns the sops
-/// scratch directory across every exit path of `spawn_cli_child` (#177, #205).
-async fn run_cli_child_inner(
-    cli_exe: &str,
-    args: &[&str],
-    shutdown: &CancellationToken,
-    hang_budget: Duration,
-    pipe_drain: PipeDrain,
-) -> Result<ChildOutcome, String> {
+    let pipe_drain: PipeDrain = pipe_drain.into();
     // Created before the spawn and reclaimed after the outcome is known, so no early
     // return inside `spawn_cli_child` - a failed spawn, a missing pipe, a failed wait -
     // can skip the delete.
@@ -1178,19 +1083,7 @@ async fn call_cli_rotate(
     hang_budget: Duration,
     pipe_drain: PipeDrain,
 ) -> Result<String, String> {
-    let outcome = if pipe_drain.is_latched() {
-        run_cli_child_inner(cli_exe, cli_args, shutdown, hang_budget, pipe_drain).await?
-    } else {
-        run_cli_child(
-            cli_exe,
-            cli_args,
-            shutdown,
-            hang_budget,
-            pipe_drain.budget(),
-        )
-        .await?
-    };
-    match outcome {
+    match run_cli_child(cli_exe, cli_args, shutdown, hang_budget, pipe_drain).await? {
         // `output_complete` is deliberately not consulted here: an exited-0 child is a
         // successful rotation even when a helper kept a pipe open, and the warn at the
         // drain deadline is where that loss is reported. See `ChildOutcome::Finished`.
