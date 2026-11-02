@@ -70,11 +70,16 @@ const CANCEL_AFTER: Duration = Duration::from_millis(800);
 /// Ceiling for a drain that a stop ended at once (plus spawn, reap and scratch reclaim).
 const CANCEL_PATH_BUDGET: Duration = Duration::from_secs(4);
 
-/// A thread-local WARN+ buffer. One plain `#[test]` owns a current-thread runtime and
-/// wraps the whole delegation in `tracing::subscriber::with_default`, so every service
-/// log line lands on the thread that owns this buffer; other tests keep their own
-/// (empty) default and cannot write here.
+/// The WARN+ buffer is process-global, so the two `capture_warns` callers (the held-handle
+/// test and the stop-interrupted-drain test) must not overlap: the test harness runs them
+/// on separate threads, and one clearing / reading the buffer mid-delegation would swallow
+/// or mix the other's warn (#192 review). `CAPTURE_GUARD` is held across the clear, the
+/// callback and the read. One plain `#[test]` owns a current-thread runtime and wraps the
+/// whole delegation in `tracing::subscriber::with_default`, so every service log line lands
+/// on the thread that owns this buffer; other tests keep their own (empty) default and
+/// cannot write here.
 static LOG_BYTES: Mutex<Vec<u8>> = Mutex::new(Vec::new());
+static CAPTURE_GUARD: Mutex<()> = Mutex::new(());
 
 struct LogWriter;
 
@@ -93,6 +98,11 @@ impl Write for LogWriter {
 }
 
 fn capture_warns<T>(f: impl FnOnce() -> T) -> (T, String) {
+    // Held for the whole capture, not just the clear: a second caller must not start its
+    // delegation (and its own clear) while the first is still writing warns here.
+    let _serial = CAPTURE_GUARD
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
     LOG_BYTES
         .lock()
         .expect("the log buffer must not be poisoned")
