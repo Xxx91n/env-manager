@@ -148,9 +148,10 @@ impl Drop for RotationInFlight {
     }
 }
 
-/// Whether a delegated rotation currently owns the mount file's envelopes (#161). Only
-/// meaningful while holding `RECONCILE_LOCK`, which is where every caller reads it.
-fn rotation_in_flight() -> bool {
+/// Whether a delegated rotation currently owns the mount file's envelopes (#161). Production
+/// callers read it while holding `RECONCILE_LOCK`; tests holding the exclusive suite gate also
+/// poll it as a readiness / drain snapshot (#193), keeping `ROTATIONS_IN_FLIGHT` itself private.
+pub(crate) fn rotation_in_flight() -> bool {
     ROTATIONS_IN_FLIGHT.load(Ordering::SeqCst) > 0
 }
 

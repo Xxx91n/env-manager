@@ -21,7 +21,7 @@ use std::time::Duration;
 use tokio_util::sync::CancellationToken;
 
 use crate::reconcile::{
-    refresh_mount, rotate_mount_at, run_reconcile_tick_at, ROTATE_HANG_BUDGET,
+    refresh_mount, rotate_mount_at, rotation_in_flight, run_reconcile_tick_at, ROTATE_HANG_BUDGET,
 };
 use crate::rotate_stop_tests::{MountFixture, ROTATION_SUITE_GATE};
 use crate::SHUTDOWN_DRAIN;
@@ -162,6 +162,35 @@ async fn refresh_stands_down_while_a_rotation_is_in_flight() {
         .expect("the stop must terminate and reap the slow child inside SHUTDOWN_DRAIN");
 }
 
+/// Bounded wait for a rotation spawned under the exclusive `ROTATION_SUITE_GATE` write lock to
+/// enter `RotationInFlight` (#193).
+///
+/// Only valid while holding `ROTATION_SUITE_GATE.write()`: under the shared read lock a sibling
+/// test's rotation could raise `rotation_in_flight()` first, whereas under the write lock no
+/// other rotation exists in the process. Fails immediately if the spawned task exits early or
+/// does not enter `RotationInFlight` inside `LOCK_FREE_BUDGET`, instead of racing a fixed sleep
+/// against slow CI scheduling.
+async fn wait_for_rotation_in_flight<T>(
+    in_flight: &mut tokio::task::JoinHandle<T>,
+    shutdown: &CancellationToken,
+) {
+    let deadline = tokio::time::Instant::now() + LOCK_FREE_BUDGET;
+    tokio::task::yield_now().await;
+    while !rotation_in_flight() {
+        if in_flight.is_finished() {
+            panic!("the spawned rotation exited before entering RotationInFlight");
+        }
+        if tokio::time::Instant::now() >= deadline {
+            shutdown.cancel();
+            let _ = tokio::time::timeout(SHUTDOWN_DRAIN, in_flight).await;
+            panic!(
+                "the spawned rotation did not enter RotationInFlight within {LOCK_FREE_BUDGET:?}"
+            );
+        }
+        tokio::time::sleep(Duration::from_millis(10)).await;
+    }
+}
+
 /// Scenario for #193: the reconcile tick is the third writer of `secretMount.json`, and like
 /// `refresh_mount` it saves a whole snapshot. While a delegated rotation is in flight, the tick
 /// must skip the interval without touching the file at all - byte-identical on disk and no
@@ -170,12 +199,16 @@ async fn refresh_stands_down_while_a_rotation_is_in_flight() {
 #[tokio::test]
 async fn tick_stands_down_while_a_rotation_is_in_flight() {
     let _quiet = ROTATION_SUITE_GATE.write().await;
+    assert!(
+        !rotation_in_flight(),
+        "exclusive ROTATION_SUITE_GATE must start with no rotation in flight"
+    );
     let fixture = MountFixture::new("tick-stand-down");
     let shutdown = CancellationToken::new();
     let token = shutdown.clone();
     let mount_path = fixture.path.clone();
 
-    let in_flight = tokio::spawn(async move {
+    let mut in_flight = tokio::spawn(async move {
         rotate_mount_at(
             &mount_path,
             STUB_EXE,
@@ -187,9 +220,10 @@ async fn tick_stands_down_while_a_rotation_is_in_flight() {
         .await
     });
 
-    // Same ordering as the two sibling tests above: the rotation has reached its child wait and
-    // holds `RotationInFlight`, while `RECONCILE_LOCK` has been released.
-    tokio::time::sleep(Duration::from_millis(300)).await;
+    // Wait on the observable in-flight state instead of a fixed sleep so slow CI scheduling
+    // cannot run the tick before `rotate_mount_at` enters `RotationInFlight` and releases
+    // `RECONCILE_LOCK` for its child wait.
+    wait_for_rotation_in_flight(&mut in_flight, &shutdown).await;
 
     tokio::time::timeout(LOCK_FREE_BUDGET, run_reconcile_tick_at(&fixture.path))
         .await
@@ -198,8 +232,8 @@ async fn tick_stands_down_while_a_rotation_is_in_flight() {
 
     assert!(
         !in_flight.is_finished(),
-        "the rotation must still be in flight when the tick returns, otherwise this test never \
-         exercised the stand-down branch"
+        "the rotation must still be running when the tick returns, proving the tick overlapped \
+         the live delegation"
     );
     assert_eq!(
         std::fs::read_to_string(&fixture.path).expect("read the mount file back"),
@@ -225,6 +259,10 @@ async fn tick_stands_down_while_a_rotation_is_in_flight() {
     assert!(
         err.contains("interrupted by service stop"),
         "the slow rotation must end as interrupted, got: {err}"
+    );
+    assert!(
+        !rotation_in_flight(),
+        "RotationInFlight must be dropped before rotate_mount_at returns"
     );
     assert_eq!(
         std::fs::read_to_string(&fixture.path).expect("read the mount file after stop"),
