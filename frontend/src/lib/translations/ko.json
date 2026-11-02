@@ -424,6 +424,7 @@
   "settings.service.unhealthy": "비정상",
   "settings.service.refreshBtn": "새로고침",
   "settings.service.rotated": "마운트 회전됨",
+  "settings.service.rotateSkipped": "프로바이더 관리 마운트를 건너뛰었습니다. 회전할 로컬 봉투가 없습니다",
   "settings.service.rotateBtn": "회전",
   "settings.service.notRunningHint": "서비스가 실행되지 않습니다. Ping으로 확인하거나 CLI로 시작: env-manager service status",
   "settings.audit.title": "감사 기록",

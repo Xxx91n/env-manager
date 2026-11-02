@@ -11,6 +11,14 @@ using System.Collections.Generic;
 
 namespace EnvManager.Secrets.Core;
 
+// A Periodic mount with no local envelope is valid provider-managed state, not a
+// failed attempt to decrypt a local envelope. RotateAll classifies this separately as skipped.
+internal sealed class ProviderManagedSecretMountException : Exception
+{
+    internal ProviderManagedSecretMountException()
+        : base("Periodic mount is provider-managed and has no local envelope to rotate") { }
+}
+
 internal sealed class SecretMountEnvelopeHolder : ISecretEnvelopeHolder
 {
     // The prefix a profile uses to name a mount instead of holding an envelope. Written by
@@ -50,9 +58,13 @@ internal sealed class SecretMountEnvelopeHolder : ISecretEnvelopeHolder
         }
         if (string.IsNullOrEmpty(mount.Envelope))
         {
-            // A mount whose envelope lives in the provider backend (Periodic) has no
-            // CLI-side rotation path yet: nothing on disk to decrypt and re-encrypt. Counted
-            // as a failure rather than skipped, because the secret really was not rotated.
+            // Periodic mounts intentionally keep their value in the provider backend. The
+            // local rotate command only re-encrypts envelopes, so this is not an attempted
+            // provider operation and must not inflate the actionable failure count.
+            if (string.Equals(mount.RefreshPolicy, "Periodic", StringComparison.OrdinalIgnoreCase))
+                throw new ProviderManagedSecretMountException();
+
+            // Missing envelopes on other policies are malformed state, not an expected skip.
             throw new SecretProviderNotFoundException(
                 mount.Provider, SecretProviderErrors.OpRotate,
                 "Mount '" + mountId + "' carries no envelope to rotate; the secret was left untouched.", mountId);

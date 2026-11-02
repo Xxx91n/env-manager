@@ -424,6 +424,7 @@
   "settings.service.unhealthy": "Нездоров",
   "settings.service.refreshBtn": "Обновить",
   "settings.service.rotated": "Маунт обновлен",
+  "settings.service.rotateSkipped": "Пропущен ресурс под управлением провайдера: локальная оболочка для ротации отсутствует",
   "settings.service.rotateBtn": "Обновить",
   "settings.service.notRunningHint": "Служба не запущена. Ping для проверки, или запустите через CLI: env-manager service status",
   "settings.audit.title": "История аудита",

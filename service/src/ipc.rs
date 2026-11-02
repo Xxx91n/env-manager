@@ -624,6 +624,7 @@ mod tests {
                     { "id": "cred-app", "provider": "credential-manager", "name": "APP_KEY", "refreshPolicy": "CreatedOnly", "healthy": false, "message": "expired" }
                 ] } } },
                 { "name": "ok_refresh", "payload": { "ok": true, "data": { "mountId": "vault-team", "refreshed": true, "lastFetchedAt": "2026-08-31T10:00:00+00:00" } } },
+                { "name": "ok_rotate_provider_managed_skipped", "note": "A Periodic mount with no local envelope is an observable skip; neither timestamp is advanced.", "payload": { "ok": true, "data": { "mountId": "vault-team", "rotated": false, "skipped": true, "skipReason": "providerManaged", "lastRotatedAt": null, "lastFetchedAt": "2026-08-31T10:00:00+00:00" } } },
                 { "name": "ok_reload", "payload": { "ok": true, "data": { "reloaded": true } } },
                 { "name": "ok_shutdown", "payload": { "ok": true, "data": { "shuttingDown": true } } },
                 { "name": "err_unknown_method", "payload": { "ok": false, "message": "unknown method: frobnicate" } },

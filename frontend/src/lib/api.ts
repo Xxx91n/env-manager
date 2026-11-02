@@ -1468,7 +1468,7 @@ export async function serviceRefreshMount(mountId: string): Promise<{ ok: boolea
 /**
  * Rotate a single mount by ID.
  * CLI: `service rotate <mountId>` (write — serialised)
- * Returns { ok, data?: { rotated: true } }
+ * Returns { ok, data?: { rotated: true } | { rotated: false, skipped: true, skipReason: 'providerManaged' } }
  */
 export async function serviceRotateMount(mountId: string): Promise<{ ok: boolean; data?: any; message?: string }> {
   const output = await runWrite('service', ['rotate', mountId])

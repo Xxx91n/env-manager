@@ -424,6 +424,7 @@
   "settings.service.unhealthy": "غير سليم",
   "settings.service.refreshBtn": "تحديث",
   "settings.service.rotated": "تم تدوير التحميل",
+  "settings.service.rotateSkipped": "تم تخطي التحميل المُدار من المزوّد؛ لا توجد حاوية محلية لتدويرها",
   "settings.service.rotateBtn": "تدوير",
   "settings.service.notRunningHint": "الخدمة لا تعمل. Ping للتحقق أو ابدأ عبر CLI: env-manager service status",
   "settings.audit.title": "سجل التدقيق",

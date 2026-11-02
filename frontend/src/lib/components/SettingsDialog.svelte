@@ -259,6 +259,8 @@
       const result = await serviceRotateMount(mountId)
       if (!result.ok) {
         serviceError = result.message || 'rotate failed'
+      } else if (result.data?.skipped) {
+        showToast(get(tStore)('settings.service.rotateSkipped'), 'info')
       } else {
         showToast(get(tStore)('settings.service.rotated'), 'success')
       }

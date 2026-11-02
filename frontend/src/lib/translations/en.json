@@ -424,6 +424,7 @@
   "settings.service.unhealthy": "Unhealthy",
   "settings.service.refreshBtn": "Refresh",
   "settings.service.rotated": "Mount rotated",
+  "settings.service.rotateSkipped": "Provider-managed mount was skipped; no local envelope to rotate",
   "settings.service.rotateBtn": "Rotate",
   "settings.service.notRunningHint": "Service is not running. Ping to check, or start it via CLI: env-manager service status",
   "settings.audit.title": "Audit History",

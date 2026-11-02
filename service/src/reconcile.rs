@@ -427,8 +427,28 @@ pub(crate) async fn rotate_mount_at_with_pipe_drain(
     {
         let _guard = RECONCILE_LOCK.lock().await; // Phase 4C: TOCTOU protection
         let mounts = load_mounts(mount_path);
-        if !mounts.iter().any(|m| m.id == mount_id) {
-            return Err(format!("mount not found: {}", mount_id));
+        let mount = match mounts.iter().find(|m| m.id == mount_id) {
+            Some(m) => m,
+            None => return Err(format!("mount not found: {}", mount_id)),
+        };
+        if mount.refreshPolicy.eq_ignore_ascii_case("Periodic")
+            && mount.envelope.as_deref().map_or(true, str::is_empty)
+        {
+            // This mount's value lives in its provider backend; the delegated CLI rotate
+            // only re-encrypts locally-held envelopes. Report an observable non-failure skip
+            // and, critically, do not claim the mount was rotated or advance either timestamp.
+            tracing::info!(
+                "skipping provider-managed Periodic mount {} during rotation",
+                mount_id
+            );
+            return Ok(serde_json::json!({
+                "mountId": mount_id,
+                "rotated": false,
+                "skipped": true,
+                "skipReason": "providerManaged",
+                "lastRotatedAt": mount.lastRotatedAt,
+                "lastFetchedAt": mount.lastFetchedAt,
+            }));
         }
         _in_flight = RotationInFlight::enter();
     }

@@ -90,10 +90,10 @@ const TREE_KILL_BUDGET: Duration = Duration::from_secs(5);
 pub(crate) static ROTATION_SUITE_GATE: tokio::sync::RwLock<()> =
     tokio::sync::RwLock::const_new(());
 
-/// A temp `secretMount.json` holding one un-rotated mount, deleted with the file.
-/// Shared across the `rotate_*_tests` suites (`rotate_writeback_tests`, `rotate_hang_tests`,
-/// `rotate_lock_tests`, `rotate_pipe_drain_tests`) so every path - stop, hang budget, post-exit
-/// pipe drain, write-back, and reconcile tick - measures the same `Periodic` mount shape.
+/// A temp `secretMount.json` holding one Periodic mount with a local envelope, deleted with the file.
+/// Delegated-rotation tests need a rotatable envelope; a separate null-envelope fixture pins the
+/// provider-managed skip path. Shared across `rotate_*_tests` suites so stop, hang, pipe drain,
+/// write-back and reconcile tests keep measuring the path they intend.
 pub(crate) struct MountFixture {
     pub(crate) path: PathBuf,
     pub(crate) original: String,
@@ -114,7 +114,8 @@ impl MountFixture {
                 "refreshPolicy": "Periodic",
                 "refreshIntervalSeconds": 300,
                 "createdAt": "2026-01-01T00:00:00Z",
-                "schemaVersion": 1,
+                "schemaVersion": 2,
+                "envelope": "{\"provider\":\"vault-kv2\",\"version\":1,\"targetName\":\"secret/env-manager/token:value\"}"
             }
         ]);
         let original = serde_json::to_string_pretty(&mounts).unwrap();

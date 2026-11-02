@@ -246,13 +246,17 @@ partial class Program
                 }
                 var mountsToRotate = LoadSecretMounts();
                 var envelopeHolder = new SecretMountEnvelopeHolder(mountsToRotate);
-                var (total, rotatedN, failedN) = SecretStore.Rotate(profilesToRotate, envelopeHolder);
+                var (total, rotatedN, failedN, skippedN) = SecretStore.Rotate(profilesToRotate, envelopeHolder);
                 // Write order mount-first, profile-second (A3): a crash between the two leaves
                 // a rotated envelope that a profile still references, never a reference that
                 // names an envelope nobody rewrote.
                 if (envelopeHolder.Changed) SaveSecretMounts(mountsToRotate);
                 if (rotatedN > 0) SaveProfiles(profilesToRotate);
                 Console.WriteLine($"Rotation complete: {rotatedN}/{total} secrets re-encrypted, {failedN} failed");
+                if (skippedN > 0)
+                {
+                    Console.WriteLine($"Skipped {skippedN} provider-managed Periodic secret(s): no local envelope; not counted as failures.");
+                }
                 if (rotatedN > 0)
                 {
                     var rotatedProfileNames = profilesToRotate
@@ -263,7 +267,7 @@ partial class Program
                         ? string.Join(", ", rotatedProfileNames)
                         : "(none)";
                     RecordProfileAudit("profile secret-provider rotate", auditName,
-                        JsonSerializer.Serialize(new { total, rotated = rotatedN, failed = failedN, profiles = rotatedProfileNames }), null);
+                        JsonSerializer.Serialize(new { total, rotated = rotatedN, failed = failedN, skipped = skippedN, profiles = rotatedProfileNames }), null);
                 }
                 return 0;
 

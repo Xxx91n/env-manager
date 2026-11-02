@@ -424,6 +424,7 @@
   "settings.service.unhealthy": "Fehlerhaft",
   "settings.service.refreshBtn": "Aktualisieren",
   "settings.service.rotated": "Mount rotiert",
+  "settings.service.rotateSkipped": "Provider-verwalteter Mount übersprungen; kein lokales Envelope zum Rotieren vorhanden",
   "settings.service.rotateBtn": "Rotieren",
   "settings.service.notRunningHint": "Dienst läuft nicht. Ping zum Prüfen oder über CLI starten: env-manager service status",
   "settings.audit.title": "Audit-Verlauf",

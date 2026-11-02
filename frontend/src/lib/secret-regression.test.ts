@@ -24,13 +24,15 @@ describe('Secret provider regression safety', () => {
     expect(src).toContain('DEFAULT_PROVIDER')
   })
 
-  it('Rotation never deletes failed secrets: failed decrypt = skip + count, never delete', () => {
+  it('Rotation distinguishes provider-managed Periodic skips from actual failures', () => {
     const src = readSecretProviderSources()
-    const rotateSection = src.slice(src.indexOf('public static (int total, int rotated, int failed) RotateAll'), src.indexOf('public static string ExportSecrets'))
+    const rotateSection = src.slice(src.indexOf('public static (int total, int rotated, int failed, int skipped) RotateAll'), src.indexOf('public static string ExportSecrets'))
     expect(rotateSection).toContain('failed')
+    expect(rotateSection).toContain('skipped')
     expect(rotateSection).toContain('catch')
-    // The failed variable must NOT be removed - only counted
+    // Actual failures remain counted, while expected provider-managed non-applicability is separate.
     expect(rotateSection).toContain('failed++')
+    expect(rotateSection).toContain('skipped++')
   })
 
   it('Export secrets: the backup is DPAPI-encrypted regardless of source provider', () => {

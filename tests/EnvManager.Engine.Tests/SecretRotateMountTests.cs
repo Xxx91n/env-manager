@@ -5,8 +5,8 @@
 // verbs write) or a "mount:<id>" reference into secretMount.json (what the schema migration
 // produces for pre-existing secrets). Rotation has to handle both: the reference form keeps
 // its envelope in the SecretMount aggregate, so a pass that only understands inline
-// envelopes skips exactly the migrated secrets and reports them as provider failures -
-// "0 helper spawns" for a secret that never reached a provider at all.
+// envelopes skips migrated secrets. Missing mounts remain real failures; a valid Periodic
+// reference with no local envelope is instead a separately reported provider-managed skip.
 //
 // Every test drives the real CLI verb (Program.RunProfileSecretCommand) against a redirected
 // user-state root with the local DPAPI provider: no registry, no network, no subprocess.
@@ -130,6 +130,63 @@ public sealed class SecretRotateMountTests : IDisposable
         Assert.Contains("Rotation complete: 1/2 secrets re-encrypted, 1 failed", stdout);
         var variables = ReadProfiles()[0].Variables;
         Assert.Equal("mount:missing", variables[1].Value);
+    }
+
+    /// <summary>
+    /// Periodic values owned by a provider backend have no local envelope for this CLI to
+    /// re-encrypt. They are not failures, but the separate skipped count makes the omission
+    /// visible; the mount reference and its rotation timestamp remain untouched.
+    /// </summary>
+    [Fact]
+    public void Rotate_ReportsProviderManagedPeriodicMountAsSkipped_NotFailed()
+    {
+        string inlineEnvelope = NewEnvelope("inline-secret", @"p\A");
+        SeedProfile("p", ("A", inlineEnvelope), ("REMOTE", "mount:m1"));
+        SeedMounts(new SecretMount
+        {
+            Id = "m1",
+            Provider = "vault-kv2",
+            Name = "REMOTE",
+            RefreshPolicy = "Periodic",
+            Envelope = null,
+            LastRotatedAt = "2026-01-01T00:00:00Z",
+            ProfileName = "p",
+        });
+
+        var (code, stdout) = RunRotate();
+
+        Assert.Equal(0, code);
+        Assert.Contains("Rotation complete: 1/2 secrets re-encrypted, 0 failed", stdout);
+        Assert.Contains("Skipped 1 provider-managed Periodic secret(s)", stdout);
+        Assert.Equal("mount:m1", ReadProfiles()[0].Variables[1].Value);
+        var mount = Assert.Single(ReadMounts());
+        Assert.Null(mount.Envelope);
+        Assert.Equal("2026-01-01T00:00:00Z", mount.LastRotatedAt);
+    }
+
+    /// <summary>
+    /// Only a Periodic null-envelope mount is the expected provider-managed skip. A malformed
+    /// CreatedOnly mount with no envelope remains an actual failure and stays observable there.
+    /// </summary>
+    [Fact]
+    public void Rotate_NonPeriodicMountWithoutEnvelopeRemainsAFailure()
+    {
+        SeedProfile("p", ("M", "mount:m1"));
+        SeedMounts(new SecretMount
+        {
+            Id = "m1",
+            Provider = "vault-kv2",
+            Name = "M",
+            RefreshPolicy = "CreatedOnly",
+            Envelope = null,
+        });
+
+        var (code, stdout) = RunRotate();
+
+        Assert.Equal(0, code);
+        Assert.Contains("Rotation complete: 0/1 secrets re-encrypted, 1 failed", stdout);
+        Assert.DoesNotContain("Skipped", stdout);
+        Assert.Equal("mount:m1", Assert.Single(ReadProfiles()[0].Variables).Value);
     }
 
     /// <summary>

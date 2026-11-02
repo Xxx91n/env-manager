@@ -424,6 +424,7 @@
   "settings.service.unhealthy": "異常",
   "settings.service.refreshBtn": "更新",
   "settings.service.rotated": "マウントがローテートされました",
+  "settings.service.rotateSkipped": "プロバイダー管理のマウントをスキップしました。ローカルにローテーション可能なエンベロープがありません",
   "settings.service.rotateBtn": "ローテート",
   "settings.service.notRunningHint": "サービスが実行されていません。Pingで確認するか、CLIで開始: env-manager service status",
   "settings.audit.title": "監査履歴",
