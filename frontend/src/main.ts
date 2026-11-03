@@ -1,6 +1,7 @@
 import './app.css'
 import App from './App.svelte'
 import { setupI18n, applyPersistedLocale } from './lib/i18n'
+import { mount } from "svelte";
 
 // Global error handler - catches uncaught errors and promise rejections.
 // In production under Tauri's custom protocol, these would otherwise be silent.
@@ -58,7 +59,7 @@ try {
 }
 
 // Mount the Svelte app. The default export must be at the top level.
-const app = new App({
+const app = mount(App, {
   target: document.getElementById('app')!,
 })
 

@@ -7,9 +7,9 @@
   import { showModal, showToast } from '../stores'
   import { open, save } from '@tauri-apps/plugin-dialog'
 
-  let allHistory: AuditEntry[] = []
-  let loading = false
-  let scope: 'user' | 'system' | 'profile' | 'all' = 'all'
+  let allHistory: AuditEntry[] = $state([])
+  let loading = $state(false)
+  let scope: 'user' | 'system' | 'profile' | 'all' = $state('all')
 
   // i18n helper: map audit command string to localized operation name
   function getOperationLabel(command: string, tFn: (key: string) => string): string {
@@ -35,7 +35,7 @@
   }
 
   // Derived: filter history by selected scope
-  $: filteredHistory = scope === 'all' ? allHistory : allHistory.filter(e => e.scope === scope)
+  let filteredHistory = $derived(scope === 'all' ? allHistory : allHistory.filter(e => e.scope === scope))
 
   onMount(() => {
     loadColWidths()
@@ -279,18 +279,18 @@
 </style>
 <div class="space-y-3">
   <div class="flex items-center gap-2">
-    <select bind:value={scope} on:change={refresh} class="px-2.5 py-1.5 text-xs border border-border rounded-md bg-card border-border/80 text-foreground">
+    <select bind:value={scope} onchange={refresh} class="px-2.5 py-1.5 text-xs border border-border rounded-md bg-card border-border/80 text-foreground">
       <option value="all">{$t('scope.all')}</option>
       <option value="user">{$t('scope.user')}</option>
       <option value="system">{$t('scope.system')}</option>
       <option value="profile">{$t('scope.profile')}</option>
     </select>
-    <button on:click={handleImport} class="px-3 py-1.5 text-xs font-medium text-primary-foreground bg-primary rounded-md hover:bg-primary">{$t('bulk.import')}</button>
-    <button on:click={handleExport} class="px-3 py-1.5 text-xs font-medium border border-border rounded-md hover:bg-muted/20 border-border/80 hover:bg-accent">{$t('bulk.export')}</button>
+    <button onclick={handleImport} class="px-3 py-1.5 text-xs font-medium text-primary-foreground bg-primary rounded-md hover:bg-primary">{$t('bulk.import')}</button>
+    <button onclick={handleExport} class="px-3 py-1.5 text-xs font-medium border border-border rounded-md hover:bg-muted/20 border-border/80 hover:bg-accent">{$t('bulk.export')}</button>
     {#if filteredHistory.length > 0}
-      <button on:click={handleClearAll} class="px-3 py-1.5 text-xs font-medium text-destructive border border-destructive/30 rounded-md hover:bg-destructive/10 border-destructive hover:bg-destructive/15">{$t('history.clearAll')}</button>
+      <button onclick={handleClearAll} class="px-3 py-1.5 text-xs font-medium text-destructive border border-destructive/30 rounded-md hover:bg-destructive/10 border-destructive hover:bg-destructive/15">{$t('history.clearAll')}</button>
     {/if}
-    <button on:click={refresh} class="ml-auto px-3 py-1.5 text-xs text-muted-foreground hover:bg-muted/30 rounded-md text-foreground/80 hover:bg-accent">{$t('buttons.refresh')}</button>
+    <button onclick={refresh} class="ml-auto px-3 py-1.5 text-xs text-muted-foreground hover:bg-muted/30 rounded-md text-foreground/80 hover:bg-accent">{$t('buttons.refresh')}</button>
   </div>
 
   <div class="history-table-root table-container bg-card border border-border rounded-md overflow-auto">
@@ -310,11 +310,11 @@
         </colgroup>
         <thead class="bg-muted/20 border-b border-border bg-muted">
           <tr>
-            <th data-col="time" on:mousedown={startResize} class="resize px-3 py-2 text-left text-[10px] text-muted-foreground select-none cursor-col-resize">{$t('history.time')}</th>
-            <th data-col="action" on:mousedown={startResize} class="resize px-3 py-2 text-left text-[10px] text-muted-foreground select-none cursor-col-resize">{$t('history.action')}</th>
-            <th data-col="scope" on:mousedown={startResize} class="resize px-3 py-2 text-left text-[10px] text-muted-foreground select-none cursor-col-resize">{$t('scope.scope')}</th>
-            <th data-col="name" on:mousedown={startResize} class="resize px-3 py-2 text-left text-[10px] text-muted-foreground select-none cursor-col-resize">{$t('table.name')}</th>
-            <th data-col="change" on:mousedown={startResize} class="resize px-3 py-2 text-left text-[10px] text-muted-foreground select-none cursor-col-resize">{$t('history.change')}</th>
+            <th data-col="time" onmousedown={startResize} class="resize px-3 py-2 text-left text-[10px] text-muted-foreground select-none cursor-col-resize">{$t('history.time')}</th>
+            <th data-col="action" onmousedown={startResize} class="resize px-3 py-2 text-left text-[10px] text-muted-foreground select-none cursor-col-resize">{$t('history.action')}</th>
+            <th data-col="scope" onmousedown={startResize} class="resize px-3 py-2 text-left text-[10px] text-muted-foreground select-none cursor-col-resize">{$t('scope.scope')}</th>
+            <th data-col="name" onmousedown={startResize} class="resize px-3 py-2 text-left text-[10px] text-muted-foreground select-none cursor-col-resize">{$t('table.name')}</th>
+            <th data-col="change" onmousedown={startResize} class="resize px-3 py-2 text-left text-[10px] text-muted-foreground select-none cursor-col-resize">{$t('history.change')}</th>
             <th class="px-3 py-2"></th>
           </tr>
         </thead>
@@ -333,8 +333,8 @@
               <td class="px-3 py-2 text-xs font-mono truncate" title={entry.name}>{entry.name}</td>
               <td class="px-3 py-2 text-[10px] font-mono text-muted-foreground truncate" title={`${entry.oldValue ?? 'null'} -> ${entry.newValue ?? 'null'}`}>{entry.oldValue ?? 'null'} -> {entry.newValue ?? 'null'}</td>
               <td class="px-3 py-2 text-right whitespace-nowrap">
-                <button on:click={() => handleUndo(entry)} class="text-[10px] text-primary hover:underline mr-2">{$t('history.undo')}</button>
-                <button on:click={() => handleDelete(entry)} class="text-[10px] text-destructive hover:underline">{$t('buttons.delete')}</button>
+                <button onclick={() => handleUndo(entry)} class="text-[10px] text-primary hover:underline mr-2">{$t('history.undo')}</button>
+                <button onclick={() => handleDelete(entry)} class="text-[10px] text-destructive hover:underline">{$t('buttons.delete')}</button>
               </td>
             </tr>
           {/each}

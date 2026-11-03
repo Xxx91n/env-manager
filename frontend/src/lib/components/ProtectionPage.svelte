@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Lock } from 'lucide-svelte'
+    import { Lock } from 'lucide-svelte'
   import { onMount } from 'svelte'
   import { frontendLog } from '../settingsStore'
   import { t } from 'svelte-i18n'
@@ -8,27 +8,24 @@
   import type { ProtectionData } from '../api'
   import CloneCombobox from './CloneCombobox.svelte'
 
-  let data: ProtectionData | null = null
-  let loading = false
-  let activeTab: 'vars' | 'paths' = 'vars'
+  let data: ProtectionData | null = $state(null)
+  let loading = $state(false)
+  let activeTab: 'vars' | 'paths' = $state('vars')
 
   // All available variables from the system (cached via listVariablesRaw)
-  let allVars: { name: string; scope: string }[] = []
+  let allVars: { name: string; scope: string }[] = $state([])
   // All available PATH entries from both scopes
-  let allPathEntries: { path: string; scope: string }[] = []
+  let allPathEntries: { path: string; scope: string }[] = $state([])
 
-  let selectedVarName = ''
-  let selectedPathEntry = ''
+  let selectedVarName = $state('')
+  let selectedPathEntry = $state('')
 
   // Local scope filter — initialises from the shared store (defaults to 'all')
-  let scopeFilter: 'all' | 'user' | 'system' = 'all'
+  let scopeFilter: 'all' | 'user' | 'system' = $state($selectedScope)
 
-  // Sync local filter with shared store on mount
-  $: scopeFilter = $selectedScope === 'all' ? 'all' : $selectedScope as 'user' | 'system'
 
   onMount(refresh)
 
-  $: if ($refreshTrigger > 0) refresh()
 
   async function refresh() {
     loading = true
@@ -64,35 +61,8 @@
     }
   }
 
-  // Filter available vars and path entries by current scope selection
-  $: filteredVars = scopeFilter === 'all'
-    ? allVars
-    : allVars.filter(v => v.scope === scopeFilter)
-  $: filteredPathEntries = scopeFilter === 'all'
-    ? allPathEntries
-    : allPathEntries.filter(p => p.scope === scopeFilter)
 
-  // Filter built-in vars display by scope — built-in protection is system-only,
-  // so we show all built-ins regardless of filter (they only apply to system scope).
-  $: filteredBuiltinVars = scopeFilter === 'all'
-    ? (data?.protectedVars.builtIn ?? [])
-    : scopeFilter === 'system'
-      ? (data?.protectedVars.builtIn ?? [])
-      : [] // user scope has no built-in protection
-  // Built-in protected paths are system-only; hide them when filtering to user scope
-  $: filteredBuiltinPaths = scopeFilter === 'user'
-    ? []
-    : (data?.protectedPaths.builtIn ?? [])
 
-  // Custom vars have no scope info from CLI, so we show them regardless
-  // (custom protection applies to any scope the user locks from).
-  $: filteredCustomVars = data?.protectedVars.custom ?? []
-  // Custom protected paths: filter by scope by matching against loaded PATH data
-  // (custom paths stored as plain strings; we resolve their scope this way)
-  $: filteredCustomPaths = scopeFilter === 'all'
-    ? (data?.protectedPaths.custom ?? [])
-    : (data?.protectedPaths.custom ?? []).filter(cp =>
-        allPathEntries.some(pe => pe.path === cp && pe.scope === scopeFilter))
 
   async function handleAddVar() {
     const name = selectedVarName.trim()
@@ -161,6 +131,40 @@
       },
     })
   }
+  // Sync local filter with shared store on mount
+  $effect(() => {
+    scopeFilter = $selectedScope === 'all' ? 'all' : $selectedScope as 'user' | 'system'
+  });
+  $effect(() => {
+    if ($refreshTrigger > 0) refresh()
+  });
+  // Filter available vars and path entries by current scope selection
+  let filteredVars = $derived(scopeFilter === 'all'
+    ? allVars
+    : allVars.filter(v => v.scope === scopeFilter))
+  let filteredPathEntries = $derived(scopeFilter === 'all'
+    ? allPathEntries
+    : allPathEntries.filter(p => p.scope === scopeFilter))
+  // Filter built-in vars display by scope — built-in protection is system-only,
+  // so we show all built-ins regardless of filter (they only apply to system scope).
+  let filteredBuiltinVars = $derived(scopeFilter === 'all'
+    ? (data?.protectedVars.builtIn ?? [])
+    : scopeFilter === 'system'
+      ? (data?.protectedVars.builtIn ?? [])
+      : []) // user scope has no built-in protection
+  // Built-in protected paths are system-only; hide them when filtering to user scope
+  let filteredBuiltinPaths = $derived(scopeFilter === 'user'
+    ? []
+    : (data?.protectedPaths.builtIn ?? []))
+  // Custom vars have no scope info from CLI, so we show them regardless
+  // (custom protection applies to any scope the user locks from).
+  let filteredCustomVars = $derived(data?.protectedVars.custom ?? [])
+  // Custom protected paths: filter by scope by matching against loaded PATH data
+  // (custom paths stored as plain strings; we resolve their scope this way)
+  let filteredCustomPaths = $derived(scopeFilter === 'all'
+    ? (data?.protectedPaths.custom ?? [])
+    : (data?.protectedPaths.custom ?? []).filter(cp =>
+        allPathEntries.some(pe => pe.path === cp && pe.scope === scopeFilter)))
 </script>
 
 <div class="space-y-3">
@@ -168,7 +172,7 @@
   <div class="flex items-center gap-2 flex-wrap">
     <div class="inline-flex rounded-md border border-border overflow-hidden">
       <button
-        on:click={() => activeTab = 'vars'}
+        onclick={() => activeTab = 'vars'}
         class="px-4 py-1.5 text-xs font-medium transition {activeTab === 'vars'
           ? 'bg-primary text-primary-foreground bg-primary/80'
           : 'bg-card text-muted-foreground hover:bg-muted/20 bg-card text-foreground/80 hover:bg-accent'}"
@@ -176,7 +180,7 @@
         {$t('protection.protectedVars')}
       </button>
       <button
-        on:click={() => activeTab = 'paths'}
+        onclick={() => activeTab = 'paths'}
         class="px-4 py-1.5 text-xs font-medium transition {activeTab === 'paths'
           ? 'bg-primary text-primary-foreground bg-primary/80'
           : 'bg-card text-muted-foreground hover:bg-muted/20 bg-card text-foreground/80 hover:bg-accent'}"
@@ -194,7 +198,7 @@
       <option value="system">{$t('scope.system')}</option>
     </select>
 
-    <button on:click={refresh} class="ml-auto px-3 py-1.5 text-xs text-muted-foreground hover:bg-muted/30 rounded-md text-foreground/80 hover:bg-accent">
+    <button onclick={refresh} class="ml-auto px-3 py-1.5 text-xs text-muted-foreground hover:bg-muted/30 rounded-md text-foreground/80 hover:bg-accent">
       {$t('buttons.refresh')}
     </button>
   </div>
@@ -214,11 +218,11 @@
           <CloneCombobox
             items={filteredVars.map(v => ({ name: v.name, value: v.scope }))}
             placeholder={$t('protection.selectVar')}
-            on:select={(e) => { selectedVarName = e.detail.name; handleAddVar() }}
+            onselect={(v) => { selectedVarName = v.name; handleAddVar() }}
           />
         </div>
         <button
-          on:click={handleAddVar}
+          onclick={handleAddVar}
           disabled={!selectedVarName.trim()}
           class="px-3 py-1.5 text-xs font-medium text-primary-foreground bg-primary rounded-md hover:bg-primary transition disabled:opacity-50 bg-primary/80"
         >
@@ -261,7 +265,7 @@
               <div class="flex items-center justify-between px-4 py-2">
                 <span class="text-xs font-mono text-foreground/80 text-foreground truncate" title={varName}>{varName}</span>
                 <button
-                  on:click={() => handleRemoveVar(varName)}
+                  onclick={() => handleRemoveVar(varName)}
                   class="text-destructive hover:text-destructive transition flex-shrink-0 ml-2"
                   title={$t('protection.unlockVar')}
                   aria-label={$t('protection.unlockVar')}
@@ -283,11 +287,11 @@
           <CloneCombobox
             items={filteredPathEntries.map(p => ({ name: p.path, value: p.scope }))}
             placeholder={$t('profiles.cloneSearchPlaceholder')}
-            on:select={(e) => { selectedPathEntry = e.detail.name; handleAddPath() }}
+            onselect={(v) => { selectedPathEntry = v.name; handleAddPath() }}
           />
         </div>
         <button
-          on:click={handleAddPath}
+          onclick={handleAddPath}
           disabled={!selectedPathEntry.trim()}
           class="px-3 py-1.5 text-xs font-medium text-primary-foreground bg-primary rounded-md hover:bg-primary transition disabled:opacity-50 bg-primary/80"
         >
@@ -322,7 +326,7 @@
               <div class="flex items-center justify-between px-4 py-2">
                 <span class="text-xs font-mono text-foreground/80 text-foreground truncate" title={entry}>{entry}</span>
                 <button
-                  on:click={() => handleRemovePath(entry, false)}
+                  onclick={() => handleRemovePath(entry, false)}
                   class="text-destructive hover:text-destructive transition flex-shrink-0 ml-2"
                   title={$t('protection.unlockPath')}
                   aria-label={$t('protection.unlockPath')}

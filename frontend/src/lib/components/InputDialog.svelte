@@ -1,30 +1,35 @@
 <script lang="ts">
+  import { createBubbler, stopPropagation } from 'svelte/legacy';
+
+  const bubble = createBubbler();
   import { t } from 'svelte-i18n'
   import { frontendLog } from '../settingsStore'
   import { inputModal, closeInputModal } from '../stores'
 
-  let inputValue = ''
-  let pending = false
-  let inputEl: HTMLInputElement | undefined
+  let inputValue = $state('')
+  let pending = $state(false)
+  let inputEl: HTMLInputElement | undefined = $state()
 
   // Use a tick-based approach instead of reactive block to avoid
   // Svelte 4 dependency tracking: assigning inputValue inside a $: block
   // makes inputValue a dependency, so typing re-fires the block and
   // resets inputValue to defaultValue on every keystroke.
-  let lastModal: typeof $inputModal = null
-  $: if ($inputModal !== lastModal) {
-    lastModal = $inputModal
-    if ($inputModal) {
-      inputValue = $inputModal.defaultValue ?? ''
-      pending = false
-      setTimeout(() => {
-        if (inputEl) {
-          inputEl.focus()
-          inputEl.select()
-        }
-      }, 0)
+  let lastModal: typeof $inputModal = $state.raw(null)
+  $effect(() => {
+    if ($inputModal !== lastModal) {
+      lastModal = $inputModal
+      if ($inputModal) {
+        inputValue = $inputModal.defaultValue ?? ''
+        pending = false
+        setTimeout(() => {
+          if (inputEl) {
+            inputEl.focus()
+            inputEl.select()
+          }
+        }, 0)
+      }
     }
-  }
+  });
 
   function handleConfirm() {
     if (pending) return
@@ -55,12 +60,12 @@
 {#if $inputModal}
   <div
     class="fixed inset-0 bg-background/40 flex items-center justify-center z-[100]"
-    on:click={handleCancel}
+    onclick={handleCancel}
     role="presentation"
   >
     <div
       class="bg-card rounded-lg shadow-xl max-w-sm w-full mx-4"
-      on:click|stopPropagation
+      onclick={stopPropagation(bubble('click'))}
       role="dialog"
       aria-modal="true"
       aria-labelledby="input-dialog-title"
@@ -80,7 +85,7 @@
         <input
           bind:this={inputEl}
           bind:value={inputValue}
-          on:keydown={handleKeydown}
+          onkeydown={handleKeydown}
           placeholder={$inputModal.placeholder ?? ''}
           maxlength={$inputModal.maxLength ?? 255}
           class="w-full px-3 py-2 text-xs border border-border rounded-md focus:outline-none focus:ring-2 focus:ring-primary bg-accent border-border/80 text-foreground placeholder-muted-foreground"
@@ -89,13 +94,13 @@
 
       <div class="px-5 py-3 border-t border-border flex gap-2 justify-end">
         <button
-          on:click={handleCancel}
+          onclick={handleCancel}
           class="px-4 py-1.5 text-xs text-foreground/80 border border-border rounded-md hover:bg-muted/20 transition text-foreground border-border/80 hover:bg-accent"
         >
           {$t('buttons.cancel')}
         </button>
         <button
-          on:click={handleConfirm}
+          onclick={handleConfirm}
           class="px-4 py-1.5 text-xs text-primary-foreground rounded-md transition bg-primary hover:bg-primary bg-primary/80"
         >
           {$t('buttons.save')}

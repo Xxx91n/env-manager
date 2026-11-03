@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Search, Plus, Power, Tag, FileText, Pencil, Trash2, Archive } from 'lucide-svelte'
+    import { Search, Plus, Power, Tag, FileText, Pencil, Trash2, Archive } from 'lucide-svelte'
   import { t } from 'svelte-i18n'
   import { frontendLog } from '../settingsStore'
   import { variables, selectedScope, search, debouncedSearch, filteredVariables, error, showModal, isWriteInProgress } from '../stores'
@@ -12,12 +12,12 @@
   import { openInputDialog } from '../stores'
   import { writable } from 'svelte/store'
 
-  let filteredVars = $filteredVariables
-  let editingVar = null
-  let showEditDialog = false
-  let notesLoaded = false
+  let filteredVars = $state($filteredVariables)
+  let editingVar = $state(null)
+  let showEditDialog = $state(false)
+  let notesLoaded = $state(false)
   let notesTick = writable(0)  // store: async-safe re-render trigger (Svelte 4 await limitation)
-  let hoveredNoteVar: string | null = null  // bump to re-render note indicators
+  let hoveredNoteVar: string | null = $state(null)  // bump to re-render note indicators
 
   async function ensureNotesLoaded() {
     if (!notesLoaded) {
@@ -40,14 +40,16 @@
     await upsertNote(variableName, result)
     notesTick.update(n => n + 1)
   }
-  let showBackupDialog = false
-  let togglingKeys: Record<string, boolean> = {}
-  let expandedValues: Record<string, string> = {}
+  let showBackupDialog = $state(false)
+  let togglingKeys: Record<string, boolean> = $state({})
+  let expandedValues: Record<string, string> = $state({})
   const MAX_EXPANDED_CACHE = 500
   let previewTimer: ReturnType<typeof setTimeout> | null = null
 
   // filteredVars is the memoized derived store filteredVariables from stores.ts
-  $: filteredVars = $filteredVariables
+  $effect(() => {
+    filteredVars = $filteredVariables
+  });
 
   function scheduleExpandedPreview(variable: { name: string; value: string; scope: string }) {
     const key = variable.scope + ':' + variable.name
@@ -212,7 +214,7 @@
     </select>
 
     <button
-      on:click={() => (showEditDialog = true)}
+      onclick={() => (showEditDialog = true)}
       class="flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-primary-foreground bg-primary rounded-md hover:bg-primary transition bg-primary/80"
     >
           <Plus class="w-3.5 h-3.5" />
@@ -220,7 +222,7 @@
     </button>
 
     <button
-      on:click={handleShowBackup}
+      onclick={handleShowBackup}
       class="flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-foreground/80 bg-card border border-border rounded-md hover:bg-muted/50 transition text-foreground border-border/80 hover:bg-accent"
     >
       <Archive class="w-3.5 h-3.5" />
@@ -259,7 +261,7 @@
             <tr class="hover:bg-muted/50 transition hover:bg-muted {variable.isDisabled ? 'opacity-50' : ''} {variable.isProtected ? 'bg-muted/60 bg-card/60' : ''}">
               <td class="px-3 py-2">
                 <button
-                  on:click={() => handleToggle(variable.name, variable.scope)}
+                  onclick={() => handleToggle(variable.name, variable.scope)}
                   disabled={$isWriteInProgress || togglingKeys[variable.name + ':' + variable.scope] === true || !!variable.isProtected || !!variable.isBuiltinProtected}
                   class="relative inline-flex h-4 w-7 items-center rounded-full transition disabled:opacity-30 disabled:cursor-not-allowed {variable.isDisabled ? 'bg-border bg-muted' : 'bg-primary bg-primary/80'}"
                   role="switch"
@@ -274,7 +276,7 @@
               <td
                 class="px-3 py-2 text-xs font-mono text-foreground cursor-pointer hover:text-primary transition select-none"
                 title={$notesStore[variable.name]?.note || $t('messages.clickToCopy')}
-                on:click={() => copyToClipboard(variable.name)}
+                onclick={() => copyToClipboard(variable.name)}
               >
                 <div class="flex items-center gap-1.5">
                   <span>{#each highlightParts(variable.name, $debouncedSearch) as part}<span class={part.match ? 'bg-yellow-200 text-foreground bg-primary/40 text-primary-foreground' : ''}>{part.text}</span>{/each}</span>
@@ -301,8 +303,8 @@
               <td
                 class="px-3 py-2 text-xs text-muted-foreground font-mono text-foreground/80 max-w-md truncate cursor-pointer hover:text-primary transition select-none"
                 title={previewTitle(variable)}
-                on:mouseenter={() => scheduleExpandedPreview(variable)}
-                on:click={() => copyToClipboard(variable.value)}
+                onmouseenter={() => scheduleExpandedPreview(variable)}
+                onclick={() => copyToClipboard(variable.value)}
               >
                 {#each highlightParts(variable.value, $debouncedSearch) as part}<span class={part.match ? 'bg-yellow-200 text-foreground bg-primary/40 text-primary-foreground' : ''}>{part.text}</span>{/each}
                 {#if expandedValues[variable.scope + ':' + variable.name] && expandedValues[variable.scope + ':' + variable.name] !== variable.value}
@@ -313,7 +315,7 @@
               </td>
               <td class="px-3 py-2 text-right text-xs">
                 <button
-                  on:click={() => handleLockToggle(variable.name, !!variable.isProtected, !!variable.isBuiltinProtected)}
+                  onclick={() => handleLockToggle(variable.name, !!variable.isProtected, !!variable.isBuiltinProtected)}
                   disabled={!!variable.isBuiltinProtected}
                   class="inline-flex p-1 {variable.isProtected ? 'text-amber-600' : 'text-muted-foreground hover:text-primary/80 hover:bg-amber-50/60'} rounded transition disabled:opacity-30 disabled:cursor-not-allowed hover:bg-primary/15"
                   title={variable.isProtected ? (variable.isBuiltinProtected ? $t('protection.lockedBuiltin') : $t('protection.unlockVar')) : $t('protection.lockVar')}
@@ -323,11 +325,11 @@
                 </button>
                                 <div class="relative inline-flex group">
                   <button
-                  on:click={() => handleNote(variable.name)}
-                  on:focus={() => ensureNotesLoaded()}
-                  on:mouseenter={() => { hoveredNoteVar = variable.name; if (!notesLoaded) void ensureNotesLoaded() }}
-                  on:mouseleave={() => hoveredNoteVar = null}
-                  on:keydown={(e) => { if (e.key === 'Escape') hoveredNoteVar = null }}
+                  onclick={() => handleNote(variable.name)}
+                  onfocus={() => ensureNotesLoaded()}
+                  onmouseenter={() => { hoveredNoteVar = variable.name; if (!notesLoaded) void ensureNotesLoaded() }}
+                  onmouseleave={() => hoveredNoteVar = null}
+                  onkeydown={(e) => { if (e.key === 'Escape') hoveredNoteVar = null }}
                   class="inline-flex p-1 text-muted-foreground hover:text-primary/80 hover:bg-primary/10 rounded transition hover:bg-primary/15"
                   title={$notesStore[variable.name] ? $t('notes.editNote') : $t('notes.addNote')}
                   aria-describedby={hoveredNoteVar === variable.name && $notesStore[variable.name] ? 'note-tip-' + variable.name.replace(/[^a-zA-Z0-9_-]/g, '_') : undefined}
@@ -345,7 +347,7 @@
                   {/if}
                 </div>
                 <button
-                  on:click={() => handleEdit(variable)}
+                  onclick={() => handleEdit(variable)}
                   disabled={$isWriteInProgress || togglingKeys[variable.name + ':' + variable.scope] === true || !!variable.isProtected}
                   class="inline-flex p-1 text-muted-foreground hover:text-primary hover:bg-primary/10 rounded transition disabled:opacity-30 disabled:cursor-not-allowed hover:bg-primary/15"
                   title={variable.isProtected ? $t('protection.lockedCannotEdit') : $t('buttons.edit')}
@@ -354,7 +356,7 @@
           <Pencil class="w-3.5 h-3.5" />
                 </button>
                 <button
-                  on:click={() => handleDelete(variable.name, variable.scope)}
+                  onclick={() => handleDelete(variable.name, variable.scope)}
                   disabled={$isWriteInProgress || togglingKeys[variable.name + ':' + variable.scope] === true || !!variable.isProtected}
                   class="inline-flex p-1 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded transition disabled:opacity-30 disabled:cursor-not-allowed hover:bg-destructive/15"
                   title={variable.isProtected ? $t('protection.lockedCannotDelete') : $t('buttons.delete')}
@@ -374,11 +376,11 @@
 {#if showEditDialog}
   <EditDialog
     variable={editingVar}
-    on:close={handleCloseEdit}
-    on:save={() => handleCloseEdit()}
+    onclose={handleCloseEdit}
+    onsave={() => handleCloseEdit()}
   />
 {/if}
 
 {#if showBackupDialog}
-  <BackupDialog on:close={handleCloseBackup} />
+  <BackupDialog onclose={handleCloseBackup} />
 {/if}

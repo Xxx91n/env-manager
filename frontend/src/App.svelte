@@ -25,7 +25,7 @@
     audit: () => import('./lib/components/AuditPage.svelte'),
     service: () => import('./lib/components/ServicePage.svelte'),
   }
-  const lazyComponentCache: Record<string, any> = {}
+  const lazyComponentCache: Record<string, any> = $state({})
   async function loadComponent<T>(key: string, importer: () => Promise<{ default: T }>): Promise<T> {
     if (!lazyComponentCache[key]) {
       lazyComponentCache[key] = await importer()
@@ -65,7 +65,7 @@
   // Each tab button has its own border-b that shows when active.
   // This eliminates the MUI #7187 class bug where offsetWidth includes
   // button padding (px-3 = 12px each side), making indicator wider than text.
-  let tabRefs: HTMLButtonElement[] = []
+  let tabRefs: HTMLButtonElement[] = $state([])
 
   function handleTabKeydown(e: KeyboardEvent, idx: number) {
     let nextIdx: number | null = null
@@ -95,14 +95,13 @@
     }
   }
 
-    let currentLocale: string = defaultLanguage
-  let initError: string | null = null
-  let showSettings = false
-  let darkMode = false
-  let themeStyle = 'slate'
-  let fontScale: number = 1
+    let currentLocale: string = $state(defaultLanguage)
+  let initError: string | null = $state(null)
+  let showSettings = $state(false)
+  let darkMode = $state(false)
+  let themeStyle = $state('slate')
+  let fontScale: number = $state(1)
 
-  $: if ($locale) currentLocale = $locale
 
   // Reactive tray i18n: whenever the svelte-i18n locale store changes (either
   // because setupI18n queued a microtask to switch from the synchronous "en"
@@ -112,12 +111,8 @@
   // the tray from inside onMount BEFORE i18n loaded the saved locale, causing the
   // tray to permanently show English ("Show" / "Quit") even when the user had
   // chosen a different language.
- let lastSyncedTrayLocale = ''
+ let lastSyncedTrayLocale = $state('')
   let trayLocaleSyncing = false
- $: if ($locale && $locale !== lastSyncedTrayLocale) {
-   lastSyncedTrayLocale = $locale
-    syncTrayLocale($locale)
-  }
 
   // Synchronous tray translation map — avoids the svelte-i18n lazy loader
   // race entirely. The tray only needs 3 keys (show/quit/tooltip), so we inline
@@ -188,14 +183,8 @@
     }
   })
   // Phase 4: silent performance telemetry — log view switch timing for developer diagnostics
-  let perfPrevView = 'variables'
-  let perfPrevTime = performance.now()
-  $: if ($activeView !== perfPrevView) {
-    const elapsed = performance.now() - perfPrevTime
-    void frontendLog('debug', 'perf.viewSwitch from=' + perfPrevView + ' to=' + $activeView + ' elapsedMs=' + elapsed.toFixed(0)).catch(() => {})
-    perfPrevView = $activeView
-    perfPrevTime = performance.now()
-  }
+  let perfPrevView = $state('variables')
+  let perfPrevTime = $state(performance.now())
 
   function applyDarkMode(isDark: boolean, skipTransition = false) {
     darkMode = isDark
@@ -234,27 +223,44 @@
     }
   }
 
-  function handleThemeChange(e: CustomEvent<boolean>) {
-    applyDarkMode(e.detail)
+  function handleThemeChange(dark: boolean) {
+    applyDarkMode(dark)
   }
 
-  function handleThemeStyleChange(e: CustomEvent<string>) {
-    themeStyle = e.detail
+  function handleThemeStyleChange(style: string) {
+    themeStyle = style
     if (typeof document !== 'undefined') {
       document.body.classList.add('theme-changing')
-      document.documentElement.setAttribute('data-theme-style', e.detail)
+      document.documentElement.setAttribute('data-theme-style', style)
       setTimeout(() => {
         document.body.classList.remove('theme-changing')
       }, 250)
     }
   }
 
-  function handleFontScaleChange(e: CustomEvent<number>) {
-    applyFontScale(e.detail)
+  function handleFontScaleChange(scale: number) {
+    applyFontScale(scale)
   }
+  $effect(() => {
+    if ($locale) currentLocale = $locale
+  });
+  $effect(() => {
+    if ($locale && $locale !== lastSyncedTrayLocale) {
+      lastSyncedTrayLocale = $locale
+      syncTrayLocale($locale)
+    }
+  });
+  $effect(() => {
+    if ($activeView !== perfPrevView) {
+      const elapsed = performance.now() - perfPrevTime
+      void frontendLog('debug', 'perf.viewSwitch from=' + perfPrevView + ' to=' + $activeView + ' elapsedMs=' + elapsed.toFixed(0)).catch(() => {})
+      perfPrevView = $activeView
+      perfPrevTime = performance.now()
+    }
+  });
 </script>
 
-<svelte:window on:resize={() => requestAnimationFrame(updateIndicator)} on:contextmenu={(e) => e.preventDefault()} />
+<svelte:window onresize={() => requestAnimationFrame(updateIndicator)} oncontextmenu={(e) => e.preventDefault()} />
 
 <svelte:head>
   <title>{$t('app.title')}</title>
@@ -265,13 +271,13 @@
     <span class="text-xs font-medium text-muted-foreground select-none">Env Manager</span>
   </div>
   <div class="titlebar-controls">
-    <button class="titlebar-btn" on:click={() => getCurrentWindow().minimize()} title={$t('app.minimize')}>
+    <button class="titlebar-btn" onclick={() => getCurrentWindow().minimize()} title={$t('app.minimize')}>
       <Minus class="w-3.5 h-3.5" />
     </button>
-    <button class="titlebar-btn" on:click={() => getCurrentWindow().toggleMaximize()} title={$t('app.maximize')}>
+    <button class="titlebar-btn" onclick={() => getCurrentWindow().toggleMaximize()} title={$t('app.maximize')}>
       <Square class="w-3 h-3" />
     </button>
-    <button class="titlebar-btn close" on:click={() => getCurrentWindow().close()} title={$t('app.close')}>
+    <button class="titlebar-btn close" onclick={() => getCurrentWindow().close()} title={$t('app.close')}>
       <X class="w-3.5 h-3.5" />
     </button>
   </div>
@@ -289,7 +295,7 @@
       </div>
       <div class="flex items-center gap-2">
         <button
-          on:click={() => { applyDarkMode(!darkMode); void setSetting('darkMode', String(!darkMode)) }}
+          onclick={() => { applyDarkMode(!darkMode); void setSetting('darkMode', String(!darkMode)) }}
           class="p-1.5 text-muted-foreground hover:text-foreground hover:bg-accent rounded-md transition"
           title={darkMode ? $t('settings.lightMode') : $t('settings.darkMode')}
           aria-label={darkMode ? $t('settings.lightMode') : $t('settings.darkMode')}
@@ -301,7 +307,7 @@
           {/if}
         </button>
         <button
-          on:click={() => {
+          onclick={() => {
             // Refresh the current active view, not just variables
             refreshTrigger.update(n => n + 1)
             // Also refresh variables store directly (variables page + backups)
@@ -314,7 +320,7 @@
           <RefreshCw class="w-4 h-4" />
         </button>
         <button
-          on:click={() => (showSettings = true)}
+          onclick={() => (showSettings = true)}
           class="p-1.5 text-muted-foreground hover:text-foreground hover:bg-accent rounded-md transition"
           title={$t('nav.settings')}
           aria-label={$t('nav.settings')}
@@ -338,8 +344,8 @@
             aria-controls="tabpanel-content"
             tabindex={$activeView === tab.id ? 0 : -1}
             disabled={$isWriteInProgress && (tab.id === 'variables' || tab.id === 'profiles' || tab.id === 'path')}
-            on:click={() => activeView.set(tab.id)}
-            on:keydown={(e) => handleTabKeydown(e, i)}
+            onclick={() => activeView.set(tab.id)}
+            onkeydown={(e) => handleTabKeydown(e, i)}
             class="px-3 py-2 text-xs font-medium transition-colors duration-200 rounded-t-md border-b-2 {$activeView === tab.id
               ? 'text-primary font-semibold border-primary'
               : 'text-muted-foreground hover:text-foreground hover:bg-accent border-transparent'} disabled:opacity-50 disabled:cursor-not-allowed"
@@ -374,7 +380,7 @@
         {@const Comp = mod}
         <Comp />
       {:catch err}
-        <div class="flex flex-col items-center gap-2 py-8 text-muted-foreground"><Monitor class="w-6 h-6"/><p class="text-xs">{$t('errors.chunkLoadFailed')}</p><button on:click={() => { delete lazyComponentCache['profiles']; activeView.set('profiles') }} class="text-xs text-primary underline">{$t('common.retry')}</button></div>
+        <div class="flex flex-col items-center gap-2 py-8 text-muted-foreground"><Monitor class="w-6 h-6"/><p class="text-xs">{$t('errors.chunkLoadFailed')}</p><button onclick={() => { delete lazyComponentCache['profiles']; activeView.set('profiles') }} class="text-xs text-primary underline">{$t('common.retry')}</button></div>
       {/await}
     {:else if $activeView === 'path'}
       {#await loadComponent('path', lazyImporters.path)}
@@ -383,7 +389,7 @@
         {@const Comp = mod}
         <Comp />
       {:catch err}
-        <div class="flex flex-col items-center gap-2 py-8 text-muted-foreground"><Monitor class="w-6 h-6"/><p class="text-xs">{$t('errors.chunkLoadFailed')}</p><button on:click={() => { delete lazyComponentCache['path']; activeView.set('path') }} class="text-xs text-primary underline">{$t('common.retry')}</button></div>
+        <div class="flex flex-col items-center gap-2 py-8 text-muted-foreground"><Monitor class="w-6 h-6"/><p class="text-xs">{$t('errors.chunkLoadFailed')}</p><button onclick={() => { delete lazyComponentCache['path']; activeView.set('path') }} class="text-xs text-primary underline">{$t('common.retry')}</button></div>
       {/await}
     {:else if $activeView === 'history'}
       {#await loadComponent('history', lazyImporters.history)}
@@ -392,7 +398,7 @@
         {@const Comp = mod}
         <Comp />
       {:catch err}
-        <div class="flex flex-col items-center gap-2 py-8 text-muted-foreground"><Monitor class="w-6 h-6"/><p class="text-xs">{$t('errors.chunkLoadFailed')}</p><button on:click={() => { delete lazyComponentCache['history']; activeView.set('history') }} class="text-xs text-primary underline">{$t('common.retry')}</button></div>
+        <div class="flex flex-col items-center gap-2 py-8 text-muted-foreground"><Monitor class="w-6 h-6"/><p class="text-xs">{$t('errors.chunkLoadFailed')}</p><button onclick={() => { delete lazyComponentCache['history']; activeView.set('history') }} class="text-xs text-primary underline">{$t('common.retry')}</button></div>
       {/await}
     {:else if $activeView === 'protection'}
       {#await loadComponent('protection', lazyImporters.protection)}
@@ -401,7 +407,7 @@
         {@const Comp = mod}
         <Comp />
       {:catch err}
-        <div class="flex flex-col items-center gap-2 py-8 text-muted-foreground"><Monitor class="w-6 h-6"/><p class="text-xs">{$t('errors.chunkLoadFailed')}</p><button on:click={() => { delete lazyComponentCache['protection']; activeView.set('protection') }} class="text-xs text-primary underline">{$t('common.retry')}</button></div>
+        <div class="flex flex-col items-center gap-2 py-8 text-muted-foreground"><Monitor class="w-6 h-6"/><p class="text-xs">{$t('errors.chunkLoadFailed')}</p><button onclick={() => { delete lazyComponentCache['protection']; activeView.set('protection') }} class="text-xs text-primary underline">{$t('common.retry')}</button></div>
       {/await}
     {:else if $activeView === 'audit'}
       {#await loadComponent('audit', lazyImporters.audit)}
@@ -410,7 +416,7 @@
         {@const Comp = mod}
         <Comp />
       {:catch err}
-        <div class="flex flex-col items-center gap-2 py-8 text-muted-foreground"><Monitor class="w-6 h-6"/><p class="text-xs">{$t('errors.chunkLoadFailed')}</p><button on:click={() => { delete lazyComponentCache['audit']; activeView.set('audit') }} class="text-xs text-primary underline">{$t('common.retry')}</button></div>
+        <div class="flex flex-col items-center gap-2 py-8 text-muted-foreground"><Monitor class="w-6 h-6"/><p class="text-xs">{$t('errors.chunkLoadFailed')}</p><button onclick={() => { delete lazyComponentCache['audit']; activeView.set('audit') }} class="text-xs text-primary underline">{$t('common.retry')}</button></div>
       {/await}
     {:else if $activeView === 'service'}
       {#await loadComponent('service', lazyImporters.service)}
@@ -419,7 +425,7 @@
         {@const Comp = mod}
         <Comp />
       {:catch err}
-        <div class="flex flex-col items-center gap-2 py-8 text-muted-foreground"><Monitor class="w-6 h-6"/><p class="text-xs">{$t('errors.chunkLoadFailed')}</p><button on:click={() => { delete lazyComponentCache['service']; activeView.set('service') }} class="text-xs text-primary underline">{$t('common.retry')}</button></div>
+        <div class="flex flex-col items-center gap-2 py-8 text-muted-foreground"><Monitor class="w-6 h-6"/><p class="text-xs">{$t('errors.chunkLoadFailed')}</p><button onclick={() => { delete lazyComponentCache['service']; activeView.set('service') }} class="text-xs text-primary underline">{$t('common.retry')}</button></div>
       {/await}
     {/if}
   </div>
@@ -429,15 +435,11 @@
   <SettingsDialog
     darkMode={darkMode}
       themeStyle={themeStyle}
-    on:close={() => (showSettings = false)}
-    on:themeChange={handleThemeChange}
-    on:themeStyleChange={handleThemeStyleChange}
+    onclose={() => (showSettings = false)}
+    onthemeChange={handleThemeChange}
+    onthemeStyleChange={handleThemeStyleChange}
     fontScale={fontScale}
-    on:fontScaleChange={handleFontScaleChange}
-    on:pathChanged={() => {
-      refreshTrigger.update(n => n + 1)
-      listVariables()
-    }}
+    onfontScaleChange={handleFontScaleChange}
   />
 {/if}
 
@@ -452,7 +454,7 @@
           : toast.type === 'error'
             ? 'bg-destructive text-primary-foreground'
             : 'bg-primary text-primary-foreground'}"
-        on:click={() => dismissToast(toast.id)}
+        onclick={() => dismissToast(toast.id)}
       >
         {toast.message}
       </div>

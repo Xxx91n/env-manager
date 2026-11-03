@@ -23,10 +23,10 @@
 
   const tStore = t
 
-  let serviceRunning = false
-  let serviceHealthData: any = null
-  let serviceLoading = false
-  let serviceError: string | null = null
+  let serviceRunning = $state(false)
+  let serviceHealthData: any = $state(null)
+  let serviceLoading = $state(false)
+  let serviceError: string | null = $state(null)
 
   onMount(() => {
     void refreshServiceStatus()
@@ -137,7 +137,7 @@
       <h2 class="text-base font-semibold text-foreground">{$t('nav.service')}</h2>
       <p class="text-xs text-muted-foreground mt-1">{$t('service.description')}</p>
     </div>
-    <button on:click={refreshServiceStatus} disabled={serviceLoading}
+    <button onclick={refreshServiceStatus} disabled={serviceLoading}
       class="px-3 py-1.5 text-xs font-medium rounded-md border border-border hover:bg-muted/20 transition border-border/80 hover:bg-accent disabled:opacity-50">
       {$t('buttons.refresh')}
     </button>
@@ -152,19 +152,19 @@
       {#if serviceLoading}
         <span class="text-xs text-muted-foreground">{$t('settings.service.checking')}</span>
       {/if}
-      <button on:click={handleServicePing} disabled={serviceLoading}
+      <button onclick={handleServicePing} disabled={serviceLoading}
         class="px-2 py-0.5 text-xs font-medium text-muted-foreground border border-border rounded-md hover:bg-muted/20 transition disabled:opacity-50 text-foreground/80 border-border/80 hover:bg-accent">
         {$t('settings.service.ping')}
       </button>
-      <button on:click={handleServiceReload} disabled={serviceLoading || !serviceRunning}
+      <button onclick={handleServiceReload} disabled={serviceLoading || !serviceRunning}
         class="px-2 py-0.5 text-xs font-medium text-muted-foreground border border-border rounded-md hover:bg-muted/20 transition disabled:opacity-50 text-foreground/80 border-border/80 hover:bg-accent">
         {$t('settings.service.reload')}
       </button>
-      <button on:click={handleServiceShutdown} disabled={serviceLoading || !serviceRunning}
+      <button onclick={handleServiceShutdown} disabled={serviceLoading || !serviceRunning}
         class="px-2 py-0.5 text-xs font-medium text-destructive border border-destructive/30 rounded-md hover:bg-destructive/10 transition disabled:opacity-50 border-destructive hover:bg-destructive/20">
         {$t('settings.service.shutdown')}
       </button>
-      <button on:click={handleServiceStart} disabled={serviceLoading || serviceRunning}
+      <button onclick={handleServiceStart} disabled={serviceLoading || serviceRunning}
         class="px-2 py-0.5 text-xs font-medium text-primary border border-green-300 rounded-md hover:bg-primary/10 transition disabled:opacity-50 border-primary hover:bg-primary/20">
         {$t('settings.service.start')}
       </button>
@@ -187,11 +187,11 @@
                 {new Date(mount.lastFetchedAt).toLocaleString()}
               </span>
             {/if}
-            <button on:click={() => handleMountRefresh(mount.id)} disabled={serviceLoading}
+            <button onclick={() => handleMountRefresh(mount.id)} disabled={serviceLoading}
               class="px-1 text-xs text-primary hover:underline disabled:opacity-50">
               {$t('settings.service.refreshBtn')}
             </button>
-            <button on:click={() => handleMountRotate(mount.id)} disabled={serviceLoading}
+            <button onclick={() => handleMountRotate(mount.id)} disabled={serviceLoading}
               class="px-1 text-xs text-primary hover:underline disabled:opacity-50">
               {$t('settings.service.rotateBtn')}
             </button>

@@ -28,7 +28,7 @@ describe('v0.9.20 Tray i18n + lightweight mode regression', () => {
 
   it('App.svelte has on:contextmenu preventDefault for WebView2 right-click suppression', () => {
     const appSrc = readFileSync(join(__dirname2, 'App.svelte'), 'utf8')
-    expect(appSrc).toMatch(/on:contextmenu.*preventDefault/)
+    expect(appSrc).toMatch(/oncontextmenu.*preventDefault/)
   })
 
   it('App.svelte has updateTrayLocale function called from syncTrayLocale', () => {
