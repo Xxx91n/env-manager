@@ -21,7 +21,7 @@
   let selectedPathEntry = $state('')
 
   // Local scope filter — initialises from the shared store (defaults to 'all')
-  let scopeFilter: 'all' | 'user' | 'system' = $state('all')
+  let scopeFilter: 'all' | 'user' | 'system' = $state($selectedScope)
 
 
   onMount(refresh)

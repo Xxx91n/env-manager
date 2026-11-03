@@ -26,7 +26,7 @@
 
  let entries: PathEntry[] = $state([])
   // reverse index from ProfilePage — normalized path -> profile names
-  let pathIdx: Map<string, string[]> = $state(new Map())
+  let pathIdx: Map<string, string[]> = $state($pathProfileIndex)
  let scope: 'user' | 'system' = $state('user')
  let loading = $state(false)
  let actionLoading = $state(false)
