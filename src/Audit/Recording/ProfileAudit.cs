@@ -95,6 +95,10 @@ partial class Program
             "profile edit-var",
         };
 
+        /// <summary>
+        /// Dispatches an undoable profile audit command to its handler and refuses
+        /// unsupported commands loudly instead of silently reporting success.
+        /// </summary>
         internal static bool TryUndo(AuditEntry entry)
         {
             string cmd = entry.Command;
@@ -136,6 +140,7 @@ partial class Program
             }
         }
 
+        /// <summary>Undoes a profile create by removing the profile if it still exists (idempotent).</summary>
         private static bool UndoCreate(List<ProfileData> profiles, AuditEntry entry)
         {
             // Undoing create => delete the profile if it still exists.
@@ -150,6 +155,7 @@ partial class Program
             return true;
         }
 
+        /// <summary>Undoes a profile delete by restoring the profile from OldValue, failing loud on name shadowing.</summary>
         private static bool UndoDelete(List<ProfileData> profiles, AuditEntry entry)
         {
             // Undoing delete => restore from OldValue. Use Id-based conflict
@@ -180,6 +186,7 @@ partial class Program
             return true;
         }
 
+        /// <summary>Undoes a profile rename by restoring the original name; refuses stale renames.</summary>
         private static bool UndoRename(List<ProfileData> profiles, AuditEntry entry)
         {
             // OldValue is the original name, NewValue is the new name.
@@ -201,6 +208,7 @@ partial class Program
             return true;
         }
 
+        /// <summary>Undoes a profile add-var by removing the added variable (idempotent).</summary>
         private static bool UndoAddVar(List<ProfileData> profiles, AuditEntry entry)
         {
             // NewValue is the added variable JSON. Removing it is idempotent.
@@ -215,6 +223,7 @@ partial class Program
             return true;
         }
 
+        /// <summary>Undoes a profile remove-var by re-adding the removed variable if absent (idempotent).</summary>
         private static bool UndoRemoveVar(List<ProfileData> profiles, AuditEntry entry)
         {
             // OldValue is the removed variable JSON. Re-add is idempotent (only add if not already present).
@@ -229,6 +238,7 @@ partial class Program
             return true;
         }
 
+        /// <summary>Undoes a profile edit-var by restoring the pre-edit variable value.</summary>
         private static bool UndoEditVar(List<ProfileData> profiles, AuditEntry entry)
         {
             // OldValue is the pre-edit variable JSON, NewValue is the post-edit variable JSON.
