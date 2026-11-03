@@ -193,7 +193,7 @@
     "ProfileEffective.cs#UnapplyProfile:0": 5,
     "ProfileEffective.cs#UnapplyProfile:1": 1,
     "ProfileLaunchCommand.cs#RunProfileLaunchCommand:0": 1,
-    "ProfileLaunchCommand.cs#ProfileSetLaunch:0": 48,
+    "ProfileLaunchCommand.cs#ProfileSetLaunch:0": 1,
     "ProfileLaunchCommand.cs#ValidateLaunchPreflight:0": 2,
     "ProfileLaunchCommand.cs#ProfileLaunch:0": 29,
     "ProfileLaunchCommand.cs#ValidateLaunchTarget:0": 6,

@@ -517,7 +517,7 @@ partial class Program
     /// to avoid leaking the prefix (regression: previously GUI "Add CLI to PATH" produced
     /// \\?\D:\... in user PATH which broke child invocations).
     /// </summary>
-    static string StripVerbatimPrefix(string? path)
+    internal static string StripVerbatimPrefix(string? path)
     {
         if (string.IsNullOrEmpty(path)) return path ?? string.Empty;
         if (path.StartsWith(@"\\?\UNC\", StringComparison.OrdinalIgnoreCase)) return @"\\" + path.Substring(8);
