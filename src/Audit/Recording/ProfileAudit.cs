@@ -72,150 +72,179 @@ partial class Program
     static bool TryUndoProfileAudit(AuditEntry entry)
     {
         if (entry.Scope != "profile") return false;
-        string cmd = entry.Command;
+        return ProfileUndoHelpers.TryUndo(entry);
+    }
 
-        // Explicit allow-list of undoable profile subcommands. A future
-        // profile subcommand that mutates profiles.json MUST be added here
-        // (its own branch below) or audit undo will refuse with a clear
-        // "cannot be undone" error -- never silently report success.
-        // This catches the silent-success footgun flagged by the architect
-        // and code-reviewer lanes (HIGH severity).
-        var undoable = cmd == "profile create"
-            || cmd == "profile delete"
-            || cmd == "profile rename"
-            || cmd == "profile add-var"
-            || cmd == "profile remove-var"
-            || cmd == "profile edit-var";
-        if (!undoable)
+    /// <summary>
+    /// Undo logic for profile-level audit entries. Extracted from
+    /// TryUndoProfileAudit into a nested helper class to keep cognitive
+    /// complexity under the repository gate. Behavior is identical to the
+    /// original method: same allow-list, same error text, same return
+    /// values, and the same save side effects (including the existing
+    /// cases that call SaveProfiles even when the undo is a no-op).
+    /// </summary>
+    private static class ProfileUndoHelpers
+    {
+        private static readonly string[] UndoableCommands =
         {
-            Console.Error.WriteLine("Error: Profile command '" + cmd + "' has no undo path; this change cannot be undone");
-            return false;
-        }
+            "profile create",
+            "profile delete",
+            "profile rename",
+            "profile add-var",
+            "profile remove-var",
+            "profile edit-var",
+        };
 
-        try
+        internal static bool TryUndo(AuditEntry entry)
         {
-            var profiles = LoadProfiles();
+            string cmd = entry.Command;
 
-            if (cmd == "profile create")
+            // Explicit allow-list of undoable profile subcommands. A future
+            // profile subcommand that mutates profiles.json MUST be added here
+            // (its own branch below) or audit undo will refuse with a clear
+            // "cannot be undone" error -- never silently report success.
+            // This catches the silent-success footgun flagged by the architect
+            // and code-reviewer lanes (HIGH severity).
+            if (!UndoableCommands.Contains(cmd))
             {
-                // Undoing create => delete the profile if it still exists.
-                // Idempotent: if the profile is already gone, report true (nothing to do).
-                var existing = FindProfile(profiles, entry.Name);
-                if (existing != null)
-                {
-                    if (existing.IsEnabled) UnapplyProfile(existing);
-                    profiles.Remove(existing);
-                    SaveProfiles(profiles);
-                }
-                return true;
+                Console.Error.WriteLine("Error: Profile command '" + cmd + "' has no undo path; this change cannot be undone");
+                return false;
             }
 
-            if (cmd == "profile delete")
+            try
             {
-                // Undoing delete => restore from OldValue. Use Id-based conflict
-                // detection so a same-Named different-Id profile does NOT silently
-                // swallow the restore, and a true idempotent repeat undo is a no-op.
-                if (string.IsNullOrEmpty(entry.OldValue)) return true;
-                var restored = JsonSerializer.Deserialize<ProfileData>(entry.OldValue, JsonOpts);
-                if (restored == null) return true;
-
-                var conflictById = profiles.FirstOrDefault(p => p.Id.Equals(restored.Id, StringComparison.OrdinalIgnoreCase));
-                var conflictByName = FindProfile(profiles, restored.Name);
-
-                if (conflictById != null)
+                var profiles = LoadProfiles();
+                switch (cmd)
                 {
-                    // Same Id already present => idempotent undo, nothing to do.
-                    return true;
+                    case "profile create": return UndoCreate(profiles, entry);
+                    case "profile delete": return UndoDelete(profiles, entry);
+                    case "profile rename": return UndoRename(profiles, entry);
+                    case "profile add-var": return UndoAddVar(profiles, entry);
+                    case "profile remove-var": return UndoRemoveVar(profiles, entry);
+                    case "profile edit-var": return UndoEditVar(profiles, entry);
+                    default:
+                        // Defensive: unreachable because of the allow-list above,
+                        // but keep a safety net that refuses rather than silently succeeding.
+                        Console.Error.WriteLine("Error: Profile command " + cmd + " reached undo without a handler");
+                        return false;
                 }
-                if (conflictByName != null)
-                {
-                    // Different Id but same Name => restoring would shadow a live profile.
-                    // Fail loud rather than silently dropping the restore (HIGH finding).
-                    Console.Error.WriteLine("Error: A profile named " + restored.Name + " already exists; undo would shadow it. Rename or delete that profile first.");
-                    return false;
-                }
-                restored.EnsureCollections();
-                profiles.Add(restored);
+            }
+            catch (Exception ex)
+            {
+                Console.Error.WriteLine("Error: Profile undo failed: " + ex.GetType().Name + " -- " + ex.Message);
+                return false;
+            }
+        }
+
+        private static bool UndoCreate(List<ProfileData> profiles, AuditEntry entry)
+        {
+            // Undoing create => delete the profile if it still exists.
+            // Idempotent: if the profile is already gone, report true (nothing to do).
+            var existing = FindProfile(profiles, entry.Name);
+            if (existing != null)
+            {
+                if (existing.IsEnabled) UnapplyProfile(existing);
+                profiles.Remove(existing);
                 SaveProfiles(profiles);
-                return true;
             }
-
-            if (cmd == "profile rename")
-            {
-                // OldValue is the original name, NewValue is the new name.
-                // If the profile is no longer at NewValue (e.g. further renamed
-                // since the audit), refuse rather than silently no-op -- this
-                // matches the registry path's stale-value contract.
-                var p = FindProfile(profiles, entry.NewValue ?? "");
-                if (p == null)
-                {
-                    Console.Error.WriteLine("Error: Profile " + entry.NewValue + " no longer exists; undo is stale. Use --force to override if the profile was further renamed.");
-                    return false;
-                }
-                if (entry.OldValue != null)
-                {
-                    if (p.IsEnabled) UnapplyProfile(p);
-                    p.SetName(entry.OldValue);
-                    SaveProfiles(profiles);
-                }
-                return true;
-            }
-
-            if (cmd == "profile add-var")
-            {
-                // NewValue is the added variable JSON. Removing it is idempotent.
-                var p = FindProfile(profiles, entry.Name);
-                if (p != null && !string.IsNullOrEmpty(entry.NewValue))
-                {
-                    var added = JsonSerializer.Deserialize<ProfileVariable>(entry.NewValue, JsonOpts);
-                    if (added != null)
-                        p.Variables.RemoveAll(v => v.Name.Equals(added.Name, StringComparison.OrdinalIgnoreCase));
-                    SaveProfiles(profiles);
-                }
-                return true;
-            }
-
-            if (cmd == "profile remove-var")
-            {
-                // OldValue is the removed variable JSON. Re-add is idempotent (only add if not already present).
-                var p = FindProfile(profiles, entry.Name);
-                if (p != null && !string.IsNullOrEmpty(entry.OldValue))
-                {
-                    var removed = JsonSerializer.Deserialize<ProfileVariable>(entry.OldValue, JsonOpts);
-                    if (removed != null && !p.Variables.Any(v => v.Name.Equals(removed.Name, StringComparison.OrdinalIgnoreCase)))
-                        p.Variables.Add(removed);
-                    SaveProfiles(profiles);
-                }
-                return true;
-            }
-
-            if (cmd == "profile edit-var")
-            {
-                // OldValue is the pre-edit variable JSON, NewValue is the post-edit variable JSON.
-                var p = FindProfile(profiles, entry.Name);
-                if (p != null && !string.IsNullOrEmpty(entry.OldValue))
-                {
-                    var pre = JsonSerializer.Deserialize<ProfileVariable>(entry.OldValue, JsonOpts);
-                    var post = string.IsNullOrEmpty(entry.NewValue) ? null : JsonSerializer.Deserialize<ProfileVariable>(entry.NewValue, JsonOpts);
-                    if (pre != null && post != null)
-                    {
-                        p.Variables.RemoveAll(v => v.Name.Equals(post.Name, StringComparison.OrdinalIgnoreCase));
-                        p.Variables.Add(pre);
-                        SaveProfiles(profiles);
-                    }
-                }
-                return true;
-            }
-
-            // Defensive: unreachable because of the allow-list above, but
-            // keep a safety net that refuses rather than silently succeeding.
-            Console.Error.WriteLine("Error: Profile command " + cmd + " reached undo without a handler");
-            return false;
+            return true;
         }
-        catch (Exception ex)
+
+        private static bool UndoDelete(List<ProfileData> profiles, AuditEntry entry)
         {
-            Console.Error.WriteLine("Error: Profile undo failed: " + ex.GetType().Name + " -- " + ex.Message);
-            return false;
+            // Undoing delete => restore from OldValue. Use Id-based conflict
+            // detection so a same-Named different-Id profile does NOT silently
+            // swallow the restore, and a true idempotent repeat undo is a no-op.
+            if (string.IsNullOrEmpty(entry.OldValue)) return true;
+            var restored = JsonSerializer.Deserialize<ProfileData>(entry.OldValue, JsonOpts);
+            if (restored == null) return true;
+
+            var conflictById = profiles.FirstOrDefault(p => p.Id.Equals(restored.Id, StringComparison.OrdinalIgnoreCase));
+            var conflictByName = FindProfile(profiles, restored.Name);
+
+            if (conflictById != null)
+            {
+                // Same Id already present => idempotent undo, nothing to do.
+                return true;
+            }
+            if (conflictByName != null)
+            {
+                // Different Id but same Name => restoring would shadow a live profile.
+                // Fail loud rather than silently dropping the restore (HIGH finding).
+                Console.Error.WriteLine("Error: A profile named " + restored.Name + " already exists; undo would shadow it. Rename or delete that profile first.");
+                return false;
+            }
+            restored.EnsureCollections();
+            profiles.Add(restored);
+            SaveProfiles(profiles);
+            return true;
+        }
+
+        private static bool UndoRename(List<ProfileData> profiles, AuditEntry entry)
+        {
+            // OldValue is the original name, NewValue is the new name.
+            // If the profile is no longer at NewValue (e.g. further renamed
+            // since the audit), refuse rather than silently no-op -- this
+            // matches the registry path's stale-value contract.
+            var p = FindProfile(profiles, entry.NewValue ?? "");
+            if (p == null)
+            {
+                Console.Error.WriteLine("Error: Profile " + entry.NewValue + " no longer exists; undo is stale. Use --force to override if the profile was further renamed.");
+                return false;
+            }
+            if (entry.OldValue != null)
+            {
+                if (p.IsEnabled) UnapplyProfile(p);
+                p.SetName(entry.OldValue);
+                SaveProfiles(profiles);
+            }
+            return true;
+        }
+
+        private static bool UndoAddVar(List<ProfileData> profiles, AuditEntry entry)
+        {
+            // NewValue is the added variable JSON. Removing it is idempotent.
+            var p = FindProfile(profiles, entry.Name);
+            if (p != null && !string.IsNullOrEmpty(entry.NewValue))
+            {
+                var added = JsonSerializer.Deserialize<ProfileVariable>(entry.NewValue, JsonOpts);
+                if (added != null)
+                    p.Variables.RemoveAll(v => v.Name.Equals(added.Name, StringComparison.OrdinalIgnoreCase));
+                SaveProfiles(profiles);
+            }
+            return true;
+        }
+
+        private static bool UndoRemoveVar(List<ProfileData> profiles, AuditEntry entry)
+        {
+            // OldValue is the removed variable JSON. Re-add is idempotent (only add if not already present).
+            var p = FindProfile(profiles, entry.Name);
+            if (p != null && !string.IsNullOrEmpty(entry.OldValue))
+            {
+                var removed = JsonSerializer.Deserialize<ProfileVariable>(entry.OldValue, JsonOpts);
+                if (removed != null && !p.Variables.Any(v => v.Name.Equals(removed.Name, StringComparison.OrdinalIgnoreCase)))
+                    p.Variables.Add(removed);
+                SaveProfiles(profiles);
+            }
+            return true;
+        }
+
+        private static bool UndoEditVar(List<ProfileData> profiles, AuditEntry entry)
+        {
+            // OldValue is the pre-edit variable JSON, NewValue is the post-edit variable JSON.
+            var p = FindProfile(profiles, entry.Name);
+            if (p != null && !string.IsNullOrEmpty(entry.OldValue))
+            {
+                var pre = JsonSerializer.Deserialize<ProfileVariable>(entry.OldValue, JsonOpts);
+                var post = string.IsNullOrEmpty(entry.NewValue) ? null : JsonSerializer.Deserialize<ProfileVariable>(entry.NewValue, JsonOpts);
+                if (pre != null && post != null)
+                {
+                    p.Variables.RemoveAll(v => v.Name.Equals(post.Name, StringComparison.OrdinalIgnoreCase));
+                    p.Variables.Add(pre);
+                    SaveProfiles(profiles);
+                }
+            }
+            return true;
         }
     }
 }
