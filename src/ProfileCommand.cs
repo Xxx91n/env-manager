@@ -318,7 +318,7 @@ partial class Program
         return 0;
     }
 
-    static ProfileData? FindProfile(List<ProfileData> profiles, string name)
+    internal static ProfileData? FindProfile(List<ProfileData> profiles, string name)
     {
         var matches = profiles.Where(profile =>
             profile.Name.Equals(name, StringComparison.OrdinalIgnoreCase)).Take(2).ToList();

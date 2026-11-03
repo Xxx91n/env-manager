@@ -48,83 +48,7 @@ partial class Program
             Console.Error.WriteLine("Usage: env-manager profile set-launch <name> --target <exe> [--args <args>] [--cwd <dir>] [--type global|launch]");
             return 1;
         }
-        string name = args[2];
-        string? target = null, launchArgs = null, cwd = null, newType = null;
-        for (int i = 3; i < args.Length; i++)
-        {
-            string a = args[i];
-            switch (a)
-            {
-                case "--target": if (++i >= args.Length) goto Missing; target = args[i]; break;
-                case "--args": if (++i >= args.Length) goto Missing; launchArgs = args[i]; break;
-                case "--cwd": if (++i >= args.Length) goto Missing; cwd = args[i]; break;
-                case "--type": if (++i >= args.Length) goto Missing; newType = args[i]; break;
-                default: Console.Error.WriteLine($"Unknown flag: {a}"); return 1;
-            }
-        }
-        Missing:
-        if (target is null && newType is null)
-        {
-            Console.Error.WriteLine("Error: at least --target or --type must be specified");
-            return 1;
-        }
-        if (newType is not null && !newType.Equals("global", StringComparison.OrdinalIgnoreCase) && !newType.Equals("launch", StringComparison.OrdinalIgnoreCase))
-        {
-            Console.Error.WriteLine("Error: --type must be 'global' or 'launch'");
-            return 1;
-        }
-
-        var profiles = LoadProfiles();
-        var profile = FindProfile(profiles, name);
-        if (profile == null)
-        {
-            Console.Error.WriteLine($"Error: Profile '{name}' not found");
-            return 1;
-        }
-
-        bool wasEnabled = profile.IsEnabled;
-        if (wasEnabled)
-        {
-            Console.Error.WriteLine($"Error: Cannot modify a launch configuration while profile '{name}' is applied. Unapply it first.");
-            return 1;
-        }
-
-        if (newType is not null)
-        {
-            profile.SetProfileType(newType.ToLowerInvariant());
-            if (profile.ProfileType == "global") profile.SetLaunchTarget(null);
-        }
-        if (profile.ProfileType.Equals("launch", StringComparison.OrdinalIgnoreCase))
-        {
-            if (target is not null) profile.SetLaunchTarget(StripVerbatimPrefix(target));
-            if (launchArgs is not null) profile.SetLaunchArguments(launchArgs);
-            if (cwd is not null) profile.SetWorkingDirectory(StripVerbatimPrefix(cwd));
-            if (string.IsNullOrWhiteSpace(profile.TargetExecutable))
-            {
-                Console.Error.WriteLine("Error: Launch profile requires --target <exe>");
-                return 1;
-            }
-        }
-        else
-        {
-            // Global profile: --target is forbidden.
-            if (target is not null)
-            {
-                Console.Error.WriteLine("Error: --target is only valid on Launch profiles");
-                return 1;
-            }
-        }
-        try
-        {
-            SaveProfiles(profiles);
-        }
-        catch (InvalidDataException ex)
-        {
-            Console.Error.WriteLine("Error: " + ScrubExceptionMessage(ex.Message));
-            return 1;
-        }
-        Console.WriteLine($"Updated launch configuration for profile '{name}' (type={profile.ProfileType})");
-        return 0;
+        return ProfileSetLaunchHelpers.Run(args);
     }
 
     /// <summary>
@@ -284,5 +208,178 @@ partial class Program
         string system32Prefix = Environment.GetFolderPath(Environment.SpecialFolder.System).TrimEnd('\\').ToLowerInvariant() + '\\';
         if (lower.StartsWith(system32Prefix) || lower.StartsWith(@"\\windows\\system32\\"))
             throw new InvalidDataException("Launch targets inside \\Windows\\System32 are rejected to prevent system32 hijacking");
+    }
+}
+
+/// <summary>
+/// Behavior-preserving helpers for ProfileSetLaunch (T04 of #82: cognitive complexity 48 -> thin shell).
+/// Decision logic extracted from Program.ProfileSetLaunch into this sibling static class
+/// (not on Program); command semantics, output copy, exit codes and verified snapshots are
+/// unchanged. Members required by this class were widened private -> internal with no
+/// behavior change (FindProfile in ProfileCommand.cs, StripVerbatimPrefix in PathCommand.cs).
+/// </summary>
+internal static class ProfileSetLaunchHelpers
+{
+    static int Run(string[] args)
+    {
+        if (!TryParseFlags(args, out string name, out string? target,
+            out string? launchArgs, out string? cwd, out string? newType, out string? error))
+        {
+            Console.Error.WriteLine(error);
+            return 1;
+        }
+        if (!ValidateOptions(target, newType, out string? optionError))
+        {
+            Console.Error.WriteLine(optionError);
+            return 1;
+        }
+
+        var profiles = LoadProfiles();
+        var profile = FindProfile(profiles, name);
+        if (profile == null)
+        {
+            Console.Error.WriteLine($"Error: Profile '{name}' not found");
+            return 1;
+        }
+
+        if (profile.IsEnabled)
+        {
+            Console.Error.WriteLine($"Error: Cannot modify a launch configuration while profile '{name}' is applied. Unapply it first.");
+            return 1;
+        }
+
+        ApplyTypeConversion(profile, newType);
+
+        if (!ApplyLaunchOptions(profile, target, launchArgs, cwd))
+        {
+            return 1;
+        }
+
+        if (!TrySaveProfiles(profiles, out string? saveError))
+        {
+            Console.Error.WriteLine("Error: " + saveError);
+            return 1;
+        }
+
+        Console.WriteLine($"Updated launch configuration for profile '{name}' (type={profile.ProfileType})");
+        return 0;
+    }
+
+    static bool TryParseFlags(string[] args, out string name, out string? target,
+        out string? launchArgs, out string? cwd, out string? newType, out string? error)
+    {
+        name = args[2];
+        target = launchArgs = cwd = newType = null;
+        for (int i = 3; i < args.Length; i++)
+        {
+            string a = args[i];
+            switch (a)
+            {
+                case "--target":
+                case "--args":
+                case "--cwd":
+                case "--type":
+                    if (!TryConsumeValue(args, ref i, out string? value)) goto Missing;
+                    AssignFlag(a, value, ref target, ref launchArgs, ref cwd, ref newType);
+                    break;
+                default: error = $"Unknown flag: {a}"; return false;
+            }
+        }
+        Missing:
+        error = null;
+        return true;
+    }
+
+    static void AssignFlag(string flag, string? value, ref string? target,
+        ref string? launchArgs, ref string? cwd, ref string? newType)
+    {
+        switch (flag)
+        {
+            case "--target": target = value; break;
+            case "--args": launchArgs = value; break;
+            case "--cwd": cwd = value; break;
+            case "--type": newType = value; break;
+        }
+    }
+
+    static bool TryConsumeValue(string[] args, ref int i, out string? value)
+    {
+        if (++i >= args.Length)
+        {
+            value = null;
+            return false;
+        }
+        value = args[i];
+        return true;
+    }
+
+    static bool ValidateOptions(string? target, string? newType, out string? error)
+    {
+        if (target is null && newType is null)
+        {
+            error = "Error: at least --target or --type must be specified";
+            return false;
+        }
+        if (!IsValidType(newType))
+        {
+            error = "Error: --type must be 'global' or 'launch'";
+            return false;
+        }
+        error = null;
+        return true;
+    }
+
+    static bool IsValidType(string? newType)
+    {
+        return newType is null
+            || newType.Equals("global", StringComparison.OrdinalIgnoreCase)
+            || newType.Equals("launch", StringComparison.OrdinalIgnoreCase);
+    }
+
+    static void ApplyTypeConversion(ProfileData profile, string? newType)
+    {
+        if (newType is not null)
+        {
+            profile.SetProfileType(newType.ToLowerInvariant());
+            if (profile.ProfileType == "global") profile.SetLaunchTarget(null);
+        }
+    }
+
+    static bool ApplyLaunchOptions(ProfileData profile, string? target, string? launchArgs, string? cwd)
+    {
+        if (profile.ProfileType.Equals("launch", StringComparison.OrdinalIgnoreCase))
+        {
+            if (target is not null) profile.SetLaunchTarget(StripVerbatimPrefix(target));
+            if (launchArgs is not null) profile.SetLaunchArguments(launchArgs);
+            if (cwd is not null) profile.SetWorkingDirectory(StripVerbatimPrefix(cwd));
+            if (string.IsNullOrWhiteSpace(profile.TargetExecutable))
+            {
+                Console.Error.WriteLine("Error: Launch profile requires --target <exe>");
+                return false;
+            }
+            return true;
+        }
+        // Global profile: --target is forbidden.
+        if (target is not null)
+        {
+            Console.Error.WriteLine("Error: --target is only valid on Launch profiles");
+            return false;
+        }
+        return true;
+    }
+
+    static bool TrySaveProfiles(List<ProfileData> profiles, out string? error)
+    {
+        try
+        {
+            SaveProfiles(profiles);
+            error = null;
+            return true;
+        }
+        catch (InvalidDataException ex)
+        {
+            error = ScrubExceptionMessage(ex.Message);
+            return false;
+        }
     }
 }
