@@ -36,11 +36,13 @@ See `AGENTS.md` for the complete list of 40+ hard boundaries.
 
 As of 2026-08-29, all 11 open Dependabot advisories were triaged using a reachability-based pyramid (runtime-risk first; dev-only / SSR-only / platform-unreachable second). All 11 were assessed as **VEX: Not Affected** and dismissed with per-alert comments in the GitHub alert timeline (audit-visible). Summary:
 
+**Resolution update (2026-11-04):** the Svelte 5 + Vite 8 same-window migration landed via PR #223 (installed stack: `svelte 5.57.3`, `vite 8.3.5`, `@sveltejs/vite-plugin-svelte 7.3.1`, `vitest 4.1.12`, `esbuild 0.28.2`), so the `svelte 4.2.20`, `vite 5.4.21` and `esbuild 0.19.12` advisory classes below are fixed in the dependency tree and their GitHub Dependabot alerts have closed. All eight statements (six `svelte@4.2.20`, one `source-map-js@1.2.1`, one `postcss-selector-parser@6.1.4`) in `security/vex/frontend.json` were dropped accordingly; the file now carries an empty `statements` array (version 2). The `glib` row stands.
+
 | Alerts | Package (installed) | Reason | Tracking |
 |--------|--------------------|--------|----------|
-| 7 (medium) | `svelte 4.2.20` | SSR-only XSS family; env-manager is a purely client-side SPA inside WebView2 (no SSR rendering path). Fixes exist only on Svelte 5.x. | Svelte 5 migration: issue #28 |
-| 3 (1 high, 2 medium) | `vite 5.4.21` | Dev-server-only advisories (require `--host` network exposure); production artifacts ship via `tauri://` with no dev server. Vite 5 is EOL upstream. | Vite 6.4.3+ upgrade: issue #29 |
-| 1 (medium) | `esbuild 0.19.12` | Dev-server CORS advisory; not present in production builds. | Same as above |
+| 7 (medium) | `svelte 4.2.20` | SSR-only XSS family; env-manager is a purely client-side SPA inside WebView2 (no SSR rendering path). Fixes exist only on Svelte 5.x. | Svelte 5 migration: issue #28 — **resolved** (PR #223, installed `svelte 5.57.3`) |
+| 3 (1 high, 2 medium) | `vite 5.4.21` | Dev-server-only advisories (require `--host` network exposure); production artifacts ship via `tauri://` with no dev server. Vite 5 is EOL upstream. | Vite 6.4.3+ upgrade: issue #29 — **resolved** (PR #223, installed `vite 8.3.5`) |
+| 1 (medium) | `esbuild 0.19.12` | Dev-server CORS advisory; not present in production builds. | Same as above — **resolved** (PR #223, installed `esbuild 0.28.2`) |
 | 1 (medium) | Rust `glib 0.18.5` (Tauri transitive) | gtk-rs stack is not compiled on Windows builds. Same disposition as tauri-apps/tauri#12048 (`status: upstream`). | — |
 
 Production application code carries no runtime vulnerability among these. If the architecture changes (e.g., SSR or network-exposed dev server is introduced), these dispositions must be re-evaluated.
@@ -53,6 +55,6 @@ Triage of 2026-10-25 (audit-gate alert set at `--omit=dev --audit-level=high`, f
 
 | Alerts | Package (installed) | Reason | Tracking |
 |--------|--------------------|--------|----------|
-| 1 (high) | `source-map-js 1.2.1` | Source maps are parsed only by the build-time toolchain (vite/postcss); the shipped WebView2 SPA never consumes a source map at runtime. Fix exists (>= 1.2.2) and flows via dependabot/auto-merge; drop the VEX statement then. | — |
-| 1 (moderate) | `postcss-selector-parser 6.1.4` | Exercised only while tailwindcss compiles first-party CSS at build time; no adversary-controlled selector input in shipped artifacts. No fix on the 6.x line (patch is 7.1.6, reached with the Tailwind 4 toolchain). | Tailwind 4 migration: issue #99 |
-| 6 (moderate) | `svelte 4.2.20` (via `bits-ui` → `@melt-ui/svelte`) | SSR-only XSS family; env-manager is a purely client-side SPA inside WebView2 (no SSR rendering path). Fixes exist only on Svelte 5.x. | Svelte 5 migration: issue #28 |
+| 1 (high) | `source-map-js 1.2.1` | Source maps are parsed only by the build-time toolchain (vite/postcss); the shipped WebView2 SPA never consumes a source map at runtime. | **resolved** (2026-11-04): lockfile carries `source-map-js 1.2.2`; VEX statement dropped |
+| 1 (moderate) | `postcss-selector-parser 6.1.5` | Exercised only while tailwindcss compiles first-party CSS at build time; no adversary-controlled selector input in shipped artifacts. | **resolved** (2026-11-04): installed `6.1.5` is the first patched version per the Dependabot alert record (`< 6.1.5` vulnerable); VEX statement dropped (historically tracked under issue #99) |
+| 6 (moderate) | `svelte 4.2.20` (via `bits-ui` → `@melt-ui/svelte`) | SSR-only XSS family; env-manager is a purely client-side SPA inside WebView2 (no SSR rendering path). Fixes exist only on Svelte 5.x. | Svelte 5 migration: issue #28 — **resolved** (PR #223, installed `svelte 5.57.3`; VEX statements dropped) |
