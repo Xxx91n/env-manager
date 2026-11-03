@@ -223,23 +223,23 @@
     }
   }
 
-  function handleThemeChange(e: CustomEvent<boolean>) {
-    applyDarkMode(e.detail)
+  function handleThemeChange(dark: boolean) {
+    applyDarkMode(dark)
   }
 
-  function handleThemeStyleChange(e: CustomEvent<string>) {
-    themeStyle = e.detail
+  function handleThemeStyleChange(style: string) {
+    themeStyle = style
     if (typeof document !== 'undefined') {
       document.body.classList.add('theme-changing')
-      document.documentElement.setAttribute('data-theme-style', e.detail)
+      document.documentElement.setAttribute('data-theme-style', style)
       setTimeout(() => {
         document.body.classList.remove('theme-changing')
       }, 250)
     }
   }
 
-  function handleFontScaleChange(e: CustomEvent<number>) {
-    applyFontScale(e.detail)
+  function handleFontScaleChange(scale: number) {
+    applyFontScale(scale)
   }
   $effect(() => {
     if ($locale) currentLocale = $locale

@@ -14,7 +14,7 @@
   // Svelte 4 dependency tracking: assigning inputValue inside a $: block
   // makes inputValue a dependency, so typing re-fires the block and
   // resets inputValue to defaultValue on every keystroke.
-  let lastModal: typeof $inputModal = $state(null)
+  let lastModal: typeof $inputModal = $state.raw(null)
   $effect(() => {
     if ($inputModal !== lastModal) {
       lastModal = $inputModal
