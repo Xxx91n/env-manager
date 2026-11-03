@@ -10,6 +10,7 @@ export default defineConfig({
     alias: {
       $lib: path.resolve("./src/lib"),
     },
+    conditions: ['browser'],
   },
   build: {
     outDir: '../dist',

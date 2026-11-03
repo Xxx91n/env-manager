@@ -73,9 +73,9 @@ describe('v0.9.20 handleThemeStyleChange function exists', () => {
     expect(appSrc).toContain('function handleThemeStyleChange')
   })
 
-  it('App.svelte binds on:themeStyleChange={handleThemeStyleChange}', () => {
+  it('App.svelte binds onthemeStyleChange={handleThemeStyleChange}', () => {
     const appSrc = readFileSync(join(__dirname2, 'App.svelte'), 'utf8')
-    expect(appSrc).toContain('on:themeStyleChange={handleThemeStyleChange}')
+    expect(appSrc).toContain('onthemeStyleChange={handleThemeStyleChange}')
   })
 
   it('App.svelte reads persisted themeStyle in onMount', () => {
@@ -83,9 +83,9 @@ describe('v0.9.20 handleThemeStyleChange function exists', () => {
     expect(appSrc).toContain("getSetting('themeStyle')")
   })
 
-  it('SettingsDialog changeThemeStyle dispatches themeStyleChange event', () => {
+  it('SettingsDialog changeThemeStyle invokes onthemeStyleChange callback', () => {
     const sdSrc = readFileSync(join(__dirname2, 'lib', 'components', 'SettingsDialog.svelte'), 'utf8')
-    expect(sdSrc).toContain("dispatch('themeStyleChange'")
+    expect(sdSrc).toContain('onthemeStyleChange?.(')
   })
 })
 

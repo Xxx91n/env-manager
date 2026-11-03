@@ -57,7 +57,7 @@ describe('v0.9.25 PathEditor move reactivity + highlight (W3C APG listbox-rearra
 
 describe('v0.9.25 PathEditor dead-entries button reactive disabled (WCAG 4.1.2)', () => {
   it('has $: liveDeadCount derived from displayEntries', () => {
-    expect(src.includes('$: liveDeadCount = displayEntries.filter')).toBe(true)
+    expect(src.includes('let liveDeadCount = $derived(displayEntries.filter')).toBe(true)
   })
 
   it('button disabled condition uses liveDeadCount (not stale healthSummary)', () => {

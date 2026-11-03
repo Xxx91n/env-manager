@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Plus, Trash2, ShieldCheck, Check, X, Power, Pencil, ChevronUp, ChevronDown, Eye, Loader2, StickyNote, FileText, Tag } from 'lucide-svelte'
+    import { Plus, Trash2, ShieldCheck, Check, X, Power, Pencil, ChevronUp, ChevronDown, Eye, Loader2, StickyNote, FileText, Tag } from 'lucide-svelte'
   import { loadNotes, getNoteSync, upsertNote, notesStore } from '../notesStore'
   import { onMount } from 'svelte'
   import { frontendLog } from '../settingsStore'
@@ -24,14 +24,13 @@
   import type { PathEntry } from '../api'
   import type { PathHealthEntry } from '../api'
 
- let entries: PathEntry[] = []
+ let entries: PathEntry[] = $state([])
   // reverse index from ProfilePage — normalized path -> profile names
-  let pathIdx: Map<string, string[]> = new Map()
-  $: if (pathProfileIndex) { pathIdx = $pathProfileIndex }
- let scope: 'user' | 'system' = 'user'
- let loading = false
- let actionLoading = false
- let newEntry = ''
+  let pathIdx: Map<string, string[]> = $state(new Map())
+ let scope: 'user' | 'system' = $state('user')
+ let loading = $state(false)
+ let actionLoading = $state(false)
+ let newEntry = $state('')
 
   // Staged-move state: matches the Windows PowerToys env-var editor
   // pattern where pressing up/down only reorders locally and an Apply button
@@ -41,21 +40,15 @@
   // so we still identify each entry by its original registry position);
   // stagedActive is true while the user is mid-edit; stagedApplyLoading gates
   // the confirm button. Cancel restores from `entries` (last committed snapshot).
-  let stagedEntries: PathEntry[] = []
-  let stagedActive = false
- let stagedApplyLoading = false
-  // Visible order: when staged moves are active we show the in-flight order;
-  // otherwise the last-committed one. The #each renders this, and move buttons
-  // operate on the visual position `pos` (NOT entry.index, which is the
-  // original registry index used as the stable key).
-  $: displayEntries = stagedActive ? stagedEntries : entries
-  $: liveDeadCount = displayEntries.filter((e: any) => !e.exists && !e.isProtected).length  // WCAG 4.1.2: disabled reflects real data
+  let stagedEntries: PathEntry[] = $state([])
+  let stagedActive = $state(false)
+ let stagedApplyLoading = $state(false)
   
   // Notes (sticky-note) — shared notesStore, key prefixed with path:
-  let notesLoaded = false
+  let notesLoaded = $state(false)
   let notesTick = writable(0)  // store: async-safe re-render trigger (Svelte 4 await limitation)
-  let hoveredNotePath: string | null = null
-  let lastMovedKey: number | null = null  // Moved entry highlight (W3C APG listbox-rearrangeable)
+  let hoveredNotePath: string | null = $state(null)
+  let lastMovedKey: number | null = $state(null)  // Moved entry highlight (W3C APG listbox-rearrangeable)
 
   async function ensureNotesLoaded() {
     if (!notesLoaded) {
@@ -88,22 +81,17 @@
   // get $t-stable variant via store directly (Avoid reactive retriggers): N/A.
 
   // Inline rename state
-  let editingIndex: number | null = null
-  let editValue: string = ''
-  let editError: string = ''
-  let healthMap: Map<string, PathHealthEntry> = new Map()
-  let healthLoading = false
+  let editingIndex: number | null = $state(null)
+  let editValue: string = $state('')
+  let editError: string = $state('')
+  let healthMap: Map<string, PathHealthEntry> = $state(new Map())
+  let healthLoading = $state(false)
   let healthSummary: { healthy: number; dead: number; duplicate: number } | null = null
 
   onMount(async () => {
     await refresh()
   })
 
-  // Watch refreshTrigger from App.svelte: refresh path entries when the
-  // header refresh button is clicked, regardless of active view.
-  $: if ($refreshTrigger > 0) {
-    refresh()
-  }
 
   async function refresh() {
     loading = true
@@ -494,6 +482,22 @@
       blurTimeoutId = null
     }
   }
+  $effect(() => {
+    if (pathProfileIndex) { pathIdx = $pathProfileIndex }
+  });
+  // Visible order: when staged moves are active we show the in-flight order;
+  // otherwise the last-committed one. The #each renders this, and move buttons
+  // operate on the visual position `pos` (NOT entry.index, which is the
+  // original registry index used as the stable key).
+  let displayEntries = $derived(stagedActive ? stagedEntries : entries)
+  let liveDeadCount = $derived(displayEntries.filter((e: any) => !e.exists && !e.isProtected).length)  // WCAG 4.1.2: disabled reflects real data
+  // Watch refreshTrigger from App.svelte: refresh path entries when the
+  // header refresh button is clicked, regardless of active view.
+  $effect(() => {
+    if ($refreshTrigger > 0) {
+      refresh()
+    }
+  });
 </script>
 
 <div class="space-y-3">
@@ -503,7 +507,7 @@
     <select
       id="path-scope"
       bind:value={scope}
-      on:change={handleScopeChange}
+      onchange={handleScopeChange}
       class="px-2.5 py-1.5 text-xs border border-border rounded-md focus:outline-none focus:ring-1 focus:ring-primary bg-card bg-accent border-border/80 text-foreground"
     >
       <option value="user">{$t('scope.user')}</option>
@@ -516,11 +520,11 @@
       type="text"
       placeholder={$t('path.entryPlaceholder')}
       bind:value={newEntry}
-      on:keydown={(e) => { if (e.key === 'Enter') handleAdd() }}
+      onkeydown={(e) => { if (e.key === 'Enter') handleAdd() }}
       class="flex-1 px-3 py-1.5 text-xs border border-border rounded-md focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary font-mono bg-card border-border/80 text-foreground"
     />
     <button
-      on:click={handleAdd}
+      onclick={handleAdd}
       disabled={actionLoading || !newEntry.trim()}
       class="flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-primary-foreground bg-primary rounded-md hover:bg-primary transition disabled:opacity-50 bg-primary/80"
     >
@@ -528,7 +532,7 @@
       {$t('path.addEntry')}
     </button>
     <button
-      on:click={() => handleDedupe(true)}
+      onclick={() => handleDedupe(true)}
       disabled={actionLoading || entries.length === 0}
       title={$t('path.dedupeDryRun')}
       class="flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-foreground/80 bg-muted/30 rounded-md hover:bg-muted transition disabled:opacity-50 bg-accent text-foreground"
@@ -537,7 +541,7 @@
       {$t('path.dedupeDryRun')}
     </button>
     <button
-      on:click={() => handleDedupe(false)}
+      onclick={() => handleDedupe(false)}
       disabled={actionLoading || entries.length === 0}
       title={$t('path.dedupe')}
       class="flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-amber-700 bg-primary/10 rounded-md hover:bg-amber-100 transition disabled:opacity-50 text-primary/80 hover:bg-primary/15"
@@ -546,7 +550,7 @@
       {$t('path.dedupe')}
     </button>
     <button
-      on:click={() => handleHealthCheck(true)}
+      onclick={() => handleHealthCheck(true)}
       disabled={actionLoading || healthLoading || entries.length === 0}
       title={$t('path.healthCheck')}
       class="flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-primary bg-primary/5 rounded-md hover:bg-primary/15 transition disabled:opacity-50 bg-primary/10"
@@ -555,7 +559,7 @@
       {$t('path.healthCheck')}
     </button>
     <button
-      on:click={handleRemoveDeadConfirm}
+      onclick={handleRemoveDeadConfirm}
       disabled={actionLoading || liveDeadCount === 0}
       title={$t('path.removeDead')}
       class="flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-destructive bg-destructive/10 rounded-md hover:bg-destructive/15 transition disabled:opacity-30 disabled:cursor-not-allowed"
@@ -579,7 +583,7 @@
         <span class="text-[11px] text-primary">{$t('path.stagedActive')}</span>
         <div class="flex items-center gap-2">
           <button
-            on:click={applyStagedMoves}
+            onclick={applyStagedMoves}
             disabled={stagedApplyLoading}
             class="inline-flex items-center gap-1 px-2.5 py-1 text-[11px] font-medium text-primary-foreground bg-primary hover:bg-primary rounded-md transition disabled:opacity-50"
             title={$t('path.applyMoves')}
@@ -589,7 +593,7 @@
             {$t('path.applyMoves')}
           </button>
           <button
-            on:click={cancelStagedMoves}
+            onclick={cancelStagedMoves}
             disabled={stagedApplyLoading}
             class="inline-flex items-center px-2.5 py-1 text-[11px] text-muted-foreground hover:bg-muted/30 rounded-md transition disabled:opacity-50 text-foreground/80 hover:bg-accent"
             title={$t('buttons.cancel')}
@@ -620,13 +624,13 @@
                     <input
                       type="text"
                       bind:value={editValue}
-                      on:keydown={(e) => handleEditKeydown(e, entry.path)}
-                      on:blur={() => handleEditBlur(entry.path)}
+                      onkeydown={(e) => handleEditKeydown(e, entry.path)}
+                      onblur={() => handleEditBlur(entry.path)}
                       class="flex-1 px-2 py-1 text-[10px] font-mono border border-primary rounded-md focus:outline-none focus:ring-1 focus:ring-primary bg-background text-foreground"
                       spellcheck="false"
                     />
                     <button
-                      on:click={() => confirmEdit(entry.path)}
+                      onclick={() => confirmEdit(entry.path)}
                       disabled={actionLoading}
                       class="inline-flex p-1 text-primary hover:bg-primary/10 rounded transition disabled:opacity-50 hover:bg-primary/15"
                       title={$t('buttons.save')}
@@ -635,7 +639,7 @@
           <Check class="w-3 h-3" />
                     </button>
                     <button
-                      on:click={cancelEdit}
+                      onclick={cancelEdit}
                       disabled={actionLoading}
                       class="inline-flex p-1 text-muted-foreground hover:text-muted-foreground hover:bg-muted/30 rounded transition disabled:opacity-50 hover:bg-accent"
                       title={$t('buttons.cancel')}
@@ -652,7 +656,7 @@
                   <div
                     class="text-[11px] font-mono text-foreground/80 text-foreground break-all cursor-pointer hover:text-primary transition select-none leading-relaxed"
                     title={$notesStore[pathNoteKey(scope, entry.path)]?.note || $t('messages.clickToCopy')}
-                    on:click={() => copyToClipboard(entry.path)}
+                    onclick={() => copyToClipboard(entry.path)}
                   >
                     {entry.path}
                   </div>
@@ -686,11 +690,11 @@
                   <!-- Note button (sticky-note) -->
                   <div class="relative inline-flex">
                     <button
-                      on:click={() => handlePathNote(scope, entry.path)}
-                      on:focus={() => ensureNotesLoaded()}
-                      on:mouseenter={() => { hoveredNotePath = entry.path; if (!notesLoaded) void ensureNotesLoaded() }}
-                      on:mouseleave={() => hoveredNotePath = null}
-                      on:keydown={(e) => { if (e.key === 'Escape') hoveredNotePath = null }}
+                      onclick={() => handlePathNote(scope, entry.path)}
+                      onfocus={() => ensureNotesLoaded()}
+                      onmouseenter={() => { hoveredNotePath = entry.path; if (!notesLoaded) void ensureNotesLoaded() }}
+                      onmouseleave={() => hoveredNotePath = null}
+                      onkeydown={(e) => { if (e.key === 'Escape') hoveredNotePath = null }}
                       class="inline-flex p-1 text-muted-foreground hover:text-primary/80 hover:bg-primary/10 rounded transition hover:bg-primary/15"
                       title={$notesStore[pathNoteKey(scope, entry.path)] ? $t('notes.editNote') : $t('notes.addNote')}
                       aria-describedby={hoveredNotePath === entry.path && $notesStore[pathNoteKey(scope, entry.path)] ? 'path-tip-' + entry.index : undefined}
@@ -709,7 +713,7 @@
                   </div>
                   <!-- Lock button -->
                   <button
-                    on:click={() => handlePathLockToggle(entry.path, !!entry.isProtected, !!entry.isBuiltinProtected)}
+                    onclick={() => handlePathLockToggle(entry.path, !!entry.isProtected, !!entry.isBuiltinProtected)}
                     disabled={!!entry.isBuiltinProtected}
                     class="inline-flex p-1 {entry.isProtected ? 'text-amber-600' : 'text-muted-foreground hover:text-primary/80 hover:bg-amber-50/60'} rounded transition disabled:opacity-30 disabled:cursor-not-allowed hover:bg-primary/15"
                     title={entry.isProtected ? (entry.isBuiltinProtected ? $t('protection.lockedBuiltin') : $t('protection.unlockPath')) : $t('protection.lockPath')}
@@ -719,7 +723,7 @@
                   </button>
                   <!-- Rename button -->
                   <button
-                    on:click={() => startEdit(entry.index, entry.path)}
+                    onclick={() => startEdit(entry.index, entry.path)}
                     disabled={actionLoading || !!entry.isProtected}
                     class="inline-flex p-1 text-muted-foreground hover:text-primary hover:bg-primary/10 rounded transition disabled:opacity-30 hover:bg-primary/15"
                     title={entry.isProtected ? $t('protection.lockedCannotEdit') : $t('path.rename')}
@@ -728,7 +732,7 @@
           <Pencil class="w-3 h-3" />
                   </button>
                   <button
-                    on:click={() => handleMoveUp(pos)}
+                    onclick={() => handleMoveUp(pos)}
                     disabled={actionLoading || pos === 0 || entry.isProtected}
                     data-move-up-key={entry.index}
                     class="inline-flex p-1 text-muted-foreground hover:text-primary hover:bg-primary/10 rounded transition disabled:opacity-30 hover:bg-primary/15"
@@ -738,7 +742,7 @@
           <ChevronUp class="w-3 h-3" />
                   </button>
                   <button
-                    on:click={() => handleMoveDown(pos)}
+                    onclick={() => handleMoveDown(pos)}
                     disabled={actionLoading || pos === displayEntries.length - 1 || entry.isProtected}
                     data-move-down-key={entry.index}
                     class="inline-flex p-1 text-muted-foreground hover:text-primary hover:bg-primary/10 rounded transition disabled:opacity-30 hover:bg-primary/15"
@@ -748,7 +752,7 @@
           <ChevronDown class="w-3 h-3" />
                   </button>
                   <button
-                    on:click={() => handleRemove(entry.path)}
+                    onclick={() => handleRemove(entry.path)}
                     disabled={actionLoading || entry.isProtected}
                     class="inline-flex p-1 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded transition disabled:opacity-30 disabled:cursor-not-allowed hover:bg-destructive/15"
                     title={$t('path.removeEntry')}

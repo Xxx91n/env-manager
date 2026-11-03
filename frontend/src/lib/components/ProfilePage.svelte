@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Plus, Download, MapPin, Play, Pencil, Trash2, X, Power } from 'lucide-svelte'
+    import { Plus, Download, MapPin, Play, Pencil, Trash2, X, Power } from 'lucide-svelte'
   import { onMount } from 'svelte'
   import { saveProfileOrder as saveStoredOrder, applyStoredOrder as applyStored } from '../profileDrag'
   
@@ -35,31 +35,31 @@
   } from '../api'
 import { parseSecretProviderList } from '../secret-provider-list'
   import type { ProfileData, EnvVariable } from '../api'
-  let profileList: ProfileData[] = []
-  let selectedProfile: ProfileData | null = null
-  let loading = false
-  let actionLoading = false
-  let newProfileName = ''
-  let newVarName = ''
-  let newVarValue = ''
-  let newVarScope: 'user' | 'system' = 'user'
-  let showAddVarPanel = false
-  let allVars: EnvVariable[] = []
-  let newPathEntry = ''
-  let newPathScope: 'user' | 'system' = 'user'
-  let pathPool: { name: string; value?: string }[] = []
-  let newProfileType: 'global' | 'launch' = 'global'
-  let newProfileTarget = ''
-  let newProfileArgs = ''
-  let newProfileCwd = ''
-  let showAddSecretPanel = false
-  let newSecretName = ''
-  let newSecretValue = ''
+  let profileList: ProfileData[] = $state([])
+  let selectedProfile: ProfileData | null = $state(null)
+  let loading = $state(false)
+  let actionLoading = $state(false)
+  let newProfileName = $state('')
+  let newVarName = $state('')
+  let newVarValue = $state('')
+  let newVarScope: 'user' | 'system' = $state('user')
+  let showAddVarPanel = $state(false)
+  let allVars: EnvVariable[] = $state([])
+  let newPathEntry = $state('')
+  let newPathScope: 'user' | 'system' = $state('user')
+  let pathPool: { name: string; value?: string }[] = $state([])
+  let newProfileType: 'global' | 'launch' = $state('global')
+  let newProfileTarget = $state('')
+  let newProfileArgs = $state('')
+  let newProfileCwd = $state('')
+  let showAddSecretPanel = $state(false)
+  let newSecretName = $state('')
+  let newSecretValue = $state('')
   // v0.8 secret provider state
-  let activeProvider = 'dpapi-current-user'
-  let availableProviders: string[] = []
+  let activeProvider = $state('dpapi-current-user')
+  let availableProviders: string[] = $state([])
   // Providers the CLI reports as (unavailable) + declared capability flags.
-  let unavailableProviders: string[] = []
+  let unavailableProviders: string[] = $state([])
   let providerCapabilities: Record<string, { refresh: boolean; certauth: boolean; network: boolean }> = {}
 
 
@@ -76,8 +76,8 @@ import { parseSecretProviderList } from '../secret-provider-list'
     return null
   }    // Pointer drag state remains local. Registry/profile persistence is never
   // touched by a GUI-only ordering change.
-  let dragIndex: number | null = null
-  let isDragging = false
+  let dragIndex: number | null = $state(null)
+  let isDragging = $state(false)
   let pointerId: number | null = null
   onMount(() => {
     void refreshProfiles()
@@ -113,11 +113,6 @@ import { parseSecretProviderList } from '../secret-provider-list'
     } catch {
       // keep defaults
     }
-  }
-  // Watch refreshTrigger from App.svelte: refresh profiles when header
-  // refresh button is clicked, regardless of active view.
-  $: if ($refreshTrigger > 0) {
-    refreshProfiles()
   }
   let profileRefreshEpoch = 0
   async function refreshProfiles() {
@@ -345,10 +340,10 @@ import { parseSecretProviderList } from '../secret-provider-list'
   // (the DPAPI fallback can't decrypt CredMan/SOPS/etc). Now we show a confirm
   // modal: the user must acknowledge that existing secrets are NOT auto-migrated
   // and that they should run "Rotate all secrets" afterwards.
-  let pendingProvider: string | null = null
+  let pendingProvider: string | null = $state(null)
   // Inline provider activation error (displayed under the selector, not as modal toast)
-  let providerErrorMessage: string | null = null
-  let providerChanging = false
+  let providerErrorMessage: string | null = $state(null)
+  let providerChanging = $state(false)
   function requestChangeProvider(newProvider: string) {
     if (newProvider === activeProvider) return
     pendingProvider = newProvider
@@ -618,10 +613,17 @@ import { parseSecretProviderList } from '../secret-provider-list'
     newVarName = ''
     newVarValue = ''
       }
+  // Watch refreshTrigger from App.svelte: refresh profiles when header
+  // refresh button is clicked, regardless of active view.
+  $effect(() => {
+    if ($refreshTrigger > 0) {
+      refreshProfiles()
+    }
+  });
 </script>
 <svelte:window
-  on:pointerup={finishPointerDrag}
-  on:pointercancel={cancelPointerDrag}
+  onpointerup={finishPointerDrag}
+  onpointercancel={cancelPointerDrag}
 />
 <div class="space-y-3">
   <!-- Create profile bar -->
@@ -643,7 +645,7 @@ import { parseSecretProviderList } from '../secret-provider-list'
           class="flex-1 min-w-[200px] px-2 py-1 text-xs border border-border rounded-md font-mono bg-card border-border/80 text-foreground"
         />
         <button
-          on:click={handleBrowseTarget}
+          onclick={handleBrowseTarget}
           class="px-2 py-1 text-xs text-primary bg-primary/5 rounded-md hover:bg-primary/15 bg-primary/10"
           title={$t('profiles.browse')}
         >
@@ -668,11 +670,11 @@ import { parseSecretProviderList } from '../secret-provider-list'
         type="text"
         placeholder={$t('profiles.createPrompt')}
         bind:value={newProfileName}
-        on:keydown={(event) => { if (event.key === 'Enter') handleCreate() }}
+        onkeydown={(event) => { if (event.key === 'Enter') handleCreate() }}
         class="flex-1 px-3 py-1.5 text-xs border border-border rounded-md focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary bg-card border-border/80 text-foreground"
       />
       <button
-        on:click={handleCreate}
+        onclick={handleCreate}
         disabled={actionLoading || !newProfileName.trim()}
         class="flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-primary-foreground bg-primary rounded-md hover:bg-primary transition disabled:opacity-50 bg-primary/80"
       >
@@ -680,7 +682,7 @@ import { parseSecretProviderList } from '../secret-provider-list'
         {$t('dialogs.createProfile')}
       </button>
       <button
-        on:click={handleImport}
+        onclick={handleImport}
         disabled={actionLoading}
         class="flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-foreground/80 bg-card border border-border rounded-md hover:bg-muted/50 transition disabled:opacity-50 text-foreground border-border/80 hover:bg-accent"
         title={$t('profiles.import')}
@@ -704,7 +706,7 @@ import { parseSecretProviderList } from '../secret-provider-list'
       {#each profileList as profile, i (profile.name)}
         <div
           class="bg-card rounded-md border border-border bg-card border-border transition-all duration-150 hover:shadow-md hover:ring-2 hover:ring-blue-300 {isDragging && dragIndex === i ? 'opacity-80 ring-2 ring-primary shadow-lg' : ''}"
-          on:pointerenter={() => handleDragPointerEnter(i)}
+          onpointerenter={() => handleDragPointerEnter(i)}
           role="listitem"
           data-profile-name={profile.name}
           data-profile-index={i}
@@ -717,13 +719,13 @@ import { parseSecretProviderList } from '../secret-provider-list'
               title={$t('profiles.dragToSort')}
               aria-label={$t('profiles.dragToSort')}
               data-testid={`profile-drag-handle-${i}`}
-              on:pointerdown={(event) => beginPointerDrag(event, i)}
-              on:pointerup={(event) => finishPointerDrag(event)}
+              onpointerdown={(event) => beginPointerDrag(event, i)}
+              onpointerup={(event) => finishPointerDrag(event)}
             >
           <MapPin class="w-3 h-3 pointer-events-none" />
             </button>
             <button
-              on:click={() => selectProfile(profile)}
+              onclick={() => selectProfile(profile)}
               class="flex items-center gap-3 flex-1 text-left"
             >
               <span class="text-xs font-medium text-foreground">{profile.name}</span>
@@ -746,7 +748,7 @@ import { parseSecretProviderList } from '../secret-provider-list'
             <div class="flex items-center gap-3">
               <!-- Toggle switch -->
               <button
-                on:click={() => handleToggleProfile(profile)}
+                onclick={() => handleToggleProfile(profile)}
                 disabled={actionLoading || profile.profileType === 'launch'}
                 class="relative inline-flex h-4 w-7 items-center rounded-full transition disabled:opacity-40 disabled:cursor-not-allowed {profile.isEnabled ? 'bg-primary bg-primary/80' : 'bg-border bg-muted'}"
                 role="switch"
@@ -758,7 +760,7 @@ import { parseSecretProviderList } from '../secret-provider-list'
               {#if profile.profileType === 'launch' && profile.targetExecutable}
                 <!-- Launch button (Launch profiles only) -->
                 <button
-                  on:click={() => handleLaunchProfile(profile)}
+                  onclick={() => handleLaunchProfile(profile)}
                   disabled={actionLoading}
                   class="p-1 text-primary hover:bg-primary/10 rounded transition hover:bg-primary/15"
                   title={$t('profiles.localLaunch')}
@@ -769,7 +771,7 @@ import { parseSecretProviderList } from '../secret-provider-list'
               {/if}
               <!-- Export button -->
               <button
-                on:click={() => handleExport(profile)}
+                onclick={() => handleExport(profile)}
                 disabled={actionLoading}
                 class="p-1 text-muted-foreground hover:text-primary rounded transition"
                 title={$t('profiles.export')}
@@ -779,7 +781,7 @@ import { parseSecretProviderList } from '../secret-provider-list'
               </button>
               <!-- Rename button -->
               <button
-                on:click={() => handleRename(profile)}
+                onclick={() => handleRename(profile)}
                 disabled={actionLoading}
                 class="p-1 text-muted-foreground hover:text-primary rounded transition"
                 title={$t('profiles.rename')}
@@ -789,7 +791,7 @@ import { parseSecretProviderList } from '../secret-provider-list'
               </button>
               <!-- Delete button -->
               <button
-                on:click={() => handleDelete(profile)}
+                onclick={() => handleDelete(profile)}
                 disabled={actionLoading}
                 class="p-1 text-muted-foreground hover:text-destructive rounded transition"
                 title={$t('buttons.delete')}
@@ -810,7 +812,7 @@ import { parseSecretProviderList } from '../secret-provider-list'
                     {@const inheritBlocked = (profile.profileType === 'global' && parent.profileType === 'launch')
                       || (profile.profileType === 'launch' && parent.profileType === 'launch' && (parent.secretVariables?.length ?? 0) > 0)}
                       <div class="flex items-center gap-1.5 text-[10px] text-muted-foreground text-foreground/80" title={inheritBlocked ? $t('errors.inheritBlocked') : ''}>
-                        <input type="checkbox" class="cursor-pointer" checked={profile.inherits?.includes(parent.name)} disabled={inheritBlocked} on:change={(event) => handleInheritance(parent.name, event.currentTarget.checked)} />
+                        <input type="checkbox" class="cursor-pointer" checked={profile.inherits?.includes(parent.name)} disabled={inheritBlocked} onchange={(event) => handleInheritance(parent.name, event.currentTarget.checked)} />
                         <span class="truncate" class:opacity-40={inheritBlocked} class:cursor-not-allowed={inheritBlocked}>{parent.name}</span>
                         {#if parent.profileType === 'launch'}
                           <span class="text-[8px] px-0.5 rounded bg-amber-100 text-amber-800 bg-primary/15 text-primary/80">{$t('profiles.typeLaunch')}</span>
@@ -830,7 +832,7 @@ import { parseSecretProviderList } from '../secret-provider-list'
                          {:else}
                            <span class="text-[9px] px-1 rounded-full bg-primary/10 text-primary bg-primary/20/40">{$t('scope.user')}</span>
                          {/if}
-                         <button on:click={() => handleRemovePath(path)} disabled={profile.isEnabled} class="text-destructive disabled:opacity-30" aria-label={$t('buttons.delete')}>×</button>
+                         <button onclick={() => handleRemovePath(path)} disabled={profile.isEnabled} class="text-destructive disabled:opacity-30" aria-label={$t('buttons.delete')}>×</button>
                        </div>
                      {/each}
                   </div>
@@ -844,11 +846,11 @@ import { parseSecretProviderList } from '../secret-provider-list'
                        items={pathPool}
                        placeholder={$t('profiles.cloneSearchPlaceholder')}
                        keepQueryOnSelect={true}
-                       on:input={(e) => { newPathEntry = e.detail }}
-                       on:select={(e) => { newPathEntry = e.detail.name }}
+                       oninput={(v) => { newPathEntry = v }}
+                       onselect={(v) => { newPathEntry = v.name }}
                      />
                    </div>
-                   <button on:click={handleAddPath} disabled={profile.isEnabled || !newPathEntry.trim()} class="px-2 text-[10px] text-primary disabled:opacity-30">{$t('buttons.add')}</button>
+                   <button onclick={handleAddPath} disabled={profile.isEnabled || !newPathEntry.trim()} class="px-2 text-[10px] text-primary disabled:opacity-30">{$t('buttons.add')}</button>
                  </div>
                   {#if profile.isEnabled}
                     <p class="text-[9px] text-primary/80 mt-1">{$t('profiles.unapplyToEdit')}</p>
@@ -876,7 +878,7 @@ import { parseSecretProviderList } from '../secret-provider-list'
                             <span class="text-[9px] text-muted-foreground" title={pv.sourceProfile}>{$t("profiles.inheritsFrom")} {pv.sourceProfile}</span>
                           {/if}
                           <button
-                            on:click={() => handleRemoveVar(pv.name)}
+                            onclick={() => handleRemoveVar(pv.name)}
                             disabled={actionLoading}
                             class="p-0.5 text-muted-foreground hover:text-destructive rounded transition"
                             title={$t('buttons.delete')}
@@ -903,7 +905,7 @@ import { parseSecretProviderList } from '../secret-provider-list'
                           <span class="text-[10px] font-mono text-muted-foreground flex-1 truncate">{'<encrypted>'}</span>
           <Power class="w-3 h-3 text-amber-600" />
                           <button
-                            on:click={() => handleRemoveSecret(pv.name)}
+                            onclick={() => handleRemoveSecret(pv.name)}
                             disabled={actionLoading}
                             class="p-0.5 text-muted-foreground hover:text-destructive rounded transition"
                             title={$t('buttons.delete')}
@@ -920,7 +922,7 @@ import { parseSecretProviderList } from '../secret-provider-list'
               <!-- Add variable button -->
               {#if !showAddVarPanel}
                 <button
-                  on:click={() => (showAddVarPanel = true)}
+                  onclick={() => (showAddVarPanel = true)}
                   disabled={profile.isEnabled}
                   class="flex items-center gap-1 text-[10px] font-medium text-primary hover:text-primary disabled:opacity-40 disabled:cursor-not-allowed"
                 >
@@ -937,7 +939,7 @@ import { parseSecretProviderList } from '../secret-provider-list'
                   <CloneCombobox
                     items={allVars}
                     placeholder={$t('profiles.cloneSearchPlaceholder')}
-                    on:select={(e) => { handleCloneSelectFrom(e.detail) }}
+                    onselect={(v) => { handleCloneSelectFrom(v) }}
                   />
                                     <!-- Scope selector: user vs system -->
                   <div class="flex items-center gap-2 mb-1">
@@ -947,7 +949,7 @@ import { parseSecretProviderList } from '../secret-provider-list'
                     <select
                       id="profile-var-scope"
                       value={newVarScope}
-                      on:change={(e) => newVarScope = e.currentTarget.value}
+                      onchange={(e) => newVarScope = e.currentTarget.value}
                       class="px-2 py-1 text-[10px] border border-border rounded focus:outline-none focus:ring-1 focus:ring-primary bg-accent border-border/80 text-foreground"
                     >
                       <option value="user">{$t('scope.user')}</option>
@@ -968,14 +970,14 @@ import { parseSecretProviderList } from '../secret-provider-list'
                   />
                   <div class="flex gap-1">
                     <button
-                      on:click={handleAddVar}
+                      onclick={handleAddVar}
                       disabled={actionLoading || !newVarName.trim() || profile.isEnabled}
                       class="flex-1 px-2 py-1 text-[10px] font-medium text-primary-foreground bg-primary rounded hover:bg-primary transition disabled:opacity-50 bg-primary/80"
                     >
                       {$t('buttons.save')}
                     </button>
                     <button
-                      on:click={() => { showAddVarPanel = false; newVarName = ''; newVarValue = ''; newVarScope = 'user' }}
+                      onclick={() => { showAddVarPanel = false; newVarName = ''; newVarValue = ''; newVarScope = 'user' }}
                       class="px-2 py-1 text-[10px] text-muted-foreground border border-border rounded hover:bg-muted/50 transition text-foreground/80 border-border/80 hover:bg-accent"
                     >
                       {$t('buttons.cancel')}
@@ -990,7 +992,7 @@ import { parseSecretProviderList } from '../secret-provider-list'
                      <select
                      class="text-[9px] px-1.5 py-0.5 rounded bg-muted/30 bg-accent text-muted-foreground text-foreground/80 border border-border border-border/80 focus:outline-none focus:ring-1 focus:ring-primary"
                      value={activeProvider}
-                     on:change={(e) => {
+                     onchange={(e) => {
                        const next = e.currentTarget.value;
                        e.currentTarget.value = activeProvider;
                        requestChangeProvider(next);
@@ -1008,13 +1010,13 @@ import { parseSecretProviderList } from '../secret-provider-list'
                    {#if providerErrorMessage}
                       <div class="mt-1 p-1.5 rounded-md bg-primary/10 border border-amber-200 text-[10px] text-amber-700 border-primary/40 text-primary/80">
                         <span class="font-medium">{$t('secrets.activeProvider')}:</span> {providerErrorMessage}
-                        <button type="button" class="ml-1 underline text-primary/80" on:click={() => providerErrorMessage = null}>{$t('buttons.close')}</button>
+                        <button type="button" class="ml-1 underline text-primary/80" onclick={() => providerErrorMessage = null}>{$t('buttons.close')}</button>
                       </div>
                     {/if}
                 </div>
                 {#if !showAddSecretPanel}
                   <button
-                    on:click={() => (showAddSecretPanel = true)}
+                    onclick={() => (showAddSecretPanel = true)}
                     class="flex items-center gap-1 text-[10px] font-medium text-primary/80 hover:text-amber-700 mt-2"
                   >
           <Plus class="w-3 h-3" />
@@ -1036,14 +1038,14 @@ import { parseSecretProviderList } from '../secret-provider-list'
                     />
                     <div class="flex gap-1">
                       <button
-                        on:click={handleAddSecret}
+                        onclick={handleAddSecret}
                         disabled={actionLoading || !newSecretName.trim() || !newSecretValue}
                         class="flex-1 px-2 py-1 text-[10px] font-medium text-primary-foreground bg-primary/80 rounded hover:bg-amber-700 transition disabled:opacity-50 bg-primary/60 hover:bg-primary/80"
                       >
                         {$t('profiles.addSecret')}
                       </button>
                       <button
-                        on:click={() => { showAddSecretPanel = false; newSecretName = ''; newSecretValue = '' }}
+                        onclick={() => { showAddSecretPanel = false; newSecretName = ''; newSecretValue = '' }}
                         class="px-2 py-1 text-[10px] text-muted-foreground border border-border rounded hover:bg-muted/50 transition text-foreground/80 border-border/80 hover:bg-accent"
                       >
                         {$t('buttons.cancel')}
@@ -1067,14 +1069,14 @@ import { parseSecretProviderList } from '../secret-provider-list'
         <div class="flex justify-end gap-2">
           <button
             type="button"
-            on:click={cancelChangeProvider}
+            onclick={cancelChangeProvider}
             class="px-3 py-1 text-[11px] text-muted-foreground border border-border rounded hover:bg-muted/50 transition text-foreground/80 border-border/80 hover:bg-accent"
           >
             {$t('buttons.cancel')}
           </button>
           <button
             type="button"
-            on:click={confirmChangeProvider}
+            onclick={confirmChangeProvider}
             disabled={providerChanging}
             class="px-3 py-1 text-[11px] font-medium text-primary-foreground bg-primary/80 rounded hover:bg-amber-700 transition bg-primary/60 hover:bg-primary/80 disabled:opacity-50 disabled:cursor-wait"
           >

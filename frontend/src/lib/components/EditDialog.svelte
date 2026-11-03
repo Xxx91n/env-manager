@@ -1,5 +1,7 @@
 <script lang="ts">
-  import { createEventDispatcher } from 'svelte'
+  import { createBubbler, stopPropagation } from 'svelte/legacy';
+
+  const bubble = createBubbler();
   import { frontendLog } from '../settingsStore'
   import { t } from 'svelte-i18n'
   import { setVariable, renameVariable, changeScope } from '../api'
@@ -7,19 +9,23 @@
   import { hasVariableConflict } from '../features'
   import type { EnvVariable } from '../api'  // for typed param'
 
-  export let variable = null
+  interface Props {
+    variable?: any;
+    onsave?: () => void;
+    onclose?: () => void;
+  }
 
-  const dispatch = createEventDispatcher()
+  let { variable = null, onsave, onclose }: Props = $props();
 
-  let name = variable?.name || ''
-  let value = variable?.value || ''
-  let scope = variable?.scope || 'user'
+  let name = $state(variable?.name || '')
+  let value = $state(variable?.value || '')
+  let scope = $state(variable?.scope || 'user')
   let originalName = variable?.name || ''
-  let saving = false
-  let localError = ''
+  let saving = $state(false)
+  let localError = $state('')
 
   // Check if name has changed from original
-  $: nameChanged = !!variable && name !== originalName
+  let nameChanged = $derived(!!variable && name !== originalName)
 
   async function handleSave() {
     if (!name.trim()) {
@@ -106,7 +112,7 @@
         // Normal set (new variable or just value change)
         await setVariable(name, value, scope as 'user' | 'system', overwrite || !!variable)
       }
-      dispatch('save')
+      onsave?.()
     } catch (err) { void frontendLog('error', '[EditDialog] ' + (err instanceof Error ? err.message : String(err))).catch(() => {});
       localError = err instanceof Error ? err.message : String(err)
       setTimeout(() => { localError = '' }, 4000)
@@ -116,17 +122,17 @@
   }
 
   function handleClose() {
-    dispatch('close')
+    onclose?.()
   }
 </script>
 
 <div
   class="fixed inset-0 bg-background/40 flex items-center justify-center z-50"
-  on:click={handleClose}
-  on:keydown={(e) => { if (e.key === 'Escape') handleClose() }}
+  onclick={handleClose}
+  onkeydown={(e) => { if (e.key === 'Escape') handleClose() }}
   role="presentation"
   tabindex="-1">
-  <div class="bg-card rounded-lg shadow-xl max-w-md w-full mx-4" on:click|stopPropagation>
+  <div class="bg-card rounded-lg shadow-xl max-w-md w-full mx-4" onclick={stopPropagation(bubble('click'))}>
     <div class="px-5 py-3 border-b border-border">
       <h2 class="text-sm font-semibold text-foreground">
         {variable ? $t('dialogs.editVariable') : $t('dialogs.addVariable')}
@@ -167,7 +173,7 @@
           bind:value={value}
           rows="4"
           class="w-full px-3 py-1.5 text-xs border border-border rounded-md focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary font-mono bg-accent border-border/80 text-foreground"
-        />
+></textarea>
       </div>
 
       <div>
@@ -188,14 +194,14 @@
 
     <div class="px-5 py-3 border-t border-border flex gap-2 justify-end">
       <button
-        on:click={handleClose}
+        onclick={handleClose}
         disabled={saving}
         class="px-4 py-1.5 text-xs text-foreground/80 border border-border rounded-md hover:bg-muted/20 transition disabled:opacity-50 text-foreground border-border/80 hover:bg-accent"
       >
         {$t('buttons.cancel')}
       </button>
       <button
-        on:click={handleSave}
+        onclick={handleSave}
         disabled={saving}
         class="px-4 py-1.5 text-xs text-primary-foreground bg-primary rounded-md hover:bg-primary transition disabled:opacity-50 bg-primary/80"
       >

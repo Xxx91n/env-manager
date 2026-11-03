@@ -1,6 +1,9 @@
 <script lang="ts">
+  import { createBubbler, stopPropagation } from 'svelte/legacy';
+
+  const bubble = createBubbler();
   import { Power } from 'lucide-svelte'
-  import { createEventDispatcher, onMount } from 'svelte'
+  import { onMount } from 'svelte'
   import { t, locale } from 'svelte-i18n'
   import { locales, defaultLanguage } from '../i18n'
   import { isCliInPath, addCliToPath, removeCliFromPath, listPathEntries, appVersion, checkUpdatePlugin, downloadAndInstall, bulkImport, bulkExport, pickOpenFile, pickSaveFile, serviceStatus, serviceHealth, servicePing, serviceRefreshMount, serviceRotateMount, serviceShutdown, serviceReload, serviceStart, serviceStop, exportState, importState } from '../api'
@@ -9,19 +12,28 @@
   import { showToast } from '../stores'
   import { t as tStore } from 'svelte-i18n'
 
-  export let darkMode = false
-  export let fontScale: number = 1
-  export let themeStyle: string = 'slate'
+  interface Props {
+    darkMode?: boolean;
+    fontScale?: number;
+    themeStyle?: string;
+    onthemeStyleChange?: (style: string) => void;
+    onthemeChange?: (dark: boolean) => void;
+    onrefresh?: () => void;
+    onfontScaleChange?: (scale: number) => void;
+    onclose?: () => void;
+  }
+
+  let { darkMode = $bindable(false), fontScale = $bindable(1), themeStyle = $bindable('slate'), onthemeStyleChange, onthemeChange, onrefresh, onfontScaleChange, onclose }: Props = $props();
 
   // Lightweight mode config
-  let autoLightweight = true
-  let lightweightTimeout = 10
-  let lightweightLoading = false
+  let autoLightweight = $state(true)
+  let lightweightTimeout = $state(10)
+  let lightweightLoading = $state(false)
 
-  const dispatch = createEventDispatcher()
-
-  let selectedFontScale: number = fontScale
-  $: if (fontScale !== selectedFontScale) selectedFontScale = fontScale
+  let selectedFontScale: number = $state(fontScale)
+  $effect(() => {
+    if (fontScale !== selectedFontScale) selectedFontScale = fontScale
+  });
 
   const languageNames: Record<string, string> = {
     en: 'English',
@@ -36,18 +48,20 @@
     ar: 'العربية',
   }
 
-  let currentLocale: string = defaultLanguage
-  $: if ($locale) currentLocale = $locale
+  let currentLocale: string = $state(defaultLanguage)
+  $effect(() => {
+    if ($locale) currentLocale = $locale
+  });
 
-  let cliInPath = false
-  let cliToggleLoading = false
-  let updateChecking = false
-  let updateAvailable: boolean | null = null
-  let latestVersion = ''
+  let cliInPath = $state(false)
+  let cliToggleLoading = $state(false)
+  let updateChecking = $state(false)
+  let updateAvailable: boolean | null = $state(null)
+  let latestVersion = $state('')
   let releaseUrl = ''
-  let installing = false
-  let bulkScope: 'user' | 'system' = 'user'
-  let bulkLoading = false
+  let installing = $state(false)
+  let bulkScope: 'user' | 'system' = $state('user')
+  let bulkLoading = $state(false)
 
   // Service control panel state
   let serviceRunning = false
@@ -93,7 +107,7 @@
   function changeThemeStyle(style: string) {
     themeStyle = style
     void setSetting('themeStyle', style)
-    dispatch('themeStyleChange', style)
+    onthemeStyleChange?.(style)
     // Add theme-changing class for smooth color base transition
     if (typeof document !== 'undefined' && document.body) {
       document.body.classList.add('theme-changing')
@@ -110,7 +124,7 @@
     } catch {
       // Ignore storage errors
     }
-    dispatch('themeChange', darkMode)
+    onthemeChange?.(darkMode)
   }
 
   async function toggleCliInPath() {
@@ -131,7 +145,7 @@
         cliInPath = await isCliInPath()
         if (result.added || cliInPath) {
           showToast(get(tStore)('settings.cliAdded'), 'success')
-          dispatch('refresh')
+          onrefresh?.()
         } else {
           showToast(get(tStore)('settings.cliAddFailed') + ': ' + result.message, 'error')
         }
@@ -388,15 +402,15 @@
     } catch {
       // Ignore
     }
-    dispatch('fontScaleChange', scale)
+    onfontScaleChange?.(scale)
   }
 
   function handleClose() {
-    dispatch('close')
+    onclose?.()
   }
 
   // Full-state disaster recovery handlers
-  let drLoading = false
+  let drLoading = $state(false)
   let drError: string | null = null
 
   async function handleExportState() {
@@ -476,11 +490,11 @@
 
 <div
   class="fixed inset-0 bg-background/40 flex items-center justify-center z-50"
-  on:click={handleClose}
-  on:keydown={(e) => { if (e.key === 'Escape') handleClose() }}
+  onclick={handleClose}
+  onkeydown={(e) => { if (e.key === 'Escape') handleClose() }}
   role="presentation"
   tabindex="-1">
-  <div class="bg-card rounded-lg shadow-xl max-w-sm max-h-[90vh] overflow-y-auto w-full mx-4" on:click|stopPropagation>
+  <div class="bg-card rounded-lg shadow-xl max-w-sm max-h-[90vh] overflow-y-auto w-full mx-4" onclick={stopPropagation(bubble('click'))}>
     <div class="px-5 py-4 border-b border-border">
       <h2 class="text-sm font-semibold text-foreground">{$t('nav.settings')}</h2>
     </div>
@@ -492,7 +506,7 @@
         </label>
         <select
           id="settings-lang"
-          on:change={(e) => switchLocale(e.currentTarget.value)}
+          onchange={(e) => switchLocale(e.currentTarget.value)}
           value={currentLocale}
           class="w-full px-3 py-1.5 text-sm border border-border rounded-md focus:outline-none focus:ring-1 focus:ring-primary bg-card bg-accent border-border/80 text-foreground"
         >
@@ -505,7 +519,7 @@
       <div class="flex items-center justify-between">
         <span class="text-xs font-medium text-muted-foreground">{$t('settings.darkMode')}</span>
         <button
-         on:click={toggleDarkMode}
+         onclick={toggleDarkMode}
           class="relative inline-flex h-5 w-8 items-center rounded-full transition {darkMode ? 'bg-primary' : 'bg-border'}"
          role="switch"
          aria-checked={darkMode}
@@ -520,7 +534,7 @@
       <div class="flex items-center justify-between">
         <span class="text-xs font-medium text-muted-foreground">{$t('settings.addCliToPath')}</span>
         <button
-          on:click={toggleCliInPath}
+          onclick={toggleCliInPath}
           disabled={cliToggleLoading}
           class="relative inline-flex h-5 w-8 items-center rounded-full transition {cliInPath ? 'bg-primary' : 'bg-border'} disabled:opacity-50"
           role="switch"
@@ -537,7 +551,7 @@
       <div class="flex items-center justify-between py-1">
         <span class="text-xs font-medium text-muted-foreground">{$t('settings.themeStyle')}</span>
         <select
-          on:change={(e) => changeThemeStyle(e.currentTarget.value)}
+          onchange={(e) => changeThemeStyle(e.currentTarget.value)}
           class="px-2.5 py-1 text-xs border rounded border-border bg-card text-foreground focus:ring-1 focus:ring-ring"
           aria-label={$t('settings.themeStyle')}
         >
@@ -559,7 +573,7 @@
             max={1.5}
             step={0.05}
             value={selectedFontScale}
-            on:input={(e) => changeFontScale(parseFloat(e.currentTarget.value))}
+            oninput={(e) => changeFontScale(parseFloat(e.currentTarget.value))}
             class="flex-1 h-1.5 rounded-full appearance-none bg-border cursor-pointer
                    accent-[hsl(var(--primary))]"
             id="settings-font-size"
@@ -579,7 +593,7 @@
         </label>
         <div class="flex items-center gap-2">
           <button
-            on:click={handleCheckUpdate}
+            onclick={handleCheckUpdate}
             disabled={updateChecking}
             class="px-3 py-1.5 text-xs font-medium text-primary-foreground bg-primary rounded-md hover:bg-primary transition disabled:opacity-50 bg-primary/80"
           >
@@ -595,7 +609,7 @@
               <span class="text-xs text-muted-foreground">{$t('update.downloading')}</span>
             {:else}
               <button
-                on:click={handleDownloadAndInstall}
+                onclick={handleDownloadAndInstall}
                 class="px-3 py-1.5 text-xs font-medium text-primary hover:underline"
               >
                 {$t('update.download', { values: { version: latestVersion } })}
@@ -622,14 +636,14 @@
             <option value="system">{$t('scope.system')}</option>
           </select>
           <button
-            on:click={handleBulkImport}
+            onclick={handleBulkImport}
             disabled={bulkLoading}
             class="px-3 py-1 text-xs font-medium text-foreground/80 bg-card border border-border rounded-md hover:bg-muted/50 transition disabled:opacity-50 text-foreground border-border/80 hover:bg-accent"
           >
             {$t('settings.bulkImport')}
           </button>
           <button
-            on:click={handleBulkExport}
+            onclick={handleBulkExport}
             disabled={bulkLoading}
             class="px-3 py-1 text-xs font-medium text-foreground/80 bg-card border border-border rounded-md hover:bg-muted/50 transition disabled:opacity-50 text-foreground border-border/80 hover:bg-accent"
           >
@@ -648,14 +662,14 @@
         </label>
         <div class="flex items-center gap-2 flex-wrap">
           <button
-            on:click={handleExportState}
+            onclick={handleExportState}
             disabled={drLoading}
             class="px-3 py-1 text-xs font-medium text-foreground/80 bg-card border border-border rounded-md hover:bg-muted/50 transition disabled:opacity-50 text-foreground border-border/80 hover:bg-accent"
           >
             {$t('settings.drExport')}
           </button>
           <button
-            on:click={handleImportState}
+            onclick={handleImportState}
             disabled={drLoading}
             class="px-3 py-1 text-xs font-medium text-foreground/80 bg-card border border-border rounded-md hover:bg-muted/50 transition disabled:opacity-50 text-foreground border-border/80 hover:bg-accent"
           >
@@ -673,13 +687,13 @@
         </label>
         <div class="flex items-center gap-3">
           <button
-            on:click={handleToggleAutoLightweight}
+            onclick={handleToggleAutoLightweight}
             disabled={lightweightLoading}
             class="relative inline-flex h-5 w-8 items-center rounded-full transition {autoLightweight ? 'bg-primary' : 'bg-border bg-muted'} disabled:opacity-50"
             role="switch"
             aria-checked={autoLightweight}
           >
-            <span class="inline-block h-3.5 w-3.5 transform rounded-full bg-card transition {autoLightweight ? 'translate-x-3.5' : 'translate-x-0.5'}" />
+            <span class="inline-block h-3.5 w-3.5 transform rounded-full bg-card transition {autoLightweight ? 'translate-x-3.5' : 'translate-x-0.5'}"></span>
           </button>
           <span class="text-xs text-muted-foreground">
             {$t('settings.lightweightAuto')}
@@ -691,7 +705,7 @@
                 min="1"
                 max="120"
                 bind:value={lightweightTimeout}
-                on:change={handleLightweightTimeoutChange}
+                onchange={handleLightweightTimeoutChange}
                 class="w-16 px-2 py-1 text-xs border border-border rounded-md bg-card border-border/80 text-foreground"
               />
               <span class="text-xs text-muted-foreground">
@@ -705,7 +719,7 @@
     </div>
     <div class="px-5 py-3 border-t border-border flex justify-end">
       <button
-        on:click={handleClose}
+        onclick={handleClose}
         class="px-4 py-1.5 text-sm text-foreground/80 border border-border rounded-md hover:bg-muted/50 transition text-foreground border-border/80 hover:bg-accent"
       >
         {$t('buttons.close')}

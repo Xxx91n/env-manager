@@ -1,4 +1,7 @@
 <script lang="ts">
+  import { createBubbler, stopPropagation } from 'svelte/legacy';
+
+  const bubble = createBubbler();
   import { t } from 'svelte-i18n'
   import { frontendLog } from '../settingsStore'
   import { modal, closeModal } from '../stores'
@@ -26,13 +29,13 @@
 {#if $modal}
   <div
     class="fixed inset-0 bg-background/40 flex items-center justify-center z-[100]"
-    on:click={handleCancel}
-    on:keydown={(e) => { if (e.key === 'Escape') handleCancel() }}
+    onclick={handleCancel}
+    onkeydown={(e) => { if (e.key === 'Escape') handleCancel() }}
     role="presentation"
   >
     <div
       class="bg-card rounded-lg shadow-xl max-w-sm w-full mx-4"
-      on:click|stopPropagation
+      onclick={stopPropagation(bubble('click'))}
       role="alertdialog"
       aria-modal="true"
       aria-labelledby="modal-title"
@@ -52,13 +55,13 @@
 
       <div class="px-5 py-3 border-t border-border flex gap-2 justify-end">
         <button
-          on:click={handleCancel}
+          onclick={handleCancel}
           class="px-4 py-1.5 text-xs text-foreground/80 border border-border rounded-md hover:bg-muted/20 transition text-foreground border-border/80 hover:bg-accent"
         >
           {$modal.cancelLabel || $t('buttons.cancel')}
         </button>
         <button
-          on:click={handleConfirm}
+          onclick={handleConfirm}
           class="px-4 py-1.5 text-xs text-primary-foreground rounded-md transition {$modal.variant === 'danger'
             ? 'bg-destructive hover:bg-destructive bg-destructive hover:bg-destructive'
             : 'bg-primary hover:bg-primary bg-primary/80 hover:bg-primary'}"

@@ -5,8 +5,8 @@
   import { auditList } from '../api'
   import { showToast } from '../stores'
 
-  let auditEntries: any[] = []
-  let auditLoading = false
+  let auditEntries: any[] = $state([])
+  let auditLoading = $state(false)
 
   onMount(async () => {
     await loadAudit()
@@ -32,7 +32,7 @@
       <p class="text-xs text-muted-foreground mt-1">{$t('audit.description')}</p>
     </div>
     <button
-      on:click={loadAudit}
+      onclick={loadAudit}
       disabled={auditLoading}
       class="px-3 py-1.5 text-xs font-medium rounded-md border border-border hover:bg-muted/20 transition border-border/80 hover:bg-accent disabled:opacity-50"
     >
