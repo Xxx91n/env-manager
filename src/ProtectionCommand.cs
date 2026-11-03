@@ -7,8 +7,19 @@ partial class Program
     static int RunProtectionCommand(string[] args)
     {
         string sub = args.Length > 1 ? args[1].ToLowerInvariant() : "list";
+        if (sub == "list") return ProtectionCommandHelpers.RunList();
+        if (sub == "add-path" && args.Length > 2) return ProtectionCommandHelpers.RunAddPath(args[2]);
+        if (sub == "remove-path" && args.Length > 2) return ProtectionCommandHelpers.RunRemovePath(args[2]);
+        if (sub == "add-var" && args.Length > 2) return ProtectionCommandHelpers.RunAddVar(args[2]);
+        if (sub == "remove-var" && args.Length > 2) return ProtectionCommandHelpers.RunRemoveVar(args[2]);
+        return ArgError("Usage: env-manager protection list | add-path <dir> | remove-path <dir> | add-var <name> | remove-var <name>");
+    }
 
-        if (sub == "list")
+    private static class ProtectionCommandHelpers
+    {
+        /// <summary>列出内置与自定义的受保护环境变量及受保护 PATH 条目。</summary>
+        /// <returns>成功返回 0。</returns>
+        internal static int RunList()
         {
             // Output: { protectedVars: { builtIn: [...], custom: [...] },
             //           protectedPaths: { builtIn: [...], custom: [...] } }
@@ -29,11 +40,11 @@ partial class Program
             return 0;
         }
 
-        // --- Custom protected PATH entries ---
-
-        if (sub == "add-path" && args.Length > 2)
+        /// <summary>将目录条目加入自定义受保护 PATH 列表（含校验）。</summary>
+        /// <param name="entry">要添加的 PATH 条目。</param>
+        /// <returns>成功返回 0；参数非法或校验失败时返回错误码并输出错误信息。</returns>
+        internal static int RunAddPath(string entry)
         {
-            string entry = args[2];
             if (string.IsNullOrWhiteSpace(entry) || entry.Contains('\0') || entry.Contains(';') || entry.Contains('\r') || entry.Contains('\n'))
                 return ArgError("Error: Invalid PATH entry (must not contain semicolons or control characters)");
             var custom = CustomProtectedPathEntries;
@@ -46,9 +57,11 @@ partial class Program
             return 0;
         }
 
-        if (sub == "remove-path" && args.Length > 2)
+        /// <summary>从自定义受保护 PATH 列表移除目录条目（内置条目不可移除）。</summary>
+        /// <param name="entry">要移除的 PATH 条目。</param>
+        /// <returns>成功返回 0；尝试移除内置条目或校验失败时返回错误码并输出错误信息。</returns>
+        internal static int RunRemovePath(string entry)
         {
-            string entry = args[2];
             // Cannot remove built-in protected entries
             if (ProtectedPathEntries.Any(p => p.TrimEnd('\\', '/').Equals(entry.TrimEnd('\\', '/'), StringComparison.OrdinalIgnoreCase)))
                 return ArgError("Error: Cannot remove built-in protected PATH entry");
@@ -67,11 +80,11 @@ partial class Program
             return 0;
         }
 
-        // --- Custom protected variables (user-lockable) ---
-
-        if (sub == "add-var" && args.Length > 2)
+        /// <summary>将变量名加入自定义受保护变量列表（含校验）。</summary>
+        /// <param name="varName">要添加的环境变量名。</param>
+        /// <returns>成功返回 0；参数非法或校验失败时返回错误码并输出错误信息。</returns>
+        internal static int RunAddVar(string varName)
         {
-            string varName = args[2];
             if (string.IsNullOrWhiteSpace(varName) || varName.Length > 255 || varName.Contains('\0') || varName.Contains('=') || varName.Contains('\r') || varName.Contains('\n') || varName.Contains('\t'))
                 return ArgError("Error: Invalid variable name (must not contain =, null, or control characters)");
 
@@ -87,9 +100,11 @@ partial class Program
             return 0;
         }
 
-        if (sub == "remove-var" && args.Length > 2)
+        /// <summary>从自定义受保护变量列表移除变量名（内置条目不可移除）。</summary>
+        /// <param name="varName">要移除的环境变量名。</param>
+        /// <returns>成功返回 0；尝试移除内置条目或校验失败时返回错误码并输出错误信息。</returns>
+        internal static int RunRemoveVar(string varName)
         {
-            string varName = args[2];
             // Cannot remove built-in protected variables
             if (ProtectedSystemVars.Contains(varName))
                 return ArgError("Error: Cannot remove built-in protected variable. Only custom protected variables can be unlocked.");
@@ -111,9 +126,8 @@ partial class Program
             }
             return 0;
         }
-
-        return ArgError("Usage: env-manager protection list | add-path <dir> | remove-path <dir> | add-var <name> | remove-var <name>");
     }
+
     // Built-in protected system variables and PATH entries are loaded from external
     // JSON config files in %LOCALAPPDATA%\EnvManager (see ProtectionCommand.cs).
     // They are seeded from embedded protection.defaults.json on first run and can
