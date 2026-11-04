@@ -104,6 +104,14 @@ public class ComplexityRampCharacterizationTests : IDisposable
         Console.SetError(cap.PreviousErr);
     }
 
+    /// <summary>Read one custom protection store straight from disk (the loader falls back to empty on corrupt JSON).</summary>
+    List<string> ReadCustomProtectionFile(string fileName)
+    {
+        using var doc = JsonDocument.Parse(File.ReadAllText(Path.Combine(_dir, fileName)));
+        Assert.Equal(JsonValueKind.Array, doc.RootElement.ValueKind);
+        return doc.RootElement.EnumerateArray().Select(v => v.GetString()!).ToList();
+    }
+
     // ---- history undo: the profile branch (TryUndoProfileAudit) ------------------
 
     /// <summary>Undoing a profile-create audit entry deletes the profile and exits zero.</summary>
@@ -126,23 +134,48 @@ public class ComplexityRampCharacterizationTests : IDisposable
         Assert.DoesNotContain(Program.LoadProfiles(), p => p.Name == "em_ramp_a");
     }
 
-    /// <summary>Undoing a profile-delete audit entry restores the profile from its captured summary.</summary>
+    /// <summary>Undoing a profile-delete audit entry restores every captured profile field.</summary>
     [Fact]
     public void Undo_ProfileDelete_RestoresProfileFromCapturedState()
     {
-        Assert.Equal(0, Program.RunProfileCommand(new[] { "profile", "create", "em_ramp_b" }));
+        // Seeded through the raw save seam so the fixture carries non-default captured
+        // fields without setup verbs that would add audit entries. isEnabled stays false
+        // on purpose: deleting an applied profile calls UnapplyProfile, which writes the
+        // real HKCU\Environment and would break this suite's no-registry-write contract.
+        var parent = new ProfileData();
+        parent.SetName("em_ramp_parent");
+        parent.SetProfileType("global");
+        var child = new ProfileData();
+        child.SetName("em_ramp_b");
+        child.SetProfileType("global");
+        child.SetInherits(new[] { "em_ramp_parent" });
+        child.AddPathEntry("C:\\em-ramp-path");
+        child.AddVariable("EM_RAMP_B_VAR", "b-value", "system");
+        Program.SaveProfilesRawForTests(new List<ProfileData> { parent, child });
+
         Assert.Equal(0, Program.RunProfileCommand(new[] { "profile", "delete", "em_ramp_b" }));
+        // Prove the delete landed: UndoDelete no-ops when the id still exists, so a
+        // delete that left the profile in place would satisfy the restore assertions.
+        Assert.DoesNotContain(Program.LoadProfiles(), p => p.Name == "em_ramp_b");
         var history = LoadHistory();
-        Assert.Equal(2, history.Count);
-        AuditEntry? deleteEntry = null;
-        foreach (var e in history) if (e.Command == "profile delete") deleteEntry = e;
-        Assert.NotNull(deleteEntry);
+        var deleteEntry = Assert.Single(history);
+        Assert.Equal("profile delete", deleteEntry.Command);
+
         var cap = CaptureConsole();
         int exit;
-        try { exit = Invoke("RunHistoryCommand", "history", "undo", deleteEntry!.Id); }
+        try { exit = Invoke("RunHistoryCommand", "history", "undo", deleteEntry.Id); }
         finally { ReleaseConsole(cap); }
         Assert.Equal(0, exit);
-        Assert.Contains(Program.LoadProfiles(), p => p.Name == "em_ramp_b");
+
+        var restored = Program.LoadProfiles().Single(p => p.Name == "em_ramp_b");
+        Assert.Equal(child.Id, restored.Id);
+        Assert.False(restored.IsEnabled);
+        Assert.Equal(new[] { "em_ramp_parent" }, restored.Inherits);
+        Assert.Equal(new[] { "C:\\em-ramp-path" }, restored.PathEntries);
+        var variable = Assert.Single(restored.Variables);
+        Assert.Equal("EM_RAMP_B_VAR", variable.Name);
+        Assert.Equal("b-value", variable.Value);
+        Assert.Equal("system", variable.Scope);
     }
 
     /// <summary>A non-undoable profile command refuses with the explicit no-undo-path error copy.</summary>
@@ -203,6 +236,7 @@ public class ComplexityRampCharacterizationTests : IDisposable
         Assert.Equal(0, add);
         Assert.Contains("Added protected variable: EM_RAMP_X", cap.Stdout.ToString());
         Assert.True(File.Exists(Path.Combine(_dir, "protected-vars.json")));
+        Assert.Equal(new[] { "EM_RAMP_X" }, ReadCustomProtectionFile("protected-vars.json"));
 
         cap = CaptureConsole();
         int remove;
@@ -210,6 +244,7 @@ public class ComplexityRampCharacterizationTests : IDisposable
         finally { ReleaseConsole(cap); }
         Assert.Equal(0, remove);
         Assert.Contains("Removed protected variable: EM_RAMP_X", cap.Stdout.ToString());
+        Assert.Empty(ReadCustomProtectionFile("protected-vars.json"));
     }
 
     /// <summary>add-path then remove-path round-trips the custom protected-PATH store.</summary>
@@ -222,6 +257,7 @@ public class ComplexityRampCharacterizationTests : IDisposable
         finally { ReleaseConsole(cap); }
         Assert.Equal(0, add);
         Assert.Contains("Added protected PATH entry: C:\\em-ramp\\dir", cap.Stdout.ToString());
+        Assert.Equal(new[] { "C:\\em-ramp\\dir" }, ReadCustomProtectionFile("protected-paths.json"));
 
         cap = CaptureConsole();
         int remove;
@@ -229,6 +265,7 @@ public class ComplexityRampCharacterizationTests : IDisposable
         finally { ReleaseConsole(cap); }
         Assert.Equal(0, remove);
         Assert.Contains("Removed protected PATH entry: C:\\em-ramp\\dir", cap.Stdout.ToString());
+        Assert.Empty(ReadCustomProtectionFile("protected-paths.json"));
     }
 
     /// <summary>Removing a built-in protected variable is rejected with the cannot-remove copy.</summary>
@@ -253,6 +290,7 @@ public class ComplexityRampCharacterizationTests : IDisposable
         finally { ReleaseConsole(cap); }
         Assert.Equal(1, exit);
         Assert.Contains("Invalid PATH entry", cap.Stderr.ToString());
+        Assert.False(File.Exists(Path.Combine(_dir, "protected-paths.json")));
     }
 
     /// <summary>An unknown protection subcommand exits one with the usage line.</summary>
