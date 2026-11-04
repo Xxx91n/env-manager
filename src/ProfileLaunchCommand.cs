@@ -189,10 +189,11 @@ partial class Program
     }
 
     /// <summary>
-    /// Validates that a Launch profile target executable exists, has a known executable
-    /// extension, and is NOT inside \\Windows\\System32 (hard refusal: system32 hijacking).
+    /// Validates that a Launch profile target has a known executable extension and is
+    /// NOT inside \\Windows\\System32 (hard refusal: system32 hijacking). Existence may
+    /// be waived only when undoing a deleted profile whose target has since disappeared.
     /// </summary>
-    static void ValidateLaunchTarget(string target)
+    static void ValidateLaunchTarget(string target, bool allowMissing = false)
     {
         if (string.IsNullOrWhiteSpace(target)) throw new InvalidDataException("Launch target is empty");
         string cwd = Environment.CurrentDirectory;
@@ -200,7 +201,7 @@ partial class Program
         string ext = Path.GetExtension(full).ToLowerInvariant();
         if (ext is not (".exe" or ".bat" or ".cmd" or ".ps1"))
             throw new InvalidDataException($"Launch target must be an .exe/.bat/.cmd/.ps1 file (got: {ext})");
-        if (!File.Exists(full)) throw new InvalidDataException($"Launch target does not exist: {full}");
+        if (!allowMissing && !File.Exists(full)) throw new InvalidDataException($"Launch target does not exist: {full}");
         // T04-SYS32-FIX: the prior verbatim literal @"c:\\windows\\system32\\" carries doubled separators,
         // so its compiled value never matches Path.GetFullPath output and the system32-hijacking
         // guard was inert. Match the resolved system folder (and a separator-normalized path) instead.

@@ -72,12 +72,12 @@ public class ComplexityRampCharacterizationTests : IDisposable
     }
 
     /// <summary>Seed one profile-scoped audit entry through the real recorder (encrypted at rest).</summary>
-    static void RecordProfileAudit(string command, string profileName)
+    static void RecordProfileAudit(string command, string profileName, string? oldSummary = null)
     {
         var mi = typeof(Program).GetMethod("RecordProfileAudit",
             BindingFlags.NonPublic | BindingFlags.Public | BindingFlags.Static)
             ?? throw new InvalidOperationException("missing RecordProfileAudit");
-        mi.Invoke(null, new object?[] { command, profileName, null, null });
+        mi.Invoke(null, new object?[] { command, profileName, oldSummary, null });
     }
 
     sealed class Captured
@@ -142,14 +142,22 @@ public class ComplexityRampCharacterizationTests : IDisposable
         // fields without setup verbs that would add audit entries. isEnabled stays false
         // on purpose: deleting an applied profile calls UnapplyProfile, which writes the
         // real HKCU\Environment and would break this suite's no-registry-write contract.
+        string launchTarget = Path.Combine(_dir, "em-ramp-target.exe");
+        File.WriteAllText(launchTarget, "fixture");
         var parent = new ProfileData();
         parent.SetName("em_ramp_parent");
         parent.SetProfileType("global");
         var child = new ProfileData();
         child.SetName("em_ramp_b");
-        child.SetProfileType("global");
+        child.SetProfileType("launch");
+        child.SetLaunchTarget(launchTarget);
+        child.SetLaunchArguments("--from-audit");
+        child.SetWorkingDirectory("C:\\em-ramp-work");
+        child.SetAppliedAt(123456789);
+        child.SetSecretVariables(new[] { "EM_RAMP_SECRET" });
+        child.SetSchemaVersion(2);
         child.SetInherits(new[] { "em_ramp_parent" });
-        child.AddPathEntry("C:\\em-ramp-path");
+        child.AddPathEntry("C:\\em-ramp-path", "system");
         child.AddVariable("EM_RAMP_B_VAR", "b-value", "system");
         Program.SaveProfilesRawForTests(new List<ProfileData> { parent, child });
 
@@ -160,6 +168,9 @@ public class ComplexityRampCharacterizationTests : IDisposable
         var history = LoadHistory();
         var deleteEntry = Assert.Single(history);
         Assert.Equal("profile delete", deleteEntry.Command);
+        // The target may disappear between deletion and undo. Restoring the saved
+        // profile configuration must not depend on the executable still existing.
+        File.Delete(launchTarget);
 
         var cap = CaptureConsole();
         int exit;
@@ -170,12 +181,82 @@ public class ComplexityRampCharacterizationTests : IDisposable
         var restored = Program.LoadProfiles().Single(p => p.Name == "em_ramp_b");
         Assert.Equal(child.Id, restored.Id);
         Assert.False(restored.IsEnabled);
+        Assert.Equal(123456789, restored.AppliedAt);
         Assert.Equal(new[] { "em_ramp_parent" }, restored.Inherits);
         Assert.Equal(new[] { "C:\\em-ramp-path" }, restored.PathEntries);
+        Assert.Equal(new[] { "system" }, restored.PathScopes);
+        Assert.Equal("launch", restored.ProfileType);
+        Assert.Equal(launchTarget, restored.TargetExecutable);
+        Assert.False(File.Exists(launchTarget));
+        Assert.Equal("--from-audit", restored.LaunchArguments);
+        Assert.Equal("C:\\em-ramp-work", restored.WorkingDirectory);
+        Assert.Equal(new[] { "EM_RAMP_SECRET" }, restored.SecretVariables);
+        Assert.Equal(2, restored.SchemaVersion);
         var variable = Assert.Single(restored.Variables);
         Assert.Equal("EM_RAMP_B_VAR", variable.Name);
         Assert.Equal("b-value", variable.Value);
         Assert.Equal("system", variable.Scope);
+
+        // Ordinary future saves may retain this unchanged dangling target, but
+        // changing it to a different missing executable remains invalid.
+        var persistedAfterUndo = Program.LoadProfiles();
+        Program.SaveProfiles(persistedAfterUndo);
+        persistedAfterUndo.Single(p => p.Name == "em_ramp_b")
+            .SetLaunchTarget(Path.Combine(_dir, "different-missing.exe"));
+        Assert.Throws<InvalidDataException>(() => Program.SaveProfiles(persistedAfterUndo));
+    }
+
+    /// <summary>Older audit summaries still restore with the legacy model defaults for fields they omitted.</summary>
+    [Fact]
+    public void Undo_ProfileDelete_LegacySummaryUsesDefaultsForMissingFields()
+    {
+        string legacySummary = JsonSerializer.Serialize(new
+        {
+            id = "legacy-profile-id",
+            name = "em_ramp_legacy",
+            isEnabled = false,
+            inherits = Array.Empty<string>(),
+            pathEntries = new[] { "C:\\legacy-path" },
+            variables = Array.Empty<ProfileVariable>()
+        });
+        RecordProfileAudit("profile delete", "em_ramp_legacy", legacySummary);
+        var entry = Assert.Single(LoadHistory());
+
+        var cap = CaptureConsole();
+        int exit;
+        try { exit = Invoke("RunHistoryCommand", "history", "undo", entry.Id); }
+        finally { ReleaseConsole(cap); }
+
+        Assert.Equal(0, exit);
+        var restored = Assert.Single(Program.LoadProfiles());
+        Assert.Equal("legacy-profile-id", restored.Id);
+        Assert.Equal("em_ramp_legacy", restored.Name);
+        Assert.Equal(new[] { "C:\\legacy-path" }, restored.PathEntries);
+        Assert.Empty(restored.PathScopes);
+        Assert.Equal("global", restored.ProfileType);
+        Assert.Null(restored.TargetExecutable);
+        Assert.Null(restored.LaunchArguments);
+        Assert.Null(restored.WorkingDirectory);
+    }
+
+    /// <summary>A null persisted profile type does not break delete/undo validation.</summary>
+    [Fact]
+    public void Undo_ProfileDelete_NullProfileTypeDoesNotBreakValidation()
+    {
+        var profile = new ProfileData();
+        profile.SetName("em_ramp_null_type");
+        profile.SetProfileType(null!);
+        Program.SaveProfilesRawForTests(new List<ProfileData> { profile });
+
+        Assert.Equal(0, Program.RunProfileCommand(new[] { "profile", "delete", "em_ramp_null_type" }));
+        var entry = Assert.Single(LoadHistory());
+        var cap = CaptureConsole();
+        int exit;
+        try { exit = Invoke("RunHistoryCommand", "history", "undo", entry.Id); }
+        finally { ReleaseConsole(cap); }
+
+        Assert.Equal(0, exit);
+        Assert.Null(Assert.Single(Program.LoadProfiles()).ProfileType);
     }
 
     /// <summary>A non-undoable profile command refuses with the explicit no-undo-path error copy.</summary>
