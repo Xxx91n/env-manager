@@ -177,7 +177,7 @@ partial class Program
             }
             restored.EnsureCollections();
             profiles.Add(restored);
-            SaveProfilesRestoringDeletedProfile(profiles, restored.Id);
+            SaveProfiles(profiles, restored.Id);
             return true;
         }
 

@@ -37,18 +37,9 @@ partial class Program
         return profiles;
     }
 
-    internal static void SaveProfiles(List<ProfileData> profiles)
+    internal static void SaveProfiles(List<ProfileData> profiles, string? allowMissingLaunchTargetForProfileId = null)
     {
-        ValidateProfiles(profiles);
-        AtomicWriteProfiles(profiles, createBackup: true);
-    }
-
-    // Undoing a profile delete must be able to recover its configuration even if
-    // the launch target disappeared since the profile was recorded. Scope the
-    // exception to that one restored profile; all other profile validation remains.
-    internal static void SaveProfilesRestoringDeletedProfile(List<ProfileData> profiles, string restoredProfileId)
-    {
-        ValidateProfiles(profiles, restoredProfileId);
+        ValidateProfiles(profiles, allowMissingLaunchTargetForProfileId);
         AtomicWriteProfiles(profiles, createBackup: true);
     }
 
@@ -68,33 +59,11 @@ static void AtomicWriteProfiles(List<ProfileData> profiles, bool createBackup)
     File.Move(temp, ProfilesFilePath, true);
 }
 
-    static Dictionary<string, string?> LoadPersistedLaunchTargets()
-    {
-        var targets = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
-        if (!File.Exists(ProfilesFilePath)) return targets;
-
-        try
-        {
-            var persisted = JsonSerializer.Deserialize<List<ProfileData>>(File.ReadAllText(ProfilesFilePath), JsonOpts) ?? new();
-            foreach (var profile in persisted)
-            {
-                if (profile.ProfileType.Equals("launch", StringComparison.OrdinalIgnoreCase)
-                    && !string.IsNullOrEmpty(profile.Id))
-                    targets.TryAdd(profile.Id, profile.TargetExecutable);
-            }
-        }
-        catch (JsonException)
-        {
-            // Invalid stored JSON provides no trusted prior target to compare against.
-        }
-        return targets;
-    }
-
     static void ValidateProfiles(List<ProfileData> profiles, string? allowMissingLaunchTargetForProfileId = null)
     {
         // A target can disappear after its profile was saved. Permit retaining that
         // exact target, but not setting/changing a target to a missing file.
-        var persistedLaunchTargets = LoadPersistedLaunchTargets();
+        var persistedLaunchTargets = PersistedLaunchTargetHelpers.Load();
 
         // CLI commands address profiles by name. Keep one namespace so a command
         // can never target a Global profile when the caller intended Launch.
@@ -138,6 +107,33 @@ static void AtomicWriteProfiles(List<ProfileData> profiles, bool createBackup)
             ResolveProfilePaths(profile, profiles);
         }
     }
+
+    private static class PersistedLaunchTargetHelpers
+    {
+        internal static Dictionary<string, string?> Load()
+        {
+            var targets = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
+            if (!File.Exists(Program.ProfilesFilePath)) return targets;
+
+            try
+            {
+                var persisted = JsonSerializer.Deserialize<List<ProfileData>>(
+                    File.ReadAllText(Program.ProfilesFilePath), Program.JsonOpts) ?? new();
+                foreach (var profile in persisted)
+                {
+                    if (profile.ProfileType.Equals("launch", StringComparison.OrdinalIgnoreCase)
+                        && !string.IsNullOrEmpty(profile.Id))
+                        targets.TryAdd(profile.Id, profile.TargetExecutable);
+                }
+            }
+            catch (JsonException)
+            {
+                // Invalid stored JSON provides no trusted prior target to compare against.
+            }
+            return targets;
+        }
+    }
+
     /// <summary>
     /// Returns the path to the profiles JSON file in LocalAppData.
     /// Mirrors PowerToys' approach of storing profiles in a per-user app data folder.
