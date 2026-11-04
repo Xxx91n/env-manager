@@ -355,7 +355,20 @@ test("checked-in VEX statements pass the gate's own validation", () => {
       title: `fixture for ${statement.vulnerability?.name}`,
     };
   });
-  assert.notEqual(advisories.length, 0, 'checked-in VEX carries statements');
+  // An empty document is the correct end state once every exemption has been
+  // resolved and retired from SECURITY.md: the replay below would be vacuous,
+  // and the gate's fail-closed behaviour is covered by the fixture tests, so
+  // exercise the real (empty) VEX directory against a report with no
+  // advisories instead of failing on the empty array itself.
+  if (advisories.length === 0) {
+    withTempDir((dir) => {
+      const input = path.join(dir, 'audit.json');
+      writeJson(input, npmAuditReport([]));
+      const run = runGate([`--input=${input}`, `--vex-dir=${realVexDir}`]);
+      assert.equal(run.code, 0, run.stderr);
+    });
+    return;
+  }
 
   withTempDir((dir) => {
     const input = path.join(dir, 'audit.json');
@@ -375,7 +388,10 @@ test("checked-in VEX statements pass the gate's own validation", () => {
 test('security/vex/frontend.json products use @id npm purls with provenance fields', () => {
   const doc = JSON.parse(fs.readFileSync(realVexFile, 'utf8'));
   assert.equal(Array.isArray(doc.statements), true, 'statements array');
-  assert.notEqual(doc.statements.length, 0, 'statements non-empty');
+  // The per-statement shape checks below only apply to statements that are
+  // actually carried; an emptied document (all exemptions resolved) has
+  // nothing to validate and is covered by the empty-path arm of the replay
+  // test above.
 
   doc.statements.forEach((statement, index) => {
     const where = `statement #${index + 1}`;
