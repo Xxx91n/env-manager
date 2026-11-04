@@ -117,6 +117,14 @@ public class ComplexityRampCharacterizationTests : IDisposable
             .EnumerateArray().Select(v => v.GetString()!).ToList();
     }
 
+    /// <summary>Read one custom protection store straight from disk (the loader falls back to empty on corrupt JSON).</summary>
+    List<string> ReadCustomProtectionFile(string fileName)
+    {
+        using var doc = JsonDocument.Parse(File.ReadAllText(Path.Combine(_dir, fileName)));
+        Assert.Equal(JsonValueKind.Array, doc.RootElement.ValueKind);
+        return doc.RootElement.EnumerateArray().Select(v => v.GetString()!).ToList();
+    }
+
     // ---- history undo: the profile branch (TryUndoProfileAudit) ------------------
 
     /// <summary>Undoing a profile-create audit entry deletes the profile and exits zero.</summary>
@@ -244,7 +252,7 @@ public class ComplexityRampCharacterizationTests : IDisposable
         finally { ReleaseConsole(cap); }
         Assert.Equal(0, remove);
         Assert.Contains("Removed protected variable: EM_RAMP_X", cap.Stdout.ToString());
-        Assert.Empty(ListCustomProtection("protectedVars"));
+        Assert.Empty(ReadCustomProtectionFile("protected-vars.json"));
     }
 
     /// <summary>add-path then remove-path round-trips the custom protected-PATH store.</summary>
@@ -265,7 +273,7 @@ public class ComplexityRampCharacterizationTests : IDisposable
         finally { ReleaseConsole(cap); }
         Assert.Equal(0, remove);
         Assert.Contains("Removed protected PATH entry: C:\\em-ramp\\dir", cap.Stdout.ToString());
-        Assert.Empty(ListCustomProtection("protectedPaths"));
+        Assert.Empty(ReadCustomProtectionFile("protected-paths.json"));
     }
 
     /// <summary>Removing a built-in protected variable is rejected with the cannot-remove copy.</summary>
