@@ -73,7 +73,7 @@ static void AtomicWriteProfiles(List<ProfileData> profiles, bool createBackup)
             if (string.IsNullOrWhiteSpace(profile.Name))
                 throw new InvalidDataException("Profile names must be non-empty");
 
-            bool isLaunch = profile.ProfileType.Equals("launch", StringComparison.OrdinalIgnoreCase);
+            bool isLaunch = string.Equals(profile.ProfileType, "launch", StringComparison.OrdinalIgnoreCase);
             if (!profileNames.Add(profile.Name))
                 throw new InvalidDataException($"Profile names must be unique (duplicate: {profile.Name})");
 
@@ -121,7 +121,7 @@ static void AtomicWriteProfiles(List<ProfileData> profiles, bool createBackup)
                     File.ReadAllText(Program.ProfilesFilePath), Program.JsonOpts) ?? new();
                 foreach (var profile in persisted)
                 {
-                    if (profile.ProfileType.Equals("launch", StringComparison.OrdinalIgnoreCase)
+                    if (string.Equals(profile.ProfileType, "launch", StringComparison.OrdinalIgnoreCase)
                         && !string.IsNullOrEmpty(profile.Id))
                         targets.TryAdd(profile.Id, profile.TargetExecutable);
                 }

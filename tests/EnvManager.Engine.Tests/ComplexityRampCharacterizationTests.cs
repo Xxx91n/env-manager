@@ -239,6 +239,26 @@ public class ComplexityRampCharacterizationTests : IDisposable
         Assert.Null(restored.WorkingDirectory);
     }
 
+    /// <summary>A null persisted profile type does not break delete/undo validation.</summary>
+    [Fact]
+    public void Undo_ProfileDelete_NullProfileTypeDoesNotBreakValidation()
+    {
+        var profile = new ProfileData();
+        profile.SetName("em_ramp_null_type");
+        profile.SetProfileType(null!);
+        Program.SaveProfilesRawForTests(new List<ProfileData> { profile });
+
+        Assert.Equal(0, Program.RunProfileCommand(new[] { "profile", "delete", "em_ramp_null_type" }));
+        var entry = Assert.Single(LoadHistory());
+        var cap = CaptureConsole();
+        int exit;
+        try { exit = Invoke("RunHistoryCommand", "history", "undo", entry.Id); }
+        finally { ReleaseConsole(cap); }
+
+        Assert.Equal(0, exit);
+        Assert.Null(Assert.Single(Program.LoadProfiles()).ProfileType);
+    }
+
     /// <summary>A non-undoable profile command refuses with the explicit no-undo-path error copy.</summary>
     [Fact]
     public void Undo_NonUndoableProfileCommand_RefusesWithClearError()
