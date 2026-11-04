@@ -43,6 +43,15 @@ partial class Program
         AtomicWriteProfiles(profiles, createBackup: true);
     }
 
+    // Undoing a profile delete must be able to recover its configuration even if
+    // the launch target disappeared since the profile was recorded. Scope the
+    // exception to that one restored profile; all other profile validation remains.
+    internal static void SaveProfilesRestoringDeletedProfile(List<ProfileData> profiles, string restoredProfileId)
+    {
+        ValidateProfiles(profiles, restoredProfileId);
+        AtomicWriteProfiles(profiles, createBackup: true);
+    }
+
 static void AtomicWriteProfiles(List<ProfileData> profiles, bool createBackup)
 {
     string temp = ProfilesFilePath + ".tmp." + Environment.ProcessId;
@@ -59,7 +68,7 @@ static void AtomicWriteProfiles(List<ProfileData> profiles, bool createBackup)
     File.Move(temp, ProfilesFilePath, true);
 }
 
-    static void ValidateProfiles(List<ProfileData> profiles)
+    static void ValidateProfiles(List<ProfileData> profiles, string? allowMissingLaunchTargetForProfileId = null)
     {
         // CLI commands address profiles by name. Keep one namespace so a command
         // can never target a Global profile when the caller intended Launch.
@@ -77,7 +86,9 @@ static void AtomicWriteProfiles(List<ProfileData> profiles, bool createBackup)
             {
                 if (string.IsNullOrWhiteSpace(profile.TargetExecutable))
                     throw new InvalidDataException($"Launch profile '{profile.Name}' must specify targetExecutable");
-                ValidateLaunchTarget(profile.TargetExecutable);
+                ValidateLaunchTarget(
+                    profile.TargetExecutable,
+                    allowMissing: profile.Id.Equals(allowMissingLaunchTargetForProfileId, StringComparison.OrdinalIgnoreCase));
             }
             else
             {

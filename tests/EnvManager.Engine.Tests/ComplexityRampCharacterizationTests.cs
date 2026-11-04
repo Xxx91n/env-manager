@@ -142,13 +142,15 @@ public class ComplexityRampCharacterizationTests : IDisposable
         // fields without setup verbs that would add audit entries. isEnabled stays false
         // on purpose: deleting an applied profile calls UnapplyProfile, which writes the
         // real HKCU\Environment and would break this suite's no-registry-write contract.
+        string launchTarget = Path.Combine(_dir, "em-ramp-target.exe");
+        File.WriteAllText(launchTarget, "fixture");
         var parent = new ProfileData();
         parent.SetName("em_ramp_parent");
         parent.SetProfileType("global");
         var child = new ProfileData();
         child.SetName("em_ramp_b");
         child.SetProfileType("launch");
-        child.SetLaunchTarget("C:\\em-ramp-target.exe");
+        child.SetLaunchTarget(launchTarget);
         child.SetLaunchArguments("--from-audit");
         child.SetWorkingDirectory("C:\\em-ramp-work");
         child.SetAppliedAt(123456789);
@@ -166,6 +168,9 @@ public class ComplexityRampCharacterizationTests : IDisposable
         var history = LoadHistory();
         var deleteEntry = Assert.Single(history);
         Assert.Equal("profile delete", deleteEntry.Command);
+        // The target may disappear between deletion and undo. Restoring the saved
+        // profile configuration must not depend on the executable still existing.
+        File.Delete(launchTarget);
 
         var cap = CaptureConsole();
         int exit;
@@ -181,7 +186,8 @@ public class ComplexityRampCharacterizationTests : IDisposable
         Assert.Equal(new[] { "C:\\em-ramp-path" }, restored.PathEntries);
         Assert.Equal(new[] { "system" }, restored.PathScopes);
         Assert.Equal("launch", restored.ProfileType);
-        Assert.Equal("C:\\em-ramp-target.exe", restored.TargetExecutable);
+        Assert.Equal(launchTarget, restored.TargetExecutable);
+        Assert.False(File.Exists(launchTarget));
         Assert.Equal("--from-audit", restored.LaunchArguments);
         Assert.Equal("C:\\em-ramp-work", restored.WorkingDirectory);
         Assert.Equal(new[] { "EM_RAMP_SECRET" }, restored.SecretVariables);
@@ -218,7 +224,7 @@ public class ComplexityRampCharacterizationTests : IDisposable
         Assert.Equal("legacy-profile-id", restored.Id);
         Assert.Equal("em_ramp_legacy", restored.Name);
         Assert.Equal(new[] { "C:\\legacy-path" }, restored.PathEntries);
-        Assert.Equal(new[] { "user" }, restored.PathScopes);
+        Assert.Empty(restored.PathScopes);
         Assert.Equal("global", restored.ProfileType);
         Assert.Null(restored.TargetExecutable);
         Assert.Null(restored.LaunchArguments);
