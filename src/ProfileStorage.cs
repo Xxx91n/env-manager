@@ -68,8 +68,34 @@ static void AtomicWriteProfiles(List<ProfileData> profiles, bool createBackup)
     File.Move(temp, ProfilesFilePath, true);
 }
 
+    static Dictionary<string, string?> LoadPersistedLaunchTargets()
+    {
+        var targets = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
+        if (!File.Exists(ProfilesFilePath)) return targets;
+
+        try
+        {
+            var persisted = JsonSerializer.Deserialize<List<ProfileData>>(File.ReadAllText(ProfilesFilePath), JsonOpts) ?? new();
+            foreach (var profile in persisted)
+            {
+                if (profile.ProfileType.Equals("launch", StringComparison.OrdinalIgnoreCase)
+                    && !string.IsNullOrEmpty(profile.Id))
+                    targets.TryAdd(profile.Id, profile.TargetExecutable);
+            }
+        }
+        catch (JsonException)
+        {
+            // Invalid stored JSON provides no trusted prior target to compare against.
+        }
+        return targets;
+    }
+
     static void ValidateProfiles(List<ProfileData> profiles, string? allowMissingLaunchTargetForProfileId = null)
     {
+        // A target can disappear after its profile was saved. Permit retaining that
+        // exact target, but not setting/changing a target to a missing file.
+        var persistedLaunchTargets = LoadPersistedLaunchTargets();
+
         // CLI commands address profiles by name. Keep one namespace so a command
         // can never target a Global profile when the caller intended Launch.
         var profileNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -86,9 +112,10 @@ static void AtomicWriteProfiles(List<ProfileData> profiles, bool createBackup)
             {
                 if (string.IsNullOrWhiteSpace(profile.TargetExecutable))
                     throw new InvalidDataException($"Launch profile '{profile.Name}' must specify targetExecutable");
-                ValidateLaunchTarget(
-                    profile.TargetExecutable,
-                    allowMissing: profile.Id.Equals(allowMissingLaunchTargetForProfileId, StringComparison.OrdinalIgnoreCase));
+                bool isUndoRestore = profile.Id.Equals(allowMissingLaunchTargetForProfileId, StringComparison.OrdinalIgnoreCase);
+                bool targetUnchanged = persistedLaunchTargets.TryGetValue(profile.Id, out string? persistedTarget)
+                    && string.Equals(profile.TargetExecutable, persistedTarget, StringComparison.OrdinalIgnoreCase);
+                ValidateLaunchTarget(profile.TargetExecutable, allowMissing: isUndoRestore || targetUnchanged);
             }
             else
             {

@@ -196,6 +196,14 @@ public class ComplexityRampCharacterizationTests : IDisposable
         Assert.Equal("EM_RAMP_B_VAR", variable.Name);
         Assert.Equal("b-value", variable.Value);
         Assert.Equal("system", variable.Scope);
+
+        // Ordinary future saves may retain this unchanged dangling target, but
+        // changing it to a different missing executable remains invalid.
+        var persistedAfterUndo = Program.LoadProfiles();
+        Program.SaveProfiles(persistedAfterUndo);
+        persistedAfterUndo.Single(p => p.Name == "em_ramp_b")
+            .SetLaunchTarget(Path.Combine(_dir, "different-missing.exe"));
+        Assert.Throws<InvalidDataException>(() => Program.SaveProfiles(persistedAfterUndo));
     }
 
     /// <summary>Older audit summaries still restore with the legacy model defaults for fields they omitted.</summary>
