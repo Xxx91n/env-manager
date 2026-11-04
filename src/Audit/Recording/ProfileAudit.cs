@@ -51,15 +51,10 @@ partial class Program
     static string? ProfileSummary(ProfileData? profile)
     {
         if (profile == null) return null;
-        return JsonSerializer.Serialize(new
-        {
-            id = profile.Id,
-            name = profile.Name,
-            isEnabled = profile.IsEnabled,
-            inherits = profile.Inherits,
-            pathEntries = profile.PathEntries,
-            variables = profile.Variables
-        }, JsonOpts);
+        // Serialize the model itself so audit undo captures every persisted profile
+        // field. Keep this aligned with ProfileData's JSON contract; fields absent
+        // from older audit summaries continue to deserialize to their model defaults.
+        return JsonSerializer.Serialize(profile, JsonOpts);
     }
 
     /// <summary>
