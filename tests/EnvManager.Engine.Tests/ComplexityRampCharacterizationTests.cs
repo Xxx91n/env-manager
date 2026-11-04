@@ -154,6 +154,9 @@ public class ComplexityRampCharacterizationTests : IDisposable
         Program.SaveProfilesRawForTests(new List<ProfileData> { parent, child });
 
         Assert.Equal(0, Program.RunProfileCommand(new[] { "profile", "delete", "em_ramp_b" }));
+        // Prove the delete landed: UndoDelete no-ops when the id still exists, so a
+        // delete that left the profile in place would satisfy the restore assertions.
+        Assert.DoesNotContain(Program.LoadProfiles(), p => p.Name == "em_ramp_b");
         var history = LoadHistory();
         var deleteEntry = Assert.Single(history);
         Assert.Equal("profile delete", deleteEntry.Command);
