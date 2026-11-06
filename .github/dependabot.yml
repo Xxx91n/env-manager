@@ -117,37 +117,35 @@ updates:
         applies-to: security-updates
         patterns:
           - "*"
-    # 钉死不升的 major：依赖本次窗口不升；理由见注释
+    # 钉死不升的 major：只钉当前栈之上的那个 major；当前栈自身的 minor/patch 必须能流动，
+    # 否则换来的 patch 通道是纸面的。每条钉版都写明「为什么钉」。
     ignore:
-      # svelte 5：项目深度依赖 svelte-i18n 4.x + svelte-preprocess 6.x 生态（与 Svelte 4 兼容
-      # 矩阵），升 5 触发 runes + reactivity 重写 + 测试基线全部漂移。票 26 拆分 / 票 32 快照 /
-      # 票 34 元变形三票均依赖 Svelte 4 编译器行为；下一次 svelte 5 升级须独立工单评审。
+      # svelte：当前栈 svelte 5.57.3（#28 迁移窗，PR #223 落地）。钉住的只有下一个 major
+      # 6.x 及以上——6.x 要重做 runes 语义与 reactivity 写法 + 测试基线整体漂移，须独立
+      # 工单评审；5.x 的 minor/patch（含安全更新）不再被压制。
       - dependency-name: "svelte"
-        versions: ["5.x"]
-        # （deferred major：等待独立工单评审 svelte 5 迁移成本 + 既有 4.x 编译器依赖处置）
-      # typescript 5.x：本项目类型严格度匹配 TS 5 系列；TS 7 属未来版本（5.x 仍在维护）。
-      # 升 7 触发 lib 升级 + 类型推断行为变化 + svelte-check / vitest 类型基线漂移。
-      # 钉在 5.x 直到团队评审 + 兼容矩阵重做。
+        versions: [">= 6.0.0"]
+      # typescript：当前栈 5.x（frontend/package.json ^5.0.0，锁定 5.9.3）。钉住 7.x 及以上
+      # ——升 TS 7 触发 lib 升级 + 类型推断行为变化 + svelte-check / vitest 类型基线漂移，
+      # 须先重做 Svelte/Vite 类型工具链兼容矩阵。
       - dependency-name: "typescript"
         versions: ["7.x"]
-        # （deferred major：等待团队评审 TS 6/7 + 与现有 Svelte/Vite 类型工具链兼容矩阵）
-      # vite 5.x：本项目 vite-plugin-svelte 3.x + vitest 4.x 与 vite 5 锁版本；vite 6/7/8
-      # 任一 major 都需要重新跑 e2e + bundle 大小回归。钉在 5.x。
+      # vite：当前栈 vite 8.3.5 + @sveltejs/vite-plugin-svelte 7.3.1（PR #223）。钉住的只有
+      # 下一个 major 9.x 及以上——任一 major 都要重新跑 e2e + bundle 大小回归；8.x 的
+      # minor/patch（含安全更新）不再被压制。
       - dependency-name: "vite"
-        versions: ["6.x", "7.x", "8.x"]
-        # （deferred major：等待 vite-plugin-svelte 兼容矩阵重做 + bundle 回归基线更新）
-      # tailwind-merge 3：当前 2.x 与 tailwindcss 3.x 匹配；3.x 改 API + 改 typescript
-      # 类型导出，触发所有 `twMerge` 调用点重新评审。钉在 2.x。
+        versions: [">= 9.0.0"]
+      # tailwind-merge：当前栈 2.x 与 tailwindcss 3.x 匹配；3.x 改 API + 改 typescript 类型
+      # 导出，触发所有 `twMerge` 调用点重新评审，#99 的触发条件门控，故钉在 3.x。
       - dependency-name: "tailwind-merge"
         versions: ["3.x"]
-        # （deferred major：等待 tailwindcss 主线升级 + 调用点 grep 通过后再升）
-      # jsdom 30：项目测试环境用 jsdom 25（vitest 默认）；30 跳多个 major，需要重测
-      # DOM 模拟行为差异（MutationObserver/IntersectionObserver 语义）。钉在 25.x。
+      # jsdom：当前测试环境 jsdom 25（vitest 默认）；26 起跨多个 major，须重测 DOM 模拟
+      # 行为差异（MutationObserver / IntersectionObserver 语义），故钉 26.0.0 及以上。
       - dependency-name: "jsdom"
         versions: [">= 26.0.0"]
-        # （deferred major：等待 DOM 模拟语义审计 + vitest jsdom env 回归通过）
-      # vitest 5.x 三件套（vitest / @vitest/ui / @vitest/coverage-v8）：5.x 生态尚未稳定，
-      # 等 5.x 生态稳定后再评估。当时的裁定是：这三个 major PR 一律 close + ignore。
+      # vitest 三件套（vitest / @vitest/ui / @vitest/coverage-v8）：当前栈 4.x；5.x 要重做
+      # 测试基线并与 vite 8 / @sveltejs/vite-plugin-svelte 7 的 peer 组合验证，未经评审前
+      # 钉住 5.x。
       - dependency-name: "vitest"
         versions: ["5.x"]
       - dependency-name: "@vitest/ui"
