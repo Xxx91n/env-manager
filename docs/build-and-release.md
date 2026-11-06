@@ -304,16 +304,16 @@ Failure triage: hang at `InstallFinalize` -> `StartServices` with lowest `Action
 |---------|---------|
 | @tauri-apps/api 2.x | Tauri IPC |
 | @tauri-apps/cli 2.x | Tauri build tooling |
-| svelte 4.x | UI framework |
+| svelte 5.x | UI framework |
 | svelte-i18n 4.x | Internationalization |
 | tailwindcss 3.x | CSS framework |
-| vite 5.x | Build tool |
+| vite 8.x | Build tool |
 | typescript 5.x | Type checking |
 | vitest 4.x | Unit test runner |
 | jsdom 25.x | DOM environment for tests |
 | @testing-library/svelte 5.x | Svelte component testing utilities |
 | @playwright/test 1.x | E2E browser testing |
-| archiver 8.x | ZIP archive creation (ESM named exports; use `new ZipArchive(...)`, no default export) |
+| archiver 7.x | ZIP archive creation (ESM named exports; use `new ZipArchive(...)`, no default export) |
 
 ### Cargo (Rust)
 

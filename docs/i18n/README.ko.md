@@ -173,7 +173,7 @@ flowchart LR
 
 - **CLI**: C# .NET 10 단일 파일 실행 파일 — 조정 계층이자 레지스트리 게이트웨이.
 - **Service**: 명명된 파이프 IPC를 통해 시크릿 마운트 수명 주기를 관리하는 독립 실행형 Rust 바이너리.
-- **GUI**: 동일한 IPC 계약을 사용하는 Tauri 2 + Svelte 4 프런트엔드.
+- **GUI**: 동일한 IPC 계약을 사용하는 Tauri 2 + Svelte 5 프런트엔드.
 
 ## Secret providers
 

@@ -173,7 +173,7 @@ flowchart LR
 
 - **CLI**: executável de arquivo único em C# .NET 10 — a camada de coordenação e o gateway do registro.
 - **Serviço**: binário Rust independente que gerencia o ciclo de vida da montagem de segredos via IPC por named pipe.
-- **GUI**: frontend Tauri 2 + Svelte 4 usando os mesmos contratos de IPC.
+- **GUI**: frontend Tauri 2 + Svelte 5 usando os mesmos contratos de IPC.
 
 ## Provedores de segredos
 

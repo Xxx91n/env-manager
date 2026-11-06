@@ -1,6 +1,6 @@
 # Env Manager — Agent Instructions
 
-Windows environment-variable manager: a C# .NET 10 CLI that reads and writes the registry directly, a Tauri/Rust shell, a Svelte 4 GUI, and an optional Rust service that manages secret-mount lifecycles. Apache-2.0, repository `Xxx91n/env-manager`.
+Windows environment-variable manager: a C# .NET 10 CLI that reads and writes the registry directly, a Tauri/Rust shell, a Svelte 5 GUI, and an optional Rust service that manages secret-mount lifecycles. Apache-2.0, repository `Xxx91n/env-manager`.
 
 ## Run it
 - Full build: `node scripts/build.mjs --arch x64` (`--skip-gui` / `--skip-msi` / `--skip-cli` to segment); artifacts land in the gitignored `release/`.

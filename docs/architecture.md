@@ -4,7 +4,7 @@
 
 1. **CLI backend** (`src/`) - C# .NET 10 console application that reads/writes the Windows Registry directly. Compiles to `env-manager-cli.exe`. Handles all variable CRUD, backup/restore, diff/merge operations. `src/Program.cs` is a thin Main dispatcher (<400 lines); shared CLI runtime infrastructure (constants, ValidCommands, JsonOpts, DebugLog, help text, ScrubExceptionMessage, SecretString, provider hash, mutation lock, env snapshot, atomic writes) lives in `src/CliRuntime.cs`; each command domain (profile, path, service, audit, agents, update, backup, protection, variable write/query) lives in its own `src/<Domain>Command.cs` module.
 2. **Tauri shell** (`frontend/src-tauri/`) - Rust application that embeds the CLI as a bundled resource. Spawns CLI subprocesses for each operation and returns structured JSON responses to the frontend via Tauri IPC commands.
-3. **Svelte frontend** (`frontend/src/`) - TypeScript + Svelte 4 + TailwindCSS UI rendered in a WebView2 window. Communicates with the Rust layer exclusively through `invoke('run_cli', ...)`.
+3. **Svelte frontend** (`frontend/src/`) - TypeScript + Svelte 5 + TailwindCSS UI rendered in a WebView2 window. Communicates with the Rust layer exclusively through `invoke('run_cli', ...)`.
 
 The GUI does NOT depend on a local web server. In development, Vite serves the frontend at `localhost:5173`. In production, Tauri embeds the built static assets via its `tauri://` custom protocol - no server, no network.
 

@@ -173,7 +173,7 @@ flowchart LR
 
 - **CLI**: C# .NET 10 の単一ファイル実行可能ファイル — 調整レイヤー兼レジストリゲートウェイ。
 - **Service**: 名前付きパイプ IPC 経由でシークレットマウントのライフサイクルを管理するスタンドアロンの Rust バイナリ。
-- **GUI**: 同じ IPC コントラクトを使用する Tauri 2 + Svelte 4 フロントエンド。
+- **GUI**: 同じ IPC コントラクトを使用する Tauri 2 + Svelte 5 フロントエンド。
 
 ## Secret providers
 
