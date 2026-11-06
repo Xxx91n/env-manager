@@ -46,7 +46,7 @@
   
   // Notes (sticky-note) — shared notesStore, key prefixed with path:
   let notesLoaded = $state(false)
-  let notesTick = writable(0)  // store: async-safe re-render trigger (Svelte 4 await limitation)
+  let notesTick = writable(0)  // store: async-safe re-render trigger (await results are not tracked dependencies)
   let hoveredNotePath: string | null = $state(null)
   let lastMovedKey: number | null = $state(null)  // Moved entry highlight (W3C APG listbox-rearrangeable)
 
@@ -299,7 +299,7 @@
     const tmp = arr[pos - 1]
     arr[pos - 1] = arr[pos]
     arr[pos] = tmp
-    stagedEntries = [...arr]  // New array ref for Svelte 4 keyed each reactivity
+    stagedEntries = [...arr]  // new array reference so keyed each re-diffs
     lastMovedKey = movedKey
     // W3C APG listbox-rearrangeable: focus follows the moved option so consecutive moves don't require re-finding the row
     queueMicrotask(() => {
@@ -318,7 +318,7 @@
     const tmp = arr[pos + 1]
     arr[pos + 1] = arr[pos]
     arr[pos] = tmp
-    stagedEntries = [...arr]  // New array ref for Svelte 4 keyed each reactivity
+    stagedEntries = [...arr]  // new array reference so keyed each re-diffs
     lastMovedKey = movedKey
     queueMicrotask(() => {
       const btn = document.querySelector('[data-move-down-key="' + movedKey + '"]') as HTMLButtonElement | null

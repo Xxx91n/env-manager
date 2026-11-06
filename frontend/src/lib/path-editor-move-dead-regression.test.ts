@@ -13,7 +13,7 @@ function findFn(name: string): string {
 }
 
 describe('v0.9.25 PathEditor move reactivity + highlight (W3C APG listbox-rearrangeable)', () => {
-  it('handleMoveUp creates a new array reference (Svelte 4 keyed each reactivity)', () => {
+  it('handleMoveUp creates a new array reference (keyed each reactivity)', () => {
     const fn = findFn('handleMoveUp')
     expect(fn.length).toBeGreaterThan(0)
     expect(fn.includes('stagedEntries = [...arr]')).toBe(true)

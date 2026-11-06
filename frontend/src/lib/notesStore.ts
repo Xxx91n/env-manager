@@ -15,10 +15,10 @@ export interface NotesData {
   notes: Record<string, VarNote>
 }
 
-// Svelte 4 reactive store: $notes auto-subscription guarantees
-// immediate UI reflection after async upsert (Svelte 4 svelte/store official).
-// Prior getNoteSync + notesTick writable bump did not track the function return
-// as a reactive dependency (Svelte 4 docs: function bodies not tracked).
+// Auto-subscription store: $notes guarantees immediate UI reflection after an
+// async upsert (svelte/store contract, unchanged under runes mode).
+// The prior getNoteSync + notesTick writable bump did not track the function
+// return as a reactive dependency (function bodies are not tracked).
 let cache: NotesData | null = null
 let writeTimer: ReturnType<typeof setTimeout> | null = null
 let pendingData: NotesData | null = null
@@ -64,7 +64,7 @@ export async function upsertNote(key: string, noteText: string): Promise<void> {
     const note: VarNote = { key, note: trimmed, updatedAt: new Date().toISOString() }
     data.notes[key] = note
     // optimistic: update store immediately so $notesStore subscribers re-render
-    // before the 200ms debounced IPC write (Svelte 4 svelte/store guarantee).
+    // before the 200ms debounced IPC write (svelte/store subscriber contract).
     ;(notesStore as any)._update(s => ({ ...s, [key]: note }))
   } else {
     delete data.notes[key]

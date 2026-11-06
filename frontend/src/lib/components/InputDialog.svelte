@@ -10,10 +10,10 @@
   let pending = $state(false)
   let inputEl: HTMLInputElement | undefined = $state()
 
-  // Use a tick-based approach instead of reactive block to avoid
-  // Svelte 4 dependency tracking: assigning inputValue inside a $: block
-  // makes inputValue a dependency, so typing re-fires the block and
-  // resets inputValue to defaultValue on every keystroke.
+  // Use a tick-based approach instead of a reactive block: assigning
+  // inputValue inside the block makes inputValue a dependency, so typing
+  // re-fires the block and resets inputValue to defaultValue on every
+  // keystroke. `$effect` tracks it exactly as `$:` did.
   let lastModal: typeof $inputModal = $state.raw(null)
   $effect(() => {
     if ($inputModal !== lastModal) {

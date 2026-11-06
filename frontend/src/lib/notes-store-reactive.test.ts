@@ -9,7 +9,7 @@ const variablesSrc = readFileSync(variablesPath, 'utf8')
 const pathEditorPath = resolve(__dirname, 'components/PathEditor.svelte')
 const pathEditorSrc = readFileSync(pathEditorPath, 'utf8')
 
-describe('v0.9.25 notesStore reactive store (Svelte 4)', () => {
+describe('v0.9.25 notesStore reactive store', () => {
   it('exports notesStore as a Readable for $notesStore auto-subscription', () => {
     expect(src.includes('export const notesStore')).toBe(true)
     // must be typed Readable so components cannot .set directly from outside
@@ -18,7 +18,7 @@ describe('v0.9.25 notesStore reactive store (Svelte 4)', () => {
 
   it('upsertNote updates the store optimistically before the IPC write', () => {
     // Root cause being fixed: prior getNoteSync + notesTick bump did not track the function return
-    // as a reactive dependency (Svelte 4 docs: function bodies not tracked).
+    // as a reactive dependency (function bodies are not tracked).
     expect(src.includes('(notesStore as any)._update(')).toBe(true)
   })
 
