@@ -16,7 +16,7 @@
   let editingVar = $state(null)
   let showEditDialog = $state(false)
   let notesLoaded = $state(false)
-  let notesTick = writable(0)  // store: async-safe re-render trigger (Svelte 4 await limitation)
+  let notesTick = writable(0)  // store: async-safe re-render trigger (await results are not tracked dependencies)
   let hoveredNoteVar: string | null = $state(null)  // bump to re-render note indicators
 
   async function ensureNotesLoaded() {

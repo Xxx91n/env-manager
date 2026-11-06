@@ -173,7 +173,7 @@ flowchart LR
 
 - **CLI**：C# .NET 10 单文件可执行程序——协调层与注册表网关。
 - **服务**：独立 Rust 二进制，通过命名管道 IPC 管理机密挂载生命周期。
-- **GUI**：Tauri 2 + Svelte 4 前端，使用同一套 IPC 契约。
+- **GUI**：Tauri 2 + Svelte 5 前端，使用同一套 IPC 契约。
 
 ## 机密提供者
 

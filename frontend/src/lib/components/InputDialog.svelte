@@ -10,10 +10,10 @@
   let pending = $state(false)
   let inputEl: HTMLInputElement | undefined = $state()
 
-  // Use a tick-based approach instead of reactive block to avoid
-  // Svelte 4 dependency tracking: assigning inputValue inside a $: block
-  // makes inputValue a dependency, so typing re-fires the block and
-  // resets inputValue to defaultValue on every keystroke.
+  // Reset the draft only when a new dialog payload arrives: assigning
+  // inputValue unconditionally inside the effect would make every keystroke a
+  // dependency and re-fire the reset. lastModal is state.raw, so the guard
+  // comparison itself cannot re-trigger the effect.
   let lastModal: typeof $inputModal = $state.raw(null)
   $effect(() => {
     if ($inputModal !== lastModal) {

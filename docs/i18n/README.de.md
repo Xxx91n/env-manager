@@ -173,7 +173,7 @@ flowchart LR
 
 - **CLI**: C#-.NET-10-Einzeldatei-Executable — die Koordinationsschicht und das Registrierungs-Gateway.
 - **Service**: eigenständige Rust-Binärdatei, die den Lebenszyklus von Secret-Mounts über Named-Pipe-IPC verwaltet.
-- **GUI**: Tauri-2- + Svelte-4-Frontend, das dieselben IPC-Verträge verwendet.
+- **GUI**: Tauri-2- + Svelte-5-Frontend, das dieselben IPC-Verträge verwendet.
 
 ## Secret providers
 

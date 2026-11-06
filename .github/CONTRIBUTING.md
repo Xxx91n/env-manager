@@ -1,6 +1,6 @@
 # Contributing to Env Manager
 
-Thanks for your interest in contributing! This project is a Windows environment variable manager with a multi-language stack (C# .NET 10, TypeScript/Svelte 4, Rust/Tauri 2.0).
+Thanks for your interest in contributing! This project is a Windows environment variable manager with a multi-language stack (C# .NET 10, TypeScript/Svelte 5, Rust/Tauri 2.0).
 
 ## Prerequisites
 
@@ -30,7 +30,7 @@ node scripts/build.mjs --arch x64
 ## Project Structure
 
 - `src/*.cs` -- C# .NET 10 CLI backend (env-manager-cli.exe); `src/Program.cs` is the thin Main dispatcher, `src/CliRuntime.cs` holds the shared CLI runtime, one module file per command domain
-- `frontend/src/` -- Svelte 4 + TypeScript frontend (WebView2)
+- `frontend/src/` -- Svelte 5 + TypeScript frontend (WebView2)
 - `frontend/src-tauri/src/` -- Rust Tauri shell (env-manager.exe)
 - `service/` -- Rust standalone service binary (env-manager-service.exe)
 - `scripts/` -- Build orchestrator, test harnesses, migration scripts

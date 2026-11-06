@@ -170,7 +170,7 @@ flowchart LR
 
 - **CLI**: C# .NET 10 single-file executable — the coordination layer and registry gateway.
 - **Service**: standalone Rust binary managing secret mount lifecycle via named pipe IPC.
-- **GUI**: Tauri 2 + Svelte 4 frontend using the same IPC contracts.
+- **GUI**: Tauri 2 + Svelte 5 frontend using the same IPC contracts.
 
 ## Secret providers
 
