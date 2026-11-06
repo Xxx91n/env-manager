@@ -139,7 +139,7 @@ updates:
       # 导出，触发所有 `twMerge` 调用点重新评审，#99 的触发条件门控，故钉在 3.x。
       - dependency-name: "tailwind-merge"
         versions: ["3.x"]
-      # jsdom：当前测试环境 jsdom 25（vitest 默认）；26 起跨多个 major，须重测 DOM 模拟
+      # jsdom：当前测试环境 jsdom 25.x（frontend/package.json ^25.0.1）；26 起跨多个 major，须重测 DOM 模拟
       # 行为差异（MutationObserver / IntersectionObserver 语义），故钉 26.0.0 及以上。
       - dependency-name: "jsdom"
         versions: [">= 26.0.0"]
