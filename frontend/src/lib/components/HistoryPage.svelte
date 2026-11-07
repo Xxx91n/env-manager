@@ -42,14 +42,18 @@
     refresh()
   })
 
+  let latestRefreshId = 0
+
   async function refresh(force = true) {
+    const refreshId = ++latestRefreshId
     loading = true
     try {
-      allHistory = await listHistory(200, force)
+      const entries = await listHistory(200, force)
+      if (refreshId === latestRefreshId) allHistory = entries
     } catch (err) { void frontendLog('error', '[HistoryPage] ' + (err instanceof Error ? err.message : String(err))).catch(() => {});
       showToast(err instanceof Error ? err.message : String(err), 'error')
     } finally {
-      loading = false
+      if (refreshId === latestRefreshId) loading = false
     }
   }
 
