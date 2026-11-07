@@ -459,5 +459,44 @@ describe('api module', () => {
       const afterClear = await listHistory(200, false)
       expect(afterClear).toEqual([])
     })
+
+    it('does not allow an in-flight history read started before clear to repopulate cache', async () => {
+      let resolveFirst: ((value: unknown) => void) | undefined
+      mockInvoke.mockImplementation((_cmd: string, opts?: { command?: string; args?: string[] }) => {
+        if (opts?.command === 'history' && opts?.args?.[0] === 'list') {
+          return new Promise((resolve) => { resolveFirst = resolve })
+        }
+        if (opts?.command === 'history' && opts?.args?.[0] === 'delete' && opts?.args?.[1] === '--all') {
+          return Promise.resolve({ success: true, data: '', error: null })
+        }
+        return Promise.resolve({ success: true, data: '[]', error: null })
+      })
+
+      // Start an in-flight read
+      const inFlight = listHistory(200, true)
+
+      // In the meantime, user clears history
+      await clearHistory('all')
+
+      // Mock CLI returning empty list for post-clear reads
+      mockInvoke.mockImplementation((_cmd: string, opts?: { command?: string; args?: string[] }) => {
+        if (opts?.command === 'history' && opts?.args?.[0] === 'list') {
+          return Promise.resolve({ success: true, data: '[]', error: null })
+        }
+        return Promise.resolve({ success: true, data: '', error: null })
+      })
+
+      // First (stale) read finishes with old items
+      resolveFirst?.({
+        success: true,
+        data: JSON.stringify([{ id: 'old', timestamp: '2026-11-06T00:00:00Z', command: 'set', name: 'OLD', scope: 'user', oldValue: null, newValue: 'VAL' }]),
+        error: null,
+      })
+      await inFlight
+
+      // Cache should NOT be repopulated with the stale result
+      const fresh = await listHistory(200, false)
+      expect(fresh).toEqual([])
+    })
   })
 })
