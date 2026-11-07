@@ -9,9 +9,6 @@
   <img src="../../docs/assets/logo.png" alt="Env Manager ロゴ" width="120" height="120">
 </picture>
 
-<p align="center">
-  <img src="../../docs/assets/brand/hero.gif" alt="Env Manager ヒーロー: Dev/Staging/Prod のカラートークンによる三つ峰のクレストを持つ端末プロンプト" width="100%">
-</p>
 
 # Env Manager
 
@@ -41,16 +38,6 @@
 |:-:|:-:|:-:|
 | ![変数ビュー](../../docs/assets/gallery/01-variables.webp)<br>**変数** — 検索、スコープフィルター、行ごとの操作 | ![System スコープ](../../docs/assets/gallery/02-variables-system.webp)<br>**System スコープ** — 保護エントリはロック済み | ![PATH エディター](../../docs/assets/gallery/03-path-editor.webp)<br>**PATH エディター** — 無効・重複エントリの検出 |
 | ![プロファイル](../../docs/assets/gallery/04-profiles.webp)<br>**プロファイル** — 適用 / 起動 / 継承 | ![監査台帳](../../docs/assets/gallery/07-audit.webp)<br>**監査台帳** — ハッシュチェーンで検証可能 | ![サービスマネージャー](../../docs/assets/gallery/08-service.webp)<br>**サービスマネージャー** — シークレットのマウント |
-
-### CLI
-
-<p align="center">
-  <img src="../../docs/assets/demo.gif" alt="Env Manager CLI デモ: agents、path health、get コマンド" width="100%">
-</p>
-
-| | |
-|:-:|:-:|
-| ![CLI 端末](../../docs/assets/gallery/12-cli-terminal.webp)<br>**JSON ファーストの出力** — `agents --json` が完全なコマンド仕様を出力 | CLI はファーストクラスのサーフェスです: 18 以上のコマンド、すべてがスクリプト化され JSON で利用可能。エージェント向けマニュアルはバイナリに同梱されています — `env-manager-cli agents` を実行すると表示されます。上記の読み取り専用コマンドはシミュレートされた端末出力を使用しています。`node scripts/demo/capture.mjs` で再生成できます。 |
 
 ## Features
 

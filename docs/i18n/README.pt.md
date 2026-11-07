@@ -9,9 +9,6 @@
   <img src="../../docs/assets/logo.png" alt="Logotipo do Env Manager" width="120" height="120">
 </picture>
 
-<p align="center">
-  <img src="../../docs/assets/brand/hero.gif" alt="Hero do Env Manager: prompt de terminal com crista de três picos nos tokens de cor Dev/Staging/Prod" width="100%">
-</p>
 
 # Env Manager
 
@@ -41,16 +38,6 @@ Um gerenciador de variáveis de ambiente do Windows com dois front ends — uma 
 |:-:|:-:|:-:|
 | ![Vista de variáveis](../../docs/assets/gallery/01-variables.webp)<br>**Variáveis** — pesquisa, filtro por âmbito, ações por linha | ![Âmbito do sistema](../../docs/assets/gallery/02-variables-system.webp)<br>**Âmbito do sistema** — entradas protegidas bloqueadas | ![Editor de PATH](../../docs/assets/gallery/03-path-editor.webp)<br>**Editor de PATH** — detecção de entradas mortas e duplicadas |
 | ![Perfis](../../docs/assets/gallery/04-profiles.webp)<br>**Perfis** — aplicar / iniciar / herdar | ![Livro de auditoria](../../docs/assets/gallery/07-audit.webp)<br>**Livro de auditoria** — encadeado por hash, verificável | ![Gestor de serviços](../../docs/assets/gallery/08-service.webp)<br>**Gestor de serviços** — montagens de segredos |
-
-### CLI
-
-<p align="center">
-  <img src="../../docs/assets/demo.gif" alt="Demonstração da CLI do Env Manager: agents, path health e comandos get" width="100%">
-</p>
-
-| | |
-|:-:|:-:|
-| ![Terminal da CLI](../../docs/assets/gallery/12-cli-terminal.webp)<br>**Saída JSON em primeiro lugar** — `agents --json` emite a especificação completa de comandos | A CLI é uma superfície de primeira classe: mais de 18 comandos, todos roteirizáveis e consumíveis em JSON. O manual do agente acompanha o binário — execute `env-manager-cli agents` para imprimi-lo. Os comandos somente leitura acima usam saída de terminal simulada; regenere com `node scripts/demo/capture.mjs`. |
 
 ## Recursos
 

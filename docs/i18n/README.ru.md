@@ -9,9 +9,6 @@
   <img src="../../docs/assets/logo.png" alt="Логотип Env Manager" width="120" height="120">
 </picture>
 
-<p align="center">
-  <img src="../../docs/assets/brand/hero.gif" alt="Hero Env Manager: приглашение терминала с трёхвершинным гребнем в цветовых токенах Dev/Staging/Prod" width="100%">
-</p>
 
 # Env Manager
 
@@ -41,16 +38,6 @@
 |:-:|:-:|:-:|
 | ![Просмотр переменных](../../docs/assets/gallery/01-variables.webp)<br>**Переменные** — поиск, фильтр по области, действия по строкам | ![Область system](../../docs/assets/gallery/02-variables-system.webp)<br>**Область system** — защищённые записи заблокированы | ![Редактор PATH](../../docs/assets/gallery/03-path-editor.webp)<br>**Редактор PATH** — обнаружение мёртвых записей и дубликатов |
 | ![Профили](../../docs/assets/gallery/04-profiles.webp)<br>**Профили** — применить / запустить / наследовать | ![Журнал аудита](../../docs/assets/gallery/07-audit.webp)<br>**Журнал аудита** — хеш-цепочка, проверяемый | ![Диспетчер службы](../../docs/assets/gallery/08-service.webp)<br>**Диспетчер службы** — монтирование секретов |
-
-### CLI
-
-<p align="center">
-  <img src="../../docs/assets/demo.gif" alt="Демо Env Manager CLI: agents, path health и команды get" width="100%">
-</p>
-
-| | |
-|:-:|:-:|
-| ![Терминал CLI](../../docs/assets/gallery/12-cli-terminal.webp)<br>**JSON-first вывод** — `agents --json` отдаёт полную спецификацию команд | CLI — первоклассная поверхность: 18+ команд, каждая пригодна для скриптов и потребляется в JSON. Руководство для агентов поставляется внутри бинарника — выполните `env-manager-cli agents`, чтобы его вывести. Команды только для чтения выше используют смоделированный вывод терминала; перегенерация: `node scripts/demo/capture.mjs`. |
 
 ## Возможности
 
