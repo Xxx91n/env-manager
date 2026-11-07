@@ -50,8 +50,11 @@
     try {
       const entries = await listHistory(200, force)
       if (refreshId === latestRefreshId) allHistory = entries
-    } catch (err) { void frontendLog('error', '[HistoryPage] ' + (err instanceof Error ? err.message : String(err))).catch(() => {});
-      showToast(err instanceof Error ? err.message : String(err), 'error')
+    } catch (err) {
+      void frontendLog('error', '[HistoryPage] ' + (err instanceof Error ? err.message : String(err))).catch(() => {});
+      if (refreshId === latestRefreshId) {
+        showToast(err instanceof Error ? err.message : String(err), 'error')
+      }
     } finally {
       if (refreshId === latestRefreshId) loading = false
     }
