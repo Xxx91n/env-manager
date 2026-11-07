@@ -486,6 +486,9 @@ describe('api module', () => {
         return Promise.resolve({ success: true, data: '', error: null })
       })
 
+      // Post-clear read starts while the pre-clear read is still pending
+      const postClear = listHistory(200, false)
+
       // First (stale) read finishes with old items
       resolveFirst?.({
         success: true,
@@ -493,6 +496,7 @@ describe('api module', () => {
         error: null,
       })
       await inFlight
+      expect(await postClear).toEqual([])
 
       // Cache should NOT be repopulated with the stale result
       const fresh = await listHistory(200, false)
