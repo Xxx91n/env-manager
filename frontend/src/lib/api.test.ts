@@ -16,6 +16,8 @@ import {
   movePathEntryDown,
   listVariablesRaw,
   invalidateApiCache,
+  listHistory,
+  clearHistory,
 } from './api'
 import { isCliInPath, removeCliFromPath, listProtection } from './api'
 import { variables, error } from './stores'
@@ -408,6 +410,97 @@ describe('api module', () => {
       expect(result).not.toHaveProperty('error')
       expect(result).toHaveProperty('protectedVars')
       expect(result).toHaveProperty('protectedPaths')
+    })
+  })
+
+  describe('History API cache invalidation', () => {
+    it('clears history cache immediately after clearHistory', async () => {
+      const initialHistory = [
+        { id: '1', timestamp: '2026-11-06T00:00:00Z', command: 'set', name: 'FOO', scope: 'user', oldValue: null, newValue: 'BAR' },
+      ]
+      mockInvoke.mockImplementation((_cmd: string, opts?: { command?: string; args?: string[] }) => {
+        if (opts?.command === 'history' && opts?.args?.[0] === 'list') {
+          return Promise.resolve({
+            success: true,
+            data: JSON.stringify(initialHistory),
+            error: null,
+          })
+        }
+        if (opts?.command === 'history' && opts?.args?.[0] === 'delete' && opts?.args?.[1] === '--all') {
+          return Promise.resolve({ success: true, data: '', error: null })
+        }
+        return Promise.resolve({ success: true, data: '[]', error: null })
+      })
+
+      // First fetch populates cache
+      const fetched = await listHistory(200, true)
+      expect(fetched).toEqual(initialHistory)
+
+      // Next call without force returns cache
+      const fromCache = await listHistory(200, false)
+      expect(fromCache).toEqual(initialHistory)
+
+      // Update mock to return empty list after clear
+      mockInvoke.mockImplementation((_cmd: string, opts?: { command?: string; args?: string[] }) => {
+        if (opts?.command === 'history' && opts?.args?.[0] === 'list') {
+          return Promise.resolve({
+            success: true,
+            data: '[]',
+            error: null,
+          })
+        }
+        return Promise.resolve({ success: true, data: '', error: null })
+      })
+
+      // Clear history
+      await clearHistory('all')
+
+      // Subsequent listHistory should hit CLI / return empty, not stale cached items
+      const afterClear = await listHistory(200, false)
+      expect(afterClear).toEqual([])
+    })
+
+    it('does not allow an in-flight history read started before clear to repopulate cache', async () => {
+      let resolveFirst: ((value: unknown) => void) | undefined
+      mockInvoke.mockImplementation((_cmd: string, opts?: { command?: string; args?: string[] }) => {
+        if (opts?.command === 'history' && opts?.args?.[0] === 'list') {
+          return new Promise((resolve) => { resolveFirst = resolve })
+        }
+        if (opts?.command === 'history' && opts?.args?.[0] === 'delete' && opts?.args?.[1] === '--all') {
+          return Promise.resolve({ success: true, data: '', error: null })
+        }
+        return Promise.resolve({ success: true, data: '[]', error: null })
+      })
+
+      // Start an in-flight read
+      const inFlight = listHistory(200, true)
+
+      // In the meantime, user clears history
+      await clearHistory('all')
+
+      // Mock CLI returning empty list for post-clear reads
+      mockInvoke.mockImplementation((_cmd: string, opts?: { command?: string; args?: string[] }) => {
+        if (opts?.command === 'history' && opts?.args?.[0] === 'list') {
+          return Promise.resolve({ success: true, data: '[]', error: null })
+        }
+        return Promise.resolve({ success: true, data: '', error: null })
+      })
+
+      // Post-clear read starts while the pre-clear read is still pending
+      const postClear = listHistory(200, false)
+
+      // First (stale) read finishes with old items
+      resolveFirst?.({
+        success: true,
+        data: JSON.stringify([{ id: 'old', timestamp: '2026-11-06T00:00:00Z', command: 'set', name: 'OLD', scope: 'user', oldValue: null, newValue: 'VAL' }]),
+        error: null,
+      })
+      await inFlight
+      expect(await postClear).toEqual([])
+
+      // Cache should NOT be repopulated with the stale result
+      const fresh = await listHistory(200, false)
+      expect(fresh).toEqual([])
     })
   })
 })

@@ -288,7 +288,8 @@ const pathReadsInFlight = new Map<string, { generation: number; promise: Promise
 const HISTORY_CACHE_TTL_MS = 15000
 let historyCacheData: AuditEntry[] = []
 let lastHistoryCacheTime = 0
-let historyReadInFlight: Promise<AuditEntry[]> | null = null
+let historyReadInFlight: { generation: number; promise: Promise<AuditEntry[]> } | null = null
+let historyGeneration = 0
 
 // Protection page cache: same pattern. ListProtection runs a read-only CLI command
 // whose output rarely changes between renders; cache it for the TTL window and
@@ -321,6 +322,7 @@ export function invalidateApiCache(): void {
   for (const [, entry] of pathEntriesCache) {
     entry.time = 0
   }
+  historyGeneration += 1
   lastHistoryCacheTime = 0
   historyReadInFlight = null
   lastProtectionCacheTime = 0
@@ -879,47 +881,52 @@ export async function expandVariableValue(value: string): Promise<string> {
 
 export async function listHistory(limit = 200, force: boolean = false): Promise<AuditEntry[]> {
   const now = Date.now()
+  const generation = historyGeneration
   const cacheExists = historyCacheData.length > 0
   const cacheFresh = !force && cacheExists && (now - lastHistoryCacheTime) < HISTORY_CACHE_TTL_MS
   if (cacheFresh) return historyCacheData
 
   // SWR: return stale data immediately, refresh in background
-  if (!force && cacheExists && !historyReadInFlight) {
+  if (!force && cacheExists && historyReadInFlight?.generation !== generation) {
     const refreshPromise = (async () => {
       try {
         const output = await runRead('history', ['list', '--limit', String(limit)])
         const data = JSON.parse(output) as AuditEntry[]
-        historyCacheData = data
-        lastHistoryCacheTime = Date.now()
+        if (generation === historyGeneration) {
+          historyCacheData = data
+          lastHistoryCacheTime = Date.now()
+        }
         return data
       } catch (err) {
         error.set(err instanceof Error ? err.message : 'Failed to load history')
         return historyCacheData
       } finally {
-        historyReadInFlight = null
+        if (historyReadInFlight?.promise === refreshPromise) historyReadInFlight = null
       }
     })()
-    historyReadInFlight = refreshPromise
+    historyReadInFlight = { generation, promise: refreshPromise }
     return historyCacheData // return stale immediately
   }
 
   // No cache: block on first fetch
-  if (historyReadInFlight) return historyReadInFlight as Promise<AuditEntry[]>
+  if (historyReadInFlight?.generation === generation) return historyReadInFlight.promise
   const promise = (async () => {
     try {
       const output = await runRead('history', ['list', '--limit', String(limit)])
       const data = JSON.parse(output) as AuditEntry[]
-      historyCacheData = data
-      lastHistoryCacheTime = Date.now()
+      if (generation === historyGeneration) {
+        historyCacheData = data
+        lastHistoryCacheTime = Date.now()
+      }
       return data
     } catch (err) {
       error.set(err instanceof Error ? err.message : 'Failed to load history')
       throw err
     } finally {
-      historyReadInFlight = null
+      if (historyReadInFlight?.promise === promise) historyReadInFlight = null
     }
   })()
-  historyReadInFlight = promise
+  historyReadInFlight = { generation, promise }
   return promise
 }
 
@@ -927,17 +934,29 @@ export async function undoHistory(id: string, force = false): Promise<void> {
   const args = ['undo', id]
   if (force) args.push('--force')
   await runWrite('history', args)
+  historyGeneration += 1
+  historyCacheData = []
+  lastHistoryCacheTime = 0
+  historyReadInFlight = null
   await listVariables()
 }
 
 export async function deleteHistory(id: string): Promise<void> {
   await runWrite('history', ['delete', id])
+  historyGeneration += 1
+  historyCacheData = []
+  lastHistoryCacheTime = 0
+  historyReadInFlight = null
 }
 
 export async function clearHistory(scope: 'user' | 'system' | 'all' = 'all'): Promise<void> {
   const args = ['delete', '--all']
   if (scope !== 'all') args.push('--scope', scope)
   await runWrite('history', args)
+  historyGeneration += 1
+  historyCacheData = []
+  lastHistoryCacheTime = 0
+  historyReadInFlight = null
 }
 
 export async function bulkImport(file: string, scope: 'user' | 'system', overwrite = false, dryRun = false): Promise<Record<string, unknown>> {
