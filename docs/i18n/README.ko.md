@@ -9,9 +9,6 @@
   <img src="../../docs/assets/logo.png" alt="Env Manager 로고" width="120" height="120">
 </picture>
 
-<p align="center">
-  <img src="../../docs/assets/brand/hero.gif" alt="Env Manager 히어로: Dev/Staging/Prod 색상 토큰의 세 봉우리 문장이 있는 터미널 프롬프트" width="100%">
-</p>
 
 # Env Manager
 
@@ -41,16 +38,6 @@
 |:-:|:-:|:-:|
 | ![변수 보기](../../docs/assets/gallery/01-variables.webp)<br>**변수** — 검색, 범위 필터, 행별 작업 | ![system 범위](../../docs/assets/gallery/02-variables-system.webp)<br>**system 범위** — 보호된 항목 잠금 | ![PATH 편집기](../../docs/assets/gallery/03-path-editor.webp)<br>**PATH 편집기** — 끊어진/중복 항목 감지 |
 | ![프로필](../../docs/assets/gallery/04-profiles.webp)<br>**프로필** — 적용 / 실행 / 상속 | ![감사 원장](../../docs/assets/gallery/07-audit.webp)<br>**감사 원장** — 해시 체인, 검증 가능 | ![서비스 관리자](../../docs/assets/gallery/08-service.webp)<br>**서비스 관리자** — 시크릿 마운트 |
-
-### CLI
-
-<p align="center">
-  <img src="../../docs/assets/demo.gif" alt="Env Manager CLI 데모: agents, path health, get 명령" width="100%">
-</p>
-
-| | |
-|:-:|:-:|
-| ![CLI 터미널](../../docs/assets/gallery/12-cli-terminal.webp)<br>**JSON 우선 출력** — `agents --json`이 전체 명령 사양을 출력 | CLI는 일급 서피스입니다: 18개 이상의 명령이 모두 스크립팅 가능하고 JSON으로 소비할 수 있습니다. 에이전트 매뉴얼은 바이너리에 내장되어 있습니다 — `env-manager-cli agents`를 실행하면 출력됩니다. 위의 읽기 전용 명령은 시뮬레이션된 터미널 출력을 사용하며, `node scripts/demo/capture.mjs`로 다시 생성할 수 있습니다. |
 
 ## Features
 

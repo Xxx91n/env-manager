@@ -9,9 +9,6 @@
   <img src="../../docs/assets/logo.png" alt="Env Manager 标志" width="120" height="120">
 </picture>
 
-<p align="center">
-  <img src="../../docs/assets/brand/hero.gif" alt="Env Manager 主视觉：终端提示符与三峰徽记（Dev/Staging/Prod 配色令牌）" width="100%">
-</p>
 
 # Env Manager
 
@@ -41,16 +38,6 @@ Windows 环境变量管理器，提供两个前端——为脚本和 AI agent �
 |:-:|:-:|:-:|
 | ![变量视图](../../docs/assets/gallery/01-variables.webp)<br>**变量** —— 搜索、作用域筛选、逐行操作 | ![System 作用域](../../docs/assets/gallery/02-variables-system.webp)<br>**System 作用域** —— 受保护条目已锁定 | ![PATH 编辑器](../../docs/assets/gallery/03-path-editor.webp)<br>**PATH 编辑器** —— 失效与重复项检测 |
 | ![配置文件](../../docs/assets/gallery/04-profiles.webp)<br>**配置文件** —— apply / launch / 继承 | ![审计账本](../../docs/assets/gallery/07-audit.webp)<br>**审计账本** —— 哈希链式、可验证 | ![服务管理](../../docs/assets/gallery/08-service.webp)<br>**服务管理** —— 机密挂载 |
-
-### CLI
-
-<p align="center">
-  <img src="../../docs/assets/demo.gif" alt="Env Manager CLI 演示：agents、path health 和 get 命令" width="100%">
-</p>
-
-| | |
-|:-:|:-:|
-| ![CLI 终端](../../docs/assets/gallery/12-cli-terminal.webp)<br>**JSON 优先输出** —— `agents --json` 输出完整命令规格 | CLI 是一等界面：18+ 命令，全部可脚本化、可 JSON 消费。agent 手册内置于二进制中——运行 `env-manager-cli agents` 即可打印。上方只读命令使用模拟终端输出；使用 `node scripts/demo/capture.mjs` 重新生成。 |
 
 ## 功能
 

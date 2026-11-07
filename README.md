@@ -6,10 +6,6 @@
   <img src="docs/assets/logo.png" alt="Env Manager logo" width="120" height="120">
 </picture>
 
-<p align="center">
-  <img src="docs/assets/brand/hero.gif" alt="Env Manager hero: terminal prompt with three-peak crest in Dev/Staging/Prod color tokens" width="100%">
-</p>
-
 # Env Manager
 
 A Windows environment-variable manager with two front ends — a C# CLI built for scripts and AI agents, and a Tauri GUI for interactive editing — over one set of registry contracts.
@@ -38,16 +34,6 @@ A Windows environment-variable manager with two front ends — a C# CLI built fo
 |:-:|:-:|:-:|
 | ![Variables view](docs/assets/gallery/01-variables.webp)<br>**Variables** — search, scope filter, per-row actions | ![System scope](docs/assets/gallery/02-variables-system.webp)<br>**System scope** — protected entries locked | ![PATH Editor](docs/assets/gallery/03-path-editor.webp)<br>**PATH Editor** — dead & duplicate detection |
 | ![Profiles](docs/assets/gallery/04-profiles.webp)<br>**Profiles** — apply / launch / inherit | ![Audit Ledger](docs/assets/gallery/07-audit.webp)<br>**Audit Ledger** — hash-chained, verifiable | ![Service Manager](docs/assets/gallery/08-service.webp)<br>**Service Manager** — secret mounts |
-
-### CLI
-
-<p align="center">
-  <img src="docs/assets/demo.gif" alt="Env Manager CLI demo: agents, path health, and get commands" width="100%">
-</p>
-
-| | |
-|:-:|:-:|
-| ![CLI terminal](docs/assets/gallery/12-cli-terminal.webp)<br>**JSON-first output** — `agents --json` emits the full command spec | The CLI is a first-class surface: 18+ commands, every one scripted and JSON-consumable. The agent manual ships inside the binary — run `env-manager-cli agents` to print it. Read-only commands above use simulated terminal output; regenerate with `node scripts/demo/capture.mjs`. |
 
 ## Features
 

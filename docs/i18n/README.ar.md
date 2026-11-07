@@ -9,9 +9,6 @@
   <img src="../../docs/assets/logo.png" alt="شعار Env Manager" width="120" height="120">
 </picture>
 
-<p align="center">
-  <img src="../../docs/assets/brand/hero.gif" alt="Env Manager hero: موجه طرفية بشعار ثلاثي القمم برموز ألوان Dev/Staging/Prod" width="100%">
-</p>
 
 # Env Manager
 
@@ -45,16 +42,6 @@
 | ![الملفات الشخصية](../../docs/assets/gallery/04-profiles.webp)<br>**الملفات الشخصية** — تطبيق / تشغيل / وراثة | ![سجل التدقيق](../../docs/assets/gallery/07-audit.webp)<br>**سجل التدقيق** — متسلسل بالهاش وقابل للتحقق | ![مدير الخدمة](../../docs/assets/gallery/08-service.webp)<br>**مدير الخدمة** — تركيب الأسرار |
 
 </div>
-
-### CLI
-
-<p align="center">
-  <img src="../../docs/assets/demo.gif" alt="عرض CLI لـ Env Manager: أوامر agents وpath health وget" width="100%">
-</p>
-
-| | |
-|:-:|:-:|
-| ![طرفية CLI](../../docs/assets/gallery/12-cli-terminal.webp)<br>**مخرجات JSON أولًا** — يصدر `agents --json` مواصفة الأوامر كاملة | CLI سطح من الدرجة الأولى: أكثر من 18 أمرًا، كلها قابلة للبرمجة وقابلة للاستهلاك بصيغة JSON. دليل الوكيل مضمّن داخل الملف التنفيذي — نفّذ `env-manager-cli agents` لطباعته. أوامر القراءة فقط أعلاه تستخدم مخرجات طرفية محاكاة؛ أعد إنشاءها بـ `node scripts/demo/capture.mjs`. |
 
 ## الميزات
 
