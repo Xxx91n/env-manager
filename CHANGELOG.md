@@ -5,6 +5,13 @@ All notable changes to Env Manager will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.14.1](https://github.com/Xxx91n/env-manager/compare/v0.14.0...v0.14.1) (2026-11-07)
+
+
+### Bug Fixes
+
+* **gui:** immediately refresh history view after clear-all and mutations ([#240](https://github.com/Xxx91n/env-manager/issues/240)) ([2e7b4f4](https://github.com/Xxx91n/env-manager/commit/2e7b4f49f3c239078d31fe995e7bfb337554af72)), closes [#238](https://github.com/Xxx91n/env-manager/issues/238)
+
 ## [0.14.0](https://github.com/Xxx91n/env-manager/compare/v0.13.0...v0.14.0) (2026-11-06)
 
 
