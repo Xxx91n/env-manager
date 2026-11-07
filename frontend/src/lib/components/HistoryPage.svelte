@@ -42,10 +42,10 @@
     refresh()
   })
 
-  async function refresh() {
+  async function refresh(force = true) {
     loading = true
     try {
-      allHistory = await listHistory()
+      allHistory = await listHistory(200, force)
     } catch (err) { void frontendLog('error', '[HistoryPage] ' + (err instanceof Error ? err.message : String(err))).catch(() => {});
       showToast(err instanceof Error ? err.message : String(err), 'error')
     } finally {

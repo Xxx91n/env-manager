@@ -927,17 +927,23 @@ export async function undoHistory(id: string, force = false): Promise<void> {
   const args = ['undo', id]
   if (force) args.push('--force')
   await runWrite('history', args)
+  historyCacheData = []
+  lastHistoryCacheTime = 0
   await listVariables()
 }
 
 export async function deleteHistory(id: string): Promise<void> {
   await runWrite('history', ['delete', id])
+  historyCacheData = []
+  lastHistoryCacheTime = 0
 }
 
 export async function clearHistory(scope: 'user' | 'system' | 'all' = 'all'): Promise<void> {
   const args = ['delete', '--all']
   if (scope !== 'all') args.push('--scope', scope)
   await runWrite('history', args)
+  historyCacheData = []
+  lastHistoryCacheTime = 0
 }
 
 export async function bulkImport(file: string, scope: 'user' | 'system', overwrite = false, dryRun = false): Promise<Record<string, unknown>> {
