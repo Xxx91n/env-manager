@@ -25,12 +25,12 @@ You will receive a response within 72 hours. If the vulnerability is confirmed, 
 Env Manager handles environment variable mutation and secret provider integration. Key security surfaces:
 
 - **Cross-process mutex**: All write operations acquire `Local\EnvManager.RegistryMutation` mutex plus a Rust `CLI_RWLOCK` write lock plus a frontend `writeChain` serialization. Three layers, never bypassed.
-- **Secret storage**: Secret values are encrypted via provider-specific mechanisms (DPAPI, CredMan, Vault, SOPS, Azure KV, 1Password, AWS SM). Plaintext never persists to disk or logs.
-- **Launch profile isolation**: Launch profiles inject variables into a child process via `env_clear + inject`. Never written to registry, never broadcast `WM_SETTINGCHANGE`.
+- **Secret storage**: Secret values are encrypted by the active secret provider (DPAPI, Credential Manager, Vault, SOPS, Azure Key Vault, 1Password, AWS Secrets Manager, PowerShell SecretStore). A profile stores an encrypted envelope or a `mount:<id>` reference, and the registry never receives a secret through the secret commands. Plaintext stays out of logs and profile files; it can exist briefly in process memory and in a short-lived SOPS temp directory. The full list is in `docs/plaintext-sinks.md`.
+- **Launch profile isolation**: Launch profiles put variables into a child process with `env_clear + inject`. They never write the registry and never broadcast `WM_SETTINGCHANGE`.
 - **Named pipe IPC**: Anti-squatting (`PIPE_FIRST_PIPE_INSTANCE`) prevents pipe hijacking. 65536-byte request cap. Newline-delimited JSON protocol.
 - **Input validation**: CLI command whitelist, max 64 args, max 32767 chars per arg, null bytes and control characters rejected.
 
-See `AGENTS.md` for the complete list of 40+ hard boundaries.
+See `docs/agents/hard-boundaries.md` for the complete list of hard boundaries. `AGENTS.md` is the short routing layer.
 
 ## Known Dependency Advisories & Disposition
 

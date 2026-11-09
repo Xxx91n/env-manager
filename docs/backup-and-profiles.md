@@ -42,7 +42,7 @@ Profiles are stored at `%LOCALAPPDATA%\EnvManager\profiles.json`:
 - `name`: Profile name (unique)
 - `isEnabled`: Whether the profile is currently applied
 - `variables`: Array of `{ name, value }` pairs
-- When applied, original user variable values are backed up as `name_PowerToys_<profileName>` (PowerToys-compatible naming). `ListEnvironment` skips any key containing `_PowerToys_` so these don't appear as regular variables.
+- When applied, the original value of each affected variable is backed up as `name_PowerToys_<profileName>` (PowerToys-compatible naming). `ListEnvironment` skips any key containing `_PowerToys_` so these don't appear as regular variables.
 
 ### Profile source attribution
 
@@ -56,19 +56,19 @@ The GUI Profile page supports pointer-event-based drag-and-drop to reorder profi
 
 Profile JSON gains these optional fields (see `ProfileData` in `src/Models.cs`):
 
-- `profileType`: `"global"` (default, current apply-to-user-registry behavior) or `"launch"` (launcher template).
+- `profileType`: `"global"` (default, writes its values into the registry) or `"launch"` (a template for starting one child process).
 - `targetExecutable` (launch only): absolute or relative path to an executable. `ValidateLaunchTarget` rejects non-existent, non-executable, or System32 paths.
-- `launchArguments` (launch only): optional static args appended to the spawned command.
+- `launchArguments` (launch only): optional static args appended to the started command.
 - `workingDirectory` (launch only): optional cwd override.
-- `secretVariables`: list of variable names whose values are DPAPI-encrypted on disk (CurrentUser scope). v0.7.0 implements full DPAPI runtime: `profile add-secret`/`edit-secret` store the active provider's versioned envelope in `variables[].Value` (for DPAPI, the envelope wraps the base64 `CryptProtectData` ciphertext); `profile launch` decrypts in the launcher process; `profile reveal-secret` and `profile show --reveal` are the plaintext-to-stdout paths. The DPAPI path persists no plaintext; sops materializes it briefly in temp files and the generic `add-var`/`edit-var` verbs can bypass the secret marker - see the Plaintext lifecycle section of `docs/architecture.md`.
+- `secretVariables`: list of variable names whose values are encrypted on disk by the active secret provider. v0.7.0 implements full DPAPI runtime: `profile add-secret`/`edit-secret` store the active provider's versioned envelope in `variables[].Value` (for DPAPI, the envelope wraps the base64 `CryptProtectData` ciphertext); `profile launch` decrypts in the launcher process; `profile reveal-secret` and `profile show --reveal` are the plaintext-to-stdout paths. The DPAPI path persists no plaintext; sops materializes it briefly in temp files and the generic `add-var`/`edit-var` verbs can bypass the secret marker - see the Plaintext lifecycle section of `docs/architecture.md`.
 
 **Safety invariants specific to Launch profiles**:
 
 - A Launch profile is NEVER written to the user registry. `profile launch <name>` calls `ProcessStartInfo.EnvironmentVariables.Clear()` then `env(k,v)` per profile variable.
-- A Launch profile NEVER triggers `WM_SETTINGCHANGE`. New variables are visible ONLY to the spawned child process.
+- A Launch profile NEVER triggers `WM_SETTINGCHANGE`. New variables are visible ONLY to the started child process.
 - Profile names are globally unique across Global and Launch types because CLI commands address profiles by name. This prevents a command from targeting a different profile type than the caller intended.
 - Logs continue to record only command names and arg counts. Variable values (encrypted or not) NEVER appear in CLI/Rust logs.
-- `profile set-launch` mutates `profiles.json` and is classified as a **write** command (holds the CLI `Local\EnvManager.RegistryMutation` mutex + Rust `CLI_RWLOCK` write lock). `profile launch` is classified as **read-only** (spawns a child; does not touch the registry or profiles.json).
+- `profile set-launch` mutates `profiles.json` and is classified as a **write** command (holds the CLI `Local\EnvManager.RegistryMutation` mutex + Rust `CLI_RWLOCK` write lock). `profile launch` is classified as **read-only** (starts a child; does not touch the registry or profiles.json).
 
 ### Extended State and Safety Contracts
 
@@ -79,14 +79,14 @@ Profile JSON gains these optional fields (see `ProfileData` in `src/Models.cs`):
 - Bulk JSON/.env/CSV imports run a dry-run conflict preview in the GUI and roll back every write if any item fails verification.
 - Profiles may inherit other profiles. Cycles and missing parents are rejected; child variables override parent variables.
 - Profile PATH fragments append unique entries to user PATH and use the same backup chain as variables.
-- Applied profiles record `appliedAt`. Overlapping profiles must be unapplied in reverse application order; unsafe unapply is rejected.
-- Inheritance and PATH fragments cannot change while a profile is active. GUI controls must expose the same disabled state.
+- A profile that is applied records `appliedAt`. Applying a Global profile first unapplies the one already active; a Launch profile is never applied. Unsafe unapply is rejected.
+- A profile's inheritance can change while it is active: the CLI unapplies it, updates the chain, and re-applies it when it is still applicable. PATH entries cannot change while it is applied, and the GUI controls must show the same disabled state.
 - `profiles.json` is atomically replaced, backed up to `profiles.json.bak`, and recovered from a valid backup after JSON corruption.
 - CLI/Rust logs record command names and argument counts, never argument values. Environment values may contain credentials.
 
 ## Security (full list)
 
-- No credential storage - only manages environment variables
+- Secret values are stored only as provider envelopes or `mount:<id>` references; the secret commands store no plaintext (the generic `add-var`/`edit-var` verbs are the known exception)
 - Direct Registry API via `Microsoft.Win32.Registry`, no COM
 - IPC isolation - CLI runs as a separate subprocess
 - Input length validation (32767 byte limit on variable names/values)
@@ -95,7 +95,7 @@ Profile JSON gains these optional fields (see `ProfileData` in `src/Models.cs`):
 - Variable name validation: rejects empty names, names >255 chars (user scope), names containing `=`
 - Path traversal protection: backup files must have `.json` extension, writes to system directories blocked
 - Backup file size cap: 50 MB maximum to prevent DoS via large files
-- CLI command whitelist in Rust IPC layer: only known commands can spawn subprocesses (list, get, set, delete, toggle, backup, restore, diff, merge, validate, profile, path, agents, help)
+- CLI command whitelist in Rust IPC layer: only the 25 known commands can start subprocesses (service, list, get, set, rename, change-scope, delete, toggle, backup, restore, diff, merge, validate, profile, path, agents, history, bulk, expand, help, protection, update, audit, export-state, import-state)
 - Process isolation: CREATE_NO_WINDOW flag prevents console flicker and information leakage
 - **Critical system variable protection (config-driven)**: system-scope modifications to protected variables are blocked in SetVariable, DeleteVariable, and SetVariableWithoutNotify. The built-in ProtectedSystemVars and ProtectedPathEntries are loaded from external editable JSON files in `%LOCALAPPDATA%\EnvManager\builtin-protected-vars.json` and `builtin-protected-paths.json` respectively, created from embedded `protection.defaults.json` defaults on first run. Users/admins can edit these files to customize which built-in variables and PATH entries are protected without recompiling. The defaults include: PATHEXT, PSMODULEPATH, SystemRoot, windir, ComSpec, TEMP, TMP, USERPROFILE, SystemDrive, ProgramFiles, ProgramFiles(x86), ProgramData, HOMEDRIVE, HOMEPATH, NUMBER_OF_PROCESSORS, OS, PROCESSOR_ARCHITECTURE, PROCESSOR_IDENTIFIER, PROCESSOR_LEVEL, PROCESSOR_REVISION, ALLUSERSPROFILE, APPDATA, COMMONPROGRAMFILES, COMMONPROGRAMFILES(x86), COMPUTERNAME, LOCALAPPDATA, LOGONSERVER, OneDrive, OneDriveConsumer, PUBLIC, SESSIONNAME, USERDOMAIN, USERNAME; and for PATH: `C:\Windows\System32`, `C:\Windows`, `C:\Windows\System32\Wbem`, `C:\Windows\System32\WindowsPowerShell\v1.0\`. PATH as a variable name is NOT in the protected-vars list - it is protected per-entry via ProtectedPathEntries (built-in Windows system paths loaded from the JSON file) plus custom entries stored in `protected-paths.json`. SetPathEntries checks IsProtectedPathEntry before allowing removal of any PATH entry. These are also blocked from being added to profiles via IsProfileApplicable() and ProfileAddVar().
 - **Custom protected variables (user-lockable)**: Users can lock any variable via the GUI lock button or CLI `protection add-var`. Locked variables are stored in `%LOCALAPPDATA%\EnvManager\protected-vars.json`. Locked variables cannot be toggled, edited, or deleted. The `list` command annotates each variable with `isProtected` (true if protected by built-in or custom rules) and `isBuiltinProtected` (true only if protected by embedded built-in defaults, not user locks). Built-in protected variable (system scope) cannot be unlocked; custom locks can be removed via `protection remove-var`.
@@ -123,7 +123,7 @@ When an AI agent uses the CLI directly:
 1. **Always use `--scope user`** for non-interactive workflows. System scope requires elevation and may fail silently.
 2. **Call `agents --json` first** to discover the full command contract, safety boundaries, and async support per command.
 3. **Read commands are safe to batch** (list, get, backup, diff, validate, agents, profile list/show/status, path list). They acquire a read lock and can run concurrently.
-4. **Write commands are serialized**. Do not fire multiple write commands in parallel - they will queue and execute in order, which may cause unexpected delays.
+4. **Write commands are serialized**. Do not fire multiple write commands in parallel - they queue and run in order, which may cause unexpected delays.
 5. **Never delete critical system variables**. The CLI blocks system-scope modifications to protected variables, but user-scope PATH deletion is allowed and could break the agent's own environment. Always backup first.
 6. **Profile names must be 1-255 chars** with no null bytes, newlines, or carriage returns. Variable names in profiles must not contain `=`.
 7. **Backup files must have `.json` extension** and cannot be in system directories. Files exceeding 50 MB are rejected.

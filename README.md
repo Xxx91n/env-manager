@@ -8,7 +8,7 @@
 
 # Env Manager
 
-A Windows environment-variable manager with two front ends — a C# CLI built for scripts and AI agents, and a Tauri GUI for interactive editing — over one set of registry contracts.
+A Windows environment-variable manager with two front ends: a C# command-line tool built for scripts and AI agents, and a Tauri desktop app for interactive editing. Both front ends use the same registry rules.
 
 **"Adapts seamlessly to every environment."**
 
@@ -32,17 +32,17 @@ A Windows environment-variable manager with two front ends — a C# CLI built fo
 
 | | | |
 |:-:|:-:|:-:|
-| ![Variables view](docs/assets/gallery/01-variables.webp)<br>**Variables** — search, scope filter, per-row actions | ![System scope](docs/assets/gallery/02-variables-system.webp)<br>**System scope** — protected entries locked | ![PATH Editor](docs/assets/gallery/03-path-editor.webp)<br>**PATH Editor** — dead & duplicate detection |
-| ![Profiles](docs/assets/gallery/04-profiles.webp)<br>**Profiles** — apply / launch / inherit | ![Audit Ledger](docs/assets/gallery/07-audit.webp)<br>**Audit Ledger** — hash-chained, verifiable | ![Service Manager](docs/assets/gallery/08-service.webp)<br>**Service Manager** — secret mounts |
+| ![Variables view](docs/assets/gallery/01-variables.webp)<br>**Variables** — search, scope filter, per-row actions | ![System scope](docs/assets/gallery/02-variables-system.webp)<br>**System scope** — protected entries locked | ![PATH Editor](docs/assets/gallery/03-path-editor.webp)<br>**PATH Editor** — dead and duplicate entry detection |
+| ![Profiles](docs/assets/gallery/04-profiles.webp)<br>**Profiles** — apply, launch, inherit | ![Audit Ledger](docs/assets/gallery/07-audit.webp)<br>**Audit Ledger** — hash-chained, verifiable | ![Service Manager](docs/assets/gallery/08-service.webp)<br>**Service Manager** — secret mounts |
 
 ## Features
 
-- **Dual front ends** — `env-manager-cli` for scripting and CI, `env-manager.exe` (Tauri 2 + Svelte) for interactive editing. Both route through the same registry contracts.
-- **Protected by default** — system variables and PATH entries cannot be deleted or renamed; every write is serialized through three layers (mutex + write lock + verify-before-swap).
-- **Profiles** — global profiles apply to the registry; launch profiles inject an isolated env block into one process without touching the registry. Inheritance, conflict preview, reverse-order rollback.
-- **8 secret providers** — DPAPI, Credential Manager, SecretStore, HashiCorp Vault, SOPS, Azure Key Vault, 1Password, AWS Secrets Manager. The secret verbs persist only ciphertext envelopes or `mount:<id>` references — the generic `add-var`/`edit-var` gap can still write plaintext to the registry; the full boundary is in [Security](#security) and [docs/plaintext-sinks.md](docs/plaintext-sinks.md).
-- **PATH health** — `path health` detects duplicates and dead entries; `--fix` rewrites, `--dry-run` reports.
-- **Audit ledger** — append-only, SHA256 hash-chained history with rollback and disaster-recovery export.
+- **Two front ends** — `env-manager-cli` for scripting and CI, `env-manager.exe` (Tauri 2 + Svelte) for interactive editing. Both go through the same registry rules.
+- **Protected by default** — system variables and PATH entries cannot be deleted or renamed. A rename or scope change writes and checks the new value before deleting the old one. Every write holds all three locks: a Windows mutex in the CLI, a read/write lock in the Rust shell, and a write queue in the GUI.
+- **Profiles** — a Global profile writes its values into the registry; a Launch profile puts its values into the environment of one child process and never writes the registry. Profiles can inherit from other profiles, and the app previews conflicts before applying.
+- **Eight secret providers** — DPAPI, Credential Manager, SecretStore, HashiCorp Vault, SOPS, Azure Key Vault, 1Password, AWS Secrets Manager. Secret values are kept as encrypted envelopes or `mount:<id>` references. The generic `add-var` and `edit-var` commands can still write plaintext to the registry; the full boundary is in [Security](#security) and [docs/plaintext-sinks.md](docs/plaintext-sinks.md).
+- **PATH health** — `path health` finds duplicate and dead entries; `--fix` rewrites the list, `--dry-run` only reports.
+- **Audit ledger** — append-only, SHA256 hash-chained history with rollback and a disaster-recovery export.
 
 ## For AI agents
 
@@ -54,47 +54,46 @@ env-manager-cli agents --json     # full command table as structured JSON
 ```
 
 - [AGENTS.md](AGENTS.md) — repository-level agent instructions (architecture, hard boundaries, testing).
-- [AGENTS.cli.md](AGENTS.cli.md) — ships inside the CLI binary, so an agent can discover the contract at runtime.
-- **Capability-scoped surface** — an opt-in `agentCapabilities` whitelist on `secret-providers.json` lets deployments reject parallel set/delete calls from agents.
+- [AGENTS.cli.md](AGENTS.cli.md) — ships inside the CLI binary, so an agent can read the contract at runtime.
 
 ## Security
 
 > [!WARNING]
-> Current builds are **not code-signed**. Windows SmartScreen may show an "unrecognized app" warning on first launch — click "More info" then "Run anyway". We have applied for free open-source code signing via the SignPath Foundation; once approved, all release artifacts (MSI + EXE) will be signed. See [Code signing policy](docs/code-signing-policy.md).
+> Current builds are **not code-signed**. Windows SmartScreen may show an "unrecognized app" warning on first launch — click "More info" then "Run anyway". We have applied for free open-source code signing via the SignPath Foundation; once approved, all release artifacts (MSI and EXE) will be signed. See [Code signing policy](docs/code-signing-policy.md).
 
-Protected variables and PATH entries are disabled before deletion, with exact registry value-kind verification on restore. Named pipe IPC uses anti-squatting flags and input validation (64 arg max, 32767 char cap, null byte rejection). See [SECURITY.md](SECURITY.md) for vulnerability reporting.
+Protected variables and PATH entries are disabled before deletion, and the exact registry value kind is checked on restore. Values are validated before they reach the registry, and the named pipe refuses a second creator and caps a request at 65536 bytes. See [SECURITY.md](SECURITY.md) for vulnerability reporting.
 
-**Threat model.** The adversary we do *not* defend against is any process running inside your own Windows user session — it can already call `profile reveal-secret`, read a launched child's environment block, or catch the transient temp files the providers produce. What the design *does* bound: DPAPI-CurrentUser ciphertext is undecryptable to another user or machine, the secret verbs cannot land a secret in the registry (the generic-verb gap above aside), and the only sinks *meant* to carry a secret value are the designed ones documented in the plaintext-boundary matrix linked below.
+**Threat model.** The project does not defend against a process running inside your own Windows user session. Such a process can already call `profile reveal-secret`, read a launched child's environment block, or catch the short-lived temp files the providers write. The design does limit the damage: DPAPI CurrentUser ciphertext cannot be decrypted by another user or on another machine, the secret commands cannot land a secret in the registry (the generic-command gap above aside), and the only places meant to carry a secret value are listed in the plaintext table linked below.
 
-**Plaintext boundary.** The full sink-by-sink matrix — where plaintext can exist, for how long, and who cleans it up — lives in [docs/plaintext-sinks.md](docs/plaintext-sinks.md); the Plaintext lifecycle section of `docs/architecture.md` is the authoritative per-surface allowlist. Memory zeroing and log scrubbing are best-effort hygiene, not guarantees; `tests/canary-redaction.Tests.ps1` scans 7 output sinks for a planted canary and the shared contract suite asserts `plaintext-never-in-envelope` on all 8 providers.
+**Plaintext boundary.** The full table — where plaintext can exist, for how long, and what removes it — is in [docs/plaintext-sinks.md](docs/plaintext-sinks.md). The Plaintext lifecycle section of `docs/architecture.md` is the authoritative per-surface list. Memory zeroing and log scrubbing are best-effort, not guarantees: `tests/canary-redaction.Tests.ps1` scans 7 output surfaces for a planted canary, and the shared contract suite asserts `plaintext-never-in-envelope` on all 8 providers.
 
 ## Install
 
 ### MSI Installer
 
-Download the MSI from [GitHub Releases](https://github.com/Xxx91n/env-manager/releases) and run it. Creates Start Menu shortcuts automatically. Available in x64, x86, and ARM64.
+Download the MSI from [GitHub Releases](https://github.com/Xxx91n/env-manager/releases) and run it. Start Menu shortcuts are created automatically. Available in x64, x86, and ARM64.
 
 ### Portable
 
-Download the portable ZIP from [GitHub Releases](https://github.com/Xxx91n/env-manager/releases). Extract and run `env-manager.exe` directly. No installation needed.
+Download the portable ZIP from [GitHub Releases](https://github.com/Xxx91n/env-manager/releases). Extract it and run `env-manager.exe`. No installation needed.
 
 ### CLI-Only
 
-Download the CLI-only ZIP for headless or scripting use: `env-manager-cli.exe` plus `.dll` files. No GUI, no WebView2 dependency.
+Download the CLI-only ZIP for headless or scripting use: `env-manager-cli.exe` plus its `.dll` files. No GUI and no WebView2 dependency.
 
 ### Prerequisites
 
 > [!IMPORTANT]
-> **Portable** and **CLI-Only** builds are framework-dependent: they require the **.NET 10 Desktop Runtime** on the target machine — download it from the official [.NET download page](https://dotnet.microsoft.com/download/dotnet/10.0). The **MSI installer** does not check for or install .NET — install the runtime yourself before first launch.
+> **Portable** and **CLI-Only** builds are framework-dependent: they need the **.NET 10 Desktop Runtime** on the target machine — download it from the official [.NET download page](https://dotnet.microsoft.com/download/dotnet/10.0). The **MSI installer** does not check for or install .NET; install the runtime yourself before first launch.
 >
-> **WebView2 Runtime** (for the GUI) is preinstalled on Windows 11 and available for Windows 10 21H2+ from [Microsoft](https://developer.microsoft.com/microsoft-edge/webview/).
+> **WebView2 Runtime** (for the GUI) is preinstalled on Windows 11 and available for Windows 10 21H2 and later from [Microsoft](https://developer.microsoft.com/microsoft-edge/webview/).
 
 For optional external secret-provider tools (SOPS, 1Password CLI, Vault CLI, AWS CLI, Azure CLI, PowerShell 7), see the [Secret Providers Guide](docs/secret-providers-guide.md).
 
 ### winget
 
 > [!NOTE]
-> winget distribution is planned but not yet available. Track via GitHub Issues for updates.
+> winget distribution is planned but not yet available. Track progress in GitHub Issues.
 
 ### From Source
 
@@ -105,7 +104,7 @@ cd frontend && npm ci && cd ..
 node scripts/build.mjs --arch x64
 ```
 
-Requires .NET 10 SDK, Node.js 18+, Rust stable with MSVC or GNU target. See [docs/build-and-release.md](docs/build-and-release.md) for details.
+Requires .NET 10 SDK, Node.js 18+, and Rust stable with the MSVC or GNU target. See [docs/build-and-release.md](docs/build-and-release.md) for details.
 
 ## Usage
 
@@ -117,7 +116,7 @@ env-manager-cli.exe list
 env-manager-cli.exe get PATH
 env-manager-cli.exe set JAVA_HOME "D:\jdk17" --scope system
 
-# Create a Launch profile and launch with isolated env
+# Create a Launch profile and launch with an isolated environment
 env-manager-cli.exe profile create dev --type launch --target python.exe
 env-manager-cli.exe profile add-secret dev API_KEY "sk-xxx"
 env-manager-cli.exe profile launch dev
@@ -129,7 +128,7 @@ env-manager-cli.exe path health
 env-manager-cli.exe backup --output backup.json
 env-manager-cli.exe restore backup.json
 
-# Disaster recovery + tamper-evident audit
+# Disaster recovery and tamper-evident audit
 env-manager-cli.exe export-state --output state.dpapi
 env-manager-cli.exe audit verify --strict
 
@@ -141,7 +140,7 @@ See [docs/cli-commands.md](docs/cli-commands.md) for the full command reference.
 
 ### GUI
 
-Run `env-manager.exe`. The GUI provides a real-time variable list with search, scope filtering, inline edit, a PATH editor with drag-and-drop reordering, profile management, secret provider selection, service control panel, audit history, and 10-language i18n.
+Run `env-manager.exe`. The GUI shows a live variable list with search, scope filtering, inline edit, a PATH editor with drag-and-drop reordering, profile management, secret provider selection, service control, the audit ledger, and 10 languages.
 
 ## Architecture
 
@@ -154,30 +153,30 @@ flowchart LR
     CLI --> SEC[Secret Providers]
 ```
 
-- **CLI**: C# .NET 10 single-file executable — the coordination layer and registry gateway.
-- **Service**: standalone Rust binary managing secret mount lifecycle via named pipe IPC.
-- **GUI**: Tauri 2 + Svelte 5 frontend using the same IPC contracts.
+- **CLI**: a C# .NET 10 executable that coordinates the work and is the only writer of the registry.
+- **Service**: a standalone Rust binary that keeps secret mounts fresh over a named pipe.
+- **GUI**: a Tauri 2 + Svelte 5 front end that uses the same IPC contracts.
 
 ## Secret providers
 
-8 provider backends with activation preflight — failures surface as inline amber banners directly in the profile editor:
+Eight secret providers, each checked when you switch to it. A failed check appears as an inline amber banner in the profile editor:
 
-| Provider | Auth Method | Periodic Refresh | Docs |
+| Provider | Auth Method | Timer Refresh | Docs |
 |---|---|---|---|
-| DPAPI CurrentUser | Windows DPAPI | No (per-user) | [Guide](docs/secret-providers-guide.md) |
-| Windows Credential Manager | CredMan + DPAPI | No (per-user) | [Guide](docs/secret-providers-guide.md) |
-| PowerShell SecretManagement | SecretStore vault | No (CreatedOnly) | [Guide](docs/secret-providers-guide.md) |
+| DPAPI CurrentUser | Windows DPAPI | No (per user) | [Guide](docs/secret-providers-guide.md) |
+| Windows Credential Manager | Credential Manager + DPAPI | No (per user) | [Guide](docs/secret-providers-guide.md) |
+| PowerShell SecretManagement | SecretStore vault | No (`CreatedOnly`) | [Guide](docs/secret-providers-guide.md) |
 | HashiCorp Vault KV v2 | VAULT_TOKEN / AppRole cert | Yes | [Guide](docs/secret-providers-guide.md) |
-| SOPS | Age / PGP / KMS | No (CreatedOnly) | [Guide](docs/secret-providers-guide.md) |
-| Azure Key Vault | SP cert / managed identity | Yes | [Guide](docs/secret-providers-guide.md) |
+| SOPS | Age / PGP / KMS | No (`CreatedOnly`) | [Guide](docs/secret-providers-guide.md) |
+| Azure Key Vault | Service principal cert / managed identity | Yes | [Guide](docs/secret-providers-guide.md) |
 | 1Password CLI | OP_SERVICE_ACCOUNT_TOKEN | Yes | [Guide](docs/secret-providers-guide.md) |
 | AWS Secrets Manager | SigV4 + access keys | Yes | [Guide](docs/secret-providers-guide.md) |
 
-See [docs/secret-providers-guide.md](docs/secret-providers-guide.md) for per-provider prerequisites, one-time setup, and activation error fix steps.
+See [docs/secret-providers-guide.md](docs/secret-providers-guide.md) for per-provider prerequisites, one-time setup, and error fix steps.
 
 ## Service mode
 
-`env-manager-service.exe` is a standalone Rust binary managing secret mount lifecycle via named pipe IPC:
+`env-manager-service.exe` is a standalone Rust binary that keeps secret mounts fresh and answers over a named pipe:
 
 - **ServiceMode**: Service (SCM-managed, machine boot), Background (user-launched), Cli (one-shot gateway)
 - **Reconcile loop**: 300s periodic full-scan, idempotent per-item handler, 30s first-tick delay
@@ -204,7 +203,7 @@ See [docs/secret-providers-guide.md](docs/secret-providers-guide.md) for per-pro
 
 ## Contributing
 
-Issues and PRs welcome. Read [AGENTS.md](AGENTS.md) first for architecture boundaries and the test policy.
+Issues and PRs are welcome. Read [AGENTS.md](AGENTS.md) first for the architecture boundaries and the test policy.
 
 ## License
 

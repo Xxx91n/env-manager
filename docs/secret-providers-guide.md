@@ -2,7 +2,7 @@
 
 > **Official upstream docs**: this guide mirrors vendor-canonical configuration. Per-provider primary references are linked inline at each section: [Microsoft.PowerShell.SecretManagement](https://www.powershellgallery.com/packages/Microsoft.PowerShell.SecretManagement) + [SecretStore](https://www.powershellgallery.com/packages/Microsoft.PowerShell.SecretStore); [HashiCorp Vault KV v2](https://developer.hashicorp.com/vault/docs/secrets/kv/kv-v2); [Mozilla SOPS](https://getsops.io/) and [age](https://github.com/FiloSottile/age); [Azure Key Vault REST API](https://learn.microsoft.com/en-us/rest/api/keyvault/) and [az CLI managed identity / SP](https://learn.microsoft.com/en-us/azure/key-vault/general/authentication); [1Password CLI](https://developer.1password.com/docs/cli/getting-started); [AWS Secrets Manager REST API + SigV4](https://docs.aws.amazon.com/secretsmanager/latest/userguide/).
 
-Env Manager supports 8 secret-store providers. Secrets are scoped to "Launch (local)" (per-process) profiles only; Global profiles cannot hold secrets. The active provider is selected in the Profile editor > Active provider dropdown. The activation probe runs once at selection time; if your environment is not configured, the selection is rejected with an inline error under the dropdown plus a toast -- you must fix the environment and retry.
+Env Manager ships eight secret providers. Secrets belong to Launch profiles only, because those put values into one child process; a Global profile cannot hold a secret. The active provider is selected in the Profile editor > Active provider dropdown. The activation probe runs once at selection time; if your environment is not configured, the selection is rejected with an inline error under the dropdown plus a toast -- you must fix the environment and retry.
 
 Three providers work offline with no setup:
 
@@ -52,14 +52,14 @@ Open pwsh and run:
 Install-Module Microsoft.PowerShell.SecretManagement, Microsoft.PowerShell.SecretStore -Scope CurrentUser -Force
 ```
 
-### SecretStore no-password bootstrap (required for headless activation)
+### SecretStore no-password bootstrap (required before switching to the provider headlessly)
 
 The `Microsoft.PowerShell.SecretStore` vault defaults to an interactive password
 prompt on every read/write. The Env Manager activation probe runs headless
 (no terminal to type a password into), so a fresh SecretStore will hang the
 probe until the 30s timeout and report a `Set-Secret is not recognized` /
 `CLIXML` failure. Configure the store for no interactive password once before
-activating the provider:
+switching to the provider:
 
 ```powershell
 Set-SecretStoreConfiguration -Scope CurrentUser -Authentication None `
