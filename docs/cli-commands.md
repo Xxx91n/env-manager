@@ -48,7 +48,7 @@ All commands follow: `env-manager-cli <command> [arguments] [--flags]`
 | `profile add-secret` | `profile add-secret <name> <var> <value>` | v0.7.0. Encrypt `value` with the active secret provider and store its envelope in the profile. Requires the profile to be unapplied. Audit records NAME only. |
 | `profile edit-secret` | `profile edit-secret <name> <oldvar> <newvar> <value>` | v0.7.0. Rename the secret and encrypt it again with the active provider. Audit records old/new NAME only. |
 | `profile remove-secret` | `profile remove-secret <name> <var>` | v0.7.0. Remove a secret variable from the profile (also dropped from `secretVariables`). |
-| `profile reveal-secret` | `profile reveal-secret <name> <var>` | v0.7.0. Print one secret's plaintext to stdout. The active provider decrypts it; with the default DPAPI provider only the same user account can decrypt. Use sparingly. |
+| `profile reveal-secret` | `profile reveal-secret <name> <var>` | v0.7.0. Print one secret's plaintext to stdout. The provider recorded in the stored envelope decrypts it, even after the active provider changes; legacy bare DPAPI values use the default DPAPI provider. DPAPI values require the same user account that encrypted them. Use sparingly. |
 | `history list` | `history list [--limit N]` | List audit history (JSON, most recent first) |
 | `history undo` | `history undo <id> [--force]` | Undo a specific audit entry |
 | `history delete` | `history delete <id>` or `history delete --all [--scope user\|system]` | Delete a history record or clear all by scope |
@@ -61,7 +61,7 @@ All commands follow: `env-manager-cli <command> [arguments] [--flags]`
 | `protection add-var` | `protection add-var <name>` | Lock a variable (add to custom protected vars) |
 | `protection remove-var` | `protection remove-var <name>` | Unlock a variable (remove from custom protected vars) |
 | `update check` | `update check` | Check for latest version via GitHub Releases API |
-| `service status` | `service status` | Query env-manager-service via the named pipe (read-only). Reports `running` when the service answers, `not_running` when no pipe exists, and `unresponsive` when the pipe exists but the connect times out. |
+| `service status` | `service status` | Query env-manager-service over the named pipe (read-only). A healthy service answers with `running: true`. The gateway defines `not_running` (no pipe) and `unresponsive` (pipe exists but the connect times out) as degraded states; a probe that cannot connect currently prints an error and exits 1, so a script sees a stopped service as a non-zero exit today. |
 | `service health` | `service health` | Query env-manager-service health (mount count, uptime) via IPC |
 | `service ping` | `service ping` | Ping the env-manager-service named pipe (read-only) |
 | `service refresh` | `service refresh` | Trigger a refresh pass on env-manager-service (write - the service refreshes all eligible mounts) |

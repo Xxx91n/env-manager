@@ -267,9 +267,15 @@ try {
             continue
         }
         $lines = @(Get-DocLines $file)
+        $inFence = $false
         for ($i = 0; $i -lt $lines.Count; $i++) {
             $line = $lines[$i]
             $lineNo = $i + 1
+            # Fenced blocks are literal examples (command lines, JSON, code), not
+            # prose. Toggle on the delimiter line so a documented `service reload`
+            # example is not renamed by the vocabulary rule.
+            $isFenceLine = $line -match '^\s*(```|~~~)'
+            if ($isFenceLine) { $inFence = -not $inFence }
 
             # trailing whitespace (works on a clean CI checkout too)
             if ($line -match '[ \t]+$') {
@@ -330,7 +336,7 @@ try {
             # 6. glossary avoid words. Inline code spans keep their own names
             # (command names, argument names, identifiers, real error text), so
             # strip them before matching; link targets are not prose either.
-            if ($avoidPattern -and ($vocabularyFiles -contains $file)) {
+            if ($avoidPattern -and -not $isFenceLine -and -not $inFence -and ($vocabularyFiles -contains $file)) {
                 $prose = [regex]::Replace($line, '`[^`]*`', ' ')
                 $prose = [regex]::Replace($prose, '\]\([^)]*\)', ']')
                 $hits = @([regex]::Matches($prose, $avoidPattern) | ForEach-Object { $_.Value } | Sort-Object -Unique)

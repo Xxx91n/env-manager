@@ -50,7 +50,7 @@ All commands: `env-manager-cli <command> [args] [--scope user|system] [--debug]`
 | `expand` | `expand <value>` | Resolve nested %VAR% references |
 | `protection` | `protection <subcommand>` | List and manage protected vars + PATH entries |
 | `update` | `update check` | Check GitHub releases for newer version (network) |
-| `service` | `service status\|ping\|health\|refresh\|rotate\|reload\|shutdown` | Send one request to env-manager-service. `status` reports `running` when the service answers, `not_running` when no pipe exists, and `unresponsive` when the pipe exists but the connect times out. |
+| `service` | `service status\|ping\|health\|refresh\|rotate\|reload\|shutdown` | Send one request to env-manager-service. A healthy service answers with `running: true`. The gateway defines `not_running` (no pipe) and `unresponsive` (pipe exists but the connect times out) as degraded states; a failed probe currently prints an error and exits 1. |
 | `audit` | `audit list\|verify\|encrypt-file\|migrate-audit\|verify-ledger\|export-survival-kit\|recover-from-ledger` | Audit ledger management (hash-chained tamper-evident) |
 | `export-state` | `export-state --output <file>` | Export all internal settings files as a DPAPI-CurrentUser-encrypted archive |
 | `import-state` | `import-state --input <file> [--dry-run]` | Import a DPAPI-encrypted state archive (atomically writes all settings files) |
