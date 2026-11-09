@@ -306,7 +306,8 @@ partial class Program
   path move-down <index> [--scope user|system] Move PATH entry down
   path rename <old> <new> [--scope user|system] Rename a PATH entry
   path dedupe [--scope user|system] [--dry-run]  Remove duplicate PATH entries (preserves first, respects protected)
-  path health [--scope user|system] [--fix] [--dry-run]  Detect + optionally remove duplicates and dead (non-existent) PATH entries");
+  path health [--scope user|system] [--fix] [--dry-run]  Detect + optionally remove duplicates and dead (non-existent) PATH entries
+  path help                                   Show this help");
         return 0;
     }
 

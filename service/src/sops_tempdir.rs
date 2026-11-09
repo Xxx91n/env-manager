@@ -18,7 +18,7 @@
 // form buys a second code path without removing the surface. The decision comment on
 // #177 records the probe and the versions it was taken on.
 //
-// Shape: one root per delegation, handed to the CLI through `SCRATCH_ENV` and reclaimed
+// Shape: one root per delegation, handed to the CLI through `TEMP_DIR_ENV` and reclaimed
 // when `reconcile::run_cli_child` returns. Owning the directory is what makes the
 // guarantee reachable at all - the process that cleans up is the one still alive when the
 // CLI is killed. `SopsProvider.CreateWorkingDirectory` falls back to its own `%TEMP%`
@@ -31,7 +31,7 @@ use std::time::{Duration, SystemTime};
 /// The variable `SopsProvider` reads to place its sops working directories
 /// (`src/Secrets/Providers/SopsProvider.cs`). Spelled after the existing
 /// `ENVMANAGER_LOCALAPPDATA` seam rather than with the `ENV_MANAGER_` split.
-pub(crate) const SCRATCH_ENV: &str = "ENVMANAGER_SOPS_SCRATCH_DIR";
+pub(crate) const TEMP_DIR_ENV: &str = "ENVMANAGER_SOPS_SCRATCH_DIR";
 
 /// Prefix of the service-owned root. Deliberately *not* `env-manager-sops-`: that is the
 /// name of the provider's own working directories, and a root left behind by a service
@@ -68,12 +68,12 @@ const RECLAIM_BACKOFF: Duration = Duration::from_millis(200);
 /// gone. Dropping it without reclaiming it is the leak #177 is about, so `Drop` makes one
 /// last attempt: that path is only reachable when the caller's future is dropped
 /// mid-await, the same class of exit `Child::kill_on_drop` covers for the child.
-pub(crate) struct SopsScratch {
+pub(crate) struct SopsTempDir {
     root: PathBuf,
     reclaimed: bool,
 }
 
-impl SopsScratch {
+impl SopsTempDir {
     /// Create the root, or `None` when it cannot be created.
     ///
     /// A failure here is not a reason to refuse the rotation: the CLI falls back to its
@@ -131,7 +131,7 @@ impl SopsScratch {
     }
 }
 
-impl Drop for SopsScratch {
+impl Drop for SopsTempDir {
     fn drop(&mut self) {
         if self.reclaimed {
             return;

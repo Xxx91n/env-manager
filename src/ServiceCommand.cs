@@ -13,7 +13,7 @@ partial class Program
     {
         if (args.Length < 2)
         {
-            Console.Error.WriteLine("Usage: env-manager service <status|health|refresh <id>|rotate <id>|reload|shutdown>");
+            Console.Error.WriteLine("Usage: env-manager service <status|ping|health|refresh <id>|rotate <id>|reload|shutdown>");
             return 1;
         }
 

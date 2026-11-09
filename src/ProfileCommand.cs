@@ -287,6 +287,7 @@ partial class Program
                                                     Create a Global or Launch profile atomically
   profile delete <name>               Delete a profile
   profile show <name>                 Show profile details (JSON)
+  profile preview <name>              Preview resolved variables and PATH entries without writing
   profile apply <name> [--strict]     Apply a profile (backs up existing user vars).
                                                       Preflight warnings (undefined %VAR%, stale PATH
                                                       entry, dangling launch target) are advisory: exit 2 on
@@ -300,6 +301,7 @@ partial class Program
   profile remove-var <profile> <name>                Remove a variable from a profile
   profile edit-var <profile> <old> <new> <val>       Edit a variable in a profile
   profile status <name>                         Check profile application status
+  profile set-inherits <name> [parent ...]      Set the profiles this profile inherits from
   profile export <name> --output <file>          Export profile to JSON file
   profile import <file>                          Import profile from JSON file
   profile rename <old> <new>                     Rename a profile
@@ -314,7 +316,8 @@ partial class Program
   profile import-secrets <profile> <file>          Import encrypted secrets from a file into a profile
   profile secret-provider list                     List available secret providers and active selection
   profile secret-provider set <name>               Set the active secret provider
-  profile secret-provider rotate                   Re-encrypt all secrets across all profiles with the active provider");
+  profile secret-provider rotate                   Re-encrypt all secrets across all profiles with the active provider
+  profile help                                     Show this help");
         return 0;
     }
 
@@ -528,7 +531,7 @@ partial class Program
         if (profile.ProfileType != null &&
             profile.ProfileType.Equals("launch", StringComparison.OrdinalIgnoreCase))
         {
-            Console.Error.WriteLine($"Error: Profile '{name}' is a Launch (local) profile and cannot be applied to the registry. Use 'env-manager-cli profile launch <name>' to spawn its target with isolated variables.");
+            Console.Error.WriteLine($"Error: Profile '{name}' is a Launch profile and cannot be applied to the registry. Use 'env-manager-cli profile launch <name>' to spawn its target with isolated variables.");
             return 1;
         }
 

@@ -59,10 +59,10 @@ partial class Program
         // writes to the registry). Prohibit at entry so users do not encrypt
         // a secret on a Global profile and discover later that it is inert.
         if (!profile.ProfileType.Equals("launch", StringComparison.OrdinalIgnoreCase))
-            return ArgError("Error: Secrets can only be added to Launch (local) profiles. Use \"profile set-launch <name> --target <exe>\" to convert a Global profile to Launch first.");
+            return ArgError("Error: Secrets can only be added to Launch profiles. Use \"profile set-launch <name> --target <exe>\" to convert a Global profile to Launch first.");
         // same invariant as AddSecret - reject non-launch profiles.
         if (!profile.ProfileType.Equals("launch", StringComparison.OrdinalIgnoreCase))
-            return ArgError("Error: Secrets can only be edited on Launch (local) profiles. Use \"profile set-launch <name> --target <exe>\" to convert first.");
+            return ArgError("Error: Secrets can only be edited on Launch profiles. Use \"profile set-launch <name> --target <exe>\" to convert first.");
         if (profile.IsEnabled) return ArgError("Error: Unapply the profile before changing its variables");
 
         string encrypted = SecretStore.Mount(varValue, profileName + "\\" + varName);

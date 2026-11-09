@@ -39,7 +39,7 @@ internal static class AgentsCommand
         {
             var ver = System.Reflection.Assembly.GetExecutingAssembly().GetName().Version;
             string version = $"{ver.Major}.{ver.Minor}.{ver.Build}";
-            Console.WriteLine($"env-manager-cli v{version} | Commands: list,get,set,delete,toggle,backup,restore,diff,merge,validate,profile,path,agents,help | Scopes: user,system | Safe: no-credentials,injection-protected,write-serialized | Agents: env-manager-cli agents --json for full spec");
+            Console.WriteLine($"env-manager-cli v{version} | Commands: list,get,set,rename,change-scope,delete,toggle,backup,restore,diff,merge,validate,profile,path,history,bulk,expand,protection,update,service,audit,export-state,import-state,agents,help | Scopes: user,system | Safe: no-credentials,injection-protected,write-serialized | Agents: env-manager-cli agents --json for full spec");
             return 0;
         }
 
@@ -64,17 +64,21 @@ internal static class AgentsCommand
                     new { cmd = "diff", desc = "Compare backups (JSON)", args = "<old> <new>", scope = false, @async = true },
                     new { cmd = "merge", desc = "Merge backups", args = "<old> <new> --output <file>", scope = false, @async = false },
                     new { cmd = "validate", desc = "Validate backup", args = "<file>", scope = false, @async = true },
-                    new { cmd = "profile", desc = "Manage profiles", args = "list|create|delete|apply|unapply|show|add-var|remove-var|edit-var|status", scope = true, @async = false },
-                    new { cmd = "path", desc = "Edit PATH as list", args = "list|add|remove|move-up|move-down|rename", scope = true, @async = false },
+                    new { cmd = "profile", desc = "Manage profiles", args = "list|create|delete|show|preview|apply|unapply|rename|add-var|remove-var|edit-var|add-path|remove-path|status|export|import|set-inherits|set-launch|launch|add-secret|edit-secret|remove-secret|reveal-secret|export-secrets|import-secrets|secret-provider|help", scope = true, @async = false },
+                    new { cmd = "path", desc = "Edit PATH as list", args = "list|add|remove|move-up|move-down|rename|dedupe|health|help", scope = true, @async = false },
                     new { cmd = "agents", desc = "Output AGENTS.md spec", args = "[--path|--json|--summary]", scope = false, @async = true },
                     new { cmd = "help", desc = "Show help", args = "", scope = false, @async = true },
                     new { cmd = "rename", desc = "Atomically rename variable (verify before delete)", args = "<old> <new>", scope = true, @async = false },
                     new { cmd = "change-scope", desc = "Move variable user<->system atomically", args = "<name> <new-scope>", scope = true, @async = false },
-                    new { cmd = "history", desc = "Audit log + guarded undo", args = "list|undo|delete|clear", scope = false, @async = true },
+                    new { cmd = "history", desc = "Audit log + guarded undo", args = "list|undo <id>|delete <id>|delete --all [--scope user|system]", scope = false, @async = true },
                     new { cmd = "bulk", desc = "Import/export JSON/.env/CSV with --dry-run", args = "import|export <file>", scope = true, @async = false },
                     new { cmd = "expand", desc = "Resolve nested %VAR% references", args = "<value>", scope = false, @async = true },
                     new { cmd = "protection", desc = "List/add/remove protected vars and PATH entries", args = "list|add-var|remove-var|add-path|remove-path", scope = false, @async = true },
                     new { cmd = "update", desc = "Check GitHub releases for newer version", args = "check", scope = false, @async = true },
+                    new { cmd = "service", desc = "IPC gateway to the secret lifecycle service", args = "status|ping|health|refresh <id>|rotate <id>|reload|shutdown", scope = false, @async = true },
+                    new { cmd = "audit", desc = "Manage the audit ledger (hash-chained, tamper-evident)", args = "list|verify|encrypt-file|migrate-audit|verify-ledger|export-survival-kit|recover-from-ledger", scope = false, @async = true },
+                    new { cmd = "export-state", desc = "Export internal config as a DPAPI-encrypted archive", args = "--output <file>", scope = false, @async = false },
+                    new { cmd = "import-state", desc = "Import a DPAPI-encrypted state archive", args = "--input <file> [--dry-run]", scope = false, @async = false },
                 },
                 scopes = new[] { "user", "system" },
                 output = "stdout: JSON or text, stderr: errors/debug, exit 0=success 1=failure",
@@ -105,7 +109,7 @@ internal static class AgentsCommand
         }
         else
         {
-            Console.WriteLine("# Env Manager CLI\n\nCommands: list, get, set, delete, toggle, backup, restore, diff, merge, validate, profile, path, agents, help\n\nUse --debug for verbose logging. Use --scope user|system for scope control.\nUse agents --json for machine-readable spec.");
+            Console.WriteLine("# Env Manager CLI\n\nCommands: list, get, set, rename, change-scope, delete, toggle, backup, restore, diff, merge, validate, profile, path, history, bulk, expand, protection, update, service, audit, export-state, import-state, agents, help\n\nUse --debug for verbose logging. Use --scope user|system for scope control.\nUse agents --json for machine-readable spec.");
         }
         return 0;
     }

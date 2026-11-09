@@ -178,12 +178,11 @@ See [docs/secret-providers-guide.md](docs/secret-providers-guide.md) for per-pro
 
 `env-manager-service.exe` is a standalone Rust binary that keeps secret mounts fresh and answers over a named pipe:
 
-- **Three modes**: service (controlled by the Windows Service Manager and started at boot), background (started by the user), and CLI (one request, then exit).
-- **Refresh loop**: starts in both service and background mode. It scans every mount every 300 seconds, handles each mount the same way on every pass, and waits 30 seconds before the first pass. New mounts are created only, so the loop stays idle unless a mount is set to refresh on a timer.
-- **Service status**: a healthy service answers with `running: true`. The gateway defines `not_running` (no pipe) and `unresponsive` (pipe exists but the connect times out) as degraded states; a failed probe currently prints an error and exits 1, so scripts should treat a non-zero exit as not running.
-- **Audit ledger**: append-only, hash-chained `audit-ledger.jsonl` with 100MB rotation and tamper detection.
-- **IPC**: anti-squatting pipe flag, 65536-byte request cap, newline-delimited JSON protocol.
-- **Watchdog**: two layers — the Service Manager restarts the service in service mode, and the GUI pings it every 30 seconds and restarts it after two failures in background mode.
+- **ServiceMode**: Service (SCM-managed, machine boot), Background (user-launched), Cli (one-shot gateway)
+- **Reconcile loop**: 300s periodic full-scan, idempotent per-item handler, 30s first-tick delay
+- **Audit ledger**: append-only hash-chained `audit-ledger.jsonl` with 100MB rotation and tamper detection
+- **IPC**: anti-squatting pipe flag, 65536-byte request cap, newline-delimited JSON protocol
+- **Watchdog**: two-layer recovery — SCM auto-restart (Service mode) + GUI 30s ping watchdog (Background mode)
 
 ## Documentation
 
