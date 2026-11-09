@@ -54,9 +54,18 @@ AGENTS.md
 LICENSE
 '@
 $baseDoc = $baseDoc -replace "\r\n", "`n"
+$repoRoot = Split-Path -Parent $PSScriptRoot
+$latestSha = @(& git -C $repoRoot log -1 --format=%H -- README.md 2>$null) | Select-Object -First 1
+if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($latestSha)) {
+    Write-Host "SELFTEST FAIL: cannot read README.md history"
+    exit 1
+}
+$latestSha = $latestSha.Trim()
+$baseDoc = $baseDoc.Replace('ee7b425f38df', $latestSha)
 
 $temp = Join-Path ([System.IO.Path]::GetTempPath()) ("check-docs-structure-" + [guid]::NewGuid().ToString('N'))
-New-Item -ItemType Directory -Path $temp | Out-Null
+$i18nDir = Join-Path $temp (Join-Path 'docs' 'i18n')
+New-Item -ItemType Directory -Path $i18nDir -Force | Out-Null
 try {
     $cases = @(
         @{
@@ -85,19 +94,19 @@ try {
         },
         @{
             Name = 'missing-sync-comment'
-            Text = $baseDoc.Replace("<!-- sync: ee7b425f38df -->`n", "")
+            Text = $baseDoc.Replace("<!-- sync: $latestSha -->`n", "")
             Exit = 1
             Pattern = 'missing sync top comment'
         },
         @{
             Name = 'stale-sync-comment'
-            Text = $baseDoc.Replace("<!-- sync: ee7b425f38df -->", "<!-- sync: 000000000000 -->")
+            Text = $baseDoc.Replace("<!-- sync: $latestSha -->", "<!-- sync: 000000000000 -->")
             Exit = 1
             Pattern = 'stale or unknown sync commit'
         }
     )
     foreach ($case in $cases) {
-        $doc = Join-Path $temp ($case.Name + '.md')
+        $doc = Join-Path $i18nDir ($case.Name + '.md')
         [System.IO.File]::WriteAllText($doc, ($case.Text.Trim() + "`n"), (New-Object System.Text.UTF8Encoding($false)))
         $prevEap = $ErrorActionPreference
         $ErrorActionPreference = 'Continue'

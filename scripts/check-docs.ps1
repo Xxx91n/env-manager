@@ -232,19 +232,30 @@ $script:sectionMarkers = @(
 
 function Get-MarkdownSections([string[]]$Lines) {
     $sections = New-Object System.Collections.Generic.List[psobject]
-    $inFence = $false
+    $fenceChar = $null
+    $fenceLen = 0
     $curHeading = $null
     $curBody = New-Object System.Collections.Generic.List[string]
 
     for ($i = 0; $i -lt $Lines.Count; $i++) {
         $line = $Lines[$i]
-        $trimmed = $line.Trim()
-        if ($trimmed -match '^(```|~~~)') {
-            $inFence = -not $inFence
-            if ($curHeading) { $curBody.Add($line) }
-            continue
+        $fm = [regex]::Match($line, '^ {0,3}(`{3,}|~{3,})(.*)$')
+        if ($fm.Success) {
+            $marker = $fm.Groups[1].Value
+            if (-not $fenceChar) {
+                $fenceChar = $marker[0]
+                $fenceLen = $marker.Length
+                if ($curHeading) { $curBody.Add($line) }
+                continue
+            }
+            elseif ($marker[0] -eq $fenceChar -and $marker.Length -ge $fenceLen -and $fm.Groups[2].Value.Trim() -eq '') {
+                $fenceChar = $null
+                $fenceLen = 0
+                if ($curHeading) { $curBody.Add($line) }
+                continue
+            }
         }
-        if (-not $inFence -and $line -match '^(\#{1,6})[ \t]+(.+)$') {
+        if (-not $fenceChar -and $line -match '^(\#{1,6})[ \t]+(.+)$') {
             if ($curHeading) {
                 $sections.Add([pscustomobject]@{
                     LineNo = $curHeading.LineNo
@@ -355,6 +366,9 @@ function Test-TranslationStructure([string]$Path, [string]$Root) {
                 if ($sSha -ne $cSha) {
                     Add-Failure ("{0}: stale sync commit {1}; canonical {2} is at {3}" -f $Path, $sync, $canonicalRel, $cSha)
                 }
+            }
+            else {
+                Add-Failure ("{0}: cannot determine latest commit of canonical {1}" -f $Path, $canonicalRel)
             }
         }
     }
@@ -565,7 +579,8 @@ try {
 
     if ($Paths -and $Paths.Count -gt 0) {
         foreach ($p in $files) {
-            if ($p -like 'docs/i18n/*.md' -or (Test-IsTranslationDoc $p)) {
+            $norm = $p -replace '\\', '/'
+            if ($norm -like '*docs/i18n/*.md' -or (Test-IsTranslationDoc $p)) {
                 $translationFiles.Add($p)
             }
         }
