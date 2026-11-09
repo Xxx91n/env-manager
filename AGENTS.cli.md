@@ -45,7 +45,7 @@ All commands: `env-manager-cli <command> [args] [--scope user|system] [--debug]`
 | `validate` | `validate <file>` | Validate backup file format |
 | `profile` | `profile <subcommand>` | Manage variable profiles |
 | `path` | `path <subcommand>` | Edit PATH as a list |
-| `history` | `history list [--limit N]\|undo <id>\|delete <id>\|clear` | Audit log, guarded rollback, record purge |
+| `history` | `history list [--limit N]\|undo <id>\|delete <id>\|delete --all [--scope user\|system]` | Audit log, guarded rollback, record purge |
 | `bulk` | `bulk import\|export <file>` | JSON/.env/CSV interchange with --dry-run |
 | `expand` | `expand <value>` | Resolve nested %VAR% references |
 | `protection` | `protection <subcommand>` | List and manage protected vars + PATH entries |
@@ -59,14 +59,14 @@ All commands: `env-manager-cli <command> [args] [--scope user|system] [--debug]`
 
 ### Profile Subcommands
 
-`profile list | create <name> [--type global|launch] [--target <exe>] [--args <args>] [--cwd <dir>] | delete <name> | show <name> [--reveal] | apply <name> [--strict] | unapply <name> | rename <old> <new> | add-var <name> <var> <val> [--scope user|system] | remove-var <name> <var> | edit-var <name> <old> <new> <val> | add-path <name> <dir> [--scope user|system] | remove-path <name> <dir> | set-launch <name> --target <exe> [--args <args>] [--cwd <dir>] | launch <name> [-- <extra-args>] | status <name> | inherits <name> --parents <p1> [<p2>...] | add-secret <name> <var> <value> | edit-secret <name> <old> <new> <value> | remove-secret <name> <var> | reveal-secret <name> <var> | secret-provider list | secret-provider set <name> | secret-provider rotate | export-secrets <name> <file> | import-secrets <name> <file>`
+`profile list | create <name> [--type global|launch] [--target <exe>] [--args <args>] [--cwd <dir>] | delete <name> | show <name> [--reveal] | preview <name> | apply <name> [--strict] | unapply <name> | rename <old> <new> | export <name> --output <file> | import <file> | add-var <name> <var> <val> [--scope user|system] | remove-var <name> <var> | edit-var <name> <old> <new> <val> | add-path <name> <dir> [--scope user|system] | remove-path <name> <dir> | set-launch <name> --target <exe> [--args <args>] [--cwd <dir>] | launch <name> [-- <extra-args>] | status <name> | set-inherits <name> [parent ...] | add-secret <name> <var> <value> | edit-secret <name> <old> <new> <value> | remove-secret <name> <var> | reveal-secret <name> <var> | secret-provider list | secret-provider set <name> | secret-provider rotate | export-secrets <name> <file> | import-secrets <name> <file> | help`
 
 Key profile concepts:
 
 - **Global profile**: variables are written to the user or system registry on `apply` and broadcast `WM_SETTINGCHANGE`. `unapply` restores the prior values backed up as `<name>_PowerToys_<profileName>`.
 - **Launch profile**: variables are NEVER written to the registry. `profile launch` spawns the target executable with `env_clear + env(k, v)` so the variables only live in that child process. This is the only path that decrypts secrets at runtime. Apply/ApplyAll on a Launch profile is rejected at entry point.
 - **Per-variable/per-PATH scope**: since v0.7.1 `profile add-var` and `profile add-path` accept `--scope user|system` and store it per-entry in `profiles.json`. `ProfileApply` routes each variable/PATH entry to HKCU or HKLM accordingly. Default is `user` for backward compatibility.
-- **Inheritance**: a profile MAY inherit from other profiles via `profile inherits`. Cycles and self-inheritance are rejected (DFS over the existing chain). A Global profile cannot inherit a Launch profile, and a Launch profile cannot inherit a Launch profile that already carries secrets. Resolution is cycle-safe and wrapped in try/catch, so a poisoned `profiles.json` cannot brick the command.
+- **Inheritance**: a profile MAY inherit from other profiles via `profile set-inherits`. Cycles and self-inheritance are rejected (DFS over the existing chain). A Global profile cannot inherit a Launch profile, and a Launch profile cannot inherit a Launch profile that already carries secrets. Resolution is cycle-safe and wrapped in try/catch, so a poisoned `profiles.json` cannot brick the command.
 - **Multiple profiles active simultaneously**: applying a profile does NOT unapply others. Each profile backs up originals independently. Overlapping variables require reverse-order unapply.
 
 ### Path Subcommands
