@@ -71,7 +71,7 @@ Key profile concepts:
 
 ### Path Subcommands
 
-`path list [--scope] | add <dir> [--scope] [--index N] | remove <dir> [--scope] | move-up <index> [--scope] | move-down <index> [--scope] | rename <old> <new> [--scope] | dedupe [--dry-run] [--scope] | health [--fix] [--scope]`
+`path list [--scope] | add <dir> [--scope] [--index N] | remove <dir> [--scope] | move-up <index> [--scope] | move-down <index> [--scope] | rename <old> <new> [--scope] | dedupe [--dry-run] [--scope] | health [--fix] [--scope] | help`
 
 - `path health` reports duplicate and non-existent entries. With `--fix` it removes duplicates; without it stays read-only.
 - `path dedupe --dry-run` is read-only; `path dedupe` without `--dry-run` mutates the registry PATH.
