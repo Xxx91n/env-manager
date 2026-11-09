@@ -101,9 +101,10 @@ function Get-AvoidWordVariants([string]$Term) {
 
 function Test-IsTranslationDoc([string]$Path) {
     if (-not (Test-Path -LiteralPath $Path)) { return $false }
+    if ($Path -like 'docs/i18n/*') { return $true }
     $firstLines = @(Get-DocLines $Path | Select-Object -First 10)
     foreach ($l in $firstLines) {
-        if ($l -match '<!--\s*canonical:') { return $true }
+        if ($l -match '<!--\s*(canonical|sync):') { return $true }
     }
     return $false
 }
@@ -330,6 +331,13 @@ function Test-TranslationStructure([string]$Path, [string]$Root) {
     # 3. Check sync commit
     if ($sync) {
         $resolvedSync = (& git rev-parse --verify --quiet "$($sync)^{commit}" 2>$null)
+        if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($resolvedSync)) {
+            $isShallow = (& git rev-parse --is-shallow-repository 2>$null)
+            if ($isShallow -eq 'true') {
+                & git fetch --unshallow --quiet 2>$null
+                $resolvedSync = (& git rev-parse --verify --quiet "$($sync)^{commit}" 2>$null)
+            }
+        }
         if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($resolvedSync)) {
             Add-Failure ("{0}: stale or unknown sync commit: {1}" -f $Path, $sync)
         }
