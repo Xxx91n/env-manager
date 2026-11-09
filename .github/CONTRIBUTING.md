@@ -29,7 +29,7 @@ node scripts/build.mjs --arch x64
 
 ## Project Structure
 
-- `src/*.cs` -- C# .NET 10 CLI backend (env-manager-cli.exe); `src/Program.cs` is the thin Main dispatcher, `src/CliRuntime.cs` holds the shared CLI runtime, one module file per command domain
+- `src/*.cs` -- C# .NET 10 CLI (env-manager-cli.exe); `src/Program.cs` is the thin Main dispatcher, `src/CliRuntime.cs` holds the shared CLI runtime, one module file per command domain
 - `frontend/src/` -- Svelte 5 + TypeScript frontend (WebView2)
 - `frontend/src-tauri/src/` -- Rust Tauri shell (env-manager.exe)
 - `service/` -- Rust standalone service binary (env-manager-service.exe)
@@ -77,7 +77,7 @@ pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/test-with-restore.ps1
 
 ## Hard Boundaries
 
-Before contributing, read `AGENTS.md` carefully. It contains 40+ hard boundaries (red lines) that must never be violated: protected variables, cross-process mutex, verified registry writes, DPAPI secrets, Launch profile isolation, secret provider activation preflight, and more. Changes that violate a hard boundary will be rejected.
+Before contributing, read `AGENTS.md` and `docs/agents/hard-boundaries.md` carefully. They list the rules that must never be violated: protected variables, the three write locks, verified registry writes, secret storage, Launch profile isolation, and the secret provider switch check. Changes that violate a hard boundary will be rejected.
 
 ## Reporting Issues
 

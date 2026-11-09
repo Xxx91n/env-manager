@@ -7,7 +7,7 @@ This is the single-page distillation of the design review session (2026-08-02). 
 | Version | Phase | Ship criteria |
 |---|---|---|
 | v0.8.0 | A | SecretMount schema v2 + one-shot migration + C# fsync + new fields nullable (refreshPolicy, refreshIntervalSeconds, bootstrapCertThumbprint). audit.json unchanged. |
-| v0.9.0 | B+C merged | env-manager-service.exe Rust binary, NT SERVICE\EnvManagerService, Named Pipe IPC, CLI service gateway subcommand, periodic full-scan reconcile, GUI as control panel, three-level capability whitelist. |
+| v0.9.0 | B+C merged | env-manager-service.exe Rust binary, NT SERVICE\EnvManagerService, named pipe IPC, CLI service gateway subcommand, periodic full-scan refresh loop, GUI as control panel. The capability whitelist was proposed and is **not implemented**. |
 | v0.9.5 | D | Cert bootstrap: Vault AppRole/client cert, Azure SP cert — **removed before it was ever wired** (no caller, and its blocking `powershell` subprocess sat outside the stop-convergence contract). AWS Roles Anywhere documented but deferred. Env-var fallback retained. |
 | v1.0.0 | E | Unified audit-ledger.jsonl (append-only, hash-chained, 100MB rotation), Mount survival kit export, GUI recover-from-ledger, audit.json retired after migration. |
 
@@ -16,8 +16,8 @@ This is the single-page distillation of the design review session (2026-08-02). 
 1. **Migration strategy (A2)**: one-shot atomic write, delete old `secretVariables` field. No dual-write period. Rollback via `.env_bak` (existing hard boundary).
 2. **File topology (A3)**: `secretMount.json` and `profiles.json` separate files, each atomic (temp + fsync + rename). Write order mount-first, profile-second; delete reverse. C# `AtomicWriteProfiles` gains fsync to align with Rust `write_atomic`.
 3. **SecretMount schema (A3/A6/A8)** fields `{ id, provider, name, targetName, scope, refreshPolicy: CreatedOnly|Periodic, refreshIntervalSeconds, lastRotatedAt, lastFetchedAt, expiresAt, createdAt, schemaVersion: 2, bootstrapCertThumbprint }`. Default CreatedOnly/null.
-4. **Capability whitelist (A4)**: three-level combo `{cmd, scope?, mountId?}` (omitted = wildcard). Enforced in Rust `run_cli` IPC choke point. Default empty = all-allowed (today's behavior). Soft gate: rejection emits constraint-guidance message referencing `AGENTS.cli.md` so cooperating LLM agents self-correct. Not a hard wall against direct exe invocation.
-5. **Reconcile loop (A8)**: `tokio::time::interval(300s)` periodic full-scan. Idempotent per-item handler: read observed, fetch desired, write only if diff. Crash resume on next start by reading file state. No SQLite queue, no file watcher, no WAL.
+4. **Capability whitelist (A4) — not implemented**: the proposal was a three-level combo `{cmd, scope?, mountId?}` (omitted = wildcard), enforced in the Rust `run_cli` IPC choke point, default empty = all-allowed. No such gate exists in the code, and `secret-providers.json` has no `agentCapabilities` field. A rejection was meant to carry guidance that points at `AGENTS.cli.md`, so cooperating LLM agents self-correct; it was never meant to stop a caller that invokes the executable directly.
+5. **Refresh loop (A8)**: `tokio::time::interval(300s)` periodic full-scan. Idempotent per-item handler: read observed, fetch desired, write only if diff. Crash resume on next start by reading file state. No SQLite queue, no file watcher, no WAL.
 6. **Service identity (A8)**: `NT SERVICE\EnvManagerService` virtual service account. Per-service SID ACL on `%ProgramData%\EnvManager\secretMount.json` (machine-level mounts) and the audit ledger. User-bound mounts (DPAPI/CredMan/pwsh SecretStore) stay in `%LOCALAPPDATA%\EnvManager\` and are NEVER touched by the service.
 7. **Provider refresh feasibility (A8)**: Vault KV2 / SOPS / Azure SP-env / 1Password service-account-token / AWS SigV4 are Periodic-capable. DPAPI / Credential Manager / PowerShell SecretStore are NOT — GUI refuses to set them to Periodic with i18n error pointing to `docs/secret-providers-guide.md`.
 8. **Cert bootstrap (A9) — superseded**: the plan was Vault via AppRole or TLS client cert, Azure via SP cert auth, the cert stored `Cert:\LocalMachine\My` with a non-exportable private key ACL'd to the per-service SID, and a one-time interactive enroll in the GUI (no per-launch Windows Hello); AWS Roles Anywhere stayed documented and deferred. The module was deleted before it was ever called. Wiring it would have made three cloud credential bootstraps part of the supported service interface with no product trigger, and its blocking `powershell` call bypassed stop convergence. No service-side credential bootstrap exists, and no enroll UI was ever built.
@@ -29,9 +29,9 @@ This is the single-page distillation of the design review session (2026-08-02). 
 
 Detailed failure modes + regression tests for each domain are tracked as release-gate items. Summary:
 
-1. Windows service lifecycle (SCM timeout, boot ordering, stop-during-reconcile)
-2. Named pipe IPC security (DACL, impersonation, squatting, stale connection)
-3. Periodic reconcile loop (lease TTL < tick, 429 throttle, clock skew, thundering herd, partial tick)
+1. Windows service lifecycle (SCM timeout, boot ordering, stop-during-refresh)
+2. Named pipe IPC security (DACL, impersonation, squatting, a stale client)
+3. Periodic refresh loop (lease TTL < tick, 429 throttle, clock skew, thundering herd, partial tick)
 4. Certificate lifecycle (expiry, ACL reset by GPO, Mimikatz CNG export, Windows-upgrade loss) — **historical**: the only certificate holder was the deleted bootstrap; nothing in the product stores a service certificate today.
 5. Audit ledger tamper-resistance (hash-chain, unauthorized actor, rollover race, replay)
 6. Schema migration (crash orphan, rollback script completeness, service race, per-user)

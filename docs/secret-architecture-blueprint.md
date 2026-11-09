@@ -12,7 +12,7 @@ This is a strategic blueprint. It is not a sprint plan. Each phase names the pro
 
 ## Abstract
 
-Env Manager currently ships 8 secret providers (DPAPI currentUser, Windows Credential Manager, PowerShell SecretManagement, HashiCorp Vault KV2, SOPS, Azure Key Vault, 1Password, AWS Secrets Manager) wired behind a single `ISecretProvider` five-method interface (`Name`/`Encrypt`/`Decrypt`/`CanRotate`/`Rotate`/`Delete`). Secrets are scoped to **Launch (local) profiles only**; the GUI and CLI both reject Global secrets at the entry point; `IsProfileApplicable` doubly refuses any profile containing `SecretVariables` from touching the user registry; `profile launch` decrypts the secret in the launcher process and spikes the child env block with the plaintext. Provider activation is preflight-checked at config time (v0.7.5), and the pwsh provider auto-probes its module + vault before any `Set-Secret`.
+Env Manager currently ships 8 secret providers (DPAPI currentUser, Windows Credential Manager, PowerShell SecretManagement, HashiCorp Vault KV2, SOPS, Azure Key Vault, 1Password, AWS Secrets Manager) wired behind a single `ISecretProvider` interface with six actions (`Name`, `Encrypt`, `Decrypt`, `CanRotate`, `Rotate`, `Delete`). Secrets belong to **Launch profiles only** (the kind that starts one child process); the GUI and CLI both reject Global secrets at the entry point; `IsProfileApplicable` doubly refuses any profile containing `SecretVariables` from touching the user registry; `profile launch` decrypts the secret in the launcher process and spikes the child env block with the plaintext. Provider activation is preflight-checked at config time (v0.7.5), and the pwsh provider auto-probes its module + vault before any `Set-Secret`.
 
 This is a defensible v0.7.x baseline, but it is **fundamentally still a single-machine, single-process-time, single-user secret vault**. The community reference projects all converged on a different shape, and the secrets domain has shifted underneath us. This blueprint reconciles our position with that shift and lays out a phased path to an industrial-grade secrets surface without abandoning the current investment.
 
@@ -75,7 +75,7 @@ Vault supports dynamic secrets (database credentials generated on demand, revoke
 
 ### L6: No separation between Secret (a network-fetched value) and Credential (an OS-bound identity)
 
-The 8 providers are unified under one interface but they speak different domains. DPAPI/CredMan/PS SecretStore are **secret stores** (you push a value in). Vault KV2 / Azure Key Vault / 1Password / AWS Secrets Manager / SOPS are **secret backends** (you fetch a value they own). SOPS is its own category again - the "value" is the encrypted artifact in the repo. Forcing them into one interface means each provider ends up pretending to be a write-target when some are read-only by design. The interface should not collapse those.
+The 8 providers are unified under one interface but they speak different domains. DPAPI/CredMan/PS SecretStore are **local secret stores** (you push a value in). Vault KV2 / Azure Key Vault / 1Password / AWS Secrets Manager / SOPS are **remote secret stores** (you fetch a value they own). SOPS is its own category again - the "value" is the encrypted artifact in the repo. Forcing them into one interface means each provider ends up pretending to be a write-target when some are read-only by design. The interface should not collapse those.
 
 ### L7: Per-profile secret provenance, not per-secret provenance
 
@@ -107,13 +107,13 @@ Rejected alternative: keep secrets inside the Profile but add the metadata field
 
 ### P2: External authority + reconciliation loop, modeled on External Secrets Operator
 
-A Secrets coordinator (see P3) runs as a background service (`env-manager-service.exe` with `--mode=service` or `--mode=background`) that periodically reconciles each SecretMount against its provider, refreshes the envelope if needed, records the audit, and surfaces new state to subscribers (the GUI, the CLI on next read). The reconcile contract is `spec.refreshPolicy: Periodic | CreatedOnly | OnChange` with `spec.refreshIntervalSeconds` default 300. This removes L1/L4.
+A Secrets coordinator (see P3) runs as a background service (`env-manager-service.exe` with `--mode=service` or `--mode=background`) that periodically refreshes each SecretMount against its provider, refreshes the envelope if needed, records the audit, and surfaces new state to subscribers (the GUI, the CLI on next read). The refresh contract is `spec.refreshPolicy: Periodic | CreatedOnly | OnChange` with `spec.refreshIntervalSeconds` default 300. This removes L1/L4.
 
-Rejected alternative: on-demand fetch only, no reconcile loop. This is the current behaviour and it leaks stale credentials. On-demand only belongs at the very-low-end of provider sophistication (DPAPI) and is the wrong default for the network providers.
+Rejected alternative: on-demand fetch only, no refresh loop. This is the current behaviour and it leaks stale credentials. On-demand only belongs at the very-low-end of provider sophistication (DPAPI) and is the wrong default for the network providers.
 
 ### P3: Replace single `secret-providers.json` with a `SecretStore` controller
 
-A new `SecretStore` owns (a) the provider registry (still in-process, no IPC), (b) the per-secret mounts, (c) the reconcile scheduler, (d) the health surface. The CLI's `profile secret-provider set/list` becomes `secret-store set-default-provider/list`. `profile add-secret/edit-secret/remove-secret/reveal-secret` keep their names but re-route internally to the SecretStore. The Audit file acquires a SecretStore shaped sub-tree in addition to the existing Profile audit. This removes L6/L8.
+A new `SecretStore` owns (a) the provider registry (still in-process, no IPC), (b) the per-secret mounts, (c) the refresh scheduler, (d) the health surface. The CLI's `profile secret-provider set/list` becomes `secret-store set-default-provider/list`. `profile add-secret/edit-secret/remove-secret/reveal-secret` keep their names but re-route internally to the SecretStore. The Audit file acquires a SecretStore shaped sub-tree in addition to the existing Profile audit. This removes L6/L8.
 
 Rejected alternative: keep `profile secret-provider` as the user-facing command shape. We considered this and decided against because the user mental model is "I have a SecretStore with N providers and N mounts; I tie mounts to launch profiles". Keeping the provider-management under `profile` obscures that.
 
@@ -125,9 +125,11 @@ Rejected alternative: treat passkey as a provider. We considered this and decide
 
 ### P5: Per-secret rotation policy driven by the SecretStore, not by `Rotate-all`
 
-`profile secret-provider rotate` re-encrypts everything today. We propose per-secret `Rotate(id, newProvider? = keep)` with an on-disk `secretMount.json` (per-mount metadata) capturing `lastRotatedAt` and `nextRotationDueAt`. The reconcile loop drives rotation based on policy without user intervention. Auto-rotation applies only to providers that declare `CanRotate=true` (Vault KV2, Azure, AWS, 1Password do). This removes L7/L9.
+`profile secret-provider rotate` re-encrypts everything today. We propose per-secret `Rotate(id, newProvider? = keep)` with an on-disk `secretMount.json` (per-mount metadata) capturing `lastRotatedAt` and `nextRotationDueAt`. The refresh loop drives rotation based on policy without user intervention. Auto-rotation applies only to providers that declare `CanRotate=true` (Vault KV2, Azure, AWS, 1Password do). This removes L7/L9.
 
 ### P6: Capability-scoped agentic surface
+
+> **Status: not implemented.** The shipped code has no `--capability` layer, no `capabilities` array in `agents --json`, and no `agentCapabilities` field in `secret-providers.json`. The text below is the proposal only.
 
 CLI commands gaining a new `--capability` mental layer alongside the existing write/read classification. Capabilities are named (`registry.write.user`, `registry.write.system`, `secret.read`, `secret.write`, `secret.rotate`, `profile.apply`, `profile.launch`). The `agents` JSON already describes commands; we add a per-command `capabilities` array. The configuration `secret-providers.json` is extended with `agentCapabilities` whitelist. The frontend still works without any caps (back-compat) but a deployment that ships `agentCapabilities` enforces them at the CLI entry point. This removes L10.
 
@@ -137,7 +139,7 @@ Rejected alternative: command-string allow-list. Already what AGENTS.md document
 
 ## Architecture delta - what stays
 
-- `ISecretProvider` five-method interface stays **as-is**. Every provider implementation we have is reusable; only the registry layer above them changes.
+- The `ISecretProvider` interface stays **as-is** with its six actions. Every provider implementation we have is reusable; only the registry layer above them changes.
 - Launch profile `env_clear + inject` semantics stay. The launch path is the proven surface and we keep its contract forever.
 - `IsProfileApplicable` refusing profiles with `SecretVariables` stays. With the new `SecretStore`, this rule relaxes to `IsProfileApplicable` rejecting profiles with **unresolved mounts** instead - which means the same invariant survives the migration.
 - `profile launch` continues to be the only path that emits plaintext to a child env block.
@@ -150,11 +152,11 @@ Rejected alternative: command-string allow-list. Already what AGENTS.md document
 ## Architecture delta - what changes
 
 - The on-disk schema introduces `secretMount.json` alongside `profiles.json`. The Migration reads existing `SecretVariables` envelopes, attaches default `refreshPolicy: CreatedOnly` and `lastRotatedAt: updatedAt-via-audit`, and writes the new file in one transaction. Rollback = delete the file.
-- `secret-providers.json` learns `agentCapabilities` and `defaultRefreshPolicy`. Backward-compatible (defaults filled in when missing).
+- `secret-providers.json` was proposed to learn `agentCapabilities` and `defaultRefreshPolicy`. **Neither field exists in the shipped code.** The fields were meant to be optional, so an older settings file would still load.
 - `SecretEnvelope` grows from `{ provider, version, targetName, createdAt }` to `{ provider, version, targetName, createdAt, expiresAt, rotationPolicyId, schemaVersion: 2 }`. v0.8 envelopes have only the first four; the new fields are auto-prefilled on next read.
 - New CLI commands: `mount list/show/add/remove/refresh/rotate/set-policy`, `secret-store list-providers/set-default/health/audit`. Secret-oriented `profile *` commands become aliases for back-compat.
-- The agent JSON under `agents --json` adds the `capabilities` array per command and a new `authZ` field defined per the project's `agentCapabilities` config.
-- A new optional background reconcile service is shipped as a portable `env-manager-service.exe` that the GUI starts on demand and Windows Service Manager can install. This service is gated by a Settings toggle - off by default in v0.8, on by opt-in.
+- The agent JSON under `agents --json` was proposed to add a `capabilities` array per command and a new `authZ` field. **Not implemented.**
+- A background service ships as a portable `env-manager-service.exe` that the GUI starts on demand and the Windows Service Manager can install. The shipped service starts the refresh loop in both service and background mode; the loop is idle by default because new mounts are created only, and it wakes on a timer only when a mount is set to refresh that way.
 
 ---
 
@@ -168,29 +170,29 @@ Rejected alternative: command-string allow-list. Already what AGENTS.md document
 
 ### What changed and why
 
-The original Phase A-E roadmap below assumed an `secrets-agent.exe` reconcile process, a passkey/Windows Hello identity layer, and a wrap-key escrow recovery mechanism. The grill session proved each of these assumptions does not match the project's actual constraints (single-machine standalone Win11, single-user developer release, 20-100 mount workload, no central operator, session-0 service cannot surface biometric UI). The revised four-version cadence is:
+The original Phase A-E roadmap below assumed a `secrets-agent.exe` refresh process, a passkey/Windows Hello identity layer, and a wrap-key escrow recovery mechanism. The grill session proved each of these assumptions does not match the project's actual constraints (single-machine standalone Win11, single-user developer release, 20-100 mount workload, no central operator, session-0 service cannot surface biometric UI). The revised four-version cadence is:
 
 | Version | Phase | Ship criteria |
 | --- | --- | --- |
 | v0.8.0 | A | SecretMount schema v2 + one-shot migration + C# fsync + new nullable fields (refreshPolicy, refreshIntervalSeconds, bootstrapCertThumbprint). audit.json unchanged. |
-| v0.9.0 | B+C merged | env-manager-service.exe Rust binary, NT SERVICE\EnvManagerService, Named Pipe IPC, CLI service gateway subcommand, periodic full-scan reconcile, GUI as control panel, three-level capability whitelist. |
+| v0.9.0 | B+C merged | env-manager-service.exe Rust binary, NT SERVICE\EnvManagerService, Named Pipe IPC, CLI service gateway subcommand, periodic full-scan refresh, GUI as control panel, three-level capability whitelist (proposed; not implemented). |
 | v0.9.5 | D | Cert bootstrap: Vault AppRole/client cert, Azure SP cert — **removed before it was ever wired** (no caller, and its blocking `powershell` subprocess sat outside the stop-convergence contract). AWS Roles Anywhere documented but deferred. Env-var fallback retained. |
 | v1.0.0 | E | Unified audit-ledger.jsonl (append-only, hash-chained, 100MB rotation), Mount survival kit export, GUI recover-from-ledger, audit.json retired after migration. |
 
 ### Key reversals from the original blueprint
 
-- **Phase C**: the original `secrets-agent.exe` standalone process is rejected. It is now a Windows system service (`env-manager-service.exe` with `--mode=service`) under `NT SERVICE\EnvManagerService` virtual service account. In-process tokio task inside the GUI is also rejected (GUI close = reconcile stops). See the Design notes at the top of `service/src/main.rs` and `service/src/ipc.rs`.
+- **Phase C**: the original `secrets-agent.exe` standalone process is rejected. It is now a Windows system service (`env-manager-service.exe` with `--mode=service`) under `NT SERVICE\EnvManagerService` virtual service account. In-process tokio task inside the GUI is also rejected (GUI close = refresh stops). See the Design notes at the top of `service/src/main.rs` and `service/src/ipc.rs`.
 - **Phase D**: the original passkey/Windows Hello identity layer is rejected — a session 0 service cannot show biometric UI. The planned replacement, a certificate-based bootstrap at `Cert:\LocalMachine\My` with a non-exportable private key ACL'd to the per-service SID, was deleted before it was ever called. Wiring it would have promoted three cloud credential bootstraps (Vault AppRole/client cert, Azure service principal, AWS Roles Anywhere — the last still deferred) into the supported service interface with no product trigger, and its blocking `powershell` subprocess sat outside the stop-convergence contract the service relies on. No service-side credential bootstrap exists today.
-- **Phase E**: the original wrap-key escrow is rejected. The escrow solved a recovery problem that A5/A6/A8 proved empty (for cloud providers the backend IS the recovery source; for user-bound providers loss is by-design). It is replaced by unified audit-ledger + Mount survival kit export + GUI recover-from-ledger UX. The survival kit export is a CLI verb (`audit export-survival-kit`), not a service path. See the Design note at the top of `service/src/audit_ledger.rs` and the [Decision Summary](secret-architecture-decision-summary.md).
+- **Phase E**: the original wrap-key escrow is rejected. The escrow solved a recovery problem that A5/A6/A8 proved empty (for cloud providers the provider IS the recovery source; for user-bound providers loss is by-design). It is replaced by unified audit-ledger + Mount survival kit export + GUI recover-from-ledger UX. The survival kit export is a CLI verb (`audit export-survival-kit`), not a service path. See the Design note at the top of `service/src/audit_ledger.rs` and the [Decision Summary](secret-architecture-decision-summary.md).
 - **Phase B and Phase C merged into a single v0.9.0 release** (user chose Option 2). See the four-version cadence in the [Decision Summary](secret-architecture-decision-summary.md).
 
 ### Release-gate risk matrix (11 domains)
 
 The original blueprint had an anti-rejection checklist as a per-phase gate. The revised roadmap replaces it with an 11-domain release-gate risk matrix:
 
-1. Windows service lifecycle (SCM timeout, boot ordering, stop-during-reconcile)
-2. Named pipe IPC security (DACL, impersonation, squatting, stale connection)
-3. Periodic reconcile loop (lease TTL < tick, 429 throttle, clock skew, thundering herd, partial tick)
+1. Windows service lifecycle (SCM timeout, boot ordering, stop-during-refresh)
+2. Named pipe IPC security (DACL, impersonation, squatting, a stale client)
+3. Periodic refresh loop (lease TTL < tick, 429 throttle, clock skew, thundering herd, partial tick)
 4. Certificate lifecycle (expiry, ACL reset by GPO, Mimikatz CNG export, Windows-upgrade loss) — **historical**: the only certificate holder was the deleted bootstrap; nothing in the product stores a service certificate today.
 5. Audit ledger tamper-resistance (hash-chain, unauthorized actor, rollover race, replay)
 6. Schema migration (crash orphan, rollback script completeness, service race, per-user)
@@ -228,25 +230,27 @@ Problem solved: L3, L5, L7, L9.
 
 ### Phase B (v0.8.5): SecretStore controller + capability-scoped agentic surface
 
+> **Status: partly built, and the capability surface is not implemented.** The code has an internal `ISecretStore` port over the provider adapters. It has no `secret-store` command group and no `agentCapabilities` gate.
+
 Problem solved: L6, L8, L10.
 
 - Introduce `SecretStore` controller class behind `ISecretProvider`. Owns provider registry, mount metadata, health surface.
-- New CLI: `secret-store list-providers / set-default / health / audit`. `profile secret-provider` commands become aliases for back-compat.
-- `agents --json` adds `capabilities` array per command + top-level `authZ` config.
-- `secret-providers.json` gains `agentCapabilities` whitelist (default empty = all allowed, matching today's behaviour).
-- AGENTS.md: add hard boundary `v0.8.5 Capability-scoped agentic surface (hard boundary)`.
-- Tests: capability rejection, secret-store health surfaces every provider + mount count, audit inversibility.
-- Exit criteria: a deployment can ship `agentCapabilities` whitelist and reject parallel `set`/`delete` calls from LLM agents on the same machine; blue-team can inventory all secrets from the CLI in 30 seconds.
+- New CLI: `secret-store list-providers / set-default / health / audit`. `profile secret-provider` commands become aliases for back-compat. **Not shipped; the `profile secret-provider` commands remain the supported surface.**
+- `agents --json` adds `capabilities` array per command + top-level `authZ` config. **Not implemented.**
+- `secret-providers.json` gains `agentCapabilities` whitelist (default empty = all allowed, matching today's behaviour). **Not implemented; the field does not exist.**
+- AGENTS.md: add hard boundary `v0.8.5 Capability-scoped agentic surface (hard boundary)`. **Not implemented.**
+- Tests: capability rejection, secret-store health surfaces every provider + mount count, audit inversibility. **Not implemented.**
+- Exit criteria (not met): a deployment can ship `agentCapabilities` whitelist and reject parallel `set`/`delete` calls from LLM agents on the same machine; blue-team can inventory all secrets from the CLI in 30 seconds.
 
-### Phase C (v0.9.0): Optional reconcile loop (`env-manager-service.exe`)
+### Phase C (v0.9.0): Optional refresh loop (`env-manager-service.exe`)
 
 Problem solved: L1, L4 (partial).
 
 - Ship `env-manager-service.exe` as a separate binary bundled in `release/portable/` and `release/cli-only/`. GUI Settings toggle opt-in.
-- Default reconcile interval 300s. Only providers with `CanRotate=true` get a lease concept (`VaultKV2Provider`'s 1000s lease, Azure's 90-day secret expiry, AWS rotation Lambda's `pending/current/staged`).
+- Default refresh interval 300s. Only providers with `CanRotate=true` get a lease concept (`VaultKV2Provider`'s 1000s lease, Azure's 90-day secret expiry, AWS rotation Lambda's `pending/current/staged`).
 - Per-mount `refreshPolicy: Periodic | CreatedOnly | OnChange`. `OnChange` requires file-system watch on `secretMount.json`.
-- AGENTS.md: add hard boundary `v0.9.0 Optional reconcile loop (hard boundary)` describing the no-drift contract and the fail-closed behaviour when `env-manager-service.exe` is missing.
-- Tests: reconcile loop updates envelope without dropping semantics; `CreatedOnly` does not refresh on schedule; `Periodic` honour `interval`; crash recovery resumes reconcile.
+- AGENTS.md: add hard boundary `v0.9.0 Optional refresh loop (hard boundary)` describing the no-drift contract and the fail-closed behaviour when `env-manager-service.exe` is missing.
+- Tests: refresh loop updates envelope without dropping semantics; `CreatedOnly` does not refresh on schedule; `Periodic` honour `interval`; crash recovery resumes the refresh.
 - Exit criteria: a Vault KV2 secret rotated upstream surfaces in the next process launch within `refreshIntervalSeconds`; the loop never writes stale plaintext to the registry.
 
 ### Phase D (v0.9.5): Passkey / hardware-bridge identity layer
@@ -265,7 +269,7 @@ Problem solved: L9, L10 (fully), L8 (fully).
 - Schema v3 reconciles all audit streams (Profile / Registry / SecretMount / SecretStore / Identity) into a single WAL-backed ledger with retention policy.
 - Backup escrow supports WrappingKey (age-encrypted) so that an encrypted-secrets backup can be opened on a second machine by a key that lives in the user's `pass`/GPG ring, not just by DPAPI bound to the original Windows SID. `profile export-secrets` accepts `--wrapping-key <path-to-age-recipient-file>`.
 - AGENTS.md becomes the source of truth across CLI + GUI + background service + identity layer; the agent guide is generalized to cover multi-process concurrency at the SecretStore level, not just per-process RegistryMutation.
-- Exit criteria: a user can recover their secrets on a freshly installed Windows account after their original account was rebuilt, via the age-wrapping key; an LLM agent with the default `agentCapabilities` whitelist cannot perform any destructive secret operation even if it manages to invoke the CLI directly.
+- Exit criteria: a user can recover their secrets on a freshly installed Windows account after their original account was rebuilt, via the age-wrapping key; an LLM agent constrained by a `agentCapabilities` whitelist cannot perform any destructive secret operation even if it manages to invoke the CLI directly. The whitelist is not implemented today, so this exit criterion is still open.
 
 ---
 
@@ -289,7 +293,7 @@ Single TODO row in the per-phase ledger:
 ```
 Phase A: SecretMount schema v2 + secretMount.json + mount CLI + audit enrich   - not started
 Phase B: SecretStore controller + capability agentic surface                    - not started
-Phase C: env-manager-service.exe optional reconcile loop                       - DONE (v0.9.0)
+Phase C: env-manager-service.exe optional refresh loop                       - DONE (v0.9.0)
 Phase D: WindowsHelloIdentityProvider (passkey)                                  - not started
 Phase E: Schema v3 unified audit ledger + wrapping-key escrow                    - not started
 ```

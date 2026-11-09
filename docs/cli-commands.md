@@ -44,11 +44,11 @@ All commands follow: `env-manager-cli <command> [arguments] [--flags]`
 | `path dedupe` | `path dedupe [--scope] [--dry-run]` | Remove duplicate PATH entries (case-insensitive, preserves first, never removes protected entries; --dry-run reports without mutating) |
 | `path health` | `path health [--scope] [--fix] [--dry-run]` | v0.7.0. Detect duplicates and dead (non-existent) PATH entries; --fix removes non-protected duplicates+dead (always preserves protected entries) |
 | `profile set-launch` | `profile set-launch <name> --target <exe> [--args <args>] [--cwd <dir>] [--type global\|launch]` | v0.7.0. Configure a Launch profile's target executable / args / cwd, or convert a profile between Global and Launch types. Never writes the registry. |
-| `profile launch` | `profile launch <name> [--strict] [-- <extra-args ...>]` | v0.7.0. Spawn the Launch profile's targetExecutable with an isolated env block (env_clear + inject). Never writes the registry or broadcasts WM_SETTINGCHANGE. |
-| `profile add-secret` | `profile add-secret <name> <var> <value>` | v0.7.0. Encrypt `value` with DPAPI CurrentUser and store ciphertext in the profile. Requires the profile to be unapplied. Audit records NAME only. |
-| `profile edit-secret` | `profile edit-secret <name> <oldvar> <newvar> <value>` | v0.7.0. Rename and re-encrypt a secret. Audit records old/new NAME only. |
+| `profile launch` | `profile launch <name> [--strict] [-- <extra-args ...>]` | v0.7.0. Start the Launch profile's `targetExecutable` with an isolated environment block (env_clear + inject). Never writes the registry or broadcasts WM_SETTINGCHANGE. |
+| `profile add-secret` | `profile add-secret <name> <var> <value>` | v0.7.0. Encrypt `value` with the active secret provider and store its envelope in the profile. Requires the profile to be unapplied. Audit records NAME only. |
+| `profile edit-secret` | `profile edit-secret <name> <oldvar> <newvar> <value>` | v0.7.0. Rename the secret and encrypt it again with the active provider. Audit records old/new NAME only. |
 | `profile remove-secret` | `profile remove-secret <name> <var>` | v0.7.0. Remove a secret variable from the profile (also dropped from `secretVariables`). |
-| `profile reveal-secret` | `profile reveal-secret <name> <var>` | v0.7.0. Print one secret's plaintext to stdout. Only the same user account can decrypt (DPAPI CurrentUser). Use sparingly. |
+| `profile reveal-secret` | `profile reveal-secret <name> <var>` | v0.7.0. Print one secret's plaintext to stdout. The active provider decrypts it; with the default DPAPI provider only the same user account can decrypt. Use sparingly. |
 | `history list` | `history list [--limit N]` | List audit history (JSON, most recent first) |
 | `history undo` | `history undo <id> [--force]` | Undo a specific audit entry |
 | `history delete` | `history delete <id>` or `history delete --all [--scope user\|system]` | Delete a history record or clear all by scope |
@@ -61,16 +61,16 @@ All commands follow: `env-manager-cli <command> [arguments] [--flags]`
 | `protection add-var` | `protection add-var <name>` | Lock a variable (add to custom protected vars) |
 | `protection remove-var` | `protection remove-var <name>` | Unlock a variable (remove from custom protected vars) |
 | `update check` | `update check` | Check for latest version via GitHub Releases API |
-| `service status` | `service status` | Query env-manager-service status via named pipe IPC (read-only) |
+| `service status` | `service status` | Query env-manager-service via the named pipe (read-only). Reports `running` when the service answers, `not_running` when no pipe exists, and `unresponsive` when the pipe exists but the connect times out. |
 | `service health` | `service health` | Query env-manager-service health (mount count, uptime) via IPC |
 | `service ping` | `service ping` | Ping the env-manager-service named pipe (read-only) |
-| `service refresh` | `service refresh` | Trigger a reconcile tick on env-manager-service (write - service refreshes all eligible mounts) |
+| `service refresh` | `service refresh` | Trigger a refresh pass on env-manager-service (write - the service refreshes all eligible mounts) |
 | `service rotate` | `service rotate <mountId>` | Trigger secret-provider rotation on env-manager-service (write). When the named mount has a local envelope, the service delegates an unscoped `profile secret-provider rotate` to the CLI - whole-store by contract (#195): it attempts to re-encrypt every profile's locally-held envelopes (unresolvable or undecryptable secrets are counted as failures, not silently dropped) and the service writes both `lastRotatedAt`/`lastFetchedAt` on the named mount only (the delegated CLI itself stamps `lastRotatedAt` on the other mounts it rotates) - the mount id validates existence and names the stamp target, it does not filter the rotation. When the named mount is a provider-managed `Periodic` mount without a local envelope, the service returns `skipped` without delegating and advances neither stamp |
-| `service reload` | `service reload` | Tell env-manager-service to reload secretMount.json (write) |
-| `service shutdown` | `service shutdown` | Tell env-manager-service to stop its IPC server and reconcile loop (write) |
+| `service reload` | `service reload` | Tell env-manager-service to read secretMount.json again (write) |
+| `service shutdown` | `service shutdown` | Tell env-manager-service to stop its IPC server and refresh loop (write) |
 | `audit list` | `audit list [--json]` | List audit ledger events (read-only). With `--json`, output raw JSON |
 | `audit verify` | `audit verify [--ledger <file>] [--strict]` | Verify hash-chained ledger integrity: prev_hash linkage + entry_hash recomputation. Report mode (default) prints the JSON verdict and always exits 0; `--strict` exits 0 only when every line verified, 1 on any breakage (CI gate). Missing/empty ledger = trivially OK |
-| `audit encrypt-file` | `audit encrypt-file --input <file> --output <file>` | DPAPI-encrypt a file (write). User-invoked; the service never spawns it. 50MB cap, system dirs blocked |
+| `audit encrypt-file` | `audit encrypt-file --input <file> --output <file>` | DPAPI-encrypt a file (write). User-invoked; the service never starts it. 50MB cap, system dirs blocked |
 
 ## Scope
 
@@ -98,7 +98,7 @@ Key instrumented methods: `Main()` (all args), `ListEnvironment`, `GetVariable`,
 
 ## Profiles (detailed)
 
-Profiles are sets of preconfigured variables applied/unapplied as a group. When applied, original values of affected user variables are backed up. Unapplying restores originals. Profiles only affect user scope.
+Profiles are sets of preconfigured variables applied and unapplied as a group. When a Global profile is applied, the original value of every affected variable is backed up. Unapplying restores the originals. Each variable and PATH entry carries its own scope (`user` by default), so a Global profile can write to both hives.
 
 **Single active profile policy**: Only one profile can be active at a time. Applying a new profile automatically unapplies any currently-active profile first.
 
@@ -107,7 +107,7 @@ Profiles are sets of preconfigured variables applied/unapplied as a group. When 
 - Profile inheritance can be changed while a profile is active: the CLI automatically unapplies, updates inheritance, and re-applies with the new resolved variable set
 - Profile storage: `%LOCALAPPDATA%\EnvManager\profiles.json`
 - Profile variables override user variables when applied
-- **v0.6.0 Profile types**: `profileType: "global" | "launch"`. Global profiles apply to the user registry (current behavior). Launch profiles are launcher templates that are NEVER written to the registry: `profile launch <name>` spawns `targetExecutable` with an isolated environment block (`env_clear` + inject profile vars + PATH entries), and never broadcasts `WM_SETTINGCHANGE`. Profile names are globally unique across Global and Launch types because every CLI profile command is name-addressed. `ValidateLaunchTarget` rejects targets inside `\\Windows\\System32` and non-executable extensions.
+- **v0.6.0 Profile types**: `profileType: "global" | "launch"`. A Global profile writes its values into the registry. A Launch profile is a template that is NEVER written to the registry: `profile launch <name>` starts `targetExecutable` with an isolated environment block (`env_clear` plus the profile's variables and PATH entries), and never broadcasts `WM_SETTINGCHANGE`. Profile names are globally unique across Global and Launch types because every CLI profile command is name-addressed. `ValidateLaunchTarget` rejects targets inside `\\Windows\\System32` and non-executable extensions.
 - **v0.9.31 Two-tier preflight validation**: `profile apply` validates in two tiers. The error tier (data-destroying: 32767 truncation, variable names containing `=`, protected variables, missing elevation, Global-inherits-Launch topology, undeclared inherited secrets) rejects with the pre-existing error copy and exit 1. The warn tier (undefined %VAR% references in values, stale PATH entries, dangling launch targets) is advisory: the apply proceeds, a JSON warn report (`"preflight":"warn"`, parseable, listing every downgraded finding) is printed, and the exit code is 2. `--strict` promotes warn-tier findings to hard failures (exit 1, no write). Warn output is the telemetry basis for future tightening (MongoDB validationAction pattern).
 - v0.6.0/v0.7.0 new profile subcommands: `profile set-launch <name> --target <exe> [--args <args>] [--cwd <dir>] [--type global|launch]` and `profile launch <name> [-- <extra-args ...>]`
 - v0.6.0/v0.7.0 schema fields: `profileType`, `targetExecutable`, `launchArguments`, `workingDirectory`, `secretVariables` (DPAPI encryption is fully implemented in v0.7.0; `profile launch` and `profile reveal-secret` decrypt at runtime)
@@ -136,7 +136,7 @@ Variables can be toggled on/off without deleting them. When disabled:
 
 PATH variable edited as a list of directory entries. Entries can be added, removed, and reordered. Supports both user and system scopes.
 
-Duplicate removal via `path dedupe` (mirrors PowerToys issue #40402). The CLI preserves the first occurrence (case-insensitive `OrdinalIgnoreCase` matching) and never removes protected PATH entries. `--dry-run` reports what would be removed without mutating. The GUI PathEditor exposes this as two toolbar buttons: dry-run preview (eyeball icon) and destructive execute (trash icon).
+Duplicate removal via `path dedupe` (mirrors PowerToys issue #40402). The CLI preserves the first occurrence (case-insensitive `OrdinalIgnoreCase` matching) and never removes protected PATH entries. `--dry-run` reports what would be removed without mutating. The GUI PathEditor exposes this as two toolbar buttons: dry-run preview (eyeball icon) and a destructive run (trash icon).
 
 **v0.7.0 PATH health** (`path health [--scope] [--fix] [--dry-run]`): detects duplicates AND dead (non-existent) PATH entries. Protected entries are NEVER reported as duplicates (defense-in-depth: HashSet isolation) and `--fix` NEVER removes a protected entry even if it appears dead. `--fix` writes a cleaned PATH preserving order; `--dry-run` reports what would change. Without `--fix` the command is pure read. The GUI Path Editor renders a status badge per row (`healthy` / `duplicate` / `dead` / `duplicate+dead`) and a "Remove dead" bulk action.
 
@@ -165,4 +165,4 @@ Use the normal command form below. The standalone `--` separator remains reserve
 env-manager-cli path add "C:\Program Files\PowerShell\7\" --scope user
 ```
 
-Note: the GUI never hits this hazard. It builds an `args[]` array in TypeScript and sends it via Tauri IPC; the Rust backend spawns the CLI with `Command::arg()`, so each arg is an independent element and no shell tokenization happens.
+Note: the GUI never hits this hazard. It builds an `args[]` array in TypeScript and sends it via Tauri IPC; the Rust shell starts the CLI with `Command::arg()`, so each arg is an independent element and no shell tokenization happens.

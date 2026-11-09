@@ -50,7 +50,7 @@ CI short run: the build.yml `stryker` job runs on `workflow_dispatch` and publis
 
 Current status (round-8 honesty pass): `break: 60` is the aspirational target line and is currently NOT met - dispatched runs score 46.83% (run 33966698434, main, 2026-09-05: 131 tested / 118 killed / 13 survived) to 49.80% (run 34767318054, 2026-09-13: 142 tested / 126 killed / 16 survived), so the Stryker step exits 2 by design and the dispatched run concludes failure; that red is the report, not a regression. The gate stays local/PR-assist and is deliberately NOT a CI hard gate (ruling above). The second survivor triage (kill via seam assertion or LLM-detection reserve, per survivor) is registered in the round-8 report (`50-survivor-registry.md`, process workspace - untracked); score convergence is survivor-driven, and this ticket does not promise a target score.
 
-## Build GUI (development with hot reload)
+## Build GUI (development with live updates)
 
 ```powershell
 cd frontend
@@ -136,7 +136,7 @@ node scripts/build.mjs --arch x64
 
 Verify the output:
 - `release/portable/env-manager.exe` - GUI executable
-- `release/portable/env-manager-cli.exe` - CLI backend
+- `release/portable/env-manager-cli.exe` - CLI executable
 - `release/cli-only/env-manager-cli.exe` - standalone CLI
 - `release/portable/Env-Manager_portable_X.Y.Z_x64.zip` - portable ZIP
 - `release/cli-only/Env-Manager_cli-only_X.Y.Z_x64.zip` - CLI-only ZIP
@@ -150,7 +150,7 @@ Before building, stop any running instances: `Get-Process -Name 'env-manager*' -
 
 The build orchestrator (`scripts/build.mjs`) enforces a strict compile-then-package sequence:
 
-1. **Step 1**: `dotnet build -c Release -r <RID>` compiles the C# CLI, then verifies the deployed `env-manager-cli.exe` version matches `env-manager.csproj` `<Version>`. A mismatch (stale binary) throws `CLI version mismatch` and aborts the build before any packaging occurs.
+1. **Step 1**: `dotnet build -c Release -r <RID>` compiles the C# CLI, then verifies the packaged `env-manager-cli.exe` version matches `env-manager.csproj` `<Version>`. A mismatch (stale binary) throws `CLI version mismatch` and aborts the build before any packaging occurs.
 2. **Step 2**: `npm run build` + `tauri build` compiles the Tauri GUI (Rust + Svelte frontend).
 3. **Step 2b**: `cargo build` compiles the `env-manager-service` Rust binary.
 4. **Step 3-4**: Assembles portable/cli-only staging dirs from the freshly compiled output, builds MSI via WiX.
@@ -158,7 +158,7 @@ The build orchestrator (`scripts/build.mjs`) enforces a strict compile-then-pack
 
 **The `--skip-cli`, `--skip-gui`, and `--skip-service` flags are for incremental packaging ONLY** — for example, re-running the MSI build after a WiX template change without touching CLI/GUI code. If any source file (`*.cs`, `*.rs`, `*.svelte`, `*.ts`, `*.css`) changed since the last successful `build.mjs` run, ALL compile steps must run. Using skip flags to bypass compilation after a code change produces stale binaries in `release/` and is a hard boundary violation.
 
-The CLI version verification guard (AGENTS.md hard boundary v0.7.15) is the automated backstop: if a stale `bin/Release/net10.0-windows/env-manager-cli.exe` is detected (version mismatch against csproj), `build.mjs` throws and aborts before any packaging occurs. This prevents the incident where the deployed CLI was a months-old v0.3.0 artifact while the GUI showed "Unknown command: history/protection/path/profile" for every page.
+The CLI version verification guard (AGENTS.md hard boundary v0.7.15) is the automated backstop: if a stale `bin/Release/net10.0-windows/env-manager-cli.exe` is detected (version mismatch against csproj), `build.mjs` throws and aborts before any packaging occurs. This prevents the incident where the packaged CLI was a months-old v0.3.0 artifact while the GUI showed "Unknown command: history/protection/path/profile" for every page.
 
 ### Live CLI smoke test with registry backup/restore
 
@@ -277,8 +277,8 @@ Failure triage: hang at `InstallFinalize` -> `StartServices` with lowest `Action
 
 ## How to Release
 
-1. Update version in `env-manager.csproj`, `frontend/package.json`, `frontend/src-tauri/tauri.conf.json`, `frontend/src-tauri/Cargo.toml`
-2. Update `README.md` and `docs/i18n/README.zh_CN.md` if features changed (README_CN.md was superseded by `docs/i18n/`)
+1. The app version has three carriers: `env-manager.csproj`, `frontend/package.json`, and `frontend/src-tauri/tauri.conf.json`. release-please bumps all three, and the `build.yml` release job refuses a tag that disagrees with any of them. The two Rust crate manifests (`service/Cargo.toml` and `frontend/src-tauri/Cargo.toml`) still carry `0.12.0`; they are not release-please-managed, and that drift is tracked in its own issue.
+2. Update `README.md` if features changed, then the nine locale READMEs in `docs/i18n/`. During the plain-language program, each translation is updated by its own ticket; the English original stays the authority.
 3. Update `AGENTS.md` if structure or commands changed
 4. Run `node scripts/build.mjs --arch x64` (or per-arch: `--arch x86`, `--arch arm64`)
    - Brand assets (logo, variants, favicons, social preview) live in `docs/assets/`; the brand guide is `docs/assets/brand/index.md`.
@@ -348,7 +348,7 @@ Runs on every push to main. `googleapis/release-please-action` (pinned v5.0.0 SH
 
 - `release-please-config.json` sets `release-type: simple` and `include-component-in-tag: false` — tags are plain `vX.Y.Z` (repo convention, matches the `build.yml` `tags: ['v*']` trigger), not `env-manager-vX.Y.Z`.
 - `.release-please-manifest.json` pins the released version (`0.12.0` at first establishment).
-- The same config file's package `extra-files` sync the three version carriers the `build.yml` release job's version gate checks: `env-manager.csproj` (`//Project/PropertyGroup/Version`, XML updater), `frontend/src-tauri/tauri.conf.json` and `frontend/package.json` (`$.version`, JSON updater). The workflow passes `config-file` and must not pass `release-type` inline: an inline `release-type` makes the action build an inline manifest and ignore the config file, which is why the old inline `extra-files` list did nothing. Cargo crate versions and lockfiles are NOT release-please-managed (cargo --locked consistency); they move only in manual version-bump commits.
+- The same release-please configuration's package `extra-files` sync the three version carriers the `build.yml` release job's version gate checks: `env-manager.csproj` (`//Project/PropertyGroup/Version`, XML updater), `frontend/src-tauri/tauri.conf.json` and `frontend/package.json` (`$.version`, JSON updater). The workflow passes `config-file` and must not pass `release-type` inline: an inline `release-type` makes the action build an inline manifest and ignore the configuration, which is why the old inline `extra-files` list did nothing. Cargo crate versions and lockfiles are NOT release-please-managed (cargo --locked consistency); they move only in manual version-bump commits.
 
 **Tag → asset-build bridge.** release-please creates the tag and release through the GitHub API using `GITHUB_TOKEN`. GitHub starts no workflow run for events caused by that token, so the `build.yml` `push: tags: ['v*']` trigger does not fire for a release-please tag. When the action reports `release_created`, `release-please.yml` therefore dispatches `build.yml` itself with `gh workflow run build.yml --ref <tag>`; `workflow_dispatch` is the documented exception to the token-suppression rule. The dispatch condition is `!cancelled() && release_created`, so a release created before a later release-please step failed still starts the build, while a cancelled run does not. The dispatched run checks out the tag, so `github.ref` is `refs/tags/vX.Y.Z`, the version gate compares the tag against the three carriers, and the same release job runs. Manually pushed tags still take the direct `push` path. The dispatch needs the workflow-level `actions: write` permission and sets `GH_REPO` because the job has no checkout (and therefore no git remote to infer the repository from).
 
@@ -367,10 +367,10 @@ Why an explicit seam variable instead of setting `LOCALAPPDATA`: `Environment.Ge
 1. **Machine-state writes** (registry `HKCU\Environment` / `HKLM\...\Session Manager\Environment`, `%ProgramData%`): tolerated on GitHub-hosted runners because every job starts on a fresh VM — machine state dies with the job. The registry side is additionally bounded by the `test-with-restore.ps1` snapshot/reconcile transaction and the residue-zero assertion, so nothing survives the run anyway.
 2. **User-state writes** (`%LOCALAPPDATA%` tree): NOT tolerated inside a job, because a job's later steps share the same user profile — an unredirected integration run could read a stale profiles.json written by an earlier step or leak test profiles into packaging steps. The `ENVMANAGER_LOCALAPPDATA` redirect removes the shared surface entirely.
 
-**env-block snapshot semantics** (tests and CI steps MUST NOT assume cross-process real-time environment refresh): a Windows environment block is a snapshot copied at process creation; a child process inherits the env of its creator at spawn time, and a registry environment write plus `WM_SETTINGCHANGE` broadcast notifies only registered listeners (shell/Explorer), not arbitrary already-running processes. Consequences the test discipline encodes:
+**env-block snapshot semantics** (tests and CI steps MUST NOT assume cross-process real-time environment refresh): a Windows environment block is a snapshot copied at process creation; a child process inherits the environment of its creator at start time, and a registry environment write plus `WM_SETTINGCHANGE` broadcast notifies only registered listeners (shell/Explorer), not arbitrary already-running processes. Consequences the test discipline encodes:
 
-- A CLI subprocess never sees environment changes made by the harness after the subprocess was spawned; set variables BEFORE spawning.
-- A process that itself writes the registry environment does not see its own write via its inherited env-block snapshot; refresh assertions must re-read the registry (the CLI does) or spawn a fresh child, never probe the writer's own env.
+- A CLI subprocess never sees environment changes made by the harness after the subprocess was started; set variables BEFORE starting it.
+- A process that itself writes the registry environment does not see its own write through its inherited env-block snapshot; refresh assertions must re-read the registry (the CLI does) or start a fresh child, never probe the writer's own env.
 - Windows-latest hosted runners are always elevated, so elevation-gated system-scope behavior cannot be differentially verified in CI; that path is pinned at the seam level in xUnit instead.
 
 ## Performance Targets
@@ -392,7 +392,7 @@ The Tauri shell uses `tauri-plugin-log` at `Info` level. All `run_cli` calls log
 - Command and argument count on entry
 - Exit code, stdout/stderr length, and elapsed time on completion
 - stderr presence and length if non-empty
-- Spawn failure category only; command output is never persisted
+- Start failure category only; command output is never persisted
 
 CLI path resolution also logs which method succeeded (resource, adjacent, dev, cwd, PATH).
 
@@ -412,7 +412,7 @@ The GUI has a frontend-level debug logging system:
 - `debugLogs` store in `stores.ts` - holds up to 200 `DebugLogEntry` objects (capped to prevent memory leaks)
 - `addDebugLog()` - adds entries with timestamp, level (info/warn/error/debug), message, and optional command name
 - `clearDebugLogs()` - empties the log store
-- `isWriteInProgress` store - `true` while a write operation is executing (set in `runWriteOperation()` in `api.ts`)
+- `isWriteInProgress` store - `true` while a write operation is running (set in `runWriteOperation()` in `api.ts`)
 - `runCommand()` in `api.ts` logs command, timing, and status only; raw CLI errors are returned to the active UI but excluded from persisted debug logs
 - GUI buttons (nav tabs, refresh) are disabled via `disabled={$isWriteInProgress}` during write operations to prevent UI race conditions
 
@@ -426,7 +426,7 @@ Before any local development session that touches the CLI or build, run:
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts/snapshot-host-env.ps1
 ```
 
-This exports both `HKCU\Environment` and `HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\Environment` to `<repo-root>/.env_bak/` with a UTC timestamp, and copies Env Manager's internal config files from `%LOCALAPPDATA%\EnvManager\` (profiles.json, audit.json, protected-vars.json, protected-paths.json, builtin-protected-vars.json, builtin-protected-paths.json) into `.env_bak/internal-configs/`. The `.env_bak/` directory is gitignored and is a forensic safety net: it is NOT auto-cleaned. Keep at most the last few snapshots manually.
+This exports both `HKCU\Environment` and `HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\Environment` to `<repo-root>/.env_bak/` with a UTC timestamp, and copies Env Manager's internal settings files from `%LOCALAPPDATA%\EnvManager\` (profiles.json, audit.json, protected-vars.json, protected-paths.json, builtin-protected-vars.json, builtin-protected-paths.json) into `.env_bak/internal-configs/`. The `.env_bak/` directory is gitignored and is a forensic safety net: it is NOT auto-cleaned. Keep at most the last few snapshots manually.
 
 The live CLI smoke test harness `scripts/test-with-restore.ps1` snapshots every value name, unexpanded value, and registry value kind in HKCU plus accessible HKLM, byte-snapshots the test-owned Env Manager internal configuration, verifies exact post-test equality, and transactionally reconciles both hives on any failure or drift. It restores internal configuration after the suite and exercises both the raw trailing-backslash PATH command-line regression and disabled-variable exact raw-value/RegistryValueKind recovery. This snapshot script is the per-session complement: run it once before you start work, so if any change mutates the host registry or internal configs, you have a rollback artifact.
 
@@ -438,7 +438,7 @@ The live CLI smoke test harness `scripts/test-with-restore.ps1` snapshots every 
 4. `.github/workflows/mirror.yml` runs on every push to `main` and keeps GitLab / Codeberg in sync; do not push to mirrors manually.
 5. release-please (`release-please.yml`) drives CHANGELOG / version PRs from conventional commits. Established with the v0.12.0 release (HARD GATE authorized): plain `vX.Y.Z` tags, `.release-please-manifest.json`, and `extra-files` keeping csproj / tauri.conf.json / package.json in lockstep with the version gate. Release-please tags are created with `GITHUB_TOKEN`, so their push event starts no workflow; `release-please.yml` bridges that by dispatching `build.yml` at the tag ref, which runs the same release job (updater triple + `latest.json` + SLSA L2 provenance) as a manual tag push. The dispatch-only `stryker`/`kill9-resilience` jobs stay out (they require a non-tag ref), and the release-please-created release keeps its notes and draft/published state.
 6. Provenance attestation (`actions/attest-build-provenance`) runs in the `build.yml` release job so every tagged release carries SLSA L2 provenance automatically. Pinned to v4.2.2 (`4d101475d8...`) per the prior v4.1.0 SHA (`97770d5af...`) disappeared upstream, the same force-push event recorded in WORKFLOW.md §6 lesson log (`unable to find version` on the first release rehearsal). Before re-pinning any release-chain action, verify the SHA with `gh api repos/<owner>/<repo>/commits/<sha>`.
-7. Tauri updater: `tauri signer generate` executed once; public key committed in `frontend/src-tauri/tauri.conf.json` under `plugins.updater.pubkey`; private key kept only in GitHub Secrets (`TAURI_SIGNING_PRIVATE_KEY`, `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`). End-to-end updater chain: the package job zips the MSI to `Env Manager_<version>_<arch>.msi.zip`, signs the zip via `@tauri-apps/cli` (`npx --no-install tauri signer sign`) producing `<basename>.msi.zip.sig`, and uploads the `.msi` + `.msi.zip` + `.msi.zip.sig` triple through the `env-manager-msi` artifact. The release job then runs `scripts/gen-latest-json.mjs` against the downloaded artifacts to assemble `latest.json` (the manifest schema `@tauri-apps/plugin-updater` polls from the `plugins.updater.endpoints` URL declared in `tauri.conf.json`); the file is uploaded alongside the artifacts. The manifest URL targets the asset name GitHub actually stores: spaces are rewritten to dots (`Env Manager_<version>_<arch>.msi.zip` becomes `Env.Manager_<version>_<arch>.msi.zip`) and the filename segment is percent-encoded, so the updater does not 404 on the local filename. The generator refuses to invent a signature, so an unsigned package job run (for example a fork without the secrets) fails the release step rather than publishing a manifest that points at unsigned bytes.
+7. Tauri updater: `tauri signer generate` run once; public key committed in `frontend/src-tauri/tauri.conf.json` under `plugins.updater.pubkey`; private key kept only in GitHub Secrets (`TAURI_SIGNING_PRIVATE_KEY`, `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`). End-to-end updater chain: the package job zips the MSI to `Env Manager_<version>_<arch>.msi.zip`, signs the zip via `@tauri-apps/cli` (`npx --no-install tauri signer sign`) producing `<basename>.msi.zip.sig`, and uploads the `.msi` + `.msi.zip` + `.msi.zip.sig` triple through the `env-manager-msi` artifact. The release job then runs `scripts/gen-latest-json.mjs` against the downloaded artifacts to assemble `latest.json` (the manifest schema `@tauri-apps/plugin-updater` checks the `plugins.updater.endpoints` URL declared in `tauri.conf.json`); the file is uploaded alongside the artifacts. The manifest URL targets the asset name GitHub actually stores: spaces are rewritten to dots (`Env Manager_<version>_<arch>.msi.zip` becomes `Env.Manager_<version>_<arch>.msi.zip`) and the filename segment is percent-encoded, so the updater does not 404 on the local filename. The generator refuses to invent a signature, so an unsigned package job run (for example a fork without the secrets) fails the release step rather than publishing a manifest that points at unsigned bytes.
 
 ## Structural Fitness: Cognitive Complexity Guard
 

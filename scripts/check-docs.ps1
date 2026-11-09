@@ -14,9 +14,14 @@
 #      literals, calls, initializers and local variables are not declarations.)
 #   5. banned stale claims that keep coming back ("only plaintext output path",
 #      "唯一明文输出路径", "Plaintext is NEVER written to")
+#   6. words the glossary says to avoid, collected from its _Avoid_ lines and
+#      checked in the in-scope English documents. Inline code spans and link
+#      targets are skipped: a command name such as `service reload` is part of
+#      the CLI surface and must not be renamed by a prose rule.
 #
-# Scope: README.md, AGENTS.md, GLOSSARY.md and every .md under docs/ except
-# docs/history. The full scan re-derives that set independently of how it was
+# Scope: README.md, AGENTS.md, AGENTS.cli.md, SECURITY.md, GLOSSARY.md, every
+# .md under docs/ except docs/history, and the three repository-hosting docs
+# under .github/. The full scan re-derives that set independently of how it was
 # enumerated and fails loudly on anything missing - silence is how this gate
 # lost its "green means clean" reading once already.
 # Pass -Paths to check only specific files. Source changes still run
@@ -34,12 +39,71 @@ $script:memberCache = @{}
 $script:partialCache = @{}
 $script:declarationCache = @{}
 $script:typeNameCache = @{}
+$hostingDocs = @('.github/CONTRIBUTING.md', '.github/PULL_REQUEST_TEMPLATE.md', '.github/CODE_OF_CONDUCT.md')
 
 function Add-Failure([string]$Message) { $script:failures.Add($Message) | Out-Null }
 
 function Get-DocLines([string]$Path) {
     if (-not (Test-Path -LiteralPath $Path)) { return @() }
     return [System.IO.File]::ReadAllLines((Resolve-Path -LiteralPath $Path).Path, [System.Text.Encoding]::UTF8)
+}
+
+function Get-GlossaryAvoidTerms {
+    # The glossary is the only source: each `_Avoid_:` line names the synonyms a
+    # reader must not use for that term. Reading them here keeps the word list
+    # editable in one place instead of copied into this script.
+    $terms = New-Object System.Collections.Generic.List[string]
+    foreach ($line in @(Get-DocLines 'GLOSSARY.md')) {
+        $m = [regex]::Match($line, '^_Avoid_:\s*(.+)$')
+        if (-not $m.Success) { continue }
+        foreach ($part in ($m.Groups[1].Value -split ',')) {
+            $term = $part.Trim().TrimEnd('.')
+            if ($term.Length -gt 0 -and -not $terms.Contains($term)) { $terms.Add($term) }
+        }
+    }
+    return $terms.ToArray()
+}
+
+function Get-AvoidWordVariants([string]$Term) {
+    # A word list catches the forms a writer actually uses: "backend"/"backends",
+    # "spawn"/"spawned"/"spawning", "config file"/"config files". A phrase only
+    # takes a plural; a single word takes the common verb inflections too. A
+    # derived noun such as "deployment" is a different word and stays out.
+    $variants = New-Object System.Collections.Generic.List[string]
+    $variants.Add($Term)
+    if ($Term -match ' ') {
+        # A phrase takes a plural ("config files"), except a phrase that names
+        # an action with its object ("start a profile"), where the plural is
+        # not a word a writer would use.
+        if ($Term -notlike 'start *') { $variants.Add($Term + 's') }
+        return $variants.ToArray()
+    }
+    $variants.Add($Term + 's')
+    # Only the avoided verbs take -ed/-ing; adding those endings to a noun
+    # ("connectioned", "backending") would just pad the regex with noise.
+    $verbTerms = @('activate', 'deploy', 'execute', 'poll', 're-fetch', 'rekey', 'reload', 'spawn')
+    if ($verbTerms -contains $Term) {
+        if ($Term.EndsWith('e') -and $Term.Length -gt 1) {
+            $stem = $Term.Substring(0, $Term.Length - 1)
+            $variants.Add($Term + 'd')
+            foreach ($suffix in @('ed', 'ing')) { $variants.Add($stem + $suffix) }
+        }
+        else {
+            foreach ($suffix in @('ed', 'ing')) { $variants.Add($Term + $suffix) }
+        }
+    }
+    return $variants.ToArray()
+}
+
+function Test-VocabularyFile([string]$Path) {
+    # English documents only. The glossary owns the avoid list itself, the nine
+    # translations are handled by their own tickets, and docs/assets carries
+    # brand material that is not product prose.
+    if ($Path -ceq 'GLOSSARY.md') { return $false }
+    if ($Path -clike 'docs/i18n/*') { return $false }
+    if ($Path -clike 'docs/assets/*') { return $false }
+    if ($Path -clike 'docs/history/*') { return $false }
+    return $true
 }
 
 function Get-TrackedPaths([string[]]$Pathspec = @()) {
@@ -154,15 +218,17 @@ try {
         # docs/**/*.md silently skips the docs that sit directly in docs/ -
         # docs/architecture.md among them, which is how three dead citations
         # outlived every full run. Enumerate the tree and filter here instead.
-        $files = @(Get-TrackedPaths -Pathspec 'README.md', 'AGENTS.md', 'GLOSSARY.md', 'docs/' |
+        $files = @(Get-TrackedPaths -Pathspec 'README.md', 'AGENTS.md', 'AGENTS.cli.md', 'SECURITY.md', 'GLOSSARY.md', 'docs/' |
             Where-Object { $_ -like '*.md' -and $_ -notlike 'docs/history/*' })
+        $files += @(Get-TrackedPaths -Pathspec $hostingDocs)
         # Independent cross-check: re-derive the set from the whole index and
         # filter here, rather than trusting the pathspec above, so a git glob
         # quirk surfaces as a hard failure naming the files instead of as
         # silent under-coverage.
         $expected = @(Get-TrackedPaths |
             Where-Object { $_ -like 'docs/*.md' -and $_ -notlike 'docs/history/*' })
-        $missed = @($expected | Where-Object { $files -notcontains $_ })
+        $expectedHosting = @(Get-TrackedPaths -Pathspec $hostingDocs)
+        $missed = @(@($expected) + @($expectedHosting) | Where-Object { $files -notcontains $_ })
         if ($missed.Count -gt 0) {
             Add-Failure ('docs enumeration missed {0} file(s): {1}' -f $missed.Count, ($missed -join ', '))
         }
@@ -171,7 +237,7 @@ try {
         # cross-check has nothing to miss; a doc deleted outright leaves it
         # equally silent. These anchors are the structural contract - if one
         # is renamed on purpose, update this list in the same change.
-        foreach ($anchor in @('README.md', 'AGENTS.md', 'GLOSSARY.md', 'docs/architecture.md')) {
+        foreach ($anchor in @('README.md', 'AGENTS.md', 'AGENTS.cli.md', 'SECURITY.md', 'GLOSSARY.md', 'docs/architecture.md') + $hostingDocs) {
             if ($files -notcontains $anchor) {
                 Add-Failure ("docs enumeration missed required document: {0}" -f $anchor)
             }
@@ -187,6 +253,13 @@ try {
         'Plaintext is NEVER written to'
     )
     $roots = @('src/', 'docs/', 'service/', 'scripts/', 'tests/', 'frontend/', '.github/')
+    $avoidTerms = @(Get-GlossaryAvoidTerms)
+    $avoidVariants = @($avoidTerms | ForEach-Object { Get-AvoidWordVariants $_ } | Sort-Object -Unique)
+    $avoidPattern = if ($avoidVariants.Count -gt 0) {
+        '(?i)\b(?:' + (($avoidVariants | ForEach-Object { [regex]::Escape($_) }) -join '|') + ')\b'
+    }
+    else { $null }
+    $vocabularyFiles = @($files | Where-Object { Test-VocabularyFile $_ })
 
     foreach ($file in $files) {
         if (-not (Test-Path -LiteralPath $file)) {
@@ -251,6 +324,18 @@ try {
             foreach ($banned in $bannedPatterns) {
                 if ($line.IndexOf($banned, [System.StringComparison]::OrdinalIgnoreCase) -ge 0) {
                     Add-Failure ("{0}:{1}: stale claim: {2}" -f $file, $lineNo, $banned)
+                }
+            }
+
+            # 6. glossary avoid words. Inline code spans keep their own names
+            # (command names, argument names, identifiers, real error text), so
+            # strip them before matching; link targets are not prose either.
+            if ($avoidPattern -and ($vocabularyFiles -contains $file)) {
+                $prose = [regex]::Replace($line, '`[^`]*`', ' ')
+                $prose = [regex]::Replace($prose, '\]\([^)]*\)', ']')
+                $hits = @([regex]::Matches($prose, $avoidPattern) | ForEach-Object { $_.Value } | Sort-Object -Unique)
+                foreach ($hit in $hits) {
+                    Add-Failure ("{0}:{1}: avoided word: {2}" -f $file, $lineNo, $hit)
                 }
             }
         }

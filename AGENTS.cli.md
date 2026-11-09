@@ -50,10 +50,10 @@ All commands: `env-manager-cli <command> [args] [--scope user|system] [--debug]`
 | `expand` | `expand <value>` | Resolve nested %VAR% references |
 | `protection` | `protection <subcommand>` | List and manage protected vars + PATH entries |
 | `update` | `update check` | Check GitHub releases for newer version (network) |
-| `service` | `service status\|ping\|health\|refresh\|rotate\|reload\|shutdown` | IPC gateway to env-manager-service (secret mount lifecycle) |
+| `service` | `service status\|ping\|health\|refresh\|rotate\|reload\|shutdown` | Send one request to env-manager-service. `status` reports `running` when the service answers, `not_running` when no pipe exists, and `unresponsive` when the pipe exists but the connect times out. |
 | `audit` | `audit list\|verify\|encrypt-file\|migrate-audit\|verify-ledger\|export-survival-kit\|recover-from-ledger` | Audit ledger management (hash-chained tamper-evident) |
-| `export-state` | `export-state --output <file>` | Export all internal config files as DPAPI-CurrentUser-encrypted archive |
-| `import-state` | `import-state --input <file> [--dry-run]` | Import DPAPI-encrypted state archive (atomically writes all config files) |
+| `export-state` | `export-state --output <file>` | Export all internal settings files as a DPAPI-CurrentUser-encrypted archive |
+| `import-state` | `import-state --input <file> [--dry-run]` | Import a DPAPI-encrypted state archive (atomically writes all settings files) |
 | `agents` | `agents [--path\|--json\|--summary]` | Output this guide / machine-readable spec |
 | `help` | `help` | Show help text |
 
@@ -64,10 +64,10 @@ All commands: `env-manager-cli <command> [args] [--scope user|system] [--debug]`
 Key profile concepts:
 
 - **Global profile**: variables are written to the user or system registry on `apply` and broadcast `WM_SETTINGCHANGE`. `unapply` restores the prior values backed up as `<name>_PowerToys_<profileName>`.
-- **Launch profile**: variables are NEVER written to the registry. `profile launch` spawns the target executable with `env_clear + env(k, v)` so the variables only live in that child process. This is the only path that decrypts secrets at runtime. Apply/ApplyAll on a Launch profile is rejected at entry point.
+- **Launch profile**: variables are NEVER written to the registry. `profile launch` starts the target executable with `env_clear + env(k, v)`, so the variables live only in that child process. This is the only path that decrypts secrets at runtime. Applying a Launch profile is rejected before any write.
 - **Per-variable/per-PATH scope**: since v0.7.1 `profile add-var` and `profile add-path` accept `--scope user|system` and store it per-entry in `profiles.json`. `ProfileApply` routes each variable/PATH entry to HKCU or HKLM accordingly. Default is `user` for backward compatibility.
 - **Inheritance**: a profile MAY inherit from other profiles via `profile inherits`. Cycles and self-inheritance are rejected (DFS over the existing chain). A Global profile cannot inherit a Launch profile, and a Launch profile cannot inherit a Launch profile that already carries secrets. Resolution is cycle-safe and wrapped in try/catch, so a poisoned `profiles.json` cannot brick the command.
-- **Multiple profiles active simultaneously**: applying a profile does NOT unapply others. Each profile backs up originals independently. Overlapping variables require reverse-order unapply.
+- **One Global profile at a time**: applying a Global profile first unapplies the one already active. Launch profiles never write the registry, so they do not compete for the registry slots.
 
 ### Path Subcommands
 
@@ -126,7 +126,7 @@ Safety: if both original and backup exist, toggle refuses the recovery conflict 
 
 Profiles are stored at `%LOCALAPPDATA%\EnvManager\profiles.json`. When a Global profile is applied, original variable values are backed up as `<name>_PowerToys_<profileName>` and `WM_SETTINGCHANGE` is broadcast once at the end. `unapply` restores originals. Per-variable scope (`user` or `system`) controls which registry hive receives each entry on apply.
 
-Launch profiles are local-only: `profile launch <name> [-- <extra-args>]` spawns the configured target with a closed environment block containing only the profile variables (including decrypted secrets). The child process inherits the profile; nothing is written to the registry and no `WM_SETTINGCHANGE` is broadcast.
+Launch profiles never touch the registry: `profile launch <name> [-- <extra-args>]` starts the configured target with a closed environment block containing only the profile variables (including decrypted secrets). The child process gets that block; nothing is written to the registry and no `WM_SETTINGCHANGE` is broadcast.
 
 ## Audit History
 
@@ -146,7 +146,7 @@ Protected variables and PATH entries cannot be mutated until unlocked. Built-in 
 
 ## Debug Mode
 
-Pass `--debug` or `-d` to enable verbose stderr logging with timestamps. Logs record command names and argument counts only - never argument values, because values may contain credentials or secret material.
+Pass `--debug` or `-d` to enable verbose stderr logging with timestamps. Logs record command names and argument counts only - never argument values, because values may contain credentials or secret material. The Rust shell logs a 6-character hexadecimal request id for a GUI-issued run. A hand-run `service` command makes its own 10-character id (local time plus four random digits); other hand-run commands carry none.
 
 ## Error Handling
 
@@ -162,17 +162,13 @@ Pass `--debug` or `-d` to enable verbose stderr logging with timestamps. Logs re
 - **Path traversal**: backup files must have `.json` extension
 - **System directory writes**: writes to `\Windows`, `\Program Files`, `\Program Files (x86)` blocked
 - **Backup file size**: 50 MB maximum
-- **No plaintext credential storage**: secret values are encrypted via DPAPI-CurrentUser (default provider) or one of the registered external secret providers (see below). Plaintext lives only in transient process memory; `profiles.json` stores ciphertext or an envelope reference, never plaintext.
+- **No plaintext credential storage**: secret values are encrypted by the active secret provider. Plaintext exists only in the short-lived places listed in [docs/plaintext-sinks.md](docs/plaintext-sinks.md): process memory, provider child processes, and (for SOPS) a temp directory removed after the call. A profile stores an encrypted envelope or a `mount:<id>` reference, never plaintext. The generic `add-var`/`edit-var` commands bypass the secret marker and are the known exception.
 - **Network access**: limited to (a) `update check` to the GitHub releases API and (b) secret providers that talk to external vaults (Vault, Azure Key Vault, AWS Secrets Manager, 1Password). All TLS is mandatory (HTTPS) for non-localhost endpoints; localhost-only http is permitted only for 127.0.0.1/localhost/[::1]. All external calls have a 10-15s timeout and fail closed.
 - **Audit integrity**: every mutating command records its operation. Unknown profile subcommands fail loud; `--force` is the only override and it still records the attempt.
 
 ## v0.8 Secret Providers
 
 Secret variables (added via `profile add-secret` on a LAUNCH profile only) are routed to the active provider declared in `%LOCALAPPDATA%\EnvManager\secret-providers.json`. List and switch providers via `profile secret-provider list` and `profile secret-provider set <name>`. `list` reports real per-provider availability (declared capability gate, sentinel probe for network providers) and machine-readable capability tags `[refresh=yes|no certauth=yes|no network=yes|no]` per provider. `set` runs a no-op Encrypt/Decrypt/Delete probe before committing the config switch - a provider that fails its probe (pwsh missing module, Vault no `VAULT_ADDR`, cloud credentials missing, network down) is REJECTED at config time with an actionable message, never silently swapped.
-| `%LOCALAPPDATA%\EnvManager\secretMount.json` | Secret mount metadata (provider, refresh policy, lifecycle) |
-| `%LOCALAPPDATA%\EnvManager\gui-settings.json` | GUI settings (locale, darkMode, fontScale) persisted via Rust IPC |
-| `%ProgramData%\EnvManager\audit-ledger.jsonl` | Hash-chained audit ledger (service-mode, append-only) |
-| `%ProgramData%\EnvManager\service.config.json` | Service infrastructure config (non-secret metadata) |
 
 Registered providers:
 
@@ -190,16 +186,16 @@ Registered providers:
 **Agent safety with secrets**:
 
 - Do NOT pipe `profile reveal-secret` output into logs, commits, agent traces, or chat. Plaintext is user-bound (DPAPI) or external-vault-bound; another user or machine cannot decrypt it.
-- For workflows that only need to spawn a target, prefer `profile launch` (decrypts in-process, never touches stdout).
+- For workflows that only need to start a target, prefer `profile launch` (decrypts in-process, never touches stdout).
 - Secrets can ONLY live on a Launch profile. `profile add-secret` and `profile edit-secret` reject non-launch profiles at entry point.
 - Secrets on a profile CANNOT be applied to the registry (Global apply path); `IsProfileApplicable` rejects any profile containing a secret, including inherited secrets. A Global profile that inherits a Launch profile with secrets is also rejected.
 - All secret mutations require the profile to be unapplied. Switching the active provider does not silently re-encrypt existing secrets; they keep their original provider's decryption until rotated via `profile secret-provider rotate`.
 
 ## GUI Integration
 
-This CLI is the backend for the Env Manager GUI (Tauri + Svelte). The GUI spawns this CLI as a subprocess via a Rust IPC layer. State protection is layered:
+This CLI is the engine the Env Manager GUI (Tauri + Svelte) calls. The GUI starts this CLI as a subprocess through a Rust IPC layer. State protection is layered:
 
-1. **CLI mutex**: all write operations acquire the `Local\EnvManager.RegistryMutation` Windows named mutex. Concurrent CLI writes serialize on this. `service` is the one exception, and it is the whole verb family: the gateway forwards over a named pipe and writes nothing, so it takes no mutex and never waits on work it caused to run. `rotate` is locked by the CLI child it delegates to, and `refresh` is serialized inside the service by its reconcile lock - a gateway lock on either would join a cycle with that work (`src/CliRuntime.cs`, #164).
+1. **CLI mutex**: all write operations acquire the `Local\EnvManager.RegistryMutation` Windows named mutex. Concurrent CLI writes serialize on this. `service` is the one exception, and it is the whole verb family: the gateway forwards over a named pipe and writes nothing, so it takes no mutex and never waits on work it caused to run. `rotate` is locked by the CLI child it delegates to, and `refresh` is serialized inside the service by its reconcile lock (`RECONCILE_LOCK`) - a gateway lock on either would join a cycle with that work (`src/CliRuntime.cs`, #164).
 2. **Rust `CLI_RWLOCK`**: the IPC layer separates read concurrency from write exclusivity at the process level.
 3. **Frontend `writeChain`**: the GUI serializes write IPC calls so the user cannot race two write commands through the UI.
 
@@ -217,9 +213,9 @@ When the GUI is used, it refreshes its view after every mutation. CLI-only usage
 6. **Verify after mutations**: run `list` after `set`/`delete`/`toggle`/`rename`/`change-scope`.
 7. **Prefer user scope** unless system-wide changes are explicitly needed and the process has elevation.
 8. **Profile apply/unapply is atomic per-profile**: the CLI batches all variable changes and broadcasts `WM_SETTINGCHANGE` once at the end.
-9. **Multiple profiles can be active simultaneously**: applying a profile does NOT unapply other active profiles. Overlapping variables require reverse-order unapply.
+9. **One Global profile is applied at a time**: applying a profile first unapplies the one already active. Launch profiles are never applied.
 10. **Protected variables are blocked from profiles and direct mutation**: both `IsProfileApplicable()` and `ProfileAddVar()` reject variables in the protected list. PATH entries are guarded symmetrically.
-11. **Launch profiles are local-only**: never call `profile apply` on a Launch profile; use `profile launch` instead.
+11. **Launch profiles never write the registry**: never call `profile apply` on a Launch profile; use `profile launch` instead.
 
 ## Concurrency and Destructive-Action Rules
 
@@ -227,8 +223,8 @@ When the GUI is used, it refreshes its view after every mutation. CLI-only usage
 - Read operations may run concurrently. Run mutations sequentially and verify with `list`, `get`, `profile status`, or `path list`.
 - Never use `--overwrite`, `--force`, system scope, `restore`, or `bulk import` unless the caller explicitly accepts the destructive effect.
 - Run `bulk import` once with `--dry-run`; only rerun with `--overwrite` after reviewing conflicts.
-- Profiles with overlapping variables must be unapplied in reverse application order.
-- Profile inheritance must remain acyclic and respect Global/Launch topology. Active profiles cannot change inheritance or PATH fragments while applied.
+- Applying a Global profile unapplies the one already active. A Launch profile is never applied.
+- Profile inheritance must remain acyclic and respect Global/Launch topology. An active profile can change its inheritance (the CLI unapplies, updates, and re-applies it when it is still applicable), but it cannot change its PATH entries while applied.
 - Logs intentionally omit argument values. Do not add environment values to logs because they may contain credentials or secret material.
 
 ## Data Locations
@@ -242,6 +238,10 @@ When the GUI is used, it refreshes its view after every mutation. CLI-only usage
 | `%LOCALAPPDATA%\EnvManager\builtin-protected-vars.json` | Built-in protected variables (seeded from CLI resource) |
 | `%LOCALAPPDATA%\EnvManager\builtin-protected-paths.json` | Built-in protected PATH entries (seeded from CLI resource) |
 | `%LOCALAPPDATA%\EnvManager\secret-providers.json` | Active secret provider config |
+| `%LOCALAPPDATA%\EnvManager\secretMount.json` | Secret mount metadata for background and CLI mode (provider, refresh policy, last fetched and rotated times) |
+| `%ProgramData%\EnvManager\secretMount.json` | Secret mount metadata used by service mode |
+| `%LOCALAPPDATA%\EnvManager\gui-settings.json` | GUI settings (locale, darkMode, fontScale) persisted via Rust IPC |
+| `%ProgramData%\EnvManager\audit-ledger.jsonl` | Hash-chained audit ledger (service mode, append-only) |
 
 The user JSON folder is shared by both the portable and MSI installations of Env Manager, so configuration follows the Windows user account rather than the binary install location.
 
