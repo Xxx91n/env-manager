@@ -304,7 +304,7 @@
   "profiles.typeLocal": "Launch",
   "profiles.typeLocalDesc": "Variables only apply to a local app launched from this profile",
   "profiles.localLaunch": "Launch",
-  "profiles.launchApplyDisabled": "Launch profiles use isolated environment injection - cannot be applied to the registry",
+  "profiles.launchApplyDisabled": "Launch profiles put their values into one child process and never write the registry",
   "messages.profileNotLocal": "Only local profiles can be launched locally",
   "messages.profileLocalLaunched": "Profile launched locally",
   "profiles.localTarget": "Target executable",

@@ -1164,7 +1164,7 @@ exports[`per-locale full-key rendered snapshots > en full-key rendered snapshot 
   "profiles.inherits": "Inherits profiles",
   "profiles.inheritsFrom": "inherited from",
   "profiles.launch": "Launch with isolated env",
-  "profiles.launchApplyDisabled": "Launch profiles use isolated environment injection - cannot be applied to the registry",
+  "profiles.launchApplyDisabled": "Launch profiles put their values into one child process and never write the registry",
   "profiles.launchArgs": "Launch arguments",
   "profiles.localArgs": "Launch arguments",
   "profiles.localCwd": "Working directory",

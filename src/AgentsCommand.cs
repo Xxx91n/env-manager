@@ -65,7 +65,7 @@ internal static class AgentsCommand
                     new { cmd = "merge", desc = "Merge backups", args = "<old> <new> --output <file>", scope = false, @async = false },
                     new { cmd = "validate", desc = "Validate backup", args = "<file>", scope = false, @async = true },
                     new { cmd = "profile", desc = "Manage profiles", args = "list|create|delete|show|preview|apply|unapply|rename|add-var|remove-var|edit-var|add-path|remove-path|status|export|import|set-inherits|set-launch|launch|add-secret|edit-secret|remove-secret|reveal-secret|export-secrets|import-secrets|secret-provider|help", scope = true, @async = false },
-                    new { cmd = "path", desc = "Edit PATH as list", args = "list|add|remove|move-up|move-down|rename|dedupe|health", scope = true, @async = false },
+                    new { cmd = "path", desc = "Edit PATH as list", args = "list|add|remove|move-up|move-down|rename|dedupe|health|help", scope = true, @async = false },
                     new { cmd = "agents", desc = "Output AGENTS.md spec", args = "[--path|--json|--summary]", scope = false, @async = true },
                     new { cmd = "help", desc = "Show help", args = "", scope = false, @async = true },
                     new { cmd = "rename", desc = "Atomically rename variable (verify before delete)", args = "<old> <new>", scope = true, @async = false },
