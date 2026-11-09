@@ -176,14 +176,17 @@ Commands:
   validate <file>            Validate backup
   profile <subcommand>       Manage variable profiles (see: profile help)
   path <subcommand>          Edit PATH variable as list (see: path help)
-  history list|undo           View or undo audited changes
+  history list|undo <id>|delete <id>|delete --all  View, undo, or delete audited changes
   bulk import|export          Import/export .json, .env, or .csv
   expand <value>              Expand nested %VARIABLE% references
   protection list|add-path|remove-path|add-var|remove-var  View or manage protected variables and PATH entries
   agents [--path|--json|--summary] Output CLI spec. --path: file only. --json: machine-readable. --summary: brief
   help                       Show help
   update check                Check for latest version
-  service status|health|refresh <id>|rotate <id>  Interact with the secret lifecycle service
+  service status|ping|health|refresh <id>|rotate <id>|reload|shutdown  Interact with the secret lifecycle service
+  audit list|verify|encrypt-file|migrate-audit|verify-ledger|export-survival-kit|recover-from-ledger  Manage the audit ledger
+  export-state --output <file>  Export internal config as a DPAPI-encrypted archive
+  import-state --input <file> [--dry-run]  Import a DPAPI-encrypted state archive
   --debug                    Enable verbose stderr logging";
     }
 
