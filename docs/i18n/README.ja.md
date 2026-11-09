@@ -1,5 +1,5 @@
 <!-- canonical: ../../README.md -->
-<!-- sync: ef2a485dfffb -->
+<!-- sync: ee7b425f38df -->
 
 <div align="center">
 
@@ -9,12 +9,11 @@
   <img src="../../docs/assets/logo.png" alt="Env Manager ロゴ" width="120" height="120">
 </picture>
 
-
 # Env Manager
 
-2 つのフロントエンドを備えた Windows 環境変数マネージャー — スクリプトと AI エージェント向けに作られた C# CLI と、対話型編集用の Tauri GUI — 単一のレジストリコントラクト群の上に構築されています。
+Windows の環境変数を手軽に管理できるツールです。スクリプトや AI エージェントから扱いやすい C# 製コマンドラインツールと、画面を見ながら操作できる Tauri デスクトップアプリの 2 つを備えています。どちらを使っても、レジストリを安全に書き換える共通のルールで動作します。
 
-**「あらゆる環境にシームレスに適応します。」**
+**"どんな環境にも、すんなり馴染む。"**
 
 [![Release](https://img.shields.io/github/v/release/Xxx91n/env-manager)](https://github.com/Xxx91n/env-manager/releases)
 [![License](https://img.shields.io/badge/License-Apache--2.0-yellow.svg)](../../LICENSE)
@@ -36,69 +35,68 @@
 
 | | | |
 |:-:|:-:|:-:|
-| ![変数ビュー](../../docs/assets/gallery/01-variables.webp)<br>**変数** — 検索、スコープフィルター、行ごとの操作 | ![System スコープ](../../docs/assets/gallery/02-variables-system.webp)<br>**System スコープ** — 保護エントリはロック済み | ![PATH エディター](../../docs/assets/gallery/03-path-editor.webp)<br>**PATH エディター** — 無効・重複エントリの検出 |
-| ![プロファイル](../../docs/assets/gallery/04-profiles.webp)<br>**プロファイル** — 適用 / 起動 / 継承 | ![監査台帳](../../docs/assets/gallery/07-audit.webp)<br>**監査台帳** — ハッシュチェーンで検証可能 | ![サービスマネージャー](../../docs/assets/gallery/08-service.webp)<br>**サービスマネージャー** — シークレットのマウント |
+| ![変数ビュー](../../docs/assets/gallery/01-variables.webp)<br>**変数** — 検索、スコープでの絞り込み、行ごとの操作 | ![System スコープ](../../docs/assets/gallery/02-variables-system.webp)<br>**System スコープ** — 保護エントリはロック済み | ![PATH エディター](../../docs/assets/gallery/03-path-editor.webp)<br>**PATH エディター** — リンク切れや重複の検出 |
+| ![プロファイル](../../docs/assets/gallery/04-profiles.webp)<br>**プロファイル** — 適用、起動、継承 | ![監査台帳](../../docs/assets/gallery/07-audit.webp)<br>**監査台帳** — ハッシュチェーンで検証可能 | ![サービスマネージャー](../../docs/assets/gallery/08-service.webp)<br>**サービスマネージャー** — シークレットのマウント |
 
 ## Features
 
-- **デュアルフロントエンド** — スクリプトと CI 用の `env-manager-cli`、対話型編集用の `env-manager.exe` (Tauri 2 + Svelte)。どちらも同じレジストリコントラクトを経由します。
-- **デフォルトで保護** — システム変数と PATH エントリは削除・名前変更できません。すべての書き込みは 3 層の直列化 (mutex + write lock + 検証後スワップ) を通ります。
-- **プロファイル** — グローバルプロファイルはレジストリに適用されます。Launch プロファイルはレジストリに触れずに単一プロセスへ隔離された env ブロックを注入します。継承、競合プレビュー、逆順ロールバックに対応。
-- **8 つのシークレットプロバイダー** — DPAPI、Credential Manager、SecretStore、HashiCorp Vault、SOPS、Azure Key Vault、1Password、AWS Secrets Manager。シークレット系コマンドは暗号文エンベロープまたは `mount:<id>` 参照のみを永続化します — 汎用 `add-var`/`edit-var` の抜け穴からは平文がレジストリに書き込まれ得ます。平文露出の境界は [Security](#security) と [docs/plaintext-sinks.md](../../docs/plaintext-sinks.md) を参照してください。
-- **PATH ヘルス** — `path health` が重複や無効なエントリを検出します。`--fix` で書き換え、`--dry-run` でレポート。
-- **監査台帳** — 追記のみ、SHA256 ハッシュチェーンによる履歴。ロールバックと災害復旧エクスポートに対応。
+- **CLI と GUI の 2 系統** — スクリプトや CI 自動化でサクッと動かせる `env-manager-cli` と、画面上で直感的に編集できる `env-manager.exe`（Tauri 2 + Svelte）。どちらを使っても同じレジストリルールに沿って安全に処理されます。
+- **安心のデフォルト保護** — システム変数や大事な PATH 項目は、うっかり削除したり名前を変えたりできないよう保護されています。名前やスコープを変更する際も、新しい値が正しく書き込めたことを確かめてから古い方を消す念の入れよう。書き込み時は毎回、CLI の Windows ミューテックス、Rust シェルの読み書きロック、GUI の書き込みキューという 3 つのロックをしっかり確保します。
+- **2 種類のプロファイル** — レジストリにまとめて書き込む「Global プロファイル」と、指定した子プロセスだけに環境変数を渡してレジストリを一切汚さない「Launch プロファイル」があります。他のプロファイルから設定を引き継ぐ（継承する）こともでき、適用前にぶつかる項目がないかプレビュー確認できます。
+- **8 つのシークレット管理に対応** — DPAPI、資格情報マネージャー、SecretStore、HashiCorp Vault、SOPS、Azure Key Vault、1Password、AWS Secrets Manager に対応。大事なパスワードやキーは暗号化されたエンベロープ、または `mount:<id>` 参照の形で保持します。なお、汎用の `add-var` や `edit-var` コマンドを使うと平文のままレジストリに書き込まれてしまうため、どこまで平文を許容するかの詳しい線引きは [Security](#security) や [docs/plaintext-sinks.md](../../docs/plaintext-sinks.md) をご覧ください。
+- **PATH のお掃除機能** — `path health` を実行するだけで、重複した項目やもう存在しないリンク切れフォルダをすぐに見つけてくれます。`--fix` を付ければ綺麗に整頓でき、`--dry-run` を付ければ実際には変更せず確認だけできます。
+- **改ざんを防ぐ監査台帳** — 変更履歴は SHA256 ハッシュチェーンによる追記専用の台帳に記録。いつでも過去の状態へロールバックでき、万が一に備えた障害復旧用エクスポートにも対応しています。
 
 ## For AI agents
 
 ```bash
-env-manager-cli agents            # print the embedded agent manual
-env-manager-cli agents --path     # file path of the manual (AGENTS.cli.md)
-env-manager-cli agents --summary  # one-line machine-readable spec
-env-manager-cli agents --json     # full command table as structured JSON
+env-manager-cli agents            # 内蔵されているエージェント向け説明書を表示
+env-manager-cli agents --path     # 説明書ファイル (AGENTS.cli.md) の保存パスを表示
+env-manager-cli agents --summary  # プログラムで読み取りやすい 1 行仕様を出力
+env-manager-cli agents --json     # 全コマンド一覧を構造化 JSON で出力
 ```
 
-- [AGENTS.md](../../AGENTS.md) — リポジトリレベルのエージェント向け手順書 (アーキテクチャ、ハードバウンダリ、テスト方針)。
-- [AGENTS.cli.md](../../AGENTS.cli.md) — CLI バイナリに同梱され、エージェントが実行時にコントラクトを発見できます。
-- **機能単位のエージェントサーフェス** — `secret-providers.json` のオプトイン方式の `agentCapabilities` ホワイトリストにより、デプロイメントはエージェントからの並行 set/delete 呼び出しを拒否できます。
+- [AGENTS.md](../../AGENTS.md) — リポジトリ全体のエージェント向け仕様（アーキテクチャ、変更禁止ルール、テスト方針）。
+- [AGENTS.cli.md](../../AGENTS.cli.md) — CLI バイナリ内に組み込まれており、エージェントが実行時にルールを直接読み取れます。
 
 ## Security
 
 > [!WARNING]
-> 現在のビルドは**コード署名されていません**。初回起動時に Windows SmartScreen が「認識されていないアプリ」の警告を表示する場合があります — [詳細情報] をクリックしてから [実行] を選択してください。無料のオープンソース向けコード署名を SignPath Foundation 経由で申請済みです。承認され次第、すべてのリリース成果物 (MSI + EXE) が署名されます。[コード署名ポリシー](../../docs/code-signing-policy.md) を参照してください。
+> 現在のビルドには**コード署名がついていません**。初回起動時に Windows SmartScreen が「認識されていないアプリ」という警告を出すことがあります。その場合は「詳細情報」をクリックして「実行」を選んでください。現在、SignPath Foundation を通じてオープンソース向けの無料コード署名を申請中です。承認され次第、配布ファイル（MSI と EXE）すべてに署名が付きます。詳しくは [コード署名ポリシー](../../docs/code-signing-policy.md) をご覧ください。
 
-保護された変数と PATH エントリは削除前に無効化され、復元時にはレジストリの値の型を厳密に検証します。名前付きパイプ IPC はアンチスクワッティングフラグと入力検証 (引数最大 64、32767 文字上限、null バイト拒否) を採用しています。脆弱性の報告については [SECURITY.md](../../SECURITY.md) を参照してください。
+保護対象の変数や PATH 項目は、いきなり削除せずまず無効化されます。また復元時には、レジストリの値の型が元通りか厳格にチェックします。不正な値がレジストリに入り込まないよう手前で検証し、名前付きパイプ通信も二重作成を拒否した上でリクエスト上限を 65,536 バイトに制限しています。脆弱性の報告については [SECURITY.md](../../SECURITY.md) をご覧ください。
 
-**脅威モデル。** この設計が防御*しない*敵対者は、あなた自身の Windows ユーザーセッション内で動作するあらゆるプロセスです — それは既に `profile reveal-secret` を呼び出したり、起動された子プロセスの環境ブロックを読んだり、プロバイダーが生成する一時的な temp ファイルを捕捉したりできます。この設計が*実際に*制限するもの: DPAPI-CurrentUser の暗号文は他のユーザーやマシンでは復号できず、シークレット系コマンドがレジストリにシークレットを書き込むことはなく（前述の汎用コマンドの抜け穴を除き）、シークレット値を運ぶことが*意図されている* sink は、平文境界マトリクスに記載された設計上のものだけです。
+**脅威モデル:** 同じ Windows ユーザーセッション内で動いている別の悪意あるプロセスからの攻撃は防ぎきれません。同じユーザー権限があるプロセスなら、すでに `profile reveal-secret` を叩いたり、起動された子プロセスの環境変数を覗き見たり、プロバイダーが一時的に書き出す一時ファイルを捕捉できてしまうからです。ただし被害を最小限に抑える工夫はしています。DPAPI CurrentUser の暗号文は他のユーザーや別の PC では復号できませんし、シークレット操作コマンドからレジストリへシークレットが書き込まれることも防いでいます（前述の汎用変数の手動追加を除く）。シークレット値がどこに現れるかは、後述の平文取り扱い一覧にすべて明記しています。
 
-**平文の境界。** 平文が存在しうる場所、存続期間、クリーンアップ担当を網羅した sink ごとの完全なマトリクスは [docs/plaintext-sinks.md](../../docs/plaintext-sinks.md) にあります。`docs/architecture.md` の Plaintext lifecycle 節がサーフェスごとの正式な許可リストです。メモリのゼロ化とログの除去はベストエフォートの衛生対策であり保証ではありません。`tests/canary-redaction.Tests.ps1` は 7 つの出力 sink に仕込んだ canary をスキャンし、共有契約スイートは 8 つすべてのプロバイダーで `plaintext-never-in-envelope` をアサートします。
+**平文の境界:** 平文データがどこに存在し、どのくらいの時間残り、何がそれを片付けるのかをまとめた一覧は、[docs/plaintext-sinks.md](../../docs/plaintext-sinks.md) に載せています。正式な取り扱いルールは `docs/architecture.md` の「Plaintext lifecycle」節をご確認ください。なお、メモリのゼロクリアやログのマスキングはベストエフォート（可能な限り努める）であり、完全な保証ではありません。自動テスト（`tests/canary-redaction.Tests.ps1`）では 7 か所の出力先をスキャンしてシークレット漏れがないか確認しており、共通テストでも 8 つのプロバイダーすべてにおいて `plaintext-never-in-envelope`（エンベロープ内に平文を残さないこと）をチェックしています。
 
 ## Install
 
 ### MSI Installer
 
-[GitHub Releases](https://github.com/Xxx91n/env-manager/releases) から MSI をダウンロードして実行してください。スタートメニューのショートカットが自動的に作成されます。x64、x86、ARM64 に対応。
+[GitHub Releases](https://github.com/Xxx91n/env-manager/releases) から MSI ファイルをダウンロードして実行するだけです。スタートメニューのショートカットも自動で作られます。x64、x86、ARM64 の各アーキテクチャに対応しています。
 
 ### Portable
 
-[GitHub Releases](https://github.com/Xxx91n/env-manager/releases) からポータブル ZIP をダウンロードしてください。解凍して `env-manager.exe` を直接実行します。インストールは不要です。
+インストール不要で使いたい場合は、[GitHub Releases](https://github.com/Xxx91n/env-manager/releases) から ZIP をダウンロードし、解凍して中にある `env-manager.exe` をそのまま起動してください。
 
 ### CLI-Only
 
-ヘッドレスまたはスクリプト用途向けに CLI 専用 ZIP をダウンロードしてください: `env-manager-cli.exe` と `.dll` ファイル。GUI なし、WebView2 依存なし。
+サーバーやスクリプトだけで使いたい方向けの軽量版です。ZIP の中に `env-manager-cli.exe` と必要な `.dll` ファイル一式が入っています。GUI や WebView2 は一切不要です。
 
 ### Prerequisites
 
 > [!IMPORTANT]
-> **ポータブル版**と **CLI 専用**ビルドはフレームワーク依存です: 対象マシンに **.NET 10 Desktop Runtime** が必要です — 公式の [.NET ダウンロードページ](https://dotnet.microsoft.com/download/dotnet/10.0) から入手してください。**MSI インストーラー**は .NET をチェックもインストールもしません — CLI の実行前に手動でインストールしてください。
+> **ポータブル版**と **CLI 専用版**を使うには、PC に **.NET 10 Desktop Runtime** が入っている必要があります。マイクロソフト公式の [.NET ダウンロードページ](https://dotnet.microsoft.com/download/dotnet/10.0) からインストールしてください。なお、**MSI インストーラー**も .NET の自動検出や自動インストールは行わないため、初回起動前にご自身でランタイムを入れておいてください。
 >
-> **WebView2 Runtime** (GUI 用) は Windows 11 にプレインストールされており、Windows 10 21H2+ では [Microsoft](https://developer.microsoft.com/microsoft-edge/webview/) から入手できます。
+> GUI で使う **WebView2 ランタイム**は、Windows 11 には標準で入っています。Windows 10（21H2 以降）をお使いの方は、[Microsoft 公式サイト](https://developer.microsoft.com/microsoft-edge/webview/) から入手できます。
 
-オプションの外部シークレットプロバイダーツール (SOPS、1Password CLI、Vault CLI、AWS CLI、Azure CLI、PowerShell 7) については、[Secret Providers Guide](../../docs/secret-providers-guide.md) を参照してください。
+外部のシークレット管理ツール（SOPS、1Password CLI、Vault CLI、AWS CLI、Azure CLI、PowerShell 7 など）を連携させたい場合は、[シークレットプロバイダーガイド](../../docs/secret-providers-guide.md) をご覧ください。
 
 ### winget
 
 > [!NOTE]
-> winget での配布は計画中ですが、まだ利用できません。更新情報は GitHub Issues で追跡してください。
+> winget での配信も計画中ですが、現在はまだ準備中です。進捗は GitHub Issues で随時お知らせします。
 
 ### From Source
 
@@ -109,43 +107,43 @@ cd frontend && npm ci && cd ..
 node scripts/build.mjs --arch x64
 ```
 
-.NET 10 SDK、Node.js 18+、MSVC または GNU ターゲットの Rust stable が必要です。詳細は [docs/build-and-release.md](../../docs/build-and-release.md) を参照してください。
+.NET 10 SDK、Node.js 18 以上、MSVC または GNU ターゲットの Rust stable が必要です。詳しくは [docs/build-and-release.md](../../docs/build-and-release.md) を確認してください。
 
 ## Usage
 
 ### CLI
 
 ```bash
-# List / get / set
+# 一覧表示 / 取得 / 設定
 env-manager-cli.exe list
 env-manager-cli.exe get PATH
 env-manager-cli.exe set JAVA_HOME "D:\jdk17" --scope system
 
-# Create a Launch profile and launch with isolated env
+# Launch プロファイルを作成し、隔離された環境でアプリを起動
 env-manager-cli.exe profile create dev --type launch --target python.exe
 env-manager-cli.exe profile add-secret dev API_KEY "sk-xxx"
 env-manager-cli.exe profile launch dev
 
-# PATH health
+# PATH の健全性チェック
 env-manager-cli.exe path health
 
-# Backup / restore
+# バックアップと復元
 env-manager-cli.exe backup --output backup.json
 env-manager-cli.exe restore backup.json
 
-# Disaster recovery + tamper-evident audit
+# 障害復旧用の状態保存と改ざんチェック
 env-manager-cli.exe export-state --output state.dpapi
 env-manager-cli.exe audit verify --strict
 
-# Service control
+# バックグラウンドサービスの状態確認
 env-manager-cli.exe service status
 ```
 
-完全なコマンドリファレンスは [docs/cli-commands.md](../../docs/cli-commands.md) を参照してください。
+すべてのコマンド一覧は [docs/cli-commands.md](../../docs/cli-commands.md) に載っています。
 
 ### GUI
 
-`env-manager.exe` を実行してください。GUI は検索・スコープフィルタリング・インライン編集に対応したリアルタイム変数リスト、ドラッグ & ドロップで並べ替え可能な PATH エディター、プロファイル管理、シークレットプロバイダー選択、サービスコントロールパネル、監査履歴、10 言語の i18n を提供します。
+`env-manager.exe` を立ち上げると画面が開きます。環境変数の検索・絞り込み・直接編集はもちろん、ドラッグ＆ドロップで順番を入れ替えられる PATH エディター、プロファイル管理、シークレットプロバイダーの切り替え、バックグラウンドサービスの制御、監査台帳の確認まで、すべて画面上から直感的に操作できます。10 言語の表示切り替えにも対応しています。
 
 ## Architecture
 
@@ -158,49 +156,49 @@ flowchart LR
     CLI --> SEC[Secret Providers]
 ```
 
-- **CLI**: C# .NET 10 の単一ファイル実行可能ファイル — 調整レイヤー兼レジストリゲートウェイ。
-- **Service**: 名前付きパイプ IPC 経由でシークレットマウントのライフサイクルを管理するスタンドアロンの Rust バイナリ。
-- **GUI**: 同じ IPC コントラクトを使用する Tauri 2 + Svelte 5 フロントエンド。
+- **CLI**: 全体の処理を取りまとめる C# .NET 10 製の実行ファイル。レジストリへの書き込みを行えるのはこの CLI だけです。
+- **Service**: 名前付きパイプ経由でシークレットマウントを常に最新に保つ、独立した Rust 製のバックグラウンドプロセスです。
+- **GUI**: Tauri 2 + Svelte 5 で作られたデスクトップ画面。同じ IPC ルールを通じて裏側とやり取りします。
 
 ## Secret providers
 
-アクティベーション前チェックを備えた 8 つのプロバイダーバックエンド — 失敗はプロファイルエディター内にインラインの琥珀色バナーとして直接表示されます:
+全部で 8 種類のプロバイダーに対応しています。利用先を切り替えるたびに動作確認が行われ、もし設定が足りないなどの問題があれば、プロファイル編集画面にオレンジ色の警告メッセージがすぐ表示されます。
 
-| プロバイダー | 認証方式 | 定期リフレッシュ | ドキュメント |
+| プロバイダー | 認証方法 | 定期リフレッシュ | ドキュメント |
 |---|---|---|---|
-| DPAPI CurrentUser | Windows DPAPI | なし (ユーザー単位) | [ガイド](../../docs/secret-providers-guide.md) |
-| Windows Credential Manager | CredMan + DPAPI | なし (ユーザー単位) | [ガイド](../../docs/secret-providers-guide.md) |
-| PowerShell SecretManagement | SecretStore vault | なし（CreatedOnly）| [ガイド](../../docs/secret-providers-guide.md) |
-| HashiCorp Vault KV v2 | VAULT_TOKEN / AppRole cert | あり | [ガイド](../../docs/secret-providers-guide.md) |
-| SOPS | Age / PGP / KMS | なし（CreatedOnly）| [ガイド](../../docs/secret-providers-guide.md) |
-| Azure Key Vault | SP cert / managed identity | あり | [ガイド](../../docs/secret-providers-guide.md) |
+| DPAPI CurrentUser | Windows DPAPI | なし（ユーザー単位） | [ガイド](../../docs/secret-providers-guide.md) |
+| Windows 資格情報マネージャー | 資格情報マネージャー + DPAPI | なし（ユーザー単位） | [ガイド](../../docs/secret-providers-guide.md) |
+| PowerShell SecretManagement | SecretStore コンテナー | なし（`CreatedOnly`） | [ガイド](../../docs/secret-providers-guide.md) |
+| HashiCorp Vault KV v2 | VAULT_TOKEN / AppRole 証明書 | あり | [ガイド](../../docs/secret-providers-guide.md) |
+| SOPS | Age / PGP / KMS | なし（`CreatedOnly`） | [ガイド](../../docs/secret-providers-guide.md) |
+| Azure Key Vault | サービスプリンシパル証明書 / マネージド ID | あり | [ガイド](../../docs/secret-providers-guide.md) |
 | 1Password CLI | OP_SERVICE_ACCOUNT_TOKEN | あり | [ガイド](../../docs/secret-providers-guide.md) |
-| AWS Secrets Manager | SigV4 + access keys | あり | [ガイド](../../docs/secret-providers-guide.md) |
+| AWS Secrets Manager | SigV4 + アクセスキー | あり | [ガイド](../../docs/secret-providers-guide.md) |
 
-プロバイダーごとの前提条件、初期セットアップ、アクティベーションエラーの修正手順については [docs/secret-providers-guide.md](../../docs/secret-providers-guide.md) を参照してください。
+各プロバイダーを使うための準備や初回設定、うまく動かないときの対処法は [docs/secret-providers-guide.md](../../docs/secret-providers-guide.md) をご覧ください。
 
 ## Service mode
 
-`env-manager-service.exe` は、名前付きパイプ IPC 経由でシークレットマウントのライフサイクルを管理するスタンドアロンの Rust バイナリです:
+`env-manager-service.exe` は、名前付きパイプで通信を受け付けながら、シークレットマウントを常に最新に保つ単体の Rust プログラムです。
 
-- **ServiceMode**: Service (SCM 管理、マシン起動時)、Background (ユーザー起動)、Cli (ワンショットゲートウェイ)
-- **リコンサイルループ**: 300 秒間隔の定期的なフルスキャン、項目ごとの冪等ハンドラー、30 秒の初回ティック遅延
-- **監査台帳**: 追記のみのハッシュチェーン方式 `audit-ledger.jsonl`、100MB ローテーションと改ざん検出
-- **IPC**: アンチスクワッティングパイプフラグ、65536 バイトのリクエスト上限、改行区切り JSON プロトコル
-- **ウォッチドッグ**: 2 層のリカバリー — SCM 自動再起動 (Service モード) + GUI の 30 秒ピングウォッチドッグ (Background モード)
+- **ServiceMode（動作モード）**: Service（Windows サービス管理、PC 起動時に自動開始）、Background（ユーザーによる手動起動）、Cli（1 回限りのコマンド中継）
+- **同期ループ（Reconcile loop）**: 300 秒ごとの定期スキャン、重複処理を防ぐ安全な個別更新、起動後 30 秒の初回待機
+- **監査台帳**: 追記専用で SHA256 ハッシュをつないだ `audit-ledger.jsonl`。100MB での世代交代（ローテーション）と改ざん検知に対応
+- **IPC 通信**: パイプの乗っ取りを防ぐ専用フラグ、1 リクエスト最大 65,536 バイト制限、改行区切り JSON（NDJSON）形式
+- **監視（ウォッチドッグ）**: 2 段構えの自動復旧 — Windows サービスによる自動再起動（Service モード）＋ GUI からの 30 秒間隔死活監視（Background モード）
 
 ## Documentation
 
 | ドキュメント | 内容 |
 |---|---|
-| [CHANGELOG.md](../../CHANGELOG.md) | バージョン履歴 (keepachangelog 形式) |
-| [docs/cli-commands.md](../../docs/cli-commands.md) | 完全な CLI コマンドリファレンス |
-| [docs/architecture.md](../../docs/architecture.md) | 詳細なアーキテクチャ |
-| [docs/plaintext-sinks.md](../../docs/plaintext-sinks.md) | シークレットの平文が存在しうる場所 |
-| [docs/backup-and-profiles.md](../../docs/backup-and-profiles.md) | バックアップ、リストア、プロファイルのセマンティクス |
-| [docs/secret-providers-guide.md](../../docs/secret-providers-guide.md) | シークレットプロバイダーのセットアップ |
-| [docs/build-and-release.md](../../docs/build-and-release.md) | ビルドとリリースのプロセス |
-| [AGENTS.md](../../AGENTS.md) / [AGENTS.cli.md](../../AGENTS.cli.md) | エージェント向けガイド |
+| [CHANGELOG.md](../../CHANGELOG.md) | バージョン更新履歴（Keep a Changelog 形式） |
+| [docs/cli-commands.md](../../docs/cli-commands.md) | CLI コマンドの完全リファレンス |
+| [docs/architecture.md](../../docs/architecture.md) | アーキテクチャと詳細設計 |
+| [docs/plaintext-sinks.md](../../docs/plaintext-sinks.md) | シークレットの平文が残りうる場所のまとめ |
+| [docs/backup-and-profiles.md](../../docs/backup-and-profiles.md) | バックアップ、復元、プロファイルの詳しい仕様 |
+| [docs/secret-providers-guide.md](../../docs/secret-providers-guide.md) | シークレットプロバイダーの設定手順 |
+| [docs/build-and-release.md](../../docs/build-and-release.md) | ビルドとリリースの手順 |
+| [AGENTS.md](../../AGENTS.md) / [AGENTS.cli.md](../../AGENTS.cli.md) | AI エージェント向け説明書 |
 
 ## Maintainers
 
@@ -208,8 +206,8 @@ flowchart LR
 
 ## Contributing
 
-Issue と PR を歓迎します。アーキテクチャの境界とテスト方針については、まず [AGENTS.md](../../AGENTS.md) をお読みください。
+不具合報告（Issue）や改善提案（PR）は大歓迎です。開発ルールや設計上の境界線、テスト方針については、まず [AGENTS.md](../../AGENTS.md) をご覧ください。
 
 ## License
 
-Apache-2.0 © 2026 Env Manager Contributors。[LICENSE](../../LICENSE) を参照してください。
+Apache-2.0 © 2026 Env Manager Contributors。詳細は [LICENSE](../../LICENSE) をご覧ください。
