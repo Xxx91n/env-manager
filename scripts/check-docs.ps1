@@ -1,4 +1,4 @@
-﻿# check-docs.ps1 - the cheap gate for a docs-only change.
+# check-docs.ps1 - the cheap gate for a docs-only change.
 #
 # Why this exists: a prose diff used to pay the full two-suite test bill, and
 # several live docs still asserted facts the code contradicted (a singleton
@@ -18,6 +18,10 @@
 #      checked in the in-scope English documents. Inline code spans and link
 #      targets are skipped: a command name such as `service reload` is part of
 #      the CLI surface and must not be renamed by a prose rule.
+#   7. translation structure and sync metadata: each translated README under
+#      docs/i18n mirrors the canonical English README section order and
+#      heading levels, and carries the required top comments pointing to the
+#      canonical file and recording the latest English commit SHA.
 #
 # Scope: README.md, AGENTS.md, AGENTS.cli.md, SECURITY.md, GLOSSARY.md, every
 # .md under docs/ except docs/history, and the three repository-hosting docs
@@ -95,6 +99,15 @@ function Get-AvoidWordVariants([string]$Term) {
     return $variants.ToArray()
 }
 
+function Test-IsTranslationDoc([string]$Path) {
+    if (-not (Test-Path -LiteralPath $Path)) { return $false }
+    $firstLines = @(Get-DocLines $Path | Select-Object -First 10)
+    foreach ($l in $firstLines) {
+        if ($l -match '<!--\s*canonical:') { return $true }
+    }
+    return $false
+}
+
 function Test-VocabularyFile([string]$Path) {
     # English documents only. The glossary owns the avoid list itself, the nine
     # translations are handled by their own tickets, and docs/assets carries
@@ -103,6 +116,7 @@ function Test-VocabularyFile([string]$Path) {
     if ($Path -clike 'docs/i18n/*') { return $false }
     if ($Path -clike 'docs/assets/*') { return $false }
     if ($Path -clike 'docs/history/*') { return $false }
+    if (Test-IsTranslationDoc $Path) { return $false }
     return $true
 }
 
@@ -187,6 +201,193 @@ function Find-MemberFiles([string[]]$Files, [string]$Type, [string]$Member, [swi
         }
     }
     return $found.ToArray()
+}
+
+$script:sectionMarkers = @(
+    @{ Name = 'Env Manager'; Pattern = '(?i)env\s*manager' },
+    @{ Name = 'Showcase'; Pattern = $null },
+    @{ Name = 'GUI'; Pattern = '(?i)assets/gallery|gallery/' },
+    @{ Name = 'Features'; Pattern = '(?i)plaintext-sinks' },
+    @{ Name = 'For AI agents'; Pattern = '(?i)AGENTS\.cli\.md' },
+    @{ Name = 'Security'; Pattern = '(?i)code-signing-policy\.md|SECURITY\.md' },
+    @{ Name = 'Install'; Pattern = $null },
+    @{ Name = 'MSI Installer'; Pattern = '(?i)releases|\.msi' },
+    @{ Name = 'Portable'; Pattern = '(?i)releases|\.zip' },
+    @{ Name = 'CLI-Only'; Pattern = '(?i)env-manager-cli' },
+    @{ Name = 'Prerequisites'; Pattern = '(?i)WebView2|\.NET' },
+    @{ Name = 'winget'; Pattern = '(?i)winget' },
+    @{ Name = 'From Source'; Pattern = '(?i)build-and-release\.md' },
+    @{ Name = 'Usage'; Pattern = $null },
+    @{ Name = 'CLI'; Pattern = '(?i)env-manager-cli' },
+    @{ Name = 'GUI'; Pattern = '(?i)env-manager\.exe' },
+    @{ Name = 'Architecture'; Pattern = '(?i)Tauri|Svelte' },
+    @{ Name = 'Secret providers'; Pattern = '(?i)KeepassXC|Bitwarden|1Password' },
+    @{ Name = 'Service mode'; Pattern = '(?i)reconcile|sc\.exe|service' },
+    @{ Name = 'Documentation'; Pattern = '(?i)architecture\.md' },
+    @{ Name = 'Maintainers'; Pattern = '(?i)github\.com/Xxx91n' },
+    @{ Name = 'Contributing'; Pattern = '(?i)AGENTS\.md' },
+    @{ Name = 'License'; Pattern = '(?i)LICENSE' }
+)
+
+function Get-MarkdownSections([string[]]$Lines) {
+    $sections = New-Object System.Collections.Generic.List[psobject]
+    $inFence = $false
+    $curHeading = $null
+    $curBody = New-Object System.Collections.Generic.List[string]
+
+    for ($i = 0; $i -lt $Lines.Count; $i++) {
+        $line = $Lines[$i]
+        $trimmed = $line.Trim()
+        if ($trimmed -match '^(```|~~~)') {
+            $inFence = -not $inFence
+            if ($curHeading) { $curBody.Add($line) }
+            continue
+        }
+        if (-not $inFence -and $line -match '^(\#{1,6})[ \t]+(.+)$') {
+            if ($curHeading) {
+                $sections.Add([pscustomobject]@{
+                    LineNo = $curHeading.LineNo
+                    Level = $curHeading.Level
+                    Title = $curHeading.Title
+                    Body = $curBody.ToArray()
+                })
+            }
+            $curHeading = [pscustomobject]@{
+                LineNo = $i + 1
+                Level = $matches[1].Length
+                Title = $matches[2].Trim()
+            }
+            $curBody = New-Object System.Collections.Generic.List[string]
+        }
+        elseif ($curHeading) {
+            $curBody.Add($line)
+        }
+    }
+    if ($curHeading) {
+        $sections.Add([pscustomobject]@{
+            LineNo = $curHeading.LineNo
+            Level = $curHeading.Level
+            Title = $curHeading.Title
+            Body = $curBody.ToArray()
+        })
+    }
+    return $sections.ToArray()
+}
+
+function Test-TranslationStructure([string]$Path, [string]$Root) {
+    if (-not (Test-Path -LiteralPath $Path)) {
+        Add-Failure ("{0}: translation file does not exist" -f $Path)
+        return
+    }
+    $lines = @(Get-DocLines $Path)
+
+    # 1. Parse top comments (canonical and sync)
+    $canonical = $null
+    $sync = $null
+    foreach ($line in $lines) {
+        if ($line -match '^\s*#') { break }
+        if (-not $canonical -and $line -match '<!--\s*canonical:\s*([^\s>]+)\s*-->') {
+            $canonical = $matches[1].Trim()
+        }
+        if (-not $sync -and $line -match '<!--\s*sync:\s*([0-9a-fA-F]+)\s*-->') {
+            $sync = $matches[1].Trim()
+        }
+    }
+
+    if (-not $canonical) {
+        Add-Failure ("{0}: missing canonical top comment (expected '<!-- canonical: <path> -->')" -f $Path)
+    }
+    if (-not $sync) {
+        Add-Failure ("{0}: missing sync top comment (expected '<!-- sync: <commit> -->')" -f $Path)
+    }
+
+    # 2. Resolve canonical path
+    $canonicalPath = $null
+    if ($canonical) {
+        $parentDir = Split-Path -Parent (Resolve-Path -LiteralPath $Path).Path
+        $cand1 = Join-Path $parentDir $canonical
+        if (Test-Path -LiteralPath $cand1) {
+            $canonicalPath = (Resolve-Path -LiteralPath $cand1).Path
+        }
+        else {
+            $cand2 = Join-Path $Root $canonical
+            if (Test-Path -LiteralPath $cand2) {
+                $canonicalPath = (Resolve-Path -LiteralPath $cand2).Path
+            }
+            else {
+                $trimmed = $canonical -replace '^\.\./\.\./', ''
+                $cand3 = Join-Path $Root $trimmed
+                if (Test-Path -LiteralPath $cand3) {
+                    $canonicalPath = (Resolve-Path -LiteralPath $cand3).Path
+                }
+                else {
+                    Add-Failure ("{0}: canonical target does not exist: {1}" -f $Path, $canonical)
+                }
+            }
+        }
+    }
+
+    # 3. Check sync commit
+    if ($sync) {
+        $resolvedSync = (& git rev-parse --verify --quiet "$($sync)^{commit}" 2>$null)
+        if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($resolvedSync)) {
+            Add-Failure ("{0}: stale or unknown sync commit: {1}" -f $Path, $sync)
+        }
+        elseif ($canonicalPath) {
+            $canonicalRel = Resolve-Path -LiteralPath $canonicalPath | ForEach-Object {
+                $p = $_.Path
+                if ($p.StartsWith($Root)) {
+                    $p.Substring($Root.Length).TrimStart([System.IO.Path]::DirectorySeparatorChar, '/')
+                } else { $p }
+            }
+            $canonicalCommit = (& git log -1 --format=%H -- $canonicalRel 2>$null)
+            if ($LASTEXITCODE -eq 0 -and -not [string]::IsNullOrWhiteSpace($canonicalCommit)) {
+                $cSha = $canonicalCommit.Trim()
+                $sSha = $resolvedSync.Trim()
+                if ($sSha -ne $cSha) {
+                    Add-Failure ("{0}: stale sync commit {1}; canonical {2} is at {3}" -f $Path, $sync, $canonicalRel, $cSha)
+                }
+            }
+        }
+    }
+
+    # 4. Compare section structure
+    if ($canonicalPath) {
+        $canonLines = @(Get-DocLines $canonicalPath)
+        $canonSections = @(Get-MarkdownSections $canonLines)
+        $transSections = @(Get-MarkdownSections $lines)
+
+        if ($transSections.Count -ne $canonSections.Count) {
+            if ($transSections.Count -lt $canonSections.Count) {
+                Add-Failure ("{0}: missing section (found {1} section(s), expected {2})" -f $Path, $transSections.Count, $canonSections.Count)
+            }
+            else {
+                Add-Failure ("{0}: extra section (found {1} section(s), expected {2})" -f $Path, $transSections.Count, $canonSections.Count)
+            }
+        }
+
+        $minCount = [Math]::Min($transSections.Count, $canonSections.Count)
+        for ($i = 0; $i -lt $minCount; $i++) {
+            $cs = $canonSections[$i]
+            $ts = $transSections[$i]
+            if ($ts.Level -ne $cs.Level) {
+                Add-Failure ("{0}:{1}: section level mismatch at section {2}: got level {3}, expected level {4} for '{5}'" -f $Path, $ts.LineNo, ($i + 1), $ts.Level, $cs.Level, $cs.Title)
+            }
+        }
+
+        if ($canonicalPath.EndsWith('README.md') -and $canonSections.Count -eq $script:sectionMarkers.Count) {
+            for ($i = 0; $i -lt $minCount; $i++) {
+                $marker = $script:sectionMarkers[$i]
+                if ($marker.Pattern) {
+                    $ts = $transSections[$i]
+                    $secText = $ts.Title + "`n" + ($ts.Body -join "`n")
+                    if ($secText -notmatch $marker.Pattern) {
+                        Add-Failure ("{0}:{1}: sections out of order at section {2}: expected '{3}'" -f $Path, $ts.LineNo, ($i + 1), $marker.Name)
+                    }
+                }
+            }
+        }
+    }
 }
 
 try {
@@ -345,6 +546,36 @@ try {
                 }
             }
         }
+    }
+
+    # 7. translation structure and sync metadata check: each translated README
+    # under docs/i18n mirrors the canonical English README section order and
+    # heading levels, and carries the required top comments pointing to the
+    # canonical file and recording the latest English commit SHA.
+    $expectedLocales = @('ar', 'de', 'es', 'fr', 'ja', 'ko', 'pt', 'ru', 'zh_CN')
+    $translationFiles = New-Object System.Collections.Generic.List[string]
+
+    if ($Paths -and $Paths.Count -gt 0) {
+        foreach ($p in $files) {
+            if ($p -like 'docs/i18n/*.md' -or (Test-IsTranslationDoc $p)) {
+                $translationFiles.Add($p)
+            }
+        }
+    }
+    else {
+        foreach ($loc in $expectedLocales) {
+            $expectedDoc = "docs/i18n/README.$loc.md"
+            if (-not (Test-Path -LiteralPath (Join-Path $root $expectedDoc))) {
+                Add-Failure ("missing required translation document: {0}" -f $expectedDoc)
+            }
+            else {
+                $translationFiles.Add($expectedDoc)
+            }
+        }
+    }
+
+    foreach ($tFile in $translationFiles) {
+        Test-TranslationStructure -Path $tFile -Root $root
     }
 
     if ($failures.Count -gt 0) {

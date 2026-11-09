@@ -43,6 +43,10 @@ jobs:
         shell: pwsh
         run: ./scripts/test-check-docs-vocabulary.ps1
 
+      - name: Translation structure self-test (proves the docs gate rejects missing/reordered sections and bad headers)
+        shell: pwsh
+        run: ./scripts/test-check-docs-structure.ps1
+
       - name: Enforce line-ending policy
         shell: powershell
         run: |

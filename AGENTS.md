@@ -5,7 +5,7 @@ Windows environment-variable manager: a C# .NET 10 command-line tool that reads 
 ## Run it
 - Full build: `node scripts/build.mjs --arch x64` (`--skip-gui` / `--skip-msi` / `--skip-cli` to segment); artifacts land in the gitignored `release/`.
 - Tests: `scripts/test-all.ps1` — runs both suites, keeps the full log, prints exit codes only.
-- Docs-only change: `powershell -NoProfile -File scripts/check-docs.ps1` — bare-id gate, `git diff --check`, cited file/`Class.Member` resolution, stale-claim guard, and the glossary's avoid words. Source changes still run `scripts/test-all.ps1`.
+- Docs-only change: `powershell -NoProfile -File scripts/check-docs.ps1` — bare-id gate, `git diff --check`, cited file/`Class.Member` resolution, stale-claim guard, the glossary's avoid words, and translation structure consistency. Source changes still run `scripts/test-all.ps1`.
 - Registry-mutating smoke tests go through `scripts/test-with-restore.ps1`. Running a write command raw is a red line.
 
 ## Don't touch
