@@ -26,6 +26,8 @@ jobs:
     steps:
       # All actions are pinned to immutable commit SHAs for supply-chain integrity.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
 
       - name: Bare-id scanner self-test (proves the gate can fail; exit 0 = scanner fired when it should)
         shell: pwsh
@@ -42,6 +44,10 @@ jobs:
       - name: Glossary avoid-word self-test (proves prose fails and fenced examples pass)
         shell: pwsh
         run: ./scripts/test-check-docs-vocabulary.ps1
+
+      - name: Translation structure self-test (proves the docs gate rejects missing/reordered sections and bad headers)
+        shell: pwsh
+        run: ./scripts/test-check-docs-structure.ps1
 
       - name: Enforce line-ending policy
         shell: powershell
