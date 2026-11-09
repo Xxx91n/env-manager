@@ -29,7 +29,7 @@ use tokio_util::sync::CancellationToken;
 
 use crate::reconcile::{
     refresh_mount_at, rotate_mount_at_with_pipe_drain, rotation_in_flight, run_cli_child,
-    ChildOutcome, LatchedPipeDrain, PIPE_DRAIN_ON_EXIT, ROTATE_HANG_BUDGET,
+    ChildOutcome, LatchedPipeDrain, PIPE_DRAIN_ON_EXIT, ROTATION_TIME_LIMIT,
 };
 use crate::rotate_stop_tests::{MountFixture, ROTATION_SUITE_GATE};
 
@@ -154,7 +154,7 @@ fn an_exited_child_with_open_pipes_returns_within_the_drain_budget() {
                     STUB_EXE,
                     &PIPE_HOLDING_ARGS,
                     &shutdown,
-                    ROTATE_HANG_BUDGET,
+                    ROTATION_TIME_LIMIT,
                     SHORT_PIPE_DRAIN,
                 ),
             )
@@ -206,7 +206,7 @@ async fn a_child_that_closes_its_pipes_keeps_complete_output() {
             STUB_EXE,
             &FAST_ARGS,
             &shutdown,
-            ROTATE_HANG_BUDGET,
+            ROTATION_TIME_LIMIT,
             SHORT_PIPE_DRAIN,
         ),
     )
@@ -252,7 +252,7 @@ async fn an_incomplete_diagnostic_does_not_fail_a_completed_rotation() {
             &PIPE_HOLDING_ARGS,
             "mount-1",
             &shutdown,
-            ROTATE_HANG_BUDGET,
+            ROTATION_TIME_LIMIT,
             SHORT_PIPE_DRAIN,
         ),
     )
@@ -330,7 +330,7 @@ async fn the_in_flight_gate_recovers_after_the_drain_budget() {
             &PIPE_HOLDING_ARGS,
             "mount-1",
             &token,
-            ROTATE_HANG_BUDGET,
+            ROTATION_TIME_LIMIT,
             LatchedPipeDrain {
                 budget: RECOVERY_DRAIN,
                 entered: drain_tx,
@@ -425,7 +425,7 @@ async fn a_stop_during_the_post_exit_drain_ends_it_at_once() {
             STUB_EXE,
             &PIPE_HOLDING_ARGS,
             &token,
-            ROTATE_HANG_BUDGET,
+            ROTATION_TIME_LIMIT,
             LatchedPipeDrain {
                 budget: LONG_DRAIN_FOR_STOP,
                 entered: drain_tx,

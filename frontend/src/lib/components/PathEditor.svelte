@@ -36,11 +36,11 @@
   // pattern where pressing up/down only reorders locally and an Apply button
   // commits all moves at once. This lets the user click up/down many times
   // rapidly without serial IPC per click (which was slow and felt laggy).
-  // stagedEntries holds the in-flight visual order (with .index left intact,
+  // pendingEntries holds the in-flight visual order (with .index left intact,
   // so we still identify each entry by its original registry position);
   // stagedActive is true while the user is mid-edit; stagedApplyLoading gates
   // the confirm button. Cancel restores from `entries` (last committed snapshot).
-  let stagedEntries: PathEntry[] = $state([])
+  let pendingEntries: PathEntry[] = $state([])
   let stagedActive = $state(false)
  let stagedApplyLoading = $state(false)
   
@@ -102,7 +102,7 @@
       // Drop any in-flight staged move when entries are re-loaded from the
       // registry (refresh / scope change / external mutation); the staged
       // order would otherwise drift relative to the new baseline.
-      stagedEntries = []
+      pendingEntries = []
       stagedActive = false
       stagedApplyLoading = false
     } catch (err) {
@@ -203,7 +203,7 @@
 
   function handleRemoveDeadConfirm() {
     if (actionLoading || healthLoading) return
-    const deadCount = liveDeadCount  // Same source as button disabled (WCAG 4.1.2)
+    const deadCount = deadEntryCount  // Same source as button disabled (WCAG 4.1.2)
     if (deadCount === 0) {
       showToast($t('messages.pathNoDead'), 'info')
       return
@@ -278,14 +278,14 @@
     })
   }
 
-  // Staged-move handlers. Local-only swap on `stagedEntries`; no IPC
+  // Staged-move handlers. Local-only swap on `pendingEntries`; no IPC
   // per click. The Apply button runs `applyStagedMoves()` to commit the whole
   // ordered sequence to the registry in one guided pass. `pos` is the visual
   // position in displayEntries (0-based), not the registry index.
   function ensureStagedActive() {
     cancelEdit()
     if (!stagedActive) {
-      stagedEntries = entries.slice()
+      pendingEntries = entries.slice()
       stagedActive = true
     }
   }
@@ -293,13 +293,13 @@
   function handleMoveUp(pos: number) {
     if (pos <= 0) return
     ensureStagedActive()
-    const arr = stagedEntries
+    const arr = pendingEntries
     if (arr[pos].isProtected) return
     const movedKey = arr[pos].index
     const tmp = arr[pos - 1]
     arr[pos - 1] = arr[pos]
     arr[pos] = tmp
-    stagedEntries = [...arr]  // new array reference so keyed each re-diffs
+    pendingEntries = [...arr]  // new array reference so keyed each re-diffs
     lastMovedKey = movedKey
     // W3C APG listbox-rearrangeable: focus follows the moved option so consecutive moves don't require re-finding the row
     queueMicrotask(() => {
@@ -311,14 +311,14 @@
 
   function handleMoveDown(pos: number) {
     ensureStagedActive()
-    const arr = stagedEntries
+    const arr = pendingEntries
     if (pos >= arr.length - 1) return
     if (arr[pos].isProtected) return
     const movedKey = arr[pos].index
     const tmp = arr[pos + 1]
     arr[pos + 1] = arr[pos]
     arr[pos] = tmp
-    stagedEntries = [...arr]  // new array reference so keyed each re-diffs
+    pendingEntries = [...arr]  // new array reference so keyed each re-diffs
     lastMovedKey = movedKey
     queueMicrotask(() => {
       const btn = document.querySelector('[data-move-down-key="' + movedKey + '"]') as HTMLButtonElement | null
@@ -328,7 +328,7 @@
   }
 
   function cancelStagedMoves() {
-    stagedEntries = []
+    pendingEntries = []
     stagedActive = false
     stagedApplyLoading = false
   }
@@ -336,7 +336,7 @@
   // Commit the staged visual order to the registry using the minimum number
   // of move-up/move-down IPCs. For each target position i (left to right),
   // locate the live registry position of the entry whose original `.index`
-  // equals stagedEntries[i].index, then move it left (move-up) until it sits
+  // equals pendingEntries[i].index, then move it left (move-up) until it sits
   // at position i. We re-localize after every move because each move-up/down
   // shifts the live indices of the entries it crosses. O(n^2) in PATH entry
   // count — fine since N is small (<200) in practice.
@@ -344,7 +344,7 @@
     if (!stagedActive || stagedApplyLoading) return
     stagedApplyLoading = true
     try {
-      const target = stagedEntries
+      const target = pendingEntries
       // Re-read live order so we map original .index -> current real position
       // fresh; the registry may have drifted from the snapshot we staged on.
       let live = await listPathEntries(scope)
@@ -375,7 +375,7 @@
         live = await listPathEntries(scope)
       }
       stagedActive = false
-      stagedEntries = []
+      pendingEntries = []
       await refresh()
       showMessage($t('messages.pathOrderApplied'), 'success')
     } catch (err) {
@@ -489,8 +489,8 @@
   // otherwise the last-committed one. The #each renders this, and move buttons
   // operate on the visual position `pos` (NOT entry.index, which is the
   // original registry index used as the stable key).
-  let displayEntries = $derived(stagedActive ? stagedEntries : entries)
-  let liveDeadCount = $derived(displayEntries.filter((e: any) => !e.exists && !e.isProtected).length)  // WCAG 4.1.2: disabled reflects real data
+  let displayEntries = $derived(stagedActive ? pendingEntries : entries)
+  let deadEntryCount = $derived(displayEntries.filter((e: any) => !e.exists && !e.isProtected).length)  // WCAG 4.1.2: disabled reflects real data
   // Watch refreshTrigger from App.svelte: refresh path entries when the
   // header refresh button is clicked, regardless of active view.
   $effect(() => {
@@ -560,12 +560,12 @@
     </button>
     <button
       onclick={handleRemoveDeadConfirm}
-      disabled={actionLoading || liveDeadCount === 0}
+      disabled={actionLoading || deadEntryCount === 0}
       title={$t('path.removeDead')}
       class="flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-destructive bg-destructive/10 rounded-md hover:bg-destructive/15 transition disabled:opacity-30 disabled:cursor-not-allowed"
     >
           <Trash2 class="w-3.5 h-3.5" />
-      {$t('path.removeDead')}{#if liveDeadCount > 0} ({liveDeadCount}){/if}
+      {$t('path.removeDead')}{#if deadEntryCount > 0} ({deadEntryCount}){/if}
     </button>
   </div>
 

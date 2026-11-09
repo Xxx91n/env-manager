@@ -240,7 +240,7 @@ unsafe extern "system" fn service_main(_argc: u32, _argv: *mut PWSTR) {
         }
     };
 
-    let pipe = crate::RuntimeMode::Service.pipe_endpoint();
+    let pipe = crate::ServiceMode::Service.pipe_endpoint();
     // Report as soon as the listener exists: this is the point that keeps the boot-time
     // start inside ServicesPipeTimeout (#149).
     let exit = runtime.block_on(crate::run_server(

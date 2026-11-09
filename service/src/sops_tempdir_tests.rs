@@ -6,7 +6,7 @@
 // `Stop-Service`) would need an installed service and a rotation slow enough to still be
 // in flight when the stop lands.
 //
-// The stub stands in for the C# provider: it reads `SCRATCH_ENV`, creates one
+// The stub stands in for the C# provider: it reads `TEMP_DIR_ENV`, creates one
 // `env-manager-sops-<guid>` directory in it with a `secret.json`, records the two paths it
 // used, and then waits (interrupted case) or exits (completed case). Recording the file is
 // what keeps both tests from passing vacuously: a delegation that never wrote plaintext
@@ -21,8 +21,8 @@ use std::time::Duration;
 
 use tokio_util::sync::CancellationToken;
 
-use crate::reconcile::{run_cli_child, ChildOutcome, PIPE_DRAIN_ON_EXIT, ROTATE_HANG_BUDGET};
-use crate::sops_scratch::{SopsScratch, SCRATCH_ENV};
+use crate::reconcile::{run_cli_child, ChildOutcome, PIPE_DRAIN_ON_EXIT, ROTATION_TIME_LIMIT};
+use crate::sops_tempdir::{SopsTempDir, TEMP_DIR_ENV};
 use crate::SHUTDOWN_DRAIN;
 
 /// The stub "CLI": PowerShell, because the fixture needs to write two files and read an
@@ -102,7 +102,7 @@ fn stub_args(report: &Path, wait_on_ping: bool, echo_stderr: bool) -> Vec<String
          {stderr_line}\
          Set-Content -LiteralPath '{report}' -Value @($root, $file) -Encoding ascii; \
          {tail}",
-        env = SCRATCH_ENV,
+        env = TEMP_DIR_ENV,
         report = report,
         stderr_line = stderr_line,
         tail = tail
@@ -164,7 +164,7 @@ async fn completed_delegation_reclaims_the_scratch_root() {
             STUB_EXE,
             &argv_refs,
             &shutdown,
-            ROTATE_HANG_BUDGET,
+            ROTATION_TIME_LIMIT,
             PIPE_DRAIN_ON_EXIT,
         ),
     )
@@ -174,7 +174,7 @@ async fn completed_delegation_reclaims_the_scratch_root() {
     assert!(
         matches!(outcome, ChildOutcome::Finished { success: true, .. }),
         "the stub is expected to exit 0; a non-zero exit means it never wrote its plaintext \
-         (its own Test-Path guard) or never saw {SCRATCH_ENV}"
+         (its own Test-Path guard) or never saw {TEMP_DIR_ENV}"
     );
 
     let (root, file) = report
@@ -195,7 +195,7 @@ async fn completed_delegation_reclaims_the_scratch_root() {
 ///
 /// What this measures is the common case: the stub writes its file and releases the handle
 /// before the stop lands, so the delete meets nothing. A helper that still owns the handle
-/// after the job handle has closed is the bound `service/src/sops_scratch.rs` records -
+/// after the job handle has closed is the bound `service/src/sops_tempdir.rs` records -
 /// retried for about a second, then logged at error level - and is asserted separately by
 /// `reclaim_logs_when_the_tree_cannot_be_removed`.
 #[tokio::test]
@@ -211,7 +211,7 @@ async fn interrupted_delegation_reclaims_the_scratch_root() {
             STUB_EXE,
             &argv_refs,
             &token,
-            ROTATE_HANG_BUDGET,
+            ROTATION_TIME_LIMIT,
             PIPE_DRAIN_ON_EXIT,
         )
         .await
@@ -278,7 +278,7 @@ async fn interrupted_delegation_logs_stderr_that_arrived_before_the_budget() {
             STUB_EXE,
             &argv_refs,
             &token,
-            ROTATE_HANG_BUDGET,
+            ROTATION_TIME_LIMIT,
             PIPE_DRAIN_ON_EXIT,
         )
         .await
@@ -315,7 +315,7 @@ async fn interrupted_delegation_logs_stderr_that_arrived_before_the_budget() {
 /// error to retry.
 #[tokio::test]
 async fn reclaim_removes_the_tree_it_created() {
-    let scratch = SopsScratch::create().expect("a scratch root must be creatable in %TEMP%");
+    let scratch = SopsTempDir::create().expect("a scratch root must be creatable in %TEMP%");
     let root = scratch.path().to_path_buf();
     let nested = root.join("env-manager-sops-probe");
     std::fs::create_dir_all(&nested).expect("create the provider-shaped directory");
@@ -331,7 +331,7 @@ async fn reclaim_removes_the_tree_it_created() {
 
     // A second reclaim of a path that is already gone is success, not a retry loop: the
     // service can race its own delete with a concurrent delegation's.
-    let again = SopsScratch::create().expect("a second scratch root must be creatable");
+    let again = SopsTempDir::create().expect("a second scratch root must be creatable");
     let again_root = again.path().to_path_buf();
     std::fs::remove_dir_all(&again_root).expect("remove the second root out from under the guard");
     again.reclaim().await;
@@ -373,7 +373,7 @@ impl<'a> tracing_subscriber::fmt::MakeWriter<'a> for LogSink {
 async fn reclaim_logs_when_the_tree_cannot_be_removed() {
     use std::os::windows::fs::OpenOptionsExt;
 
-    let scratch = SopsScratch::create().expect("a scratch root must be creatable in %TEMP%");
+    let scratch = SopsTempDir::create().expect("a scratch root must be creatable in %TEMP%");
     let root = scratch.path().to_path_buf();
     let file = root.join("secret.json");
     std::fs::write(&file, "{\"value\":\"probe\"}").expect("write the plaintext fixture");
@@ -419,7 +419,7 @@ async fn reclaim_logs_when_the_tree_cannot_be_removed() {
 async fn reclaim_succeeds_once_the_holder_lets_go() {
     use std::os::windows::fs::OpenOptionsExt;
 
-    let scratch = SopsScratch::create().expect("a scratch root must be creatable in %TEMP%");
+    let scratch = SopsTempDir::create().expect("a scratch root must be creatable in %TEMP%");
     let root = scratch.path().to_path_buf();
     let file = root.join("secret.json");
     std::fs::write(&file, "{\"value\":\"probe\"}").expect("write the plaintext fixture");
@@ -453,7 +453,7 @@ async fn reclaim_succeeds_once_the_holder_lets_go() {
 fn drop_logs_when_the_last_attempt_also_fails() {
     use std::os::windows::fs::OpenOptionsExt;
 
-    let scratch = SopsScratch::create().expect("a scratch root must be creatable in %TEMP%");
+    let scratch = SopsTempDir::create().expect("a scratch root must be creatable in %TEMP%");
     let root = scratch.path().to_path_buf();
     let file = root.join("secret.json");
     std::fs::write(&file, "{\"value\":\"probe\"}").expect("write the plaintext fixture");
@@ -487,7 +487,7 @@ fn drop_logs_when_the_last_attempt_also_fails() {
     let _ = std::fs::remove_dir_all(&root);
 }
 
-// Startup sweep of leftovers (#219). Evidence seam: `sops_scratch::sweep_stale_roots`
+// Startup sweep of leftovers (#219). Evidence seam: `sops_tempdir::sweep_stale_roots`
 // driven against real directories under `%TEMP%`, plus one leg through `run_server` itself,
 // because the property under test is what a service start does to directories a previous
 // instance left behind. The race half of the ticket - "this instance's own roots are never
@@ -495,7 +495,7 @@ fn drop_logs_when_the_last_attempt_also_fails() {
 // placement between the RUNNING report and the task spawns; the run_server leg below
 // exercises that exact sequence on a stale and a fresh fixture.
 
-/// The two prefixes the sweep owns, spelled out so a rename in `sops_scratch` fails these
+/// The two prefixes the sweep owns, spelled out so a rename in `sops_tempdir` fails these
 /// tests instead of silently orphaning one family.
 const ROOT_PREFIX: &str = "env-manager-rotate-scratch-";
 const LEGACY_PREFIX: &str = "env-manager-sops-";
@@ -529,9 +529,9 @@ fn backdate_creation(path: &Path, hours_ago: i64) {
 /// One production-shaped sweep call over the real `%TEMP%`, so each test reads as the
 /// behaviour it pins rather than as argument plumbing.
 fn sweep_now() {
-    crate::sops_scratch::sweep_stale_roots(
+    crate::sops_tempdir::sweep_stale_roots(
         &std::env::temp_dir(),
-        crate::sops_scratch::SWEEP_MIN_AGE,
+        crate::sops_tempdir::SWEEP_MIN_AGE,
     );
 }
 

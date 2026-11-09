@@ -16,13 +16,13 @@ describe('v0.9.25 PathEditor move reactivity + highlight (W3C APG listbox-rearra
   it('handleMoveUp creates a new array reference (keyed each reactivity)', () => {
     const fn = findFn('handleMoveUp')
     expect(fn.length).toBeGreaterThan(0)
-    expect(fn.includes('stagedEntries = [...arr]')).toBe(true)
+    expect(fn.includes('pendingEntries = [...arr]')).toBe(true)
   })
 
   it('handleMoveDown creates a new array reference', () => {
     const fn = findFn('handleMoveDown')
     expect(fn.length).toBeGreaterThan(0)
-    expect(fn.includes('stagedEntries = [...arr]')).toBe(true)
+    expect(fn.includes('pendingEntries = [...arr]')).toBe(true)
   })
 
   it('handleMoveUp sets lastMovedKey for transient highlight', () => {
@@ -56,16 +56,16 @@ describe('v0.9.25 PathEditor move reactivity + highlight (W3C APG listbox-rearra
 })
 
 describe('v0.9.25 PathEditor dead-entries button reactive disabled (WCAG 4.1.2)', () => {
-  it('has $: liveDeadCount derived from displayEntries', () => {
-    expect(src.includes('let liveDeadCount = $derived(displayEntries.filter')).toBe(true)
+  it('has $: deadEntryCount derived from displayEntries', () => {
+    expect(src.includes('let deadEntryCount = $derived(displayEntries.filter')).toBe(true)
   })
 
-  it('button disabled condition uses liveDeadCount (not stale healthSummary)', () => {
-    expect(src.includes('disabled={actionLoading || liveDeadCount === 0}')).toBe(true)
+  it('button disabled condition uses deadEntryCount (not stale healthSummary)', () => {
+    expect(src.includes('disabled={actionLoading || deadEntryCount === 0}')).toBe(true)
   })
 
-  it('button label shows liveDeadCount instead of healthSummary.dead', () => {
-    expect(src.includes('{liveDeadCount}')).toBe(true)
+  it('button label shows deadEntryCount instead of healthSummary.dead', () => {
+    expect(src.includes('{deadEntryCount}')).toBe(true)
     expect(src.includes('({healthSummary.dead})')).toBe(false)
   })
 })
@@ -81,10 +81,10 @@ describe('v0.9.26 PathEditor move-down guard order fix (first-click no-op)', () 
     expect(ensureIdx).toBeLessThan(guardIdx)
   })
 
-  it('handleMoveDown guard uses arr.length (post-init) not stagedEntries.length (pre-init)', () => {
+  it('handleMoveDown guard uses arr.length (post-init) not pendingEntries.length (pre-init)', () => {
     const fn = findFn('handleMoveDown')
     expect(fn.includes('arr.length - 1')).toBe(true)
-    expect(fn.includes('stagedEntries.length - 1')).toBe(false)
+    expect(fn.includes('pendingEntries.length - 1')).toBe(false)
   })
 
   it('handleMoveUp still has pos <= 0 guard (not removed by symmetry unification)', () => {
@@ -93,11 +93,11 @@ describe('v0.9.26 PathEditor move-down guard order fix (first-click no-op)', () 
   })
 })
 
-describe('v0.9.26 PathEditor dead-entries confirm handler uses liveDeadCount', () => {
-  it('handleRemoveDeadConfirm reads liveDeadCount (not healthSummary)', () => {
+describe('v0.9.26 PathEditor dead-entries confirm handler uses deadEntryCount', () => {
+  it('handleRemoveDeadConfirm reads deadEntryCount (not healthSummary)', () => {
     const fn = findFn('handleRemoveDeadConfirm')
     expect(fn.length).toBeGreaterThan(0)
-    expect(fn.includes('const deadCount = liveDeadCount')).toBe(true)
+    expect(fn.includes('const deadCount = deadEntryCount')).toBe(true)
     expect(fn.includes('healthSummary?.dead')).toBe(false)
   })
 })

@@ -22,14 +22,14 @@ mod audit_ledger;
 mod redaction;
 mod process_guard;
 mod job_object;
-mod sops_scratch;
+mod sops_tempdir;
 mod scm;
 #[cfg(test)]
 mod resilience_tests;
 #[cfg(test)]
 mod rotate_stop_tests;
 #[cfg(test)]
-mod sops_scratch_tests;
+mod sops_tempdir_tests;
 #[cfg(test)]
 mod rotate_writeback_tests;
 #[cfg(test)]
@@ -40,35 +40,35 @@ mod rotate_hang_tests;
 mod rotate_pipe_drain_tests;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum RuntimeMode {
+pub enum ServiceMode {
     Service,
     Background,
     Cli,
 }
 
-impl RuntimeMode {
+impl ServiceMode {
     /// Resolve from --mode=<x> argv or SCM service args.
     /// Pattern provenance: CONTEXT.md term "A7 (service binary entry surface, photo pattern)" (design-review session; see docs/history/design-review-research.md).
     pub fn resolve(args: &[String]) -> Self {
         for arg in args {
             if let Some(val) = arg.strip_prefix("--mode=") {
                 return match val.to_lowercase().as_str() {
-                    "service" => RuntimeMode::Service,
-                    "background" => RuntimeMode::Background,
-                    "cli" => RuntimeMode::Cli,
-                    _ => RuntimeMode::Service,
+                    "service" => ServiceMode::Service,
+                    "background" => ServiceMode::Background,
+                    "cli" => ServiceMode::Cli,
+                    _ => ServiceMode::Service,
                 };
             }
         }
         // Default: Background mode (user-launched).
-        RuntimeMode::Background
+        ServiceMode::Background
     }
 
     pub fn pipe_endpoint(&self) -> &'static str {
         match self {
-            RuntimeMode::Service => r"\\.\pipe\EnvManager.Service",
-            RuntimeMode::Background => r"\\.\pipe\EnvManager.Background",
-            RuntimeMode::Cli => r"\\.\pipe\EnvManager.Background",
+            ServiceMode::Service => r"\\.\pipe\EnvManager.Service",
+            ServiceMode::Background => r"\\.\pipe\EnvManager.Background",
+            ServiceMode::Cli => r"\\.\pipe\EnvManager.Background",
         }
     }
 }
@@ -84,14 +84,14 @@ pub fn get_process_uptime() -> u64 {
 fn main() {
     // Resolve mode FIRST so we know where to put the log file.
     let args: Vec<String> = env::args().collect();
-    let mode = RuntimeMode::resolve(&args);
+    let mode = ServiceMode::resolve(&args);
 
     // Write service logs to a file so Session 0 service output is
     // not lost (stderr goes nowhere in Session 0). In Background mode, write
     // to %LOCALAPPDATA% alongside env-manager.log; in Service mode, write to
     // %ProgramData% alongside secretMount.json/audit-ledger.jsonl.
     let log_dir = match mode {
-        RuntimeMode::Service => {
+        ServiceMode::Service => {
             let pd = std::env::var("ProgramData").unwrap_or_else(|_| "C:\\ProgramData".to_string());
             std::path::PathBuf::from(pd).join("EnvManager")
         }
@@ -122,7 +122,7 @@ std::mem::forget(guard);
 
     // Entry guard (A7): refuse direct double-click launch with no --mode.
     // If interactive session and no --mode flag, print guidance and exit.
-    if matches!(mode, RuntimeMode::Background) && !args.iter().any(|a| a.starts_with("--mode=")) {
+    if matches!(mode, ServiceMode::Background) && !args.iter().any(|a| a.starts_with("--mode=")) {
         // Check if we're in an interactive session (console attached).
         // In service mode, there's no console. In background mode launched by GUI,
         // the GUI passes --mode=background explicitly.
@@ -136,7 +136,7 @@ std::mem::forget(guard);
     // the SCM calls service_main -- which builds the tokio runtime -- on another thread
     // (#149). The runtime below is only built for a launch the SCM did not initiate,
     // i.e. a console `--mode=service` run used for debugging.
-    if matches!(mode, RuntimeMode::Service) && scm::dispatch() {
+    if matches!(mode, ServiceMode::Service) && scm::dispatch() {
         return;
     }
 
@@ -158,10 +158,10 @@ std::mem::forget(guard);
 
     rt.block_on(async {
         match mode {
-            RuntimeMode::Service | RuntimeMode::Background => {
+            ServiceMode::Service | ServiceMode::Background => {
                 let shutdown = Arc::new(CancellationToken::new());
                 let exit = match mode {
-                    RuntimeMode::Service => {
+                    ServiceMode::Service => {
                         run_server(mode.pipe_endpoint(), shutdown, || true).await
                     }
                     _ => run_background_server(mode.pipe_endpoint(), shutdown).await,
@@ -173,7 +173,7 @@ std::mem::forget(guard);
                     other => tracing::error!("server exited without a stop request: {:?}", other),
                 }
             }
-            RuntimeMode::Cli => {
+            ServiceMode::Cli => {
                 let pipe = mode.pipe_endpoint();
                 if let Err(e) = ipc::cli_gateway(pipe).await {
                     eprintln!("Error: service IPC failed: {}", e);
@@ -236,11 +236,11 @@ pub async fn run_server(
     // push the report past ServicesPipeTimeout, the #149 red line) and before the spawns
     // below. The reconcile loop and the IPC handlers are the only writers of new scratch
     // roots, so sweeping here makes "a root this instance created is never swept" true by
-    // ordering rather than by timestamp judgement; the 24h threshold in `sops_scratch` is
+    // ordering rather than by timestamp judgement; the 24h threshold in `sops_tempdir` is
     // a second guard, not the mechanism.
-    sops_scratch::sweep_stale_roots(&env::temp_dir(), sops_scratch::SWEEP_MIN_AGE);
+    sops_tempdir::sweep_stale_roots(&env::temp_dir(), sops_tempdir::SWEEP_MIN_AGE);
 
-    let reconcile = tokio::spawn(reconcile::reconcile_loop(shutdown.clone()));
+    let reconcile = tokio::spawn(reconcile::refresh_loop(shutdown.clone()));
     let ipc = tokio::spawn(ipc::serve(pipe_name, first, shutdown.clone()));
     run_until_exit(reconcile, ipc, &shutdown).await
 }
@@ -254,7 +254,7 @@ pub async fn run_background_server(
     shutdown: Arc<CancellationToken>,
 ) -> ServerExit {
     tracing::info!("IPC pipe: {}", pipe_name);
-    let reconcile = tokio::spawn(reconcile::reconcile_loop(shutdown.clone()));
+    let reconcile = tokio::spawn(reconcile::refresh_loop(shutdown.clone()));
     let ipc = tokio::spawn(ipc::start_ipc_server(pipe_name, shutdown.clone(), false));
     run_until_exit(reconcile, ipc, &shutdown).await
 }
@@ -308,17 +308,17 @@ pub fn secret_mount_path() -> PathBuf {
     // Service mode uses ProgramData (machine-level, A8).
     // Background/CLI mode uses LocalAppData (user-level, compatibility with v0.8.0).
     let args: Vec<String> = env::args().collect();
-    let mode = RuntimeMode::resolve(&args);
+    let mode = ServiceMode::resolve(&args);
 
     match mode {
-        RuntimeMode::Service => {
+        ServiceMode::Service => {
             let program_data = env::var("ProgramData")
                 .unwrap_or_else(|_| "C:\\ProgramData".to_string());
             let dir = PathBuf::from(program_data).join("EnvManager");
             std::fs::create_dir_all(&dir).ok();
             dir.join("secretMount.json")
         }
-        RuntimeMode::Background | RuntimeMode::Cli => {
+        ServiceMode::Background | ServiceMode::Cli => {
             let local_app = env::var("LOCALAPPDATA")
                 .unwrap_or_else(|_| ".".to_string());
             let dir = PathBuf::from(local_app).join("EnvManager");

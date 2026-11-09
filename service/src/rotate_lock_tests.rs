@@ -21,7 +21,7 @@ use std::time::Duration;
 use tokio_util::sync::CancellationToken;
 
 use crate::reconcile::{
-    refresh_mount, rotate_mount_at, rotation_in_flight, run_reconcile_tick_at, ROTATE_HANG_BUDGET,
+    refresh_mount, rotate_mount_at, rotation_in_flight, run_reconcile_tick_at, ROTATION_TIME_LIMIT,
 };
 use crate::rotate_stop_tests::{MountFixture, ROTATION_SUITE_GATE};
 use crate::SHUTDOWN_DRAIN;
@@ -60,7 +60,7 @@ async fn a_slow_rotation_does_not_hold_the_reconcile_lock() {
             &STUB_SLOW_ARGS,
             "mount-1",
             &token,
-            ROTATE_HANG_BUDGET,
+            ROTATION_TIME_LIMIT,
         )
         .await
     });
@@ -79,7 +79,7 @@ async fn a_slow_rotation_does_not_hold_the_reconcile_lock() {
             &["/c", "echo", "rotated"],
             "mount-1",
             &fast_shutdown,
-            ROTATE_HANG_BUDGET,
+            ROTATION_TIME_LIMIT,
         ),
     )
     .await
@@ -137,7 +137,7 @@ async fn refresh_stands_down_while_a_rotation_is_in_flight() {
             &STUB_SLOW_ARGS,
             "mount-1",
             &token,
-            ROTATE_HANG_BUDGET,
+            ROTATION_TIME_LIMIT,
         )
         .await
     });
@@ -215,7 +215,7 @@ async fn tick_stands_down_while_a_rotation_is_in_flight() {
             &STUB_SLOW_ARGS,
             "mount-1",
             &token,
-            ROTATE_HANG_BUDGET,
+            ROTATION_TIME_LIMIT,
         )
         .await
     });
