@@ -176,7 +176,7 @@ Commands:
   validate <file>            Validate backup
   profile <subcommand>       Manage variable profiles (see: profile help)
   path <subcommand>          Edit PATH variable as list (see: path help)
-  history list|undo|delete    View, undo, or delete audited changes
+  history list|undo|delete [--all]  View, undo, or delete audited changes
   bulk import|export          Import/export .json, .env, or .csv
   expand <value>              Expand nested %VARIABLE% references
   protection list|add-path|remove-path|add-var|remove-var  View or manage protected variables and PATH entries

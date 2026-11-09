@@ -70,7 +70,7 @@ internal static class AgentsCommand
                     new { cmd = "help", desc = "Show help", args = "", scope = false, @async = true },
                     new { cmd = "rename", desc = "Atomically rename variable (verify before delete)", args = "<old> <new>", scope = true, @async = false },
                     new { cmd = "change-scope", desc = "Move variable user<->system atomically", args = "<name> <new-scope>", scope = true, @async = false },
-                    new { cmd = "history", desc = "Audit log + guarded undo", args = "list|undo|delete", scope = false, @async = true },
+                    new { cmd = "history", desc = "Audit log + guarded undo", args = "list|undo|delete <id>|delete --all [--scope user|system]", scope = false, @async = true },
                     new { cmd = "bulk", desc = "Import/export JSON/.env/CSV with --dry-run", args = "import|export <file>", scope = true, @async = false },
                     new { cmd = "expand", desc = "Resolve nested %VAR% references", args = "<value>", scope = false, @async = true },
                     new { cmd = "protection", desc = "List/add/remove protected vars and PATH entries", args = "list|add-var|remove-var|add-path|remove-path", scope = false, @async = true },
