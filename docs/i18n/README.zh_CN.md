@@ -183,7 +183,7 @@ flowchart LR
 
 `env-manager-service.exe` 是独立 Rust 二进制，通过命名管道 IPC 管理机密挂载生命周期：
 
-- **RuntimeMode**：Service（SCM 管理，开机启动）、Background（用户启动）、Cli（一次性网关）
+- **ServiceMode**：Service（SCM 管理，开机启动）、Background（用户启动）、Cli（一次性网关）
 - **协调循环**：300s 周期全量扫描，幂等逐项处理，30s 首次 tick 延迟
 - **审计账本**：追加式哈希链 `audit-ledger.jsonl`，100MB 轮转，防篡改检测
 - **IPC**：防劫持管道标志，65536 字节请求上限，换行分隔 JSON 协议

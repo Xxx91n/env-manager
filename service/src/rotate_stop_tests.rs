@@ -24,7 +24,7 @@ use std::time::Duration;
 use tokio_util::sync::CancellationToken;
 
 use crate::reconcile::{
-    rotate_mount_at, run_cli_child, ChildOutcome, PIPE_DRAIN_ON_EXIT, ROTATE_HANG_BUDGET,
+    rotate_mount_at, run_cli_child, ChildOutcome, PIPE_DRAIN_ON_EXIT, ROTATION_TIME_LIMIT,
 };
 use crate::SHUTDOWN_DRAIN;
 
@@ -155,7 +155,7 @@ async fn stop_terminates_and_reaps_the_rotate_child() {
             STUB_EXE,
             &STUB_SLOW_ARGS,
             &token,
-            ROTATE_HANG_BUDGET,
+            ROTATION_TIME_LIMIT,
             PIPE_DRAIN_ON_EXIT,
         )
         .await
@@ -206,7 +206,7 @@ async fn interrupted_rotation_leaves_the_mount_unrotated() {
             &STUB_SLOW_ARGS,
             "mount-1",
             &shutdown,
-            ROTATE_HANG_BUDGET,
+            ROTATION_TIME_LIMIT,
         ),
     )
     .await
@@ -252,7 +252,7 @@ async fn completed_rotation_records_the_mount() {
             &["/c", "echo", "rotated"],
             "mount-1",
             &shutdown,
-            ROTATE_HANG_BUDGET,
+            ROTATION_TIME_LIMIT,
         ),
     )
     .await
@@ -382,7 +382,7 @@ async fn stop_kills_the_helper_tree_not_just_the_direct_child() {
             TREE_STUB_EXE,
             &argv,
             &token,
-            ROTATE_HANG_BUDGET,
+            ROTATION_TIME_LIMIT,
             PIPE_DRAIN_ON_EXIT,
         )
         .await

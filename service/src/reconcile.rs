@@ -20,7 +20,7 @@ use tokio::sync::Mutex; // Phase 4C: TOCTOU protection
 use tokio::sync::oneshot; // phase-entry latch for post-exit pipe drain tests (#205)
 
 use crate::job_object::KillOnCloseJob; // kill-on-close tree containment for the CLI child
-use crate::sops_scratch::{SopsScratch, SCRATCH_ENV}; // service-owned sops working root (#177)
+use crate::sops_tempdir::{SopsTempDir, TEMP_DIR_ENV}; // service-owned sops working root (#177)
 
 /// `CREATE_NO_WINDOW`: the service has no console, and without the flag the CLI child
 /// would flash a window on the interactive desktop. Passed to tokio's own
@@ -74,7 +74,7 @@ pub(crate) const PIPE_DRAIN_ON_EXIT: Duration = Duration::from_millis(200);
 /// `STOP_WAIT_HINT_MS`. What it buys is that a wedged child - a provider round-trip that never
 /// returns, a DPAPI prompt nobody can answer, a CLI deadlock - ends the rotation instead of
 /// holding it, and the reconcile loop behind it, forever.
-pub(crate) const ROTATE_HANG_BUDGET: Duration = Duration::from_secs(15 * 60);
+pub(crate) const ROTATION_TIME_LIMIT: Duration = Duration::from_secs(15 * 60);
 
 /// The CLI argv a rotation delegates to. Rotation is not a circular dependency: it is a
 /// one-shot write of profiles.json, not an IPC back into the service. `--json` is absent
@@ -193,7 +193,7 @@ pub(crate) fn rotation_in_flight() -> bool {
 
 /// Main reconcile loop. Runs indefinitely (300s interval).
 /// Domain 10: defer first tick 30s to avoid SCM timeout on boot.
-pub async fn reconcile_loop(shutdown: Arc<CancellationToken>) {
+pub async fn refresh_loop(shutdown: Arc<CancellationToken>) {
     tracing::info!("reconcile loop starting (30s warmup, 300s interval)");
     tokio::select! {
         _ = tokio::time::sleep(Duration::from_secs(30)) => {}
@@ -227,9 +227,9 @@ pub async fn reconcile_loop(shutdown: Arc<CancellationToken>) {
     }
 }
 
-/// Production entry called by `reconcile_loop`: binds `run_reconcile_tick_at` to
+/// Production entry called by `refresh_loop`: binds `run_reconcile_tick_at` to
 /// `crate::secret_mount_path()`. That one-line binding stays covered by inspection until
-/// `reconcile_loop` itself takes warmup and mount-path parameters (#193).
+/// `refresh_loop` itself takes warmup and mount-path parameters (#193).
 async fn run_reconcile_tick() -> Result<(), String> {
     run_reconcile_tick_at(&crate::secret_mount_path()).await
 }
@@ -374,7 +374,7 @@ pub async fn rotate_mount(
         &delegated_rotate_argv(),
         mount_id,
         shutdown,
-        ROTATE_HANG_BUDGET,
+        ROTATION_TIME_LIMIT,
     )
     .await
 }
@@ -387,7 +387,7 @@ pub async fn rotate_mount(
 /// held while the child runs (#161). See `RECONCILE_LOCK` for what that trades away.
 ///
 /// `hang_budget` is passed through to `run_cli_child` and is a parameter for the same reason
-/// it is there: the tests inject a short one, production passes `ROTATE_HANG_BUDGET`. The
+/// it is there: the tests inject a short one, production passes `ROTATION_TIME_LIMIT`. The
 /// post-exit pipe drain is fixed here at `PIPE_DRAIN_ON_EXIT` and only injectable through
 /// `rotate_mount_at_with_pipe_drain` (#192, #205).
 pub(crate) async fn rotate_mount_at(
@@ -659,7 +659,7 @@ pub(crate) enum ChildOutcome {
     /// The rotation outlived its hang budget while no stop was requested (#161). Converged
     /// exactly like `Interrupted` - terminated, reaped, job handle closed - so the only
     /// difference is the reason and the message the caller gets. A liveness backstop, not a
-    /// rotation SLA: see `ROTATE_HANG_BUDGET`.
+    /// rotation SLA: see `ROTATION_TIME_LIMIT`.
     OverHangBudget { pid: Option<u32> },
 }
 
@@ -671,7 +671,7 @@ pub(crate) enum ChildOutcome {
 enum Ending {
     /// The service stop token was cancelled.
     Stopped,
-    /// The rotation outlived `ROTATE_HANG_BUDGET`.
+    /// The rotation outlived `ROTATION_TIME_LIMIT`.
     Hung,
 }
 
@@ -712,11 +712,11 @@ impl Ending {
 ///
 /// The value sops writes to disk does not outlive the delegation either (#177): the root the
 /// CLI puts its sops working directories in is created here, handed over through
-/// `SCRATCH_ENV`, and deleted once the outcome above is known - including the interrupted
+/// `TEMP_DIR_ENV`, and deleted once the outcome above is known - including the interrupted
 /// case, where the CLI's own `finally` never runs, because the process doing the delete is
 /// this one. That delete is retried for a moment (a killed helper can still own a handle
 /// for a fraction of a second) and a failure that survives the retries is logged at error
-/// level, never swallowed; see `crate::sops_scratch`. What this cannot cover is a service
+/// level, never swallowed; see `crate::sops_tempdir`. What this cannot cover is a service
 /// that is killed rather than stopped: the root then stays on disk with a name that says
 /// the service wrote it.
 ///
@@ -724,7 +724,7 @@ impl Ending {
 /// stop token and that budget comes first decides how the call ends, and the two that are not
 /// an exit converge the same way. The budget is a parameter rather than a constant so the
 /// tests can inject a short one and never wait a real 15 minutes on a CI runner; production
-/// passes `ROTATE_HANG_BUDGET`, which documents why the value is what it is.
+/// passes `ROTATION_TIME_LIMIT`, which documents why the value is what it is.
 ///
 /// The exit branch has its own bound (#192): `pipe_drain` caps the wait for the two pipe
 /// readers after the child is gone, so a helper that inherited the std handles cannot keep
@@ -734,7 +734,7 @@ impl Ending {
 ///
 /// Both budgets are parameters for the same reason `hang_budget` always was: a bounded wait
 /// CI cannot shorten is a bounded wait CI cannot test. Production passes
-/// `ROTATE_HANG_BUDGET` and `PIPE_DRAIN_ON_EXIT`; the held-handle fixtures inject a short
+/// `ROTATION_TIME_LIMIT` and `PIPE_DRAIN_ON_EXIT`; the held-handle fixtures inject a short
 /// pipe drain so CI never waits the helper out. No private lock or job-handle accessor is
 /// added (#163); the two mid-drain race tests pass `#[cfg(test)]` `LatchedPipeDrain` (#205),
 /// which compiles out completely in non-test builds.
@@ -749,7 +749,7 @@ pub(crate) async fn run_cli_child(
     // Created before the spawn and reclaimed after the outcome is known, so no early
     // return inside `spawn_cli_child` - a failed spawn, a missing pipe, a failed wait -
     // can skip the delete.
-    let scratch = SopsScratch::create();
+    let scratch = SopsTempDir::create();
     let outcome =
         spawn_cli_child(cli_exe, args, shutdown, hang_budget, pipe_drain, scratch.as_ref()).await;
     if let Some(scratch) = scratch {
@@ -769,7 +769,7 @@ async fn spawn_cli_child(
     shutdown: &CancellationToken,
     hang_budget: Duration,
     pipe_drain: PipeDrain,
-    scratch: Option<&SopsScratch>,
+    scratch: Option<&SopsTempDir>,
 ) -> Result<ChildOutcome, String> {
     // One job per delegation, never a process-wide singleton: the handle lives exactly as
     // long as this call, so a stop kills the rotation it interrupted and nothing else. A
@@ -798,7 +798,7 @@ async fn spawn_cli_child(
     // Where the CLI's sops working directories go. Unset, the provider keeps using its own
     // `%TEMP%` directory - the hand-run CLI case, which has no service to reclaim for it.
     if let Some(scratch) = scratch {
-        command.env(SCRATCH_ENV, scratch.path());
+        command.env(TEMP_DIR_ENV, scratch.path());
     }
     let mut child = command
         .spawn()
@@ -1186,7 +1186,7 @@ async fn call_cli_rotate(
             // Deliberately not the stop wording: an operator reading the IPC error or the
             // service log has to be able to tell "the SCM stopped us" from "this rotation
             // wedged". The duration is in the message because it is the only thing that
-            // makes the number in `ROTATE_HANG_BUDGET` falsifiable from a log line.
+            // makes the number in `ROTATION_TIME_LIMIT` falsifiable from a log line.
             Err(format!(
                 "CLI rotate exceeded its {:?} hang budget (child {} terminated and reaped)",
                 hang_budget,

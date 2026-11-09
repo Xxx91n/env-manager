@@ -183,7 +183,7 @@ Consulta [docs/secret-providers-guide.md](../../docs/secret-providers-guide.md) 
 
 `env-manager-service.exe` es un binario Rust independiente que gestiona el ciclo de vida del montaje de secretos mediante IPC por named pipe:
 
-- **RuntimeMode**: Service (gestionado por SCM, arranque del sistema), Background (iniciado por el usuario), Cli (puerta de enlace de un solo uso)
+- **ServiceMode**: Service (gestionado por SCM, arranque del sistema), Background (iniciado por el usuario), Cli (puerta de enlace de un solo uso)
 - **Bucle de reconciliación**: escaneo completo periódico cada 300 s, controlador idempotente por elemento, retraso de 30 s en el primer ciclo
 - **Registro de auditoría**: `audit-ledger.jsonl` de solo añadido y encadenado por hash, con rotación de 100 MB y detección de manipulación
 - **IPC**: indicador de pipe antisquatting, límite de 65536 bytes por solicitud, protocolo JSON delimitado por saltos de línea

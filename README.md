@@ -179,7 +179,7 @@ See [docs/secret-providers-guide.md](docs/secret-providers-guide.md) for per-pro
 
 `env-manager-service.exe` is a standalone Rust binary managing secret mount lifecycle via named pipe IPC:
 
-- **RuntimeMode**: Service (SCM-managed, machine boot), Background (user-launched), Cli (one-shot gateway)
+- **ServiceMode**: Service (SCM-managed, machine boot), Background (user-launched), Cli (one-shot gateway)
 - **Reconcile loop**: 300s periodic full-scan, idempotent per-item handler, 30s first-tick delay
 - **Audit ledger**: append-only hash-chained `audit-ledger.jsonl` with 100MB rotation and tamper detection
 - **IPC**: anti-squatting pipe flag, 65536-byte request cap, newline-delimited JSON protocol

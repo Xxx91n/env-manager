@@ -17,7 +17,7 @@ use std::time::Duration;
 
 use tokio_util::sync::CancellationToken;
 
-use crate::reconcile::{delegated_rotate_argv, rotate_mount_at, ROTATE_HANG_BUDGET};
+use crate::reconcile::{delegated_rotate_argv, rotate_mount_at, ROTATION_TIME_LIMIT};
 use crate::rotate_stop_tests::{MountFixture, ROTATION_SUITE_GATE};
 
 /// Every wait here is bounded, so a regression fails the test instead of wedging the runner
@@ -54,7 +54,7 @@ async fn provider_managed_periodic_mount_without_envelope_is_skipped_without_sta
                 &[],
                 "mount-1",
                 &shutdown,
-                ROTATE_HANG_BUDGET,
+                ROTATION_TIME_LIMIT,
             ),
         )
         .await
@@ -162,7 +162,7 @@ async fn completed_rotation_keeps_the_envelopes_the_child_wrote() {
             &arg_refs,
             "mount-1",
             &shutdown,
-            ROTATE_HANG_BUDGET,
+            ROTATION_TIME_LIMIT,
         ),
     )
     .await
@@ -205,7 +205,7 @@ async fn completed_rotation_skips_a_mount_that_vanished() {
             &arg_refs,
             "mount-1",
             &shutdown,
-            ROTATE_HANG_BUDGET,
+            ROTATION_TIME_LIMIT,
         ),
     )
     .await
@@ -246,7 +246,7 @@ async fn completed_rotation_tolerates_a_deleted_mount_file() {
             &arg_refs,
             "mount-1",
             &shutdown,
-            ROTATE_HANG_BUDGET,
+            ROTATION_TIME_LIMIT,
         ),
     )
     .await
@@ -285,7 +285,7 @@ async fn completed_rotation_reports_an_unreadable_mount_file() {
             &arg_refs,
             "mount-1",
             &shutdown,
-            ROTATE_HANG_BUDGET,
+            ROTATION_TIME_LIMIT,
         ),
     )
     .await
@@ -420,7 +420,7 @@ async fn completed_rotation_stamps_only_the_named_mount() {
             &arg_refs,
             "mount-1",
             &shutdown,
-            ROTATE_HANG_BUDGET,
+            ROTATION_TIME_LIMIT,
         ),
     )
     .await
