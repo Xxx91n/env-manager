@@ -1,5 +1,5 @@
 <!-- canonical: ../../README.md -->
-<!-- sync: ef2a485dfffb -->
+<!-- sync: ee7b425f38df -->
 
 <div align="center">
 
@@ -9,12 +9,11 @@
   <img src="../../docs/assets/logo.png" alt="شعار Env Manager" width="120" height="120">
 </picture>
 
-
 # Env Manager
 
-مدير متغيرات بيئة Windows بواجهتين — CLI بلغة C# مصمم للنصوص البرمجية ووكلاء الذكاء الاصطناعي، وGUI بتقنية Tauri للتحرير التفاعلي — فوق مجموعة واحدة من عقود السجل.
+أداة لإدارة متغيرات بيئة Windows بواجهتين: أداة سطر أوامر مكتوبة بلغة C# مخصصة للسكربتات ووكلاء الذكاء الاصطناعي، وتطبيق مكتبي مبني بـ Tauri للتحرير والتعديل السهل. كلتا الواجهتين تلتزمان بقواعد السجل (Registry) نفسها تماماً.
 
-**«يتكيف بسلاسة مع كل بيئة.»**
+**"يتكيف بسلاسة مع كل بيئة."**
 
 [![Release](https://img.shields.io/github/v/release/Xxx91n/env-manager)](https://github.com/Xxx91n/env-manager/releases)
 [![License](https://img.shields.io/badge/License-Apache--2.0-yellow.svg)](../../LICENSE)
@@ -34,23 +33,19 @@
 
 ### GUI
 
-<div dir="rtl">
-
 | | | |
 |:-:|:-:|:-:|
-| ![عرض المتغيرات](../../docs/assets/gallery/01-variables.webp)<br>**المتغيرات** — بحث، تصفية حسب النطاق، إجراءات لكل صف | ![نطاق النظام](../../docs/assets/gallery/02-variables-system.webp)<br>**نطاق النظام** — العناصر المحمية مقفلة | ![محرر PATH](../../docs/assets/gallery/03-path-editor.webp)<br>**محرر PATH** — كشف الإدخالات الميتة والمكررة |
-| ![الملفات الشخصية](../../docs/assets/gallery/04-profiles.webp)<br>**الملفات الشخصية** — تطبيق / تشغيل / وراثة | ![سجل التدقيق](../../docs/assets/gallery/07-audit.webp)<br>**سجل التدقيق** — متسلسل بالهاش وقابل للتحقق | ![مدير الخدمة](../../docs/assets/gallery/08-service.webp)<br>**مدير الخدمة** — تركيب الأسرار |
-
-</div>
+| ![عرض المتغيرات](../../docs/assets/gallery/01-variables.webp)<br>**المتغيرات** — بحث، تصفية حسب النطاق، إجراءات لكل صف | ![نطاق النظام](../../docs/assets/gallery/02-variables-system.webp)<br>**نطاق النظام** — قفل العناصر المحمية لمنع العبث | ![محرر PATH](../../docs/assets/gallery/03-path-editor.webp)<br>**محرر PATH** — اكتشاف المسارات الميتة والمكررة |
+| ![ملفات التعريف](../../docs/assets/gallery/04-profiles.webp)<br>**ملفات التعريف** — تطبيق، تشغيل، وراثة | ![سجل التدقيق](../../docs/assets/gallery/07-audit.webp)<br>**سجل التدقيق** — سلسلة تجزئة موثقة وقابلة للتحقق | ![مدير الخدمة](../../docs/assets/gallery/08-service.webp)<br>**مدير الخدمة** — نقاط ربط الأسرار |
 
 ## الميزات
 
-- **واجهتان** — `env-manager-cli` للنصوص البرمجية وCI، و`env-manager.exe` (Tauri 2 + Svelte) للتحرير التفاعلي. كلاهما يمر عبر عقدي السجل نفسيهما.
-- **محمي افتراضيًا** — لا يمكن حذف متغيرات النظام وإدخالات PATH أو إعادة تسميتها؛ كل كتابة متسلسلة عبر ثلاث طبقات (mutex + قفل كتابة + تحقق قبل الاستبدال).
-- **الملفات الشخصية** — تُطبَّق الملفات الشخصية العامة على السجل؛ بينما تحقن ملفات التشغيل كتلة بيئة معزولة في عملية واحدة دون لمس السجل. وراثة، ومعاينة التعارضات، وتراجع بترتيب عكسي.
-- **8 موفّري أسرار** — DPAPI وCredential Manager وSecretStore وHashiCorp Vault وSOPS وAzure Key Vault و1Password وAWS Secrets Manager. أوامر الأسرار لا تحفظ إلا أغلفة مشفّرة أو مراجع `mount:<id>` — وفجوة الأوامر العامة `add-var`/`edit-var` قد تكتب نصًّا صريحًا في السجل؛ وحدود تعرّض النص الصريح مبيّنة في [الأمان](#الأمان) و[docs/plaintext-sinks.md](../../docs/plaintext-sinks.md).
-- **صحة PATH** — يكتشف `path health` الإدخالات المكررة والميتة؛ `--fix` يعيد الكتابة، و`--dry-run` يكتفي بالتقرير.
-- **سجل التدقيق** — تاريخ للإضافة فقط (append-only) مربوط بسلسلة تجزئة SHA256، مع تراجع وتصدير للاسترداد من الكوارث.
+- **واجهتان للاستخدام** — `env-manager-cli` للسكربتات وخطوط البناء الآلي (CI)، وتطبيق `env-manager.exe` (مبني بـ Tauri 2 + Svelte) لتعديل المتغيرات بيسر عبر واجهة رسومية. كلاهما يعمل وفق نفس ضوابط وقواعد السجل.
+- **حماية مفعّلة تلقائياً** — لا يمكن حذف أو تغيير اسم متغيرات النظام أو مسارات PATH الأساسية. وعند تعديل الاسم أو تغيير النطاق، يتم التحقق من كتابة القيمة الجديدة بنجاح أولاً قبل إزالة القيمة القديمة. وكل عملية كتابة تخضع لثلاثة أقفال حماية: قفل Windows mutex في أداة سطر الأوامر، وقفل قراءة/كتابة في طبقة Rust، وطابور كتابة في الواجهة الرسومية.
+- **ملفات التعريف** — الملف العام (Global profile) يكتب قيمه مباشرة في سجل الويندوز، بينما ملف التشغيل (Launch profile) يضع قيمه داخل بيئة عملية فرعية واحدة فقط ولا يكتب في السجل إطلاقاً. يمكن للملفات أن ترث القيم من ملفات أخرى، ويعرض لك التطبيق أي تعارضات محتملة قبل التطبيق.
+- **ثمانية مزودات للأسرار** — يدعم التطبيق DPAPI، وCredential Manager، وSecretStore، وHashiCorp Vault، وSOPS، وAzure Key Vault، و1Password، وAWS Secrets Manager. تُحفظ القيم السرية في صورة أغلفة مشفرة أو عبر مراجع `mount:<id>`. تبقى الأوامر العامة `add-var` و`edit-var` قادرة على كتابة النصوص العادية في السجل؛ وتفاصيل الحدود الآمنة موضحة في قسم [الأمان](#الأمان) ومستند [docs/plaintext-sinks.md](../../docs/plaintext-sinks.md).
+- **سلامة مسارات PATH** — يكتشف الأمر `path health` المسارات المكررة وغير الموجودة؛ والخيار `--fix` يصلح القائمة تلقائياً، بينما يكتفي `--dry-run` بعرض تقرير دون تعديل فعلي.
+- **سجل التدقيق** — سجل إلحاقي فقط (append-only) محمي بسلسلة تجزئة SHA256، يدعم التراجع والتصدير للتعافي من الكوارث.
 
 ## لوكلاء الذكاء الاصطناعي
 
@@ -61,50 +56,49 @@ env-manager-cli agents --summary  # one-line machine-readable spec
 env-manager-cli agents --json     # full command table as structured JSON
 ```
 
-- [AGENTS.md](../../AGENTS.md) — تعليمات على مستوى المستودع للوكلاء (البنية، الحدود الصارمة، الاختبار).
-- [AGENTS.cli.md](../../AGENTS.cli.md) — يُوزَّع مع الملف التنفيذي للـCLI حتى يتمكن أي وكيل من اكتشاف العقد وقت التشغيل.
-- **سطح وكيل محدد النطاق بالقدرات** — القائمة البيضاء الاختيارية `agentCapabilities` في `secret-providers.json` تتيح للبيئات المنتشرة رفض استدعاءات set/delete المتوازية القادمة من الوكلاء.
+- [AGENTS.md](../../AGENTS.md) — إرشادات الوكلاء على مستوى المستودع (البنية المعمارية، الحدود الصارمة، الاختبارات).
+- [AGENTS.cli.md](../../AGENTS.cli.md) — مدمج مباشرة داخل أداة سطر الأوامر، مما يتيح للوكيل قراءة قواعد العمل وقت التشغيل.
 
 ## الأمان
 
 > [!WARNING]
-> الإصدارات الحالية **غير موقعة برمجيًا**. قد يعرض Windows SmartScreen تحذير «تطبيق غير معروف» عند التشغيل الأول — انقر «مزيد من المعلومات» ثم «التشغيل على أي حال». تقدمنا بطلب للحصول على توقيع كود مجاني للمشاريع مفتوحة المصدر عبر SignPath Foundation؛ وبمجرد الموافقة، ستُوقَّع جميع نواتج الإصدار (MSI + EXE). راجع [سياسة توقيع الكود](../../docs/code-signing-policy.md).
+> الإصدارات الحالية **غير موقعة بشهادة رقمية بعد**. قد يظهر لك تحذير Windows SmartScreen بأن التطبيق غير معروف عند أول تشغيل — انقر على "مزيد من المعلومات" (More info) ثم "التشغيل على أي حال" (Run anyway). لقد تقدمنا بطلب للحصول على توقيع مجاني للمشاريع مفتوحة المصدر عبر مؤسسة SignPath؛ وبمجرد اعتماده، ستكون جميع ملفات التثبيت والتشغيل موقعة رقمياً. راجع [سياسة التوقيع الرقمي](../../docs/code-signing-policy.md).
 
-تُعطَّل المتغيرات المحمية وإدخالات PATH قبل حذفها، مع تحقق دقيق من نوع القيمة في السجل عند الاستعادة. تستخدم IPC عبر named pipe أعلامًا مضادة للاستحواذ (anti-squatting) والتحقق من المدخلات (حد أقصى 64 وسيطًا، وسقف 32767 حرفًا، ورفض البايتات الفارغة). راجع [SECURITY.md](../../SECURITY.md) للإبلاغ عن الثغرات.
+يتم تعطيل المتغيرات المحمية ومسارات PATH قبل حذفها، كما يتم فحص نوع القيمة في السجل بدقة عند الاستعادة. وتخضع القيم للتحقق قبل وصولها إلى السجل، وترفض القناة المسماة (named pipe) إنشاء طرف ثانٍ وتضع حداً أقصى لحجم الطلب قدره 65536 بايت. راجع [SECURITY.md](../../SECURITY.md) للإبلاغ عن الثغرات الأمنية.
 
-**نموذج التهديد.** الخصم الذي *لا* ندافع ضده هو أي عملية تعمل داخل جلسة مستخدم Windows الخاصة بك — فهي تستطيع أصلًا استدعاء `profile reveal-secret`، أو قراءة كتلة بيئة العملية الفرعية المُطلَقة، أو اعتراض الملفات المؤقتة العابرة التي تنتجها الموفّرات. ما *يقيّده* التصميم فعلًا: نص DPAPI-CurrentUser المشفّر غير قابل للفك لمستخدم آخر أو جهاز آخر، وأوامر الأسرار لا يمكن أن توصل سرًّا إلى السجل (باستثناء فجوة الأوامر العامة المذكورة)، والمصابّ الوحيدة *المقصودة* لحمل قيمة سرية هي المصمَّمة الموثّقة في مصفوفة حدود النص الصريح أدناه.
+**نموذج التهديد.** لا يحمي التطبيق من البرامج التي تعمل داخل نفس جلسة مستخدم Windows الخاصة بك؛ إذ بإمكان مثل تلك البرامج قراءة متغيرات البيئة للعمليات الفرعية أو استدعاء `profile reveal-secret` أو الوصول للملفات المؤقتة اللحظية للمزودات. ولكن التصميم يقلل الأضرار بشكل فعال: فنصوص DPAPI CurrentUser المشفرة لا يمكن فكها من قِبل مستخدم آخر أو على جهاز مختلف، كما تمنع أوامر الأسرار وصول أي سر إلى السجل (باستثناء ما ذُكر أعلاه حول الأوامر العامة)، وتقتصر المواضع التي يمكن أن يظهر فيها النص الصريح على الأماكن المحددة في جدول النصوص الصريحة المشار إليه أدناه.
 
-**حدود النص الصريح.** المصفوفة الكاملة لكل مصبّ — أين يمكن أن يوجد النص الصريح، ولأي مدة، ومن ينظفه — موجودة في [docs/plaintext-sinks.md](../../docs/plaintext-sinks.md)؛ وقسم Plaintext lifecycle في `docs/architecture.md` هو قائمة السماح المرجعية لكل سطح. تصفير الذاكرة وتنقية السجلات إجراءات نظافة بأفضل جهد لا ضمانات؛ ويفحص `tests/canary-redaction.Tests.ps1` سبعة مواضع إخراج بحثًا عن canary مزروع، وتؤكد مجموعة العقود المشتركة `plaintext-never-in-envelope` على الموفّرين الثمانية جميعًا.
+**حدود النص الصريح.** الجدول الكامل — الذي يوضح أين يمكن أن يوجد النص الصريح، ولأي مدة، وما الذي يزيله — متاح في [docs/plaintext-sinks.md](../../docs/plaintext-sinks.md). ويعد قسم دورة حياة النص الصريح (Plaintext lifecycle) في `docs/architecture.md` هو المرجع الأساسي لكل سطح. ويعد تصفير الذاكرة وتنقية السجلات جهوداً وقائية حثيثة لا ضمانات مطلقة: يقوم اختبار `tests/canary-redaction.Tests.ps1` بفحص 7 أسطح إخراج للتأكد من عدم تسرب أي بيانات اختبارية، وتؤكد اختبارات العقود المشتركة `plaintext-never-in-envelope` عبر كافة المزودات الثمانية.
 
 ## التثبيت
 
-### مثبّت MSI
+### مثبت MSI
 
-نزّل ملف MSI من [GitHub Releases](https://github.com/Xxx91n/env-manager/releases) وشغّله. ينشئ اختصارات قائمة ابدأ تلقائيًا. متاح بإصدارات x64 وx86 وARM64.
+نزّل ملف MSI من صفحة [إصدارات GitHub](https://github.com/Xxx91n/env-manager/releases) ثم شغله. سيتم إنشاء اختصارات قائمة ابدأ تلقائياً. متوفر لأنظمة x64 وx86 وARM64.
 
-### Portable
+### النسخة المحمولة (Portable)
 
-نزّل ملف ZIP المحمول من [GitHub Releases](https://github.com/Xxx91n/env-manager/releases). فك الضغط وشغّل `env-manager.exe` مباشرة. لا حاجة للتثبيت.
+نزّل ملف ZIP المحمول من صفحة [إصدارات GitHub](https://github.com/Xxx91n/env-manager/releases). فك الضغط وشغل `env-manager.exe` مباشرة بدون الحاجة لأي تثبيت.
 
-### CLI فقط
+### نسخة سطر الأوامر فقط (CLI-Only)
 
-نزّل ZIP الخاص بـCLI فقط للاستخدام بدون واجهة أو عبر النصوص البرمجية: `env-manager-cli.exe` بالإضافة إلى ملفات `.dll`. بدون GUI وبدون اعتماد على WebView2.
+نزّل ملف ZIP الخاص بسطر الأوامر للاستخدام مع السكربتات أو في بيئات العمل المؤتمتة: يحتوي على `env-manager-cli.exe` وملفات `.dll` التابعة له، بدون واجهة رسومية ودون الحاجة لـ WebView2.
 
 ### المتطلبات المسبقة
 
 > [!IMPORTANT]
-> إصدارات **Portable** و**CLI-Only** تعتمد على framework: تتطلب **.NET 10 Desktop Runtime** على الجهاز المستهدف — نزّله من [صفحة تنزيل .NET الرسمية](https://dotnet.microsoft.com/download/dotnet/10.0). **مثبّت MSI** لا يتحقق من .NET ولا يثبّته — ثبّت وقت التشغيل بنفسك قبل التشغيل الأول.
+> نسختي **Portable** و**CLI-Only** تعتمدان على بيئة التشغيل المشتركة: تحتاجان إلى تثبيت **.NET 10 Desktop Runtime** على الجهاز المستهدف — يمكنك تنزيله من [صفحة تنزيل .NET الرسمية](https://dotnet.microsoft.com/download/dotnet/10.0). علماً بأن **مثبت MSI** لا يفحص وجود .NET ولا يقوم بتثبيته تلقائياً؛ لذا يُرجى تثبيت بيئة التشغيل بنفسك قبل التشغيل لأول مرة.
 >
-> **بيئة WebView2 Runtime** (للواجهة GUI) مثبتة مسبقًا على Windows 11 ومتاحة لنظام Windows 10 21H2+ من [Microsoft](https://developer.microsoft.com/microsoft-edge/webview/).
+> بيئة **WebView2 Runtime** (المطلوبة للواجهة الرسومية) مثبتة مسبقاً في Windows 11 ومتاحة لنظام Windows 10 الإصدار 21H2 والإصدارات الأحدث من موقع [Microsoft](https://developer.microsoft.com/microsoft-edge/webview/).
 
-بالنسبة للأدوات الخارجية الاختيارية لموفّري الأسرار (SOPS و1Password CLI وVault CLI وAWS CLI وAzure CLI وPowerShell 7)، راجع [دليل موفّري الأسرار](../../docs/secret-providers-guide.md).
+للاطلاع على أدوات مزودات الأسرار الخارجية الاختيارية (SOPS و1Password CLI وVault CLI وAWS CLI وAzure CLI وPowerShell 7)، يرجى مراجعة [دليل مزودات الأسرار](../../docs/secret-providers-guide.md).
 
 ### winget
 
 > [!NOTE]
-> توزيع عبر winget مخطط له لكنه غير متاح بعد. تابع المستجدات عبر GitHub Issues.
+> التوزيع عبر winget قيد التخطيط وسيتوفر قريباً. يمكنك متابعة تقدمه عبر مشكلات GitHub (Issues).
 
-### من المصدر
+### البناء من المصدر
 
 ```bash
 git clone https://github.com/Xxx91n/env-manager.git
@@ -113,43 +107,43 @@ cd frontend && npm ci && cd ..
 node scripts/build.mjs --arch x64
 ```
 
-يتطلب .NET 10 SDK وNode.js 18+ وRust مستقرًا مع هدف MSVC أو GNU. راجع [docs/build-and-release.md](../../docs/build-and-release.md) للتفاصيل.
+يتطلب ذلك .NET 10 SDK وNode.js 18 فما فوق، وإصدار Rust المستقر مع هدف MSVC أو GNU. راجع [docs/build-and-release.md](../../docs/build-and-release.md) للمزيد من التفاصيل.
 
 ## الاستخدام
 
-### CLI
+### سطر الأوامر (CLI)
 
 ```bash
-# List / get / set
+# عرض / جلب / تعيين
 env-manager-cli.exe list
 env-manager-cli.exe get PATH
 env-manager-cli.exe set JAVA_HOME "D:\jdk17" --scope system
 
-# Create a Launch profile and launch with isolated env
+# إنشاء ملف تشغيل والتشغيل في بيئة معزولة
 env-manager-cli.exe profile create dev --type launch --target python.exe
 env-manager-cli.exe profile add-secret dev API_KEY "sk-xxx"
 env-manager-cli.exe profile launch dev
 
-# PATH health
+# التحقق من سلامة مسارات PATH
 env-manager-cli.exe path health
 
-# Backup / restore
+# النسخ الاحتياطي / الاستعادة
 env-manager-cli.exe backup --output backup.json
 env-manager-cli.exe restore backup.json
 
-# Disaster recovery + tamper-evident audit
+# التعافي من الكوارث والتدقيق الموثق ضد التلاعب
 env-manager-cli.exe export-state --output state.dpapi
 env-manager-cli.exe audit verify --strict
 
-# Service control
+# التحكم في الخدمة
 env-manager-cli.exe service status
 ```
 
-راجع [docs/cli-commands.md](../../docs/cli-commands.md) للحصول على المرجع الكامل للأوامر.
+راجع [docs/cli-commands.md](../../docs/cli-commands.md) للحصول على المرجع الكامل لجميع الأوامر.
 
-### GUI
+### الواجهة الرسومية (GUI)
 
-شغّل `env-manager.exe`. توفر الواجهة GUI قائمة متغيرات في الوقت الفعلي مع بحث وتصفية حسب النطاق وتحرير مضمّن ومحرر PATH لإعادة الترتيب بالسحب والإفلات وإدارة الملفات الشخصية واختيار موفّر الأسرار ولوحة التحكم في الخدمة وسجل التدقيق ودعم i18n بعشر لغات.
+شغل `env-manager.exe`. تقدم لك الواجهة عرضاً مباشراً لقائمة المتغيرات مع خاصية البحث، والتصفية حسب النطاق، والتحرير السريع، ومحرر لمسارات PATH يدعم السحب والإفلات، وإدارة ملفات التعريف، واختيار مزود الأسرار، والتحكم في الخدمة، وسجل التدقيق، مع دعم كامل لعشر لغات.
 
 ## البنية
 
@@ -162,56 +156,49 @@ flowchart LR
     CLI --> SEC[Secret Providers]
 ```
 
-- **CLI**: ملف تنفيذي أحادي الملف بلغة C# .NET 10 — طبقة التنسيق وبوابة السجل.
-- **الخدمة**: ملف تنفيذي مستقل بلغة Rust يدير دورة حياة تركيب الأسرار عبر IPC باستخدام named pipe.
-- **GUI**: واجهة أمامية Tauri 2 + Svelte 5 تستخدم عقدي IPC نفسيهما.
+- **CLI**: ملف تنفيذي بلغة C# .NET 10 يتولى تنسيق العمليات وهو المسؤول الوحيد عن الكتابة في السجل.
+- **الخدمة (Service)**: برنامج مستقل بلغة Rust يحافظ على تحديث نقاط ربط الأسرار ويتواصل عبر القناة المسماة (named pipe).
+- **الواجهة (GUI)**: واجهة أمامية مبنية بـ Tauri 2 + Svelte 5 تستخدم نفس عقود IPC.
 
-## موفّرو الأسرار
+## مزودات الأسرار
 
-8 خلفيات (backends) لموفّري الأسرار مع فحص مسبق للتفعيل — تظهر حالات الفشل كلافتات كهرمانية مضمّنة مباشرة في محرر الملفات الشخصية:
+ثمانية مزودات للأسرار، يتم فحص جاهزية كل منها عند التبديل إليه. وتظهر أي مشكلة تمنع الاستخدام في صورة شريط تنبيه برتقالي داخل محرر ملفات التعريف:
 
-| الموفّر | طريقة المصادقة | التحديث الدوري | التوثيق |
+| المزود | طريقة المصادقة | التحديث الدوري بمؤقت | التوثيق |
 |---|---|---|---|
-| DPAPI CurrentUser | Windows DPAPI | لا (لكل مستخدم) | [دليل](../../docs/secret-providers-guide.md) |
-| Windows Credential Manager | CredMan + DPAPI | لا (لكل مستخدم) | [دليل](../../docs/secret-providers-guide.md) |
-| PowerShell SecretManagement | SecretStore vault | لا (CreatedOnly) | [دليل](../../docs/secret-providers-guide.md) |
-| HashiCorp Vault KV v2 | VAULT_TOKEN / AppRole cert | نعم | [دليل](../../docs/secret-providers-guide.md) |
-| SOPS | Age / PGP / KMS | لا (CreatedOnly) | [دليل](../../docs/secret-providers-guide.md) |
-| Azure Key Vault | SP cert / managed identity | نعم | [دليل](../../docs/secret-providers-guide.md) |
-| 1Password CLI | OP_SERVICE_ACCOUNT_TOKEN | نعم | [دليل](../../docs/secret-providers-guide.md) |
-| AWS Secrets Manager | SigV4 + access keys | نعم | [دليل](../../docs/secret-providers-guide.md) |
+| DPAPI CurrentUser | Windows DPAPI | لا (لكل مستخدم) | [الدليل](../../docs/secret-providers-guide.md) |
+| Windows Credential Manager | Credential Manager + DPAPI | لا (لكل مستخدم) | [الدليل](../../docs/secret-providers-guide.md) |
+| PowerShell SecretManagement | مستودع SecretStore | لا (`CreatedOnly`) | [الدليل](../../docs/secret-providers-guide.md) |
+| HashiCorp Vault KV v2 | رمز VAULT_TOKEN / شهادة AppRole | نعم | [الدليل](../../docs/secret-providers-guide.md) |
+| SOPS | Age / PGP / KMS | لا (`CreatedOnly`) | [الدليل](../../docs/secret-providers-guide.md) |
+| Azure Key Vault | شهادة كائن الخدمة / الهوية المدارة | نعم | [الدليل](../../docs/secret-providers-guide.md) |
+| 1Password CLI | رمز OP_SERVICE_ACCOUNT_TOKEN | نعم | [الدليل](../../docs/secret-providers-guide.md) |
+| AWS Secrets Manager | توقيع SigV4 + مفاتيح الوصول | نعم | [الدليل](../../docs/secret-providers-guide.md) |
 
-راجع [docs/secret-providers-guide.md](../../docs/secret-providers-guide.md) لمعرفة المتطلبات الخاصة بكل موفّر والإعداد لمرة واحدة وخطوات إصلاح أخطاء التفعيل.
+راجع [docs/secret-providers-guide.md](../../docs/secret-providers-guide.md) لمعرفة المتطلبات المسبقة لكل مزود، وخطوات الإعداد لأول مرة، وطرق معالجة أخطاء التفعيل.
 
 ## وضع الخدمة
 
-`env-manager-service.exe` هو ملف تنفيذي مستقل بلغة Rust يدير دورة حياة تركيب الأسرار عبر IPC باستخدام named pipe:
+`env-manager-service.exe` هو برنامج مستقل بلغة Rust يضمن بقاء نقاط ربط الأسرار حديثة ويستقبل الطلبات عبر قناة مسماة (named pipe):
 
-- **ServiceMode**: Service (تديره SCM، عند إقلاع الجهاز)، Background (يُشغَّل بواسطة المستخدم)، Cli (بوابة لمرة واحدة)
-- **حلقة المطابقة**: فحص كامل دوري كل 300 ثانية، معالج لكل عنصر بسلوك idempotent، وتأخير 30 ثانية قبل أول دورة
-- **سجل التدقيق**: `audit-ledger.jsonl` للإضافة فقط بسلسلة تجزئة، مع تدوير عند 100 ميجابايت واكتشاف العبث
-- **IPC**: علم named pipe مضاد للاستحواذ، سقف 65536 بايت للطلب، بروتوكول JSON مفصول بفواصل الأسطر
-- **Watchdog**: استرداد من طبقتين — إعادة تشغيل تلقائي عبر SCM (وضع Service) + مراقب ping كل 30 ثانية في GUI (وضع Background)
-
-## Limitations
-
-- الإصدارات الحالية غير موقعة برمجيًا — قد يظهر تحذير SmartScreen عند التشغيل الأول (راجع قسم «الأمان»).
-- التوزيع عبر winget مخطط له لكنه غير متاح بعد.
-- تتطلب واجهة GUI وقت تشغيل WebView2، وتتطلب نسختا Portable وCLI فقط .NET 10 Desktop Runtime (راجع المتطلبات المسبقة).
-- Windows فقط.
+- **أوضاع الخدمة (ServiceMode)**: وضع الخدمة (تتحكم به إدارة خدمات الويندوز SCM عند إقلاع النظام)، والوضع الخلفي Background (يشغله المستخدم)، ووضع Cli (بوابة سريعة للأوامر الفردية).
+- **حلقة المطابقة (Reconcile loop)**: فحص دوري شامل كل 300 ثانية، معالجة آمنة غير مكررة لكل عنصر، مع تأخير مدته 30 ثانية عند أول تشغيل.
+- **سجل التدقيق**: ملف `audit-ledger.jsonl` إلحاقي محمي بسلسلة تجزئة، مع تدوير تلقائي عند بلوغ 100 ميجابايت وميزة كشف أي محاولة تلاعب.
+- **الاتصال الداخلي (IPC)**: استخدام علم الحماية من الاستحواذ على القناة، حد أقصى للطلب 65536 بايت، وبروتوكول أسطر JSON.
+- **آلية المراقبة (Watchdog)**: حماية واستعادة من مستويين — إعادة تشغيل تلقائية من SCM (في وضع الخدمة) + فحص دوري كل 30 ثانية من الواجهة الرسومية (في الوضع الخلفي).
 
 ## التوثيق
 
 | المستند | المحتوى |
 |---|---|
 | [CHANGELOG.md](../../CHANGELOG.md) | سجل الإصدارات (بصيغة keepachangelog) |
-| [docs/cli-commands.md](../../docs/cli-commands.md) | المرجع الكامل لأوامر CLI |
-| [docs/architecture.md](../../docs/architecture.md) | البنية بعمق |
-| [docs/plaintext-sinks.md](../../docs/plaintext-sinks.md) | أين يمكن أن يوجد نص الأسرار الصريح |
-| [docs/backup-and-profiles.md](../../docs/backup-and-profiles.md) | النسخ الاحتياطي والاستعادة ودلالات الملفات الشخصية |
-| [docs/secret-providers-guide.md](../../docs/secret-providers-guide.md) | إعداد موفّري الأسرار |
-| [docs/build-and-release.md](../../docs/build-and-release.md) | عملية البناء والإصدار |
-| [AGENTS.md](../../AGENTS.md) / [AGENTS.cli.md](../../AGENTS.cli.md) | أدلة موجّهة للوكلاء |
+| [docs/cli-commands.md](../../docs/cli-commands.md) | الدليل الكامل لأوامر سطر الأوامر |
+| [docs/architecture.md](../../docs/architecture.md) | البنية المعمارية بتفصيل عميق |
+| [docs/plaintext-sinks.md](../../docs/plaintext-sinks.md) | أين يمكن أن تتواجد النصوص السرية الصريحة |
+| [docs/backup-and-profiles.md](../../docs/backup-and-profiles.md) | النسخ الاحتياطي، الاستعادة، ودلالات ملفات التعريف |
+| [docs/secret-providers-guide.md](../../docs/secret-providers-guide.md) | إعداد وتهيئة مزودات الأسرار |
+| [docs/build-and-release.md](../../docs/build-and-release.md) | دورة البناء والتحضير للإصدار |
+| [AGENTS.md](../../AGENTS.md) / [AGENTS.cli.md](../../AGENTS.cli.md) | أدلة مخصصة لوكلاء الذكاء الاصطناعي |
 
 ## القائمون على الصيانة
 
@@ -219,8 +206,8 @@ flowchart LR
 
 ## المساهمة
 
-نرحب بالمساهمات عبر Issues وPR. اقرأ [AGENTS.md](../../AGENTS.md) أولاً لفهم حدود البنية وسياسة الاختبار.
+نرحب بجميع المساهمات والاقتراحات عبر مشكلات GitHub وطلبات السحب (PRs). يرجى قراءة [AGENTS.md](../../AGENTS.md) أولاً للتعرف على الحدود المعمارية وسياسة الاختبارات.
 
 ## الترخيص
 
-Apache-2.0 © 2026 Env Manager Contributors. راجع [LICENSE](../../LICENSE).
+مرخص تحت رخصة Apache-2.0 © عام 2026 لمساهمي Env Manager. راجع [LICENSE](../../LICENSE).
