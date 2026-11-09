@@ -1,4 +1,4 @@
-# check-docs.ps1 - the cheap gate for a docs-only change.
+﻿# check-docs.ps1 - the cheap gate for a docs-only change.
 #
 # Why this exists: a prose diff used to pay the full two-suite test bill, and
 # several live docs still asserted facts the code contradicted (a singleton
