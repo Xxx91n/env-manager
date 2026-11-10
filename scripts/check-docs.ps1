@@ -206,8 +206,7 @@ function Find-MemberFiles([string[]]$Files, [string]$Type, [string]$Member, [swi
 
 $script:sectionMarkers = @(
     @{ Name = 'Env Manager'; Pattern = '(?i)env\s*manager' },
-    @{ Name = 'Showcase'; Pattern = $null },
-    @{ Name = 'GUI'; Pattern = '(?i)assets/gallery|gallery/' },
+    @{ Name = 'Showcase'; Pattern = '(?i)user-attachments/assets/' },
     @{ Name = 'Features'; Pattern = '(?i)plaintext-sinks' },
     @{ Name = 'For AI agents'; Pattern = '(?i)AGENTS\.cli\.md' },
     @{ Name = 'Security'; Pattern = '(?i)code-signing-policy\.md|SECURITY\.md' },

@@ -28,12 +28,7 @@ A Windows environment-variable manager with two front ends: a C# command-line to
 
 ## Showcase
 
-### GUI
-
-| | | |
-|:-:|:-:|:-:|
-| ![Variables view](docs/assets/gallery/01-variables.webp)<br>**Variables** — search, scope filter, per-row actions | ![System scope](docs/assets/gallery/02-variables-system.webp)<br>**System scope** — protected entries locked | ![PATH Editor](docs/assets/gallery/03-path-editor.webp)<br>**PATH Editor** — dead and duplicate entry detection |
-| ![Profiles](docs/assets/gallery/04-profiles.webp)<br>**Profiles** — apply, launch, inherit | ![Audit Ledger](docs/assets/gallery/07-audit.webp)<br>**Audit Ledger** — hash-chained, verifiable | ![Service Manager](docs/assets/gallery/08-service.webp)<br>**Service Manager** — secret mounts |
+https://github.com/user-attachments/assets/7657b508-42bb-45a8-94b7-7c1fa052a4d0
 
 ## Features
 
