@@ -1,5 +1,5 @@
 <!-- canonical: ../../README.md -->
-<!-- sync: ee7b425f38df -->
+<!-- sync: 7ef28678ebbb -->
 
 <div align="center">
 
@@ -31,12 +31,7 @@ Un gestor de variables de entorno para Windows con dos interfaces: una herramien
 
 ## Showcase
 
-### GUI
-
-| | | |
-|:-:|:-:|:-:|
-| ![Vista de variables](../../docs/assets/gallery/01-variables.webp)<br>**Variables** — búsqueda, filtro de ámbito y acciones por fila | ![Ámbito de sistema](../../docs/assets/gallery/02-variables-system.webp)<br>**Ámbito de sistema** — entradas protegidas bloqueadas | ![Editor de PATH](../../docs/assets/gallery/03-path-editor.webp)<br>**Editor de PATH** — detección de rutas rotas y duplicadas |
-| ![Profiles](../../docs/assets/gallery/04-profiles.webp)<br>**Profiles** — aplicar, lanzar y heredar | ![Audit Ledger](../../docs/assets/gallery/07-audit.webp)<br>**Audit Ledger** — encadenado por hash y verificable | ![Service Manager](../../docs/assets/gallery/08-service.webp)<br>**Service Manager** — secret mounts |
+https://github.com/user-attachments/assets/7657b508-42bb-45a8-94b7-7c1fa052a4d0
 
 ## Características
 

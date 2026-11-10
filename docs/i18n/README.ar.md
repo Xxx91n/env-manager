@@ -1,5 +1,5 @@
 <!-- canonical: ../../README.md -->
-<!-- sync: ee7b425f38df -->
+<!-- sync: 7ef28678ebbb -->
 
 <div align="center">
 
@@ -31,12 +31,7 @@
 
 ## العروض التوضيحية
 
-### GUI
-
-| | | |
-|:-:|:-:|:-:|
-| ![عرض المتغيرات](../../docs/assets/gallery/01-variables.webp)<br>**المتغيرات** — بحث، تصفية حسب النطاق، إجراءات لكل صف | ![نطاق النظام](../../docs/assets/gallery/02-variables-system.webp)<br>**نطاق النظام** — قفل العناصر المحمية لمنع العبث | ![محرر PATH](../../docs/assets/gallery/03-path-editor.webp)<br>**محرر PATH** — اكتشاف المسارات الميتة والمكررة |
-| ![ملفات التعريف](../../docs/assets/gallery/04-profiles.webp)<br>**ملفات التعريف** — تطبيق، تشغيل، وراثة | ![سجل التدقيق](../../docs/assets/gallery/07-audit.webp)<br>**سجل التدقيق** — سلسلة تجزئة موثقة وقابلة للتحقق | ![مدير الخدمة](../../docs/assets/gallery/08-service.webp)<br>**مدير الخدمة** — نقاط ربط الأسرار |
+https://github.com/user-attachments/assets/7657b508-42bb-45a8-94b7-7c1fa052a4d0
 
 ## الميزات
 

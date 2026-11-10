@@ -1,5 +1,5 @@
 <!-- canonical: ../../README.md -->
-<!-- sync: ee7b425f38df -->
+<!-- sync: 7ef28678ebbb -->
 
 <div align="center">
 
@@ -31,12 +31,7 @@ Un gestionnaire de variables d'environnement pour Windows doté de deux interfac
 
 ## Showcase
 
-### GUI
-
-| | | |
-|:-:|:-:|:-:|
-| ![Vue des variables](../../docs/assets/gallery/01-variables.webp)<br>**Variables** — recherche, filtre par portée, actions par ligne | ![Portée système](../../docs/assets/gallery/02-variables-system.webp)<br>**Portée système** — entrées protégées verrouillées | ![Éditeur PATH](../../docs/assets/gallery/03-path-editor.webp)<br>**Éditeur PATH** — repérage des doublons et des chemins introuvables |
-| ![Profils](../../docs/assets/gallery/04-profiles.webp)<br>**Profils** — appliquer, lancer, hériter | ![Registre d'audit](../../docs/assets/gallery/07-audit.webp)<br>**Registre d'audit** — chaîne de hachage infalsifiable | ![Gestionnaire de services](../../docs/assets/gallery/08-service.webp)<br>**Gestionnaire de services** — montages de secrets |
+https://github.com/user-attachments/assets/7657b508-42bb-45a8-94b7-7c1fa052a4d0
 
 ## Features
 

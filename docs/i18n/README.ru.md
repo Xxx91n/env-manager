@@ -1,5 +1,5 @@
 <!-- canonical: ../../README.md -->
-<!-- sync: ee7b425f38df -->
+<!-- sync: 7ef28678ebbb -->
 
 <div align="center">
 
@@ -31,12 +31,7 @@
 
 ## Демонстрация
 
-### GUI
-
-| | | |
-|:-:|:-:|:-:|
-| ![Просмотр переменных](../../docs/assets/gallery/01-variables.webp)<br>**Переменные** — быстрый поиск, фильтр по области видимости и действия в каждой строке | ![Область system](../../docs/assets/gallery/02-variables-system.webp)<br>**Системные переменные** — защита важных записей от случайного удаления | ![Редактор PATH](../../docs/assets/gallery/03-path-editor.webp)<br>**Редактор PATH** — поиск дубликатов и битых путей |
-| ![Профили](../../docs/assets/gallery/04-profiles.webp)<br>**Профили** — применение в систему, запуск процессов и наследование | ![Журнал аудита](../../docs/assets/gallery/07-audit.webp)<br>**Журнал аудита** — защищённая хеш-цепочка изменений с возможностью проверки | ![Диспетчер службы](../../docs/assets/gallery/08-service.webp)<br>**Диспетчер службы** — подключение секретов |
+https://github.com/user-attachments/assets/7657b508-42bb-45a8-94b7-7c1fa052a4d0
 
 ## Возможности
 
