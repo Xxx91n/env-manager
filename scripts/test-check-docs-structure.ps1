@@ -12,8 +12,7 @@ $baseDoc = @'
 
 # Env Manager
 ## Showcase
-### GUI
-docs/assets/gallery/01-variables.webp
+https://github.com/user-attachments/assets/00000000-0000-0000-0000-000000000000
 ## Features
 docs/plaintext-sinks.md
 ## For AI agents

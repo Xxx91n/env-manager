@@ -1,5 +1,5 @@
 <!-- canonical: ../../README.md -->
-<!-- sync: ee7b425f38df -->
+<!-- sync: 7ef28678ebbb -->
 
 <div align="center">
 
@@ -31,12 +31,7 @@ Ein Manager für Windows-Umgebungsvariablen mit zwei Oberflächen: ein C#-Komman
 
 ## Showcase
 
-### GUI
-
-| | | |
-|:-:|:-:|:-:|
-| ![Variablenansicht](../../docs/assets/gallery/01-variables.webp)<br>**Variablen** — Suche, Bereichsfilter, Aktionen pro Zeile | ![Systembereich](../../docs/assets/gallery/02-variables-system.webp)<br>**Systembereich** — geschützte Einträge gesperrt | ![PATH-Editor](../../docs/assets/gallery/03-path-editor.webp)<br>**PATH-Editor** — tote und doppelte Einträge erkennen |
-| ![Profile](../../docs/assets/gallery/04-profiles.webp)<br>**Profile** — anwenden, starten, erben | ![Audit Ledger](../../docs/assets/gallery/07-audit.webp)<br>**Audit Ledger** — kryptografisch verkettet, nachprüfbar | ![Dienstverwaltung](../../docs/assets/gallery/08-service.webp)<br>**Dienstverwaltung** — Secret-Mounts verwalten |
+https://github.com/user-attachments/assets/7657b508-42bb-45a8-94b7-7c1fa052a4d0
 
 ## Features
 

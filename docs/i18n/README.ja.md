@@ -1,5 +1,5 @@
 <!-- canonical: ../../README.md -->
-<!-- sync: ee7b425f38df -->
+<!-- sync: 7ef28678ebbb -->
 
 <div align="center">
 
@@ -31,12 +31,7 @@ Windows の環境変数を手軽に管理できるツールです。スクリプ
 
 ## Showcase
 
-### GUI
-
-| | | |
-|:-:|:-:|:-:|
-| ![変数ビュー](../../docs/assets/gallery/01-variables.webp)<br>**変数** — 検索、スコープでの絞り込み、行ごとの操作 | ![System スコープ](../../docs/assets/gallery/02-variables-system.webp)<br>**System スコープ** — 保護エントリはロック済み | ![PATH エディター](../../docs/assets/gallery/03-path-editor.webp)<br>**PATH エディター** — リンク切れや重複の検出 |
-| ![プロファイル](../../docs/assets/gallery/04-profiles.webp)<br>**プロファイル** — 適用、起動、継承 | ![監査台帳](../../docs/assets/gallery/07-audit.webp)<br>**監査台帳** — ハッシュチェーンで検証可能 | ![サービスマネージャー](../../docs/assets/gallery/08-service.webp)<br>**サービスマネージャー** — シークレットのマウント |
+https://github.com/user-attachments/assets/7657b508-42bb-45a8-94b7-7c1fa052a4d0
 
 ## Features
 

@@ -1,5 +1,5 @@
 <!-- canonical: ../../README.md -->
-<!-- sync: ee7b425f38df32f0dc8a53222dcc26bf3efb0c2b -->
+<!-- sync: 7ef28678ebbb -->
 
 <div align="center">
 
@@ -31,12 +31,7 @@ Um gerenciador de variáveis de ambiente do Windows com duas interfaces: uma fer
 
 ## Demonstração
 
-### GUI
-
-| | | |
-|:-:|:-:|:-:|
-| ![Visualização de variáveis](../../docs/assets/gallery/01-variables.webp)<br>**Variáveis** — busca, filtro por escopo, ações em cada linha | ![Escopo do sistema](../../docs/assets/gallery/02-variables-system.webp)<br>**Escopo do sistema** — itens protegidos ficam travados | ![Editor de PATH](../../docs/assets/gallery/03-path-editor.webp)<br>**Editor de PATH** — encontra caminhos inválidos ou duplicados |
-| ![Perfis](../../docs/assets/gallery/04-profiles.webp)<br>**Perfis** — aplicar, iniciar, herdar | ![Livro de registro de auditoria](../../docs/assets/gallery/07-audit.webp)<br>**Livro de registro de auditoria** — histórico em cadeia hash, fácil de conferir | ![Gerenciador de serviço](../../docs/assets/gallery/08-service.webp)<br>**Gerenciador de serviço** — montagens de segredos |
+https://github.com/user-attachments/assets/7657b508-42bb-45a8-94b7-7c1fa052a4d0
 
 ## Recursos
 

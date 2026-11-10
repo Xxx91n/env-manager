@@ -1,5 +1,5 @@
 <!-- canonical: ../../README.md -->
-<!-- sync: ee7b425f38df -->
+<!-- sync: 7ef28678ebbb -->
 
 <div align="center">
 
@@ -31,12 +31,7 @@
 
 ## 展示
 
-### GUI
-
-| | | |
-|:-:|:-:|:-:|
-| ![变量列表](../../docs/assets/gallery/01-variables.webp)<br>**变量列表** —— 搜索、作用域筛选、单行快捷操作 | ![系统作用域](../../docs/assets/gallery/02-variables-system.webp)<br>**系统作用域** —— 受保护项直接加锁 | ![PATH 编辑器](../../docs/assets/gallery/03-path-editor.webp)<br>**PATH 编辑器** —— 自动识别失效路径与重复项 |
-| ![配置管理](../../docs/assets/gallery/04-profiles.webp)<br>**配置** —— 应用、启动、继承 | ![审计账本](../../docs/assets/gallery/07-audit.webp)<br>**审计账本** —— 哈希链防篡改，笔笔可查 | ![服务管理](../../docs/assets/gallery/08-service.webp)<br>**服务管理** —— 机密挂载后台维护 |
+https://github.com/user-attachments/assets/7657b508-42bb-45a8-94b7-7c1fa052a4d0
 
 ## 功能
 

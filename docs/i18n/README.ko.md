@@ -1,5 +1,5 @@
 <!-- canonical: ../../README.md -->
-<!-- sync: ee7b425f38df -->
+<!-- sync: 7ef28678ebbb -->
 
 <div align="center">
 
@@ -31,12 +31,7 @@
 
 ## Showcase
 
-### GUI
-
-| | | |
-|:-:|:-:|:-:|
-| ![변수 목록](../../docs/assets/gallery/01-variables.webp)<br>**변수 목록** — 검색, 범위 필터, 줄별 빠른 작업 | ![시스템 범위](../../docs/assets/gallery/02-variables-system.webp)<br>**시스템 범위** — 보호된 중요 항목 잠금 | ![PATH 편집기](../../docs/assets/gallery/03-path-editor.webp)<br>**PATH 편집기** — 없는 경로 및 중복 항목 감지 |
-| ![프로필](../../docs/assets/gallery/04-profiles.webp)<br>**프로필** — 적용, 실행, 상속 | ![감사 원장](../../docs/assets/gallery/07-audit.webp)<br>**감사 원장** — 해시 체인 기반 위변조 검증 | ![서비스 관리자](../../docs/assets/gallery/08-service.webp)<br>**서비스 관리자** — 시크릿 마운트 관리 |
+https://github.com/user-attachments/assets/7657b508-42bb-45a8-94b7-7c1fa052a4d0
 
 ## Features
 
