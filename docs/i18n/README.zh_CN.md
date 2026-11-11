@@ -1,5 +1,5 @@
 <!-- canonical: ../../README.md -->
-<!-- sync: 7ef28678ebbb -->
+<!-- sync: 05515f04c6bc8637c326577d3d9d66a1b233e7f0 -->
 
 <div align="center">
 
@@ -63,7 +63,7 @@ env-manager-cli agents --json     # 以标准 JSON 输出全部命令列表
 
 **威胁模型。** 本项目无法防范在你当前 Windows 用户会话内运行的恶意程序。因为同属一个用户会话的程序本来就能直接调用 `profile reveal-secret`、读取子进程的环境变量块，或者抓取机密提供者生成的短暂临时文件。不过本工具在设计上最大程度缩小了风险面：通过 DPAPI CurrentUser 加密的密文在其他用户账户或换到其他电脑上都无法解密；专属的机密命令不会把机密落入注册表（上面提到的通用变量添加命令除外）；除了下方表格明确记录的位置外，没有任何其他地方会保存机密。
 
-**明文边界。** 完整的明文数据存放位置、存活时长以及清理机制，请查阅 [docs/plaintext-sinks.md](../../docs/plaintext-sinks.md)。`docs/architecture.md` 中的 Plaintext lifecycle 一节是对各个交互面的权威记录。内存数据清零和日志脱敏属于尽力而为的安全防护措施，并非绝对保证：`tests/canary-redaction.Tests.ps1` 会对 7 处输出位置进行金丝雀扫描验证，共享契约测试也会对全部 9 种机密提供者校验 `plaintext-never-in-envelope`。
+**明文边界。** 完整的明文数据存放位置、存活时长以及清理机制，请查阅 [docs/plaintext-sinks.md](../../docs/plaintext-sinks.md)。`docs/architecture.md` 中的 Plaintext lifecycle 一节是对各个交互面的权威记录。内存数据清零和日志脱敏属于尽力而为的安全防护措施，并非绝对保证：`tests/canary-redaction.Tests.ps1` 会对 7 处输出位置进行金丝雀扫描验证，共享契约测试会对其中的 8 种校验 `plaintext-never-in-envelope`，`aws-roles-anywhere` 由离线测试单独校验。
 
 ## 安装
 
@@ -169,7 +169,7 @@ flowchart LR
 | Azure Key Vault | 服务主体证书 / 托管标识 | 是 | [配置指南](../../docs/secret-providers-guide.md) |
 | 1Password CLI | OP_SERVICE_ACCOUNT_TOKEN | 是 | [配置指南](../../docs/secret-providers-guide.md) |
 | AWS Secrets Manager | SigV4 + 访问密钥 | 是 | [配置指南](../../docs/secret-providers-guide.md) |
-| AWS IAM Roles Anywhere | 用机器证书库里的证书换取临时凭据 | 是 | [配置指南](../../docs/secret-providers-guide.md) |
+| AWS IAM Roles Anywhere | 用机器证书库里的证书换取临时凭据 | 是（`Periodic`；服务端刷新还没做） | [配置指南](../../docs/secret-providers-guide.md) |
 
 每种机密提供者的前置环境、初始配置步骤以及常见报错解决方法，请查阅 [docs/secret-providers-guide.md](../../docs/secret-providers-guide.md)。
 

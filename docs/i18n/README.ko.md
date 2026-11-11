@@ -1,5 +1,5 @@
 <!-- canonical: ../../README.md -->
-<!-- sync: 7ef28678ebbb -->
+<!-- sync: 05515f04c6bc8637c326577d3d9d66a1b233e7f0 -->
 
 <div align="center">
 
@@ -63,7 +63,7 @@ env-manager-cli agents --json     # full command table as structured JSON
 
 **위협 모델.** 현재 로그인된 Windows 사용자 세션 안에서 이미 실행 중인 다른 프로세스까지는 막지 못합니다. 그런 프로세스는 이미 `profile reveal-secret`을 실행하거나, 실행된 하위 프로세스의 환경 변수를 읽거나, 제공자가 잠깐 만드는 임시 파일을 가로챌 권한이 있기 때문입니다. 대신 설계 차원에서 피해를 확실하게 줄입니다: DPAPI CurrentUser 암호문은 다른 사용자나 다른 컴퓨터에서 절대 풀 수 없으며, 시크릿 관리 명령은 시크릿을 레지스트리에 남기지 않습니다(앞서 언급한 일반 변수 추가 명령 예외 제외). 시크릿 값이 머물 수 있도록 설계된 곳은 아래 링크의 평문 취급 위치 목록에 나온 곳뿐입니다.
 
-**평문 취급 위치.** 암호화되지 않은 일반 텍스트(평문)가 어디에, 얼마나 오래 머무르고, 어떻게 지워지는지는 [docs/plaintext-sinks.md](../../docs/plaintext-sinks.md)에 상세히 정리되어 있습니다. `docs/architecture.md` 문서의 Plaintext lifecycle 절이 기준이 되는 공식 목록입니다. 메모리 즉시 삭제(zeroing)와 로그 마스킹은 가능한 최선을 다해 처리하지만 기술적으로 100% 보장되는 것은 아닙니다. 실제 동작 검증을 위해 `tests/canary-redaction.Tests.ps1` 테스트가 7개 출력 위치에서 테스트 문자열이 새어 나가지 않는지 검사하며, 공통 계약 테스트를 통해 9개 제공자 모두에서 `plaintext-never-in-envelope` 규칙(엔벨로프 안에 평문이 들어가지 않음)을 엄격히 검증합니다.
+**평문 취급 위치.** 암호화되지 않은 일반 텍스트(평문)가 어디에, 얼마나 오래 머무르고, 어떻게 지워지는지는 [docs/plaintext-sinks.md](../../docs/plaintext-sinks.md)에 상세히 정리되어 있습니다. `docs/architecture.md` 문서의 Plaintext lifecycle 절이 기준이 되는 공식 목록입니다. 메모리 즉시 삭제(zeroing)와 로그 마스킹은 가능한 최선을 다해 처리하지만 기술적으로 100% 보장되는 것은 아닙니다. 실제 동작 검증을 위해 `tests/canary-redaction.Tests.ps1` 테스트가 7개 출력 위치에서 테스트 문자열이 새어 나가지 않는지 검사하며, 공통 계약 테스트는 8개 제공자에서 `plaintext-never-in-envelope` 규칙(엔벨로프 안에 평문이 들어가지 않음)을 검증하고, `aws-roles-anywhere`는 오프라인 테스트에서 따로 검증합니다.
 
 ## Install
 
@@ -169,7 +169,7 @@ flowchart LR
 | Azure Key Vault | 서비스 주체 인증서 / managed identity | 예 | [가이드](../../docs/secret-providers-guide.md) |
 | 1Password CLI | OP_SERVICE_ACCOUNT_TOKEN | 예 | [가이드](../../docs/secret-providers-guide.md) |
 | AWS Secrets Manager | SigV4 + access keys | 예 | [가이드](../../docs/secret-providers-guide.md) |
-| AWS IAM Roles Anywhere | 컴퓨터 인증서 저장소의 인증서를 임시 자격 증명으로 교환 | 예 | [가이드](../../docs/secret-providers-guide.md) |
+| AWS IAM Roles Anywhere | 컴퓨터 인증서 저장소의 인증서를 임시 자격 증명으로 교환 | 예 (`Periodic`, 서비스 측 갱신은 아직 없음) | [가이드](../../docs/secret-providers-guide.md) |
 
 각 제공자별 필수 준비 사항, 최초 설정 방법, 오류 해결 방법은 [docs/secret-providers-guide.md](../../docs/secret-providers-guide.md)를 참고하세요.
 

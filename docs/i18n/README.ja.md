@@ -1,5 +1,5 @@
 <!-- canonical: ../../README.md -->
-<!-- sync: 7ef28678ebbb -->
+<!-- sync: 05515f04c6bc8637c326577d3d9d66a1b233e7f0 -->
 
 <div align="center">
 
@@ -63,7 +63,7 @@ env-manager-cli agents --json     # 全コマンド一覧を構造化 JSON で�
 
 **脅威モデル:** 同じ Windows ユーザーセッション内で動いている別の悪意あるプロセスからの攻撃は防ぎきれません。同じユーザー権限があるプロセスなら、すでに `profile reveal-secret` を叩いたり、起動された子プロセスの環境変数を覗き見たり、プロバイダーが一時的に書き出す一時ファイルを捕捉できてしまうからです。ただし被害を最小限に抑える工夫はしています。DPAPI CurrentUser の暗号文は他のユーザーや別の PC では復号できませんし、シークレット操作コマンドからレジストリへシークレットが書き込まれることも防いでいます（前述の汎用変数の手動追加を除く）。シークレット値がどこに現れるかは、後述の平文取り扱い一覧にすべて明記しています。
 
-**平文の境界:** 平文データがどこに存在し、どのくらいの時間残り、何がそれを片付けるのかをまとめた一覧は、[docs/plaintext-sinks.md](../../docs/plaintext-sinks.md) に載せています。正式な取り扱いルールは `docs/architecture.md` の「Plaintext lifecycle」節をご確認ください。なお、メモリのゼロクリアやログのマスキングはベストエフォート（可能な限り努める）であり、完全な保証ではありません。自動テスト（`tests/canary-redaction.Tests.ps1`）では 7 か所の出力先をスキャンしてシークレット漏れがないか確認しており、共通テストでも 9 つのプロバイダーすべてにおいて `plaintext-never-in-envelope`（エンベロープ内に平文を残さないこと）をチェックしています。
+**平文の境界:** 平文データがどこに存在し、どのくらいの時間残り、何がそれを片付けるのかをまとめた一覧は、[docs/plaintext-sinks.md](../../docs/plaintext-sinks.md) に載せています。正式な取り扱いルールは `docs/architecture.md` の「Plaintext lifecycle」節をご確認ください。なお、メモリのゼロクリアやログのマスキングはベストエフォート（可能な限り努める）であり、完全な保証ではありません。自動テスト（`tests/canary-redaction.Tests.ps1`）では 7 か所の出力先をスキャンしてシークレット漏れがないか確認しており、共通テストでは 8 つのプロバイダーについて `plaintext-never-in-envelope`（エンベロープ内に平文を残さないこと）をチェックし、`aws-roles-anywhere` はオフラインのテストで別にチェックしています。
 
 ## Install
 
@@ -169,7 +169,7 @@ flowchart LR
 | Azure Key Vault | サービスプリンシパル証明書 / マネージド ID | あり | [ガイド](../../docs/secret-providers-guide.md) |
 | 1Password CLI | OP_SERVICE_ACCOUNT_TOKEN | あり | [ガイド](../../docs/secret-providers-guide.md) |
 | AWS Secrets Manager | SigV4 + アクセスキー | あり | [ガイド](../../docs/secret-providers-guide.md) |
-| AWS IAM Roles Anywhere | マシン証明書ストアの証明書を一時的な認証情報に交換 | あり | [ガイド](../../docs/secret-providers-guide.md) |
+| AWS IAM Roles Anywhere | マシン証明書ストアの証明書を一時的な認証情報に交換 | あり（`Periodic`。サービス側の更新は未対応） | [ガイド](../../docs/secret-providers-guide.md) |
 
 各プロバイダーを使うための準備や初回設定、うまく動かないときの対処法は [docs/secret-providers-guide.md](../../docs/secret-providers-guide.md) をご覧ください。
 

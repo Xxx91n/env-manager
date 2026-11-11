@@ -1,5 +1,5 @@
 <!-- canonical: ../../README.md -->
-<!-- sync: 7ef28678ebbb -->
+<!-- sync: 05515f04c6bc8637c326577d3d9d66a1b233e7f0 -->
 
 <div align="center">
 
@@ -63,7 +63,7 @@ Les variables et chemins protégés sont désactivés avant toute suppression, e
 
 **Modèle de menace.** L'application ne peut pas vous protéger contre un programme malveillant qui tournerait déjà dans votre propre session Windows. Un tel processus a déjà le pouvoir de lancer `profile reveal-secret`, de lire l'environnement d'un processus enfant ou de récupérer les fichiers temporaires créés par les fournisseurs. L'architecture limite toutefois les risques : un secret chiffré par DPAPI CurrentUser ne peut être lu par un autre utilisateur ou sur un autre PC, les commandes dédiées aux secrets n'écrivent jamais dans le registre (hors commandes génériques mentionnées plus haut), et les seuls endroits où un secret peut transiter en clair sont clairement listés dans le tableau ci-dessous.
 
-**Frontière du texte en clair.** Le tableau complet — où le texte en clair peut se trouver, combien de temps et qui l'efface — se trouve dans [docs/plaintext-sinks.md](../../docs/plaintext-sinks.md). La section consacrée au cycle de vie du texte en clair dans `docs/architecture.md` fait foi pour chaque cas. L'effacement de la mémoire et le masquage dans les journaux sont faits au mieux sans être des garanties absolues : le script `tests/canary-redaction.Tests.ps1` vérifie sept sorties pour s'assurer qu'un mot-clé secret ne fuite pas, et la suite de tests valide la règle `plaintext-never-in-envelope` sur les neuf fournisseurs.
+**Frontière du texte en clair.** Le tableau complet — où le texte en clair peut se trouver, combien de temps et qui l'efface — se trouve dans [docs/plaintext-sinks.md](../../docs/plaintext-sinks.md). La section consacrée au cycle de vie du texte en clair dans `docs/architecture.md` fait foi pour chaque cas. L'effacement de la mémoire et le masquage dans les journaux sont faits au mieux sans être des garanties absolues : le script `tests/canary-redaction.Tests.ps1` vérifie sept sorties pour s'assurer qu'un mot-clé secret ne fuite pas, et la suite de tests valide la règle `plaintext-never-in-envelope` sur huit fournisseurs, tandis que `aws-roles-anywhere` est couvert par la suite hors ligne.
 
 ## Install
 
@@ -169,7 +169,7 @@ Neuf fournisseurs de secrets sont disponibles, chacun étant testé dès que vou
 | Azure Key Vault | Certificat de principal de service / identité managée | Oui | [Guide](../../docs/secret-providers-guide.md) |
 | 1Password CLI | OP_SERVICE_ACCOUNT_TOKEN | Oui | [Guide](../../docs/secret-providers-guide.md) |
 | AWS Secrets Manager | SigV4 + clés d'accès | Oui | [Guide](../../docs/secret-providers-guide.md) |
-| AWS IAM Roles Anywhere | Certificat du magasin machine échangé contre des identifiants temporaires | Oui | [Guide](../../docs/secret-providers-guide.md) |
+| AWS IAM Roles Anywhere | Certificat du magasin machine échangé contre des identifiants temporaires | Oui (`Periodic`; le rafraîchissement par le service n'existe pas encore) | [Guide](../../docs/secret-providers-guide.md) |
 
 Consultez le [Guide des fournisseurs de secrets](../../docs/secret-providers-guide.md) pour voir les prérequis de chaque outil, la configuration initiale et comment corriger les erreurs courantes.
 

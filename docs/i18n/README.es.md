@@ -1,5 +1,5 @@
 <!-- canonical: ../../README.md -->
-<!-- sync: 7ef28678ebbb -->
+<!-- sync: 05515f04c6bc8637c326577d3d9d66a1b233e7f0 -->
 
 <div align="center">
 
@@ -63,7 +63,7 @@ Las variables protegidas y las rutas del PATH se desactivan antes de eliminarse,
 
 **Modelo de amenazas.** El programa no intenta defenderse de otros programas que se estén ejecutando dentro de tu propia sesión de usuario de Windows. Cualquier programa en tu sesión ya tiene permiso para llamar a `profile reveal-secret`, mirar las variables de un proceso secundario lanzado o leer los archivos temporales de corta duración que dejan los proveedores. Lo que sí hace el diseño es acotar daños: nadie puede descifrar los datos cifrados con DPAPI CurrentUser desde otro usuario u otro ordenador, los comandos específicos de secretos no guardan datos sin cifrar en el registro (al margen del aviso sobre comandos genéricos mencionado arriba) y los únicos sitios pensados para manejar secretos en claro son los que figuran en la lista enlazada a continuación.
 
-**Límites de texto sin formato.** La lista completa con cada lugar donde un secreto puede estar sin cifrar, cuánto tiempo dura y qué se encarga de limpiarlo está explicada en [docs/plaintext-sinks.md](../../docs/plaintext-sinks.md). El apartado de ciclo de vida del texto sin formato de `docs/architecture.md` es la referencia oficial por superficie. Borrar la memoria y limpiar los registros se hace siempre de buena fe pero sin garantías absolutas: la prueba `tests/canary-redaction.Tests.ps1` revisa 7 salidas buscando texto de prueba, y las pruebas de contrato comprueban en los 9 proveedores que el texto sin formato jamás se guarde dentro del sobre.
+**Límites de texto sin formato.** La lista completa con cada lugar donde un secreto puede estar sin cifrar, cuánto tiempo dura y qué se encarga de limpiarlo está explicada en [docs/plaintext-sinks.md](../../docs/plaintext-sinks.md). El apartado de ciclo de vida del texto sin formato de `docs/architecture.md` es la referencia oficial por superficie. Borrar la memoria y limpiar los registros se hace siempre de buena fe pero sin garantías absolutas: la prueba `tests/canary-redaction.Tests.ps1` revisa 7 salidas buscando texto de prueba, y las pruebas de contrato comprueban en ocho proveedores que el texto sin formato jamás se guarde dentro del sobre, mientras que `aws-roles-anywhere` lo cubre la prueba sin conexión.
 
 ## Instalación
 
@@ -169,7 +169,7 @@ Dispones de nueve secret providers. Cada vez que cambias a uno, la aplicación c
 | Azure Key Vault | Certificado de Service Principal / identidad administrada | Sí | [Guía](../../docs/secret-providers-guide.md) |
 | 1Password CLI | OP_SERVICE_ACCOUNT_TOKEN | Sí | [Guía](../../docs/secret-providers-guide.md) |
 | AWS Secrets Manager | SigV4 + claves de acceso | Sí | [Guía](../../docs/secret-providers-guide.md) |
-| AWS IAM Roles Anywhere | Certificado del almacén de máquina canjeado por credenciales temporales | Sí | [Guía](../../docs/secret-providers-guide.md) |
+| AWS IAM Roles Anywhere | Certificado del almacén de máquina canjeado por credenciales temporales | Sí (`Periodic`; la actualización por el servicio aún no existe) | [Guía](../../docs/secret-providers-guide.md) |
 
 Consulta la [Guía de secret providers](../../docs/secret-providers-guide.md) para ver los requisitos de cada uno, cómo configurarlos y cómo resolver fallos habituales.
 

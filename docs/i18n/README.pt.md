@@ -1,5 +1,5 @@
 <!-- canonical: ../../README.md -->
-<!-- sync: 7ef28678ebbb -->
+<!-- sync: 05515f04c6bc8637c326577d3d9d66a1b233e7f0 -->
 
 <div align="center">
 
@@ -63,7 +63,7 @@ Variáveis e pastas do PATH protegidas são desativadas antes de qualquer exclus
 
 **Modelo de ameaças.** O projeto não protege contra programas que estejam rodando na sua própria sessão de usuário do Windows. Qualquer processo na sua sessão já pode rodar `profile reveal-secret`, ler as variáveis de ambiente de processos que você abrir ou acessar os arquivos temporários criados na hora pelos provedores. O que o sistema faz é limitar o estrago: o texto cifrado pelo DPAPI CurrentUser não pode ser lido por outro usuário nem em outro computador, os comandos de segredo nunca jogam segredos em texto puro no registro (tirando os comandos genéricos já citados), e os únicos lugares onde um segredo pode aparecer estão listados na tabela de texto puro abaixo.
 
-**Onde o texto puro pode aparecer.** A tabela completa — mostrando onde o texto puro pode existir, por quanto tempo e como ele é limpo — está em [docs/plaintext-sinks.md](../../docs/plaintext-sinks.md). A seção de ciclo de vida do texto puro em `docs/architecture.md` traz a lista oficial detalhada. A limpeza de memória e de logs é feita na medida do possível, sem garantias absolutas: o teste `tests/canary-redaction.Tests.ps1` confere 7 pontos de saída procurando um texto de teste proposital, e a suíte de testes confere se o segredo nunca vaza em texto puro nos 9 provedores.
+**Onde o texto puro pode aparecer.** A tabela completa — mostrando onde o texto puro pode existir, por quanto tempo e como ele é limpo — está em [docs/plaintext-sinks.md](../../docs/plaintext-sinks.md). A seção de ciclo de vida do texto puro em `docs/architecture.md` traz a lista oficial detalhada. A limpeza de memória e de logs é feita na medida do possível, sem garantias absolutas: o teste `tests/canary-redaction.Tests.ps1` confere 7 pontos de saída procurando um texto de teste proposital, e a suíte de testes confere em oito provedores que o segredo nunca vaza em texto puro; o `aws-roles-anywhere` fica coberto pelo teste offline.
 
 ## Instalação
 
@@ -169,7 +169,7 @@ O sistema conta com nove provedores de segredos. Sempre que você escolhe um pro
 | Azure Key Vault | Certificado Service Principal / Managed Identity | Sim | [Guia](../../docs/secret-providers-guide.md) |
 | 1Password CLI | OP_SERVICE_ACCOUNT_TOKEN | Sim | [Guia](../../docs/secret-providers-guide.md) |
 | AWS Secrets Manager | SigV4 + chaves de acesso | Sim | [Guia](../../docs/secret-providers-guide.md) |
-| AWS IAM Roles Anywhere | Certificado do armazenamento da máquina trocado por credenciais temporárias | Sim | [Guia](../../docs/secret-providers-guide.md) |
+| AWS IAM Roles Anywhere | Certificado do armazenamento da máquina trocado por credenciais temporárias | Sim (`Periodic`; a atualização pelo serviço ainda não existe) | [Guia](../../docs/secret-providers-guide.md) |
 
 Veja em [docs/secret-providers-guide.md](../../docs/secret-providers-guide.md) o que cada provedor precisa para funcionar e o passo a passo para resolver problemas comuns.
 

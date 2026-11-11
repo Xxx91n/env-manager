@@ -1,5 +1,5 @@
 <!-- canonical: ../../README.md -->
-<!-- sync: 7ef28678ebbb -->
+<!-- sync: 05515f04c6bc8637c326577d3d9d66a1b233e7f0 -->
 
 <div align="center">
 
@@ -63,7 +63,7 @@ env-manager-cli agents --json     # full command table as structured JSON
 
 **نموذج التهديد.** لا يحمي التطبيق من البرامج التي تعمل داخل نفس جلسة مستخدم Windows الخاصة بك؛ إذ بإمكان مثل تلك البرامج قراءة متغيرات البيئة للعمليات الفرعية أو استدعاء `profile reveal-secret` أو الوصول للملفات المؤقتة اللحظية للمزودات. ولكن التصميم يقلل الأضرار بشكل فعال: فنصوص DPAPI CurrentUser المشفرة لا يمكن فكها من قِبل مستخدم آخر أو على جهاز مختلف، كما تمنع أوامر الأسرار وصول أي سر إلى السجل (باستثناء ما ذُكر أعلاه حول الأوامر العامة)، وتقتصر المواضع التي يمكن أن يظهر فيها النص الصريح على الأماكن المحددة في جدول النصوص الصريحة المشار إليه أدناه.
 
-**حدود النص الصريح.** الجدول الكامل — الذي يوضح أين يمكن أن يوجد النص الصريح، ولأي مدة، وما الذي يزيله — متاح في [docs/plaintext-sinks.md](../../docs/plaintext-sinks.md). ويعد قسم دورة حياة النص الصريح (Plaintext lifecycle) في `docs/architecture.md` هو المرجع الأساسي لكل سطح. ويعد تصفير الذاكرة وتنقية السجلات جهوداً وقائية حثيثة لا ضمانات مطلقة: يقوم اختبار `tests/canary-redaction.Tests.ps1` بفحص 7 أسطح إخراج للتأكد من عدم تسرب أي بيانات اختبارية، وتؤكد اختبارات العقود المشتركة `plaintext-never-in-envelope` عبر كافة المزودات التسعة.
+**حدود النص الصريح.** الجدول الكامل — الذي يوضح أين يمكن أن يوجد النص الصريح، ولأي مدة، وما الذي يزيله — متاح في [docs/plaintext-sinks.md](../../docs/plaintext-sinks.md). ويعد قسم دورة حياة النص الصريح (Plaintext lifecycle) في `docs/architecture.md` هو المرجع الأساسي لكل سطح. ويعد تصفير الذاكرة وتنقية السجلات جهوداً وقائية حثيثة لا ضمانات مطلقة: يقوم اختبار `tests/canary-redaction.Tests.ps1` بفحص 7 أسطح إخراج للتأكد من عدم تسرب أي بيانات اختبارية، وتؤكد اختبارات العقود المشتركة `plaintext-never-in-envelope` لدى ثمانية مزودين، بينما يتحقق الاختبار غير المتصل من `aws-roles-anywhere` بشكل منفصل.
 
 ## التثبيت
 
@@ -169,7 +169,7 @@ flowchart LR
 | Azure Key Vault | شهادة كائن الخدمة / الهوية المدارة | نعم | [الدليل](../../docs/secret-providers-guide.md) |
 | 1Password CLI | رمز OP_SERVICE_ACCOUNT_TOKEN | نعم | [الدليل](../../docs/secret-providers-guide.md) |
 | AWS Secrets Manager | توقيع SigV4 + مفاتيح الوصول | نعم | [الدليل](../../docs/secret-providers-guide.md) |
-| AWS IAM Roles Anywhere | شهادة من مخزن شهادات الجهاز تُبدَّل ببيانات اعتماد مؤقتة | نعم | [الدليل](../../docs/secret-providers-guide.md) |
+| AWS IAM Roles Anywhere | شهادة من مخزن شهادات الجهاز تُبدَّل ببيانات اعتماد مؤقتة | نعم (`Periodic`؛ تحديث الخدمة لم يُنفَّذ بعد) | [الدليل](../../docs/secret-providers-guide.md) |
 
 راجع [docs/secret-providers-guide.md](../../docs/secret-providers-guide.md) لمعرفة المتطلبات المسبقة لكل مزود، وخطوات الإعداد لأول مرة، وطرق معالجة أخطاء التفعيل.
 
