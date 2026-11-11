@@ -1,8 +1,9 @@
 // env-manager-service.exe
 // Windows system service for secret mount lifecycle management.
 // Design: reconcile is a real Windows service, not an in-GUI task and not a second agent binary,
-// because provider leases must refresh while the GUI is closed. 5 of 8 providers work under the
-// NT SERVICE identity; the 3 user-bound ones stay fetch-on-launch (CreatedOnce).
+// because provider leases must refresh while the GUI is closed. 6 of 9 providers work under the
+// NT SERVICE identity; the 3 user-bound ones - and sops, machine-level but with no service-side
+// refresh surface - stay fetch-on-launch (CreatedOnly).
 
 use std::env;
 use std::path::PathBuf;
