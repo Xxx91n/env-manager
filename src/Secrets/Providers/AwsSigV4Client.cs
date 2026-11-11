@@ -1,0 +1,191 @@
+using EnvManager.Secrets.Core;
+// AwsSigV4Client.cs - shared AWS request signing and transport
+// License: Apache-2.0
+
+// One signing implementation, two credential kinds. The HMAC path is the ordinary
+// AWS SigV4 used by aws-secretsmanager; the X.509 path is the IAM Roles Anywhere
+// variant (certificate serial in the credential scope, the certificate in a signed
+// header, and the private key in place of the derived HMAC key). Both share the
+// canonical request and string-to-sign builders below, so a fix to one shape cannot
+// drift away from the other.
+
+using System;
+using System.Collections.Generic;
+using System.Globalization;
+using System.Net.Http;
+using System.Security.Cryptography;
+using System.Text;
+
+namespace EnvManager.Secrets.Providers;
+
+/// <summary>Credentials for one signed request.</summary>
+internal readonly record struct AwsCredentials(string AccessKeyId, string SecretAccessKey, string? SessionToken)
+{
+    internal string Scope(string dateStamp, string region, string service) =>
+        dateStamp + "/" + region + "/" + service + "/aws4_request";
+}
+
+/// <summary>
+/// Transport seam. Production sends over <see cref="HttpClient"/>; tests inject a fake so
+/// the wire bytes are asserted without any network. There is deliberately no environment
+/// variable that buys this seam in production: a switchable signing endpoint would let a
+/// planted variable hand the process forged temporary credentials.
+/// </summary>
+internal interface IAwsHttpSender
+{
+    HttpResponseMessage Send(HttpRequestMessage request, TimeSpan timeout);
+}
+
+internal sealed class HttpClientSender : IAwsHttpSender
+{
+    internal static readonly HttpClientSender Instance = new HttpClientSender();
+
+    public HttpResponseMessage Send(HttpRequestMessage request, TimeSpan timeout)
+    {
+        // A fresh client per call: the providers are invoked from short-lived CLI
+        // processes and a shared handler would outlive the process that owns it.
+        using var client = new System.Net.Http.HttpClient();
+        client.Timeout = timeout;
+        return client.SendAsync(request).GetAwaiter().GetResult();
+    }
+}
+
+internal static class AwsSigV4Client
+{
+    /// <summary>
+    /// Sends one SigV4-signed request with the given credentials. Raw transport and
+    /// status failures map onto the typed provider family at the boundary; the response
+    /// body is never folded into an error message.
+    /// </summary>
+    internal static HttpResponseMessage Call(
+        string provider,
+        string operation,
+        string region,
+        string service,
+        string path,
+        string target,
+        string body,
+        string contentType,
+        AwsCredentials credentials,
+        string? endpointOverride,
+        TimeSpan timeout,
+        IAwsHttpSender? sender = null)
+    {
+        string requestUrl = RequestUrl(region, service, path, endpointOverride);
+        string signedHost = new Uri(requestUrl).Host;
+
+        string amzDate = DateTimeOffset.UtcNow.ToString("yyyyMMddTHHmmssZ", CultureInfo.InvariantCulture);
+        string dateStamp = DateTimeOffset.UtcNow.ToString("yyyyMMdd", CultureInfo.InvariantCulture);
+        string scope = credentials.Scope(dateStamp, region, service);
+
+        var headers = new List<(string Name, string Value)>
+        {
+            ("content-type", contentType),
+            ("host", signedHost),
+            ("x-amz-date", amzDate),
+        };
+        if (!string.IsNullOrEmpty(credentials.SessionToken))
+            headers.Add(("x-amz-security-token", credentials.SessionToken!));
+
+        string payloadHash = HexSHA256(body);
+        string canonicalRequest = BuildCanonicalRequest("POST", path, headers, payloadHash);
+        string stringToSign = BuildStringToSign("AWS4-HMAC-SHA256", amzDate, scope, canonicalRequest);
+        string signature = BytesToHex(SignHmac(credentials.SecretAccessKey, dateStamp, region, service, stringToSign));
+
+        string auth = "AWS4-HMAC-SHA256 Credential=" + credentials.AccessKeyId + "/" + scope +
+            ", SignedHeaders=" + SignedHeaders(headers) + ", Signature=" + signature;
+
+        using var content = new StringContent(body, Encoding.UTF8, contentType);
+        var request = new HttpRequestMessage(HttpMethod.Post, requestUrl)
+        {
+            Content = content,
+        };
+        request.Headers.Add("X-Amz-Target", target);
+        request.Headers.Add("X-Amz-Date", amzDate);
+        // TryAddWithoutValidation: the SigV4 value's base64-ish segments can trip the
+        // strict Authorization header parser on some .NET platforms (CI Linux lane,
+        // live-verified); the SigV4 string is well-formed by construction.
+        request.Headers.TryAddWithoutValidation("Authorization", auth);
+        if (!string.IsNullOrEmpty(credentials.SessionToken))
+            request.Headers.TryAddWithoutValidation("X-Amz-Security-Token", credentials.SessionToken);
+
+        var send = sender ?? HttpClientSender.Instance;
+        return SecretProviderErrors.Send(provider, operation,
+            () => send.Send(request, timeout), discardRawMessage: true);
+    }
+
+    /// <summary>Endpoint for a service, honouring the official override variable when one is set.</summary>
+    internal static string RequestUrl(string region, string service, string path, string? endpointOverride)
+    {
+        if (!string.IsNullOrEmpty(endpointOverride))
+            return endpointOverride!.TrimEnd('/') + path;
+        return "https://" + service + "." + region + ".amazonaws.com" + path;
+    }
+
+    internal static string BuildCanonicalRequest(
+        string method, string path, IReadOnlyList<(string Name, string Value)> headers, string payloadHash)
+    {
+        var sb = new StringBuilder();
+        sb.Append(method).Append('\n');
+        sb.Append(path).Append('\n');
+        sb.Append('\n'); // no query string
+        foreach (var h in headers) sb.Append(h.Name).Append(':').Append(h.Value).Append('\n');
+        sb.Append('\n');
+        sb.Append(SignedHeaders(headers)).Append('\n');
+        sb.Append(payloadHash);
+        return sb.ToString();
+    }
+
+    internal static string BuildStringToSign(string algorithm, string amzDate, string scope, string canonicalRequest) =>
+        algorithm + "\n" + amzDate + "\n" + scope + "\n" + HexSHA256(canonicalRequest);
+
+    internal static string SignedHeaders(IReadOnlyList<(string Name, string Value)> headers)
+    {
+        var names = new List<string>(headers.Count);
+        foreach (var h in headers) names.Add(h.Name);
+        return string.Join(";", names);
+    }
+
+    internal static byte[] SignHmac(string secretKey, string dateStamp, string region, string service, string stringToSign)
+    {
+        byte[] kDate = HmacSHA256(Encoding.UTF8.GetBytes("AWS4" + secretKey), dateStamp);
+        byte[] kRegion = HmacSHA256(kDate, region);
+        byte[] kService = HmacSHA256(kRegion, service);
+        byte[] kSigning = HmacSHA256(kService, "aws4_request");
+        return HmacSHA256(kSigning, stringToSign);
+    }
+
+    internal static string HexSHA256(string s)
+    {
+        using var sha = SHA256.Create();
+        return BytesToHex(sha.ComputeHash(Encoding.UTF8.GetBytes(s)));
+    }
+
+    internal static byte[] HmacSHA256(byte[] key, string data) =>
+        new HMACSHA256(key).ComputeHash(Encoding.UTF8.GetBytes(data));
+
+    internal static byte[] HmacSHA256(byte[] key, byte[] data) =>
+        new HMACSHA256(key).ComputeHash(data);
+
+    internal static string BytesToHex(byte[] bytes)
+    {
+        var sb = new StringBuilder(bytes.Length * 2);
+        foreach (byte b in bytes) sb.Append(b.ToString("x2", CultureInfo.InvariantCulture));
+        return sb.ToString();
+    }
+
+    /// <summary>
+    /// The certificate serial number AWS wants in the Credential scope: its decimal
+    /// value. Windows presents serial bytes most-significant first, so they are reversed
+    /// for <see cref="System.Numerics.BigInteger"/> and padded to stay unsigned.
+    /// </summary>
+    internal static string SerialNumberDecimal(byte[] bigEndian)
+    {
+        var normalised = bigEndian.Length == 0 ? new byte[] { 0 } : bigEndian;
+        var littleEndian = new byte[normalised.Length + 1];
+        for (int i = 0; i < normalised.Length; i++)
+            littleEndian[i] = normalised[normalised.Length - 1 - i];
+        littleEndian[normalised.Length] = 0;
+        return new System.Numerics.BigInteger(littleEndian).ToString(CultureInfo.InvariantCulture);
+    }
+}

@@ -127,79 +127,20 @@ internal sealed class AwsSecretsManagerProvider : ISecretProvider
         // TLS stays mandatory for the default endpoint; an explicit override may
         // use http:// (it is always an opt-in local/emulator endpoint by nature).
         string? endpointOverride = Environment.GetEnvironmentVariable("AWS_ENDPOINT_URL_SECRETS_MANAGER");
-        string requestUrl;
-        if (!string.IsNullOrEmpty(endpointOverride))
-        {
-            requestUrl = endpointOverride.TrimEnd('/') + "/";
-        }
-        else
-        {
-            string host = "secretsmanager." + region + ".amazonaws.com";
-            requestUrl = "https://" + host + "/";
-        }
         string accessKey = Environment.GetEnvironmentVariable("AWS_ACCESS_KEY_ID") ?? "";
         string secretKey = Environment.GetEnvironmentVariable("AWS_SECRET_ACCESS_KEY") ?? "";
         string sessionToken = Environment.GetEnvironmentVariable("AWS_SESSION_TOKEN") ?? "";
         if (string.IsNullOrEmpty(accessKey) || string.IsNullOrEmpty(secretKey))
             throw new SecretProviderAuthFailedException("aws-secretsmanager", "aws-api", "AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY required");
 
-        string amzDate = DateTimeOffset.UtcNow.ToString("yyyyMMddTHHmmssZ");
-        string dateStamp = DateTimeOffset.UtcNow.ToString("yyyyMMdd");
-        string credentialScope = dateStamp + "/" + region + "/" + SERVICE + "/aws4_request";
-
-        string signedHost = endpointOverride != null
-            ? new Uri(requestUrl).Host
-            : "secretsmanager." + region + ".amazonaws.com";
-        string canonicalHeaders = "content-type:application/x-amz-json-1.1\nhost:" + signedHost + "\nx-amz-date:" + amzDate + "\n" +
-            (!string.IsNullOrEmpty(sessionToken) ? "x-amz-security-token:" + sessionToken + "\n" : "");
-        string signedHeaders = "content-type;host;x-amz-date" + (!string.IsNullOrEmpty(sessionToken) ? ";x-amz-security-token" : "");
-        string payloadHash = HexSHA256(body);
-        string canonicalRequest = "POST\n/\n\n" + canonicalHeaders + "\n" + signedHeaders + "\n" + payloadHash;
-        string stringToSign = "AWS4-HMAC-SHA256\n" + amzDate + "\n" + credentialScope + "\n" + HexSHA256(canonicalRequest);
-
-        byte[] kDate = HmacSHA256(Encoding.UTF8.GetBytes("AWS4" + secretKey), dateStamp);
-        byte[] kRegion = HmacSHA256(kDate, region);
-        byte[] kService = HmacSHA256(kRegion, SERVICE);
-        byte[] kSigning = HmacSHA256(kService, "aws4_request");
-        byte[] signature = HmacSHA256(kSigning, stringToSign);
-        string auth = "AWS4-HMAC-SHA256 Credential=" + accessKey + "/" + credentialScope + ", SignedHeaders=" + signedHeaders + ", Signature=" + BytesToHex(signature);
-
-        using var client = new System.Net.Http.HttpClient();
-        client.Timeout = Timeout;
-        var content = new System.Net.Http.StringContent(body, Encoding.UTF8, "application/x-amz-json-1.1");
-        // Per AWS SigV4: Authorization, X-Amz-Target, X-Amz-Date, X-Amz-Security-Token
-        // are REQUEST headers, not content headers. Adding "Authorization" to
-        // HttpContent throws "Misused header name, 'Authorization'" because the
-        // .NET dispatcher treats it as a content header.
-        var request = new System.Net.Http.HttpRequestMessage(System.Net.Http.HttpMethod.Post, requestUrl);
-        request.Content = content;
-        request.Headers.Add("X-Amz-Target", target);
-        request.Headers.Add("X-Amz-Date", amzDate);
-        // TryAddWithoutValidation: the SigV4 value's base64-ish segments can trip the
-        // strict Authorization header parser on some .NET platforms (CI Linux lane,
-        // live-verified); the SigV4 string is well-formed by construction.
-        request.Headers.TryAddWithoutValidation("Authorization", auth);
-        if (!string.IsNullOrEmpty(sessionToken)) request.Headers.TryAddWithoutValidation("X-Amz-Security-Token", sessionToken);
-        // transport failures map at the boundary; the HttpRequestException can
-        // carry the request URL but never the signed Authorization header value, and the
-        // raw message is dropped entirely (classification-only mandate).
-        return SecretProviderErrors.Send("aws-secretsmanager", "aws-api", () => client.SendAsync(request).GetAwaiter().GetResult(), discardRawMessage: true);
-    }
-
-    private static string HexSHA256(string s)
-    {
-        using var sha = System.Security.Cryptography.SHA256.Create();
-        return BytesToHex(sha.ComputeHash(Encoding.UTF8.GetBytes(s)));
-    }
-
-    private static byte[] HmacSHA256(byte[] key, string data) => new System.Security.Cryptography.HMACSHA256(key).ComputeHash(Encoding.UTF8.GetBytes(data));
-    private static byte[] HmacSHA256(byte[] key, byte[] data) => new System.Security.Cryptography.HMACSHA256(key).ComputeHash(data);
-
-    private static string BytesToHex(byte[] bytes)
-    {
-        var sb = new StringBuilder(bytes.Length * 2);
-        foreach (byte b in bytes) sb.Append(b.ToString("x2"));
-        return sb.ToString();
+        // Signing, canonical request and transport live in AwsSigV4Client so the
+        // Roles Anywhere provider signs with the same builders instead of a copy.
+        return AwsSigV4Client.Call(
+            "aws-secretsmanager", "aws-api", region, SERVICE, "/", target, body,
+            "application/x-amz-json-1.1",
+            new AwsCredentials(accessKey, secretKey, string.IsNullOrEmpty(sessionToken) ? null : sessionToken),
+            string.IsNullOrEmpty(endpointOverride) ? null : endpointOverride,
+            Timeout);
     }
 
     private static string SanitizeSecretId(string s)
