@@ -38,7 +38,7 @@ https://github.com/user-attachments/assets/7657b508-42bb-45a8-94b7-7c1fa052a4d0
 - **两套界面随心选** —— `env-manager-cli` 适合跑脚本和自动化 CI，`env-manager.exe`（基于 Tauri 2 + Svelte）方便日常直观点击操作。无论用哪一个，底层注册表操作规则都完全一致。
 - **自带防误删保护** —— 系统关键变量和 PATH 条目禁止删除或重命名。改名或调整作用域时，工具会先写入并核验新值，确认无误后再清理旧项。每次写入都会同时获取三把锁：CLI 端的 Windows 互斥锁、Rust 外壳的读写锁，以及 GUI 内部的写入队列。
 - **配置管理** —— 全局配置会在应用时把变量写进注册表；启动配置则只给新启动的子进程注入专属环境变量，绝不碰注册表。配置之间支持相互继承，应用前还会提前预览潜在的变量冲突。
-- **支持 8 种机密提供者** —— 涵盖 DPAPI、Credential Manager、SecretStore、HashiCorp Vault、SOPS、Azure Key Vault、1Password 和 AWS Secrets Manager。机密内容保存为加密信封或以 `mount:<id>` 形式按挂载引用。需要留意的是，通用的 `add-var` 和 `edit-var` 命令仍然可能将明文写进注册表；具体安全边界请看[安全](#安全)说明与 [docs/plaintext-sinks.md](../../docs/plaintext-sinks.md)。
+- **支持 9 种机密提供者** —— 涵盖 DPAPI、Credential Manager、SecretStore、HashiCorp Vault、SOPS、Azure Key Vault、1Password、AWS Secrets Manager 和 AWS IAM Roles Anywhere。机密内容保存为加密信封或以 `mount:<id>` 形式按挂载引用。需要留意的是，通用的 `add-var` 和 `edit-var` 命令仍然可能将明文写进注册表；具体安全边界请看[安全](#安全)说明与 [docs/plaintext-sinks.md](../../docs/plaintext-sinks.md)。
 - **PATH 健康体检** —— 运行 `path health` 就能快速揪出重复路径和已经失效的死路径；加上 `--fix` 自动清理整理，加上 `--dry-run` 仅查看报告不修改。
 - **防篡改审计账本** —— 采用只增不改的 SHA256 哈希链记录每一次变更，支持一键回滚操作和导出容灾备份。
 
@@ -63,7 +63,7 @@ env-manager-cli agents --json     # 以标准 JSON 输出全部命令列表
 
 **威胁模型。** 本项目无法防范在你当前 Windows 用户会话内运行的恶意程序。因为同属一个用户会话的程序本来就能直接调用 `profile reveal-secret`、读取子进程的环境变量块，或者抓取机密提供者生成的短暂临时文件。不过本工具在设计上最大程度缩小了风险面：通过 DPAPI CurrentUser 加密的密文在其他用户账户或换到其他电脑上都无法解密；专属的机密命令不会把机密落入注册表（上面提到的通用变量添加命令除外）；除了下方表格明确记录的位置外，没有任何其他地方会保存机密。
 
-**明文边界。** 完整的明文数据存放位置、存活时长以及清理机制，请查阅 [docs/plaintext-sinks.md](../../docs/plaintext-sinks.md)。`docs/architecture.md` 中的 Plaintext lifecycle 一节是对各个交互面的权威记录。内存数据清零和日志脱敏属于尽力而为的安全防护措施，并非绝对保证：`tests/canary-redaction.Tests.ps1` 会对 7 处输出位置进行金丝雀扫描验证，共享契约测试也会对全部 8 种机密提供者校验 `plaintext-never-in-envelope`。
+**明文边界。** 完整的明文数据存放位置、存活时长以及清理机制，请查阅 [docs/plaintext-sinks.md](../../docs/plaintext-sinks.md)。`docs/architecture.md` 中的 Plaintext lifecycle 一节是对各个交互面的权威记录。内存数据清零和日志脱敏属于尽力而为的安全防护措施，并非绝对保证：`tests/canary-redaction.Tests.ps1` 会对 7 处输出位置进行金丝雀扫描验证，共享契约测试也会对全部 9 种机密提供者校验 `plaintext-never-in-envelope`。
 
 ## 安装
 
@@ -157,7 +157,7 @@ flowchart LR
 
 ## 机密提供者
 
-支持 8 种机密提供者，每次切换时都会进行可用性检查。如果检查没通过，配置编辑器里会弹出醒目的黄色提示条：
+支持 9 种机密提供者，每次切换时都会进行可用性检查。如果检查没通过，配置编辑器里会弹出醒目的黄色提示条：
 
 | 提供者 | 认证方式 | 定时刷新 | 文档 |
 |---|---|---|---|
@@ -169,6 +169,7 @@ flowchart LR
 | Azure Key Vault | 服务主体证书 / 托管标识 | 是 | [配置指南](../../docs/secret-providers-guide.md) |
 | 1Password CLI | OP_SERVICE_ACCOUNT_TOKEN | 是 | [配置指南](../../docs/secret-providers-guide.md) |
 | AWS Secrets Manager | SigV4 + 访问密钥 | 是 | [配置指南](../../docs/secret-providers-guide.md) |
+| AWS IAM Roles Anywhere | 用机器证书库里的证书换取临时凭据 | 是 | [配置指南](../../docs/secret-providers-guide.md) |
 
 每种机密提供者的前置环境、初始配置步骤以及常见报错解决方法，请查阅 [docs/secret-providers-guide.md](../../docs/secret-providers-guide.md)。
 

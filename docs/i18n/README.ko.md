@@ -38,7 +38,7 @@ https://github.com/user-attachments/assets/7657b508-42bb-45a8-94b7-7c1fa052a4d0
 - **두 가지 프런트엔드** — 스크립트 작성과 CI 자동화에 쓰기 좋은 `env-manager-cli`, 직접 화면을 보며 손쉽게 편집할 수 있는 `env-manager.exe`(Tauri 2 + Svelte). 두 프런트엔드 모두 똑같은 레지스트리 규칙에 따라 안전하게 동작합니다.
 - **기본 보호 기능** — 시스템 필수 변수와 PATH 항목은 실수로 지우거나 이름을 바꾸지 못하도록 보호됩니다. 이름을 바꾸거나 적용 범위를 바꿀 때도 새 값을 먼저 쓰고 검증한 뒤에야 기존 값을 지웁니다. 모든 쓰기 작업은 세 단계 잠금(CLI의 Windows mutex, Rust 셸의 읽기/쓰기 잠금, GUI의 쓰기 큐)을 거쳐 충돌 없이 안전하게 처리됩니다.
 - **프로필** — 글로벌 프로필을 적용하면 레지스트리에 값이 기록되며, 실행 프로필은 레지스트리를 건드리지 않고 실행할 하나의 하위 프로세스 환경 변수에만 값을 채워 넣습니다. 다른 프로필의 값을 상속받을 수 있고, 적용하기 전에 충돌 여부를 미리 보여줍니다.
-- **8가지 시크릿 제공자** — DPAPI, Windows 자격 증명 관리자(Credential Manager), PowerShell SecretStore, HashiCorp Vault, SOPS, Azure Key Vault, 1Password, AWS Secrets Manager를 지원합니다. 시크릿 값은 암호화된 엔벨로프나 `mount:<id>` 참조 형태로 안전하게 보관됩니다. 일반 변수 추가/편집 명령(`add-var`, `edit-var`)은 일반 텍스트를 그대로 레지스트리에 쓸 수 있으므로, 자세한 보안 경계는 [보안](#security) 및 [docs/plaintext-sinks.md](../../docs/plaintext-sinks.md) 문서를 참고하세요.
+- **9가지 시크릿 제공자** — DPAPI, Windows 자격 증명 관리자(Credential Manager), PowerShell SecretStore, HashiCorp Vault, SOPS, Azure Key Vault, 1Password, AWS Secrets Manager, AWS IAM Roles Anywhere를 지원합니다. 시크릿 값은 암호화된 엔벨로프나 `mount:<id>` 참조 형태로 안전하게 보관됩니다. 일반 변수 추가/편집 명령(`add-var`, `edit-var`)은 일반 텍스트를 그대로 레지스트리에 쓸 수 있으므로, 자세한 보안 경계는 [보안](#security) 및 [docs/plaintext-sinks.md](../../docs/plaintext-sinks.md) 문서를 참고하세요.
 - **PATH 상태 점검** — `path health` 명령으로 중복된 경로와 존재하지 않는 잘못된 경로를 찾아냅니다. `--fix` 옵션으로 목록을 깔끔하게 다시 쓸 수 있고, `--dry-run` 옵션으로 실제 변경 없이 점검 결과만 먼저 확인할 수도 있습니다.
 - **감사 원장** — 이전 상태로 되돌리는 롤백 기능과 비상 복구용 내보내기를 지원하며, SHA256 해시 체인으로 기록이 위변조되지 않도록 지켜주는 추가 전용 감사 기록을 제공합니다.
 
@@ -63,7 +63,7 @@ env-manager-cli agents --json     # full command table as structured JSON
 
 **위협 모델.** 현재 로그인된 Windows 사용자 세션 안에서 이미 실행 중인 다른 프로세스까지는 막지 못합니다. 그런 프로세스는 이미 `profile reveal-secret`을 실행하거나, 실행된 하위 프로세스의 환경 변수를 읽거나, 제공자가 잠깐 만드는 임시 파일을 가로챌 권한이 있기 때문입니다. 대신 설계 차원에서 피해를 확실하게 줄입니다: DPAPI CurrentUser 암호문은 다른 사용자나 다른 컴퓨터에서 절대 풀 수 없으며, 시크릿 관리 명령은 시크릿을 레지스트리에 남기지 않습니다(앞서 언급한 일반 변수 추가 명령 예외 제외). 시크릿 값이 머물 수 있도록 설계된 곳은 아래 링크의 평문 취급 위치 목록에 나온 곳뿐입니다.
 
-**평문 취급 위치.** 암호화되지 않은 일반 텍스트(평문)가 어디에, 얼마나 오래 머무르고, 어떻게 지워지는지는 [docs/plaintext-sinks.md](../../docs/plaintext-sinks.md)에 상세히 정리되어 있습니다. `docs/architecture.md` 문서의 Plaintext lifecycle 절이 기준이 되는 공식 목록입니다. 메모리 즉시 삭제(zeroing)와 로그 마스킹은 가능한 최선을 다해 처리하지만 기술적으로 100% 보장되는 것은 아닙니다. 실제 동작 검증을 위해 `tests/canary-redaction.Tests.ps1` 테스트가 7개 출력 위치에서 테스트 문자열이 새어 나가지 않는지 검사하며, 공통 계약 테스트를 통해 8개 제공자 모두에서 `plaintext-never-in-envelope` 규칙(엔벨로프 안에 평문이 들어가지 않음)을 엄격히 검증합니다.
+**평문 취급 위치.** 암호화되지 않은 일반 텍스트(평문)가 어디에, 얼마나 오래 머무르고, 어떻게 지워지는지는 [docs/plaintext-sinks.md](../../docs/plaintext-sinks.md)에 상세히 정리되어 있습니다. `docs/architecture.md` 문서의 Plaintext lifecycle 절이 기준이 되는 공식 목록입니다. 메모리 즉시 삭제(zeroing)와 로그 마스킹은 가능한 최선을 다해 처리하지만 기술적으로 100% 보장되는 것은 아닙니다. 실제 동작 검증을 위해 `tests/canary-redaction.Tests.ps1` 테스트가 7개 출력 위치에서 테스트 문자열이 새어 나가지 않는지 검사하며, 공통 계약 테스트를 통해 9개 제공자 모두에서 `plaintext-never-in-envelope` 규칙(엔벨로프 안에 평문이 들어가지 않음)을 엄격히 검증합니다.
 
 ## Install
 
@@ -157,7 +157,7 @@ flowchart LR
 
 ## Secret providers
 
-8가지 시크릿 제공자를 지원하며, 제공자를 바꿀 때마다 상태를 자동 점검합니다. 점검에 실패하면 프로필 편집기 안에 노란색 알림 배너가 바로 표시됩니다:
+9가지 시크릿 제공자를 지원하며, 제공자를 바꿀 때마다 상태를 자동 점검합니다. 점검에 실패하면 프로필 편집기 안에 노란색 알림 배너가 바로 표시됩니다:
 
 | Provider | Auth Method | Timer Refresh | Docs |
 |---|---|---|---|
@@ -169,6 +169,7 @@ flowchart LR
 | Azure Key Vault | 서비스 주체 인증서 / managed identity | 예 | [가이드](../../docs/secret-providers-guide.md) |
 | 1Password CLI | OP_SERVICE_ACCOUNT_TOKEN | 예 | [가이드](../../docs/secret-providers-guide.md) |
 | AWS Secrets Manager | SigV4 + access keys | 예 | [가이드](../../docs/secret-providers-guide.md) |
+| AWS IAM Roles Anywhere | 컴퓨터 인증서 저장소의 인증서를 임시 자격 증명으로 교환 | 예 | [가이드](../../docs/secret-providers-guide.md) |
 
 각 제공자별 필수 준비 사항, 최초 설정 방법, 오류 해결 방법은 [docs/secret-providers-guide.md](../../docs/secret-providers-guide.md)를 참고하세요.
 

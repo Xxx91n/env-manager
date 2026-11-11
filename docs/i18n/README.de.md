@@ -38,7 +38,7 @@ https://github.com/user-attachments/assets/7657b508-42bb-45a8-94b7-7c1fa052a4d0
 - **Zwei Oberflächen** — `env-manager-cli` für Skripte und CI, `env-manager.exe` (Tauri 2 + Svelte) zum bequemen Klicken und Bearbeiten. Beide greifen auf dieselben Registrierungsregeln zu.
 - **Von Haus aus geschützt** — Systemvariablen und PATH-Einträge lassen sich weder versehentlich löschen noch umbenennen. Beim Umbenennen oder Wechseln des Bereichs wird der neue Wert zuerst geschrieben und geprüft, bevor der alte gelöscht wird. Jeder Schreibzugriff nutzt drei Sicherheitsstufen: ein Windows-Mutex im CLI, eine Lese-/Schreibsperre in der Rust-Schale und eine Warteschlange in der GUI.
 - **Profile** — ein globales Profil schreibt seine Werte direkt in die Registrierung; ein Launch-Profil gibt seine Werte nur an einen einzelnen Kindprozess weiter und rührt die Registrierung gar nicht an. Profile können Werte von anderen Profilen erben, und Konflikte werden vor dem Anwenden angezeigt.
-- **Acht Secret-Provider** — DPAPI, Anmeldeinformationsverwaltung, SecretStore, HashiCorp Vault, SOPS, Azure Key Vault, 1Password und AWS Secrets Manager. Secrets werden nur verschlüsselt als Envelopes oder über `mount:<id>`-Verweise abgelegt. Die normalen Befehle `add-var` und `edit-var` können weiterhin Klartext in die Registrierung schreiben; genaue Details dazu stehen unter [Sicherheit](#sicherheit) und in [docs/plaintext-sinks.md](../../docs/plaintext-sinks.md).
+- **Neun Secret-Provider** — DPAPI, Anmeldeinformationsverwaltung, SecretStore, HashiCorp Vault, SOPS, Azure Key Vault, 1Password, AWS Secrets Manager und AWS IAM Roles Anywhere. Secrets werden nur verschlüsselt als Envelopes oder über `mount:<id>`-Verweise abgelegt. Die normalen Befehle `add-var` und `edit-var` können weiterhin Klartext in die Registrierung schreiben; genaue Details dazu stehen unter [Sicherheit](#sicherheit) und in [docs/plaintext-sinks.md](../../docs/plaintext-sinks.md).
 - **PATH prüfen und aufräumen** — `path health` spürt doppelte und ungültige Pfade auf; mit `--fix` wird die Liste bereinigt, mit `--dry-run` wird nur ein Bericht ausgegeben.
 - **Audit Ledger** — fälschungssicheres Protokoll mit SHA256-Hash-Kette, aus dem sich Änderungen rückgängig machen oder als Notfall-Backup exportieren lassen.
 
@@ -63,7 +63,7 @@ Geschützte Variablen und PATH-Einträge werden vor dem Löschen gesichert, und 
 
 **Bedrohungsmodell.** Das Programm schützt nicht vor Programmen, die bereits in Ihrer eigenen Windows-Benutzersitzung laufen. Solche Programme könnten ohnehin `profile reveal-secret` ausführen, die Umgebungsvariablen eines gestarteten Kindprozesses auslesen oder temporäre Dateien abfangen. Das Design grenzt den Schaden aber klar ein: Mit DPAPI verschlüsselte Werte des aktuellen Nutzers können von keinem anderen Benutzer und auf keinem fremden Computer entschlüsselt werden. Die Secret-Befehle schreiben niemals Klartext in die Registrierung (außer den oben genannten Standard-Befehlen), und Klartext taucht nur an den wenigen, dafür vorgesehenen Stellen auf, die in der unten verlinkten Übersicht aufgelistet sind.
 
-**Umgang mit Klartext.** Die komplette Tabelle — wo Klartext vorkommen kann, wie lange er bleibt und wie er gelöscht wird — steht in [docs/plaintext-sinks.md](../../docs/plaintext-sinks.md). Der Abschnitt zum Lebenszyklus von Klartext in `docs/architecture.md` ist die verbindliche Liste für alle Komponenten. Das Überschreiben von Arbeitsspeicher und das Bereinigen von Logs geschehen nach bestem Bemühen: `tests/canary-redaction.Tests.ps1` sucht in 7 Ausgabekanälen nach gezielt platzierten Testwerten, und unsere Testsuite prüft für alle 8 Provider, dass niemals Klartext im Envelope landet.
+**Umgang mit Klartext.** Die komplette Tabelle — wo Klartext vorkommen kann, wie lange er bleibt und wie er gelöscht wird — steht in [docs/plaintext-sinks.md](../../docs/plaintext-sinks.md). Der Abschnitt zum Lebenszyklus von Klartext in `docs/architecture.md` ist die verbindliche Liste für alle Komponenten. Das Überschreiben von Arbeitsspeicher und das Bereinigen von Logs geschehen nach bestem Bemühen: `tests/canary-redaction.Tests.ps1` sucht in 7 Ausgabekanälen nach gezielt platzierten Testwerten, und unsere Testsuite prüft für alle 9 Provider, dass niemals Klartext im Envelope landet.
 
 ## Install
 
@@ -157,7 +157,7 @@ flowchart LR
 
 ## Secret providers
 
-Acht Provider stehen bereit und werden beim Auswählen direkt überprüft. Falls etwas nicht eingerichtet ist, erscheint ein gut sichtbarer Hinweis im Profileditor:
+Neun Provider stehen bereit und werden beim Auswählen direkt überprüft. Falls etwas nicht eingerichtet ist, erscheint ein gut sichtbarer Hinweis im Profileditor:
 
 | Provider | Anmeldung | Automatisches Auffrischen | Dokumentation |
 |---|---|---|---|
@@ -169,6 +169,7 @@ Acht Provider stehen bereit und werden beim Auswählen direkt überprüft. Falls
 | Azure Key Vault | Zertifikat / Managed Identity | Ja | [Anleitung](../../docs/secret-providers-guide.md) |
 | 1Password CLI | OP_SERVICE_ACCOUNT_TOKEN | Ja | [Anleitung](../../docs/secret-providers-guide.md) |
 | AWS Secrets Manager | SigV4 + Zugriffsschlüssel | Ja | [Anleitung](../../docs/secret-providers-guide.md) |
+| AWS IAM Roles Anywhere | Zertifikat aus dem Maschinenspeicher gegen temporäre Zugangsdaten getauscht | Ja | [Anleitung](../../docs/secret-providers-guide.md) |
 
 In [docs/secret-providers-guide.md](../../docs/secret-providers-guide.md) erfahren Sie alles über die jeweiligen Voraussetzungen, die Ersteinrichtung und was bei Fehlern zu tun ist.
 

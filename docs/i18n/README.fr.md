@@ -38,7 +38,7 @@ https://github.com/user-attachments/assets/7657b508-42bb-45a8-94b7-7c1fa052a4d0
 - **Deux interfaces complémentaires** — `env-manager-cli` pour vos scripts et votre CI, et `env-manager.exe` (Tauri 2 + Svelte) pour modifier vos variables à la souris. Les deux passent par les mêmes règles de registre.
 - **Protégé d'office** — impossible de supprimer ou renommer par mégarde les variables système et les chemins du PATH. Lors d'un renommage ou d'un changement de portée, la nouvelle valeur est écrite et vérifiée avant de supprimer l'ancienne. Chaque écriture verrouille tout à la fois : un mutex Windows dans la CLI, un verrou lecture/écriture dans le cœur Rust et une file d'attente dans l'interface graphique.
 - **Profils** — un profil Global écrit directement ses valeurs dans le registre ; un profil Launch injecte ses valeurs uniquement dans l'environnement d'un sous-processus sans toucher au registre. Les profils peuvent hériter d'autres profils, et les conflits sont prévisualisés avant la moindre application.
-- **Huit fournisseurs de secrets** — DPAPI, Credential Manager, SecretStore, HashiCorp Vault, SOPS, Azure Key Vault, 1Password et AWS Secrets Manager. Les secrets restent sous forme d'enveloppes chiffrées ou de références `mount:<id>`. Attention : les commandes génériques `add-var` et `edit-var` peuvent tout de même écrire du texte en clair dans le registre ; tous les détails sont expliqués dans [Sécurité](#security) et [docs/plaintext-sinks.md](../../docs/plaintext-sinks.md).
+- **Neuf fournisseurs de secrets** — DPAPI, Credential Manager, SecretStore, HashiCorp Vault, SOPS, Azure Key Vault, 1Password, AWS Secrets Manager et AWS IAM Roles Anywhere. Les secrets restent sous forme d'enveloppes chiffrées ou de références `mount:<id>`. Attention : les commandes génériques `add-var` et `edit-var` peuvent tout de même écrire du texte en clair dans le registre ; tous les détails sont expliqués dans [Sécurité](#security) et [docs/plaintext-sinks.md](../../docs/plaintext-sinks.md).
 - **Nettoyage du PATH** — la commande `path health` repère les doublons et les dossiers introuvables ; `--fix` remet de l'ordre dans la liste et `--dry-run` affiche simplement le constat sans rien toucher.
 - **Registre d'audit** — un journal en ajout seul chaîné en SHA256 avec retour en arrière possible et export de secours.
 
@@ -63,7 +63,7 @@ Les variables et chemins protégés sont désactivés avant toute suppression, e
 
 **Modèle de menace.** L'application ne peut pas vous protéger contre un programme malveillant qui tournerait déjà dans votre propre session Windows. Un tel processus a déjà le pouvoir de lancer `profile reveal-secret`, de lire l'environnement d'un processus enfant ou de récupérer les fichiers temporaires créés par les fournisseurs. L'architecture limite toutefois les risques : un secret chiffré par DPAPI CurrentUser ne peut être lu par un autre utilisateur ou sur un autre PC, les commandes dédiées aux secrets n'écrivent jamais dans le registre (hors commandes génériques mentionnées plus haut), et les seuls endroits où un secret peut transiter en clair sont clairement listés dans le tableau ci-dessous.
 
-**Frontière du texte en clair.** Le tableau complet — où le texte en clair peut se trouver, combien de temps et qui l'efface — se trouve dans [docs/plaintext-sinks.md](../../docs/plaintext-sinks.md). La section consacrée au cycle de vie du texte en clair dans `docs/architecture.md` fait foi pour chaque cas. L'effacement de la mémoire et le masquage dans les journaux sont faits au mieux sans être des garanties absolues : le script `tests/canary-redaction.Tests.ps1` vérifie sept sorties pour s'assurer qu'un mot-clé secret ne fuite pas, et la suite de tests valide la règle `plaintext-never-in-envelope` sur les huit fournisseurs.
+**Frontière du texte en clair.** Le tableau complet — où le texte en clair peut se trouver, combien de temps et qui l'efface — se trouve dans [docs/plaintext-sinks.md](../../docs/plaintext-sinks.md). La section consacrée au cycle de vie du texte en clair dans `docs/architecture.md` fait foi pour chaque cas. L'effacement de la mémoire et le masquage dans les journaux sont faits au mieux sans être des garanties absolues : le script `tests/canary-redaction.Tests.ps1` vérifie sept sorties pour s'assurer qu'un mot-clé secret ne fuite pas, et la suite de tests valide la règle `plaintext-never-in-envelope` sur les neuf fournisseurs.
 
 ## Install
 
@@ -157,7 +157,7 @@ flowchart LR
 
 ## Secret providers
 
-Huit fournisseurs de secrets sont disponibles, chacun étant testé dès que vous basculez dessus. Si la configuration coince, un bandeau orange apparaît directement dans l'éditeur de profil :
+Neuf fournisseurs de secrets sont disponibles, chacun étant testé dès que vous basculez dessus. Si la configuration coince, un bandeau orange apparaît directement dans l'éditeur de profil :
 
 | Fournisseur | Méthode d'authentification | Rafraîchissement automatique | Guide |
 |---|---|---|---|
@@ -169,6 +169,7 @@ Huit fournisseurs de secrets sont disponibles, chacun étant testé dès que vou
 | Azure Key Vault | Certificat de principal de service / identité managée | Oui | [Guide](../../docs/secret-providers-guide.md) |
 | 1Password CLI | OP_SERVICE_ACCOUNT_TOKEN | Oui | [Guide](../../docs/secret-providers-guide.md) |
 | AWS Secrets Manager | SigV4 + clés d'accès | Oui | [Guide](../../docs/secret-providers-guide.md) |
+| AWS IAM Roles Anywhere | Certificat du magasin machine échangé contre des identifiants temporaires | Oui | [Guide](../../docs/secret-providers-guide.md) |
 
 Consultez le [Guide des fournisseurs de secrets](../../docs/secret-providers-guide.md) pour voir les prérequis de chaque outil, la configuration initiale et comment corriger les erreurs courantes.
 

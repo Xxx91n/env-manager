@@ -38,7 +38,7 @@ https://github.com/user-attachments/assets/7657b508-42bb-45a8-94b7-7c1fa052a4d0
 - **Dos interfaces** — `env-manager-cli` para scripts y CI, y `env-manager.exe` (Tauri 2 + Svelte) para usar con ratón y pantalla. Ambas siguen las mismas reglas al tocar el registro.
 - **Protegido por defecto** — las variables del sistema y las rutas de PATH no se pueden borrar ni renombrar. Al renombrar o cambiar de ámbito, primero se escribe y comprueba el nuevo valor antes de borrar el anterior. Toda escritura adquiere los tres bloqueos a la vez: un mutex de Windows en la CLI, un bloqueo de lectura/escritura en el motor de Rust y una cola de escritura en la interfaz gráfica.
 - **Profiles** — un Global profile escribe sus valores en el registro al aplicarse; un Launch profile pasa sus valores a un solo proceso secundario y jamás toca el registro. Los perfiles pueden heredar de otros perfiles, y la app te muestra los posibles conflictos antes de aplicar nada.
-- **Ocho secret providers** — DPAPI, Credential Manager, SecretStore, HashiCorp Vault, SOPS, Azure Key Vault, 1Password y AWS Secrets Manager. Los secretos se guardan como secret envelopes cifrados o como referencias `mount:<id>`. Los comandos comunes `add-var` y `edit-var` aún pueden escribir texto sin formato en el registro; todos los detalles están en [Seguridad](#seguridad) y en [docs/plaintext-sinks.md](../../docs/plaintext-sinks.md).
+- **Nueve secret providers** — DPAPI, Credential Manager, SecretStore, HashiCorp Vault, SOPS, Azure Key Vault, 1Password, AWS Secrets Manager y AWS IAM Roles Anywhere. Los secretos se guardan como secret envelopes cifrados o como referencias `mount:<id>`. Los comandos comunes `add-var` y `edit-var` aún pueden escribir texto sin formato en el registro; todos los detalles están en [Seguridad](#seguridad) y en [docs/plaintext-sinks.md](../../docs/plaintext-sinks.md).
 - **Salud de PATH** — `path health` localiza entradas duplicadas o rutas que ya no existen; `--fix` limpia y reescribe la lista, y `--dry-run` solo te dice qué cambiaría sin tocar nada.
 - **Audit ledger** — un historial protegido por hash SHA256 donde solo se pueden añadir datos, con opción de marcha atrás y copia para recuperar el sistema en caso de desastre.
 
@@ -63,7 +63,7 @@ Las variables protegidas y las rutas del PATH se desactivan antes de eliminarse,
 
 **Modelo de amenazas.** El programa no intenta defenderse de otros programas que se estén ejecutando dentro de tu propia sesión de usuario de Windows. Cualquier programa en tu sesión ya tiene permiso para llamar a `profile reveal-secret`, mirar las variables de un proceso secundario lanzado o leer los archivos temporales de corta duración que dejan los proveedores. Lo que sí hace el diseño es acotar daños: nadie puede descifrar los datos cifrados con DPAPI CurrentUser desde otro usuario u otro ordenador, los comandos específicos de secretos no guardan datos sin cifrar en el registro (al margen del aviso sobre comandos genéricos mencionado arriba) y los únicos sitios pensados para manejar secretos en claro son los que figuran en la lista enlazada a continuación.
 
-**Límites de texto sin formato.** La lista completa con cada lugar donde un secreto puede estar sin cifrar, cuánto tiempo dura y qué se encarga de limpiarlo está explicada en [docs/plaintext-sinks.md](../../docs/plaintext-sinks.md). El apartado de ciclo de vida del texto sin formato de `docs/architecture.md` es la referencia oficial por superficie. Borrar la memoria y limpiar los registros se hace siempre de buena fe pero sin garantías absolutas: la prueba `tests/canary-redaction.Tests.ps1` revisa 7 salidas buscando texto de prueba, y las pruebas de contrato comprueban en los 8 proveedores que el texto sin formato jamás se guarde dentro del sobre.
+**Límites de texto sin formato.** La lista completa con cada lugar donde un secreto puede estar sin cifrar, cuánto tiempo dura y qué se encarga de limpiarlo está explicada en [docs/plaintext-sinks.md](../../docs/plaintext-sinks.md). El apartado de ciclo de vida del texto sin formato de `docs/architecture.md` es la referencia oficial por superficie. Borrar la memoria y limpiar los registros se hace siempre de buena fe pero sin garantías absolutas: la prueba `tests/canary-redaction.Tests.ps1` revisa 7 salidas buscando texto de prueba, y las pruebas de contrato comprueban en los 9 proveedores que el texto sin formato jamás se guarde dentro del sobre.
 
 ## Instalación
 
@@ -157,7 +157,7 @@ flowchart LR
 
 ## Secret providers
 
-Dispones de ocho secret providers. Cada vez que cambias a uno, la aplicación comprueba si funciona bien; si algo falla, verás una advertencia naranja directamente en el editor de perfiles:
+Dispones de nueve secret providers. Cada vez que cambias a uno, la aplicación comprueba si funciona bien; si algo falla, verás una advertencia naranja directamente en el editor de perfiles:
 
 | Provider | Modo de autenticación | Comprobación periódica | Documentación |
 |---|---|---|---|
@@ -169,6 +169,7 @@ Dispones de ocho secret providers. Cada vez que cambias a uno, la aplicación co
 | Azure Key Vault | Certificado de Service Principal / identidad administrada | Sí | [Guía](../../docs/secret-providers-guide.md) |
 | 1Password CLI | OP_SERVICE_ACCOUNT_TOKEN | Sí | [Guía](../../docs/secret-providers-guide.md) |
 | AWS Secrets Manager | SigV4 + claves de acceso | Sí | [Guía](../../docs/secret-providers-guide.md) |
+| AWS IAM Roles Anywhere | Certificado del almacén de máquina canjeado por credenciales temporales | Sí | [Guía](../../docs/secret-providers-guide.md) |
 
 Consulta la [Guía de secret providers](../../docs/secret-providers-guide.md) para ver los requisitos de cada uno, cómo configurarlos y cómo resolver fallos habituales.
 
