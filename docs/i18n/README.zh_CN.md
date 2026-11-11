@@ -1,5 +1,5 @@
 <!-- canonical: ../../README.md -->
-<!-- sync: 05515f04c6bc8637c326577d3d9d66a1b233e7f0 -->
+<!-- sync: 123a8b720480c6ee2acc9f9144445644152881bd -->
 
 <div align="center">
 
@@ -169,7 +169,7 @@ flowchart LR
 | Azure Key Vault | 服务主体证书 / 托管标识 | 是 | [配置指南](../../docs/secret-providers-guide.md) |
 | 1Password CLI | OP_SERVICE_ACCOUNT_TOKEN | 是 | [配置指南](../../docs/secret-providers-guide.md) |
 | AWS Secrets Manager | SigV4 + 访问密钥 | 是 | [配置指南](../../docs/secret-providers-guide.md) |
-| AWS IAM Roles Anywhere | 用机器证书库里的证书换取临时凭据 | 是（`Periodic`；服务端刷新还没做） | [配置指南](../../docs/secret-providers-guide.md) |
+| AWS IAM Roles Anywhere | 用机器证书库里的证书换取临时凭据 | 还没有：能选 `Periodic`，但服务不会重新读取 | [配置指南](../../docs/secret-providers-guide.md) |
 
 每种机密提供者的前置环境、初始配置步骤以及常见报错解决方法，请查阅 [docs/secret-providers-guide.md](../../docs/secret-providers-guide.md)。
 

@@ -1,5 +1,5 @@
 <!-- canonical: ../../README.md -->
-<!-- sync: 05515f04c6bc8637c326577d3d9d66a1b233e7f0 -->
+<!-- sync: 123a8b720480c6ee2acc9f9144445644152881bd -->
 
 <div align="center">
 
@@ -169,7 +169,7 @@ flowchart LR
 | Azure Key Vault | Сертификат Service Principal / Managed Identity | Да | [Руководство](../../docs/secret-providers-guide.md) |
 | 1Password CLI | OP_SERVICE_ACCOUNT_TOKEN | Да | [Руководство](../../docs/secret-providers-guide.md) |
 | AWS Secrets Manager | Ключи доступа SigV4 | Да | [Руководство](../../docs/secret-providers-guide.md) |
-| AWS IAM Roles Anywhere | Сертификат из хранилища машины в обмен на временные учётные данные | Да (`Periodic`; обновление службой пока не реализовано) | [Руководство](../../docs/secret-providers-guide.md) |
+| AWS IAM Roles Anywhere | Сертификат из хранилища машины в обмен на временные учётные данные | Нет, пока нет: `Periodic` выбрать можно, но служба значение не перечитывает | [Руководство](../../docs/secret-providers-guide.md) |
 
 Подробные требования к каждому провайдеру, первичную настройку и инструкции по решению типичных ошибок смотрите в [docs/secret-providers-guide.md](../../docs/secret-providers-guide.md).
 

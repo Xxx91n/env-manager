@@ -1,5 +1,5 @@
 <!-- canonical: ../../README.md -->
-<!-- sync: 05515f04c6bc8637c326577d3d9d66a1b233e7f0 -->
+<!-- sync: 123a8b720480c6ee2acc9f9144445644152881bd -->
 
 <div align="center">
 
@@ -169,7 +169,7 @@ flowchart LR
 | Azure Key Vault | شهادة كائن الخدمة / الهوية المدارة | نعم | [الدليل](../../docs/secret-providers-guide.md) |
 | 1Password CLI | رمز OP_SERVICE_ACCOUNT_TOKEN | نعم | [الدليل](../../docs/secret-providers-guide.md) |
 | AWS Secrets Manager | توقيع SigV4 + مفاتيح الوصول | نعم | [الدليل](../../docs/secret-providers-guide.md) |
-| AWS IAM Roles Anywhere | شهادة من مخزن شهادات الجهاز تُبدَّل ببيانات اعتماد مؤقتة | نعم (`Periodic`؛ تحديث الخدمة لم يُنفَّذ بعد) | [الدليل](../../docs/secret-providers-guide.md) |
+| AWS IAM Roles Anywhere | شهادة من مخزن شهادات الجهاز تُبدَّل ببيانات اعتماد مؤقتة | لا، ليس بعد: يمكن اختيار `Periodic` لكن الخدمة لا تُحدِّثه | [الدليل](../../docs/secret-providers-guide.md) |
 
 راجع [docs/secret-providers-guide.md](../../docs/secret-providers-guide.md) لمعرفة المتطلبات المسبقة لكل مزود، وخطوات الإعداد لأول مرة، وطرق معالجة أخطاء التفعيل.
 

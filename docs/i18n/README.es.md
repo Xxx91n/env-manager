@@ -1,5 +1,5 @@
 <!-- canonical: ../../README.md -->
-<!-- sync: 05515f04c6bc8637c326577d3d9d66a1b233e7f0 -->
+<!-- sync: 123a8b720480c6ee2acc9f9144445644152881bd -->
 
 <div align="center">
 
@@ -169,7 +169,7 @@ Dispones de nueve secret providers. Cada vez que cambias a uno, la aplicación c
 | Azure Key Vault | Certificado de Service Principal / identidad administrada | Sí | [Guía](../../docs/secret-providers-guide.md) |
 | 1Password CLI | OP_SERVICE_ACCOUNT_TOKEN | Sí | [Guía](../../docs/secret-providers-guide.md) |
 | AWS Secrets Manager | SigV4 + claves de acceso | Sí | [Guía](../../docs/secret-providers-guide.md) |
-| AWS IAM Roles Anywhere | Certificado del almacén de máquina canjeado por credenciales temporales | Sí (`Periodic`; la actualización por el servicio aún no existe) | [Guía](../../docs/secret-providers-guide.md) |
+| AWS IAM Roles Anywhere | Certificado del almacén de máquina canjeado por credenciales temporales | No, todavía no: se puede elegir `Periodic`, pero el servicio no vuelve a leerlo | [Guía](../../docs/secret-providers-guide.md) |
 
 Consulta la [Guía de secret providers](../../docs/secret-providers-guide.md) para ver los requisitos de cada uno, cómo configurarlos y cómo resolver fallos habituales.
 
