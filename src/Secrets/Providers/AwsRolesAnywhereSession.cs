@@ -93,21 +93,65 @@ internal static class AwsRolesAnywhereSessionExchange
             ? CertificateStore.SelectForRolesAnywhere(provider, operation, options.CertificateSha1, now)
             : null;
         X509Certificate2 certificate = certificateOverride ?? owned!;
-        using RSA? rsa = certificate.GetRSAPrivateKey();
-        using ECDsa? ecdsa = rsa == null ? certificate.GetECDsaPrivateKey() : null;
-        if (rsa == null && ecdsa == null)
+        try
+        {
+            using RSA? rsa = certificate.GetRSAPrivateKey();
+            using ECDsa? ecdsa = rsa == null ? certificate.GetECDsaPrivateKey() : null;
+            if (rsa == null && ecdsa == null)
+                throw new SecretProviderAuthFailedException(provider, operation,
+                    "certificate " + Fingerprint(options.CertificateSha1) + " has no RSA or ECDSA private key");
+
+            string body = BuildSessionBody(options);
+            // Intermediate certificates only: the trust anchor owns the root, and sending
+            // it again is not what the service asks for. The leaf and its chain are
+            // disposed here rather than by the caller, which never sees them.
+            List<X509Certificate2> chain = CertificateStore.IntermediatesFor(certificate);
+            try
+            {
+                var request = BuildSignedRequest(provider, operation, options, certificate,
+                    rsa, ecdsa, chain, body, now);
+                var response = SecretProviderErrors.Send(provider, operation,
+                    () => (sender ?? HttpClientSender.Instance).Send(request, Timeout), discardRawMessage: true);
+                if (!response.IsSuccessStatusCode)
+                    throw RejectedResponse(provider, operation, options, response);
+
+                string json = SecretProviderErrors.Send(provider, operation,
+                    () => response.Content.ReadAsStringAsync().GetAwaiter().GetResult(), discardRawMessage: true);
+                return ParseSession(provider, operation, json, now, options);
+            }
+            finally
+            {
+                foreach (var c in chain) c.Dispose();
+            }
+        }
+        finally
         {
             owned?.Dispose();
-            throw new SecretProviderAuthFailedException(provider, operation,
-                "certificate " + Fingerprint(options.CertificateSha1) + " has no RSA or ECDSA private key");
         }
+    }
 
-        string algorithm = rsa != null ? "AWS4-X509-RSA-SHA256" : "AWS4-X509-ECDSA-SHA256";
+    private static string BuildSessionBody(RolesAnywhereOptions options) =>
+        "{\"durationSeconds\":" + options.DurationSeconds.ToString(CultureInfo.InvariantCulture) +
+        ",\"profileArn\":\"" + AwsJson.Escape(options.ProfileArn) +
+        "\",\"roleArn\":\"" + AwsJson.Escape(options.RoleArn) +
+        "\",\"trustAnchorArn\":\"" + AwsJson.Escape(options.TrustAnchorArn) + "\"}";
 
-        string body = "{\"durationSeconds\":" + options.DurationSeconds.ToString(CultureInfo.InvariantCulture) +
-            ",\"profileArn\":\"" + AwsJson.Escape(options.ProfileArn) +
-            "\",\"roleArn\":\"" + AwsJson.Escape(options.RoleArn) +
-            "\",\"trustAnchorArn\":\"" + AwsJson.Escape(options.TrustAnchorArn) + "\"}";
+    /// <summary>
+    /// The signed POST /sessions request: the X.509 SigV4 variant, where the credential
+    /// scope carries the certificate serial and the certificate itself is a signed header.
+    /// </summary>
+    private static HttpRequestMessage BuildSignedRequest(
+        string provider,
+        string operation,
+        RolesAnywhereOptions options,
+        X509Certificate2 certificate,
+        RSA rsa,
+        ECDsa? ecdsa,
+        IReadOnlyList<X509Certificate2> chain,
+        string body,
+        DateTimeOffset now)
+    {
+        string algorithm = ecdsa == null ? "AWS4-X509-RSA-SHA256" : "AWS4-X509-ECDSA-SHA256";
 
         // No environment seam here: a variable that redirects the credential exchange
         // would let a planted setting hand the process forged temporary credentials.
@@ -120,6 +164,7 @@ internal static class AwsRolesAnywhereSessionExchange
         string scope = dateStamp + "/" + options.Region + "/" + Service + "/aws4_request";
 
         string leafBase64 = Convert.ToBase64String(certificate.RawData);
+        string? chainHeader = ChainHeader(chain);
         var headers = new List<(string Name, string Value)>
         {
             ("content-type", "application/json"),
@@ -127,90 +172,81 @@ internal static class AwsRolesAnywhereSessionExchange
             ("x-amz-date", amzDate),
             ("x-amz-x509", leafBase64),
         };
-        // Intermediate certificates only: the trust anchor owns the root, and sending it
-        // again is not what the service asks for.
-        List<X509Certificate2> chain = CertificateStore.IntermediatesFor(certificate);
-        try
-        {
-            if (chain.Count > 0)
-            {
-                var parts = new List<string>(chain.Count);
-                foreach (var c in chain) parts.Add(Convert.ToBase64String(c.RawData));
-                headers.Add(("x-amz-x509-chain", string.Join(",", parts)));
-            }
+        if (chainHeader != null) headers.Add(("x-amz-x509-chain", chainHeader));
 
-            string payloadHash = AwsSigV4Client.HexSHA256(body);
-            string canonicalRequest = AwsSigV4Client.BuildCanonicalRequest("POST", SessionPath, headers, payloadHash);
-            string stringToSign = AwsSigV4Client.BuildStringToSign(algorithm, amzDate, scope, canonicalRequest);
+        string payloadHash = AwsSigV4Client.HexSHA256(body);
+        string canonicalRequest = AwsSigV4Client.BuildCanonicalRequest("POST", SessionPath, headers, payloadHash);
+        string stringToSign = AwsSigV4Client.BuildStringToSign(algorithm, amzDate, scope, canonicalRequest);
 
-            byte[] signature = rsa != null
-                ? rsa.SignData(Encoding.UTF8.GetBytes(stringToSign), HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1)
-                // Explicit DER: the default here is IEEE P1363 (raw r||s), which AWS rejects.
-                : ecdsa!.SignData(Encoding.UTF8.GetBytes(stringToSign), HashAlgorithmName.SHA256,
-                    DSASignatureFormat.Rfc3279DerSequence);
+        byte[] signed = Encoding.UTF8.GetBytes(stringToSign);
+        byte[] signature = ecdsa == null
+            ? rsa.SignData(signed, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1)
+            // Explicit DER: the default here is IEEE P1363 (raw r||s), which AWS rejects.
+            : ecdsa.SignData(signed, HashAlgorithmName.SHA256, DSASignatureFormat.Rfc3279DerSequence);
 
-            string serial = AwsSigV4Client.SerialNumberDecimal(certificate.SerialNumberBytes.ToArray());
-            string auth = algorithm + " Credential=" + serial + "/" + scope +
-                ", SignedHeaders=" + AwsSigV4Client.SignedHeaders(headers) +
-                ", Signature=" + AwsSigV4Client.BytesToHex(signature);
+        string serial = AwsSigV4Client.SerialNumberDecimal(certificate.SerialNumberBytes.ToArray());
+        string auth = algorithm + " Credential=" + serial + "/" + scope +
+            ", SignedHeaders=" + AwsSigV4Client.SignedHeaders(headers) +
+            ", Signature=" + AwsSigV4Client.BytesToHex(signature);
 
-            using var content = new StringContent(body, Encoding.UTF8, "application/json");
-            // The canonical request signs the bare media type; StringContent would send
-            // "application/json; charset=utf-8" and AWS would recompute a different signature.
-            content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/json");
-            var request = new HttpRequestMessage(HttpMethod.Post, requestUrl) { Content = content };
-            request.Headers.Add("X-Amz-Date", amzDate);
-            request.Headers.Add("X-Amz-X509", leafBase64);
-            if (chain.Count > 0)
-            {
-                var chainBase64 = new List<string>(chain.Count);
-                foreach (var c in chain) chainBase64.Add(Convert.ToBase64String(c.RawData));
-                request.Headers.Add("X-Amz-X509-Chain", string.Join(",", chainBase64));
-            }
-            request.Headers.TryAddWithoutValidation("Authorization", auth);
+        // Not `using`: the HttpRequestMessage owns this content and disposes it together
+        // with the response, which happens after the builder has returned.
+        var content = new StringContent(body, Encoding.UTF8, "application/json");
+        // The canonical request signs the bare media type; StringContent would send
+        // "application/json; charset=utf-8" and AWS would recompute a different signature.
+        content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/json");
+        var request = new HttpRequestMessage(HttpMethod.Post, requestUrl) { Content = content };
+        request.Headers.Add("X-Amz-Date", amzDate);
+        request.Headers.Add("X-Amz-X509", leafBase64);
+        if (chainHeader != null) request.Headers.Add("X-Amz-X509-Chain", chainHeader);
+        request.Headers.TryAddWithoutValidation("Authorization", auth);
+        return request;
+    }
 
-            var send = sender ?? HttpClientSender.Instance;
-            var response = SecretProviderErrors.Send(provider, operation,
-                () => send.Send(request, Timeout), discardRawMessage: true);
+    /// <summary>Comma-separated DER of the intermediates, or null when there are none.</summary>
+    private static string? ChainHeader(IReadOnlyList<X509Certificate2> chain)
+    {
+        if (chain.Count == 0) return null;
+        var parts = new List<string>(chain.Count);
+        foreach (var c in chain) parts.Add(Convert.ToBase64String(c.RawData));
+        return string.Join(",", parts);
+    }
 
-            if (!response.IsSuccessStatusCode)
-            {
-                // 401/403 here means the certificate chain or the trust anchor is not
-                // accepted; the body is dropped because it can echo request material.
-                int status = (int)response.StatusCode;
-                throw status == 401
-                    ? new SecretProviderAuthFailedException(provider, operation,
-                        "CreateSession rejected certificate " + Fingerprint(options.CertificateSha1) +
-                        " (401): check the trust anchor contains the issuing CA")
-                    : SecretProviderErrors.FromStatus(provider, operation, response.StatusCode, "create-session");
-            }
+    /// <summary>
+    /// 401 means the certificate chain or the trust anchor is not accepted. The body is
+    /// dropped either way because it can echo request material.
+    /// </summary>
+    private static Exception RejectedResponse(
+        string provider, string operation, RolesAnywhereOptions options, HttpResponseMessage response)
+    {
+        if ((int)response.StatusCode == 401)
+            return new SecretProviderAuthFailedException(provider, operation,
+                "CreateSession rejected certificate " + Fingerprint(options.CertificateSha1) +
+                " (401): check the trust anchor contains the issuing CA");
+        return SecretProviderErrors.FromStatus(provider, operation, response.StatusCode, "create-session");
+    }
 
-            return SecretProviderErrors.Send(provider, operation, () =>
-            {
-                string json = response.Content.ReadAsStringAsync().GetAwaiter().GetResult();
-                using var doc = JsonDocument.Parse(json);
-                if (!doc.RootElement.TryGetProperty("credentials", out var creds))
-                    throw new SecretProviderUnavailableException(provider, operation,
-                        "CreateSession response does not contain credentials");
-                string? accessKey = creds.GetProperty("accessKeyId").GetString();
-                string? secretKey = creds.GetProperty("secretAccessKey").GetString();
-                string? sessionToken = creds.GetProperty("sessionToken").GetString();
-                string? expiration = creds.TryGetProperty("expiration", out var e) ? e.GetString() : null;
-                if (string.IsNullOrEmpty(accessKey) || string.IsNullOrEmpty(secretKey))
-                    throw new SecretProviderUnavailableException(provider, operation,
-                        "CreateSession response is missing the access key or secret key");
-                DateTimeOffset expires = DateTimeOffset.TryParse(expiration, CultureInfo.InvariantCulture,
-                    DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal, out DateTimeOffset parsed)
-                    ? parsed
-                    : now.AddSeconds(options.DurationSeconds);
-                return new RolesAnywhereSession(new AwsCredentials(accessKey!, secretKey!, sessionToken), expires);
-            }, discardRawMessage: true);
-        }
-        finally
-        {
-            foreach (var c in chain) c.Dispose();
-            owned?.Dispose();
-        }
+    private static RolesAnywhereSession ParseSession(
+        string provider, string operation, string json, DateTimeOffset now, RolesAnywhereOptions options)
+    {
+        using var doc = JsonDocument.Parse(json);
+        if (!doc.RootElement.TryGetProperty("credentials", out var creds))
+            throw new SecretProviderUnavailableException(provider, operation,
+                "CreateSession response does not contain credentials");
+
+        string? accessKey = creds.GetProperty("accessKeyId").GetString();
+        string? secretKey = creds.GetProperty("secretAccessKey").GetString();
+        string? sessionToken = creds.GetProperty("sessionToken").GetString();
+        string? expiration = creds.TryGetProperty("expiration", out var e) ? e.GetString() : null;
+        if (string.IsNullOrEmpty(accessKey) || string.IsNullOrEmpty(secretKey))
+            throw new SecretProviderUnavailableException(provider, operation,
+                "CreateSession response is missing the access key or secret key");
+
+        DateTimeOffset expires = DateTimeOffset.TryParse(expiration, CultureInfo.InvariantCulture,
+            DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal, out DateTimeOffset parsed)
+            ? parsed
+            : now.AddSeconds(options.DurationSeconds);
+        return new RolesAnywhereSession(new AwsCredentials(accessKey!, secretKey!, sessionToken), expires);
     }
 
     internal static string Fingerprint(string sha1) =>
