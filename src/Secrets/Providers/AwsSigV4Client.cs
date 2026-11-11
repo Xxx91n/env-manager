@@ -96,6 +96,10 @@ internal static class AwsSigV4Client
             ", SignedHeaders=" + SignedHeaders(headers) + ", Signature=" + signature;
 
         using var content = new StringContent(body, Encoding.UTF8, contentType);
+        // StringContent appends "; charset=utf-8", but the canonical request above signed
+        // the bare media type. AWS recomputes the canonical headers from what arrived, so
+        // the transmitted value has to match the signed one byte for byte.
+        content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue(contentType);
         var request = new HttpRequestMessage(HttpMethod.Post, requestUrl)
         {
             Content = content,

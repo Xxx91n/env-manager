@@ -168,6 +168,9 @@ internal static class AwsRolesAnywhereSessionExchange
                 ", Signature=" + AwsSigV4Client.BytesToHex(signature);
 
             using var content = new StringContent(body, Encoding.UTF8, "application/json");
+            // The canonical request signs the bare media type; StringContent would send
+            // "application/json; charset=utf-8" and AWS would recompute a different signature.
+            content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/json");
             var request = new HttpRequestMessage(HttpMethod.Post, requestUrl) { Content = content };
             request.Headers.Add("X-Amz-Date", amzDate);
             request.Headers.Add("X-Amz-X509", leafBase64);
@@ -292,6 +295,19 @@ internal static class CertificateStore
             throw new SecretProviderAuthFailedException(provider, operation,
                 "certificate " + wanted + " is not in Cert:\\LocalMachine\\My");
 
+        ValidateForRolesAnywhere(provider, operation, cert, wanted, now);
+        return cert;
+    }
+
+    /// <summary>
+    /// The shape rules the service enforces on a certificate it is asked to sign with.
+    /// Split out from the store lookup so the rules can be checked without a machine
+    /// store, which is what the offline suite does.
+    /// </summary>
+    internal static void ValidateForRolesAnywhere(
+        string provider, string operation, X509Certificate2 cert, string sha1, DateTimeOffset now)
+    {
+        string wanted = AwsRolesAnywhereSessionExchange.Fingerprint(sha1);
         if (cert.NotAfter.ToUniversalTime() <= now.UtcDateTime)
             throw new SecretProviderAuthFailedException(provider, operation,
                 "certificate " + wanted + " expired on " + cert.NotAfter.ToUniversalTime().ToString("O", CultureInfo.InvariantCulture));
@@ -304,7 +320,6 @@ internal static class CertificateStore
         if (!HasDigitalSignatureKeyUsage(cert))
             throw new SecretProviderAuthFailedException(provider, operation,
                 "certificate " + wanted + " does not allow digital signature in its key usage");
-        return cert;
     }
 
     /// <summary>
@@ -340,8 +355,14 @@ internal static class CertificateStore
 
     private static bool HasDigitalSignatureKeyUsage(X509Certificate2 cert)
     {
-        foreach (X509KeyUsageExtension usage in cert.Extensions)
+        // Other extensions (BasicConstraints, SubjectKeyIdentifier, ...) are common and
+        // may come first; casting every extension would throw on the first one that is
+        // not a key usage.
+        foreach (X509Extension extension in cert.Extensions)
+        {
+            if (extension is not X509KeyUsageExtension usage) continue;
             return (usage.KeyUsages & X509KeyUsageFlags.DigitalSignature) != 0;
+        }
         // No key-usage extension means unrestricted, which satisfies the requirement.
         return true;
     }

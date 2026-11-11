@@ -53,7 +53,8 @@ bool Available => true;
 // the sentinel Encrypt/Decrypt/Delete round-trip that network providers have always run;
 // a provider whose backend is a customer cloud account declares false and is probed
 // read-only through ProbeReadOnly, so opening the profile editor cannot create secrets
-// in an account nobody asked to modify.
+// in an account nobody asked to modify. Not part of the `[refresh/certauth/network]`
+// line that `profile secret-provider list` prints; it only selects the probe below.
 bool ProbeWritesData => true;
 
 // The read-only probe itself: runs only when ProbeWritesData is false, and must fail

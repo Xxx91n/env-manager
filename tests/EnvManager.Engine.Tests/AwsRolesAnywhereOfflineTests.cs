@@ -393,6 +393,81 @@ public sealed class AwsRolesAnywhereOfflineTests : IDisposable
             sender.Requests[0].Request.RequestUri!.ToString());
     }
 
+    // ---- 6. the transmitted headers must match the signed ones byte for byte ----
+
+    [Fact]
+    public void CreateSession_TransmittedContentTypeEqualsTheSignedValue()
+    {
+        using var cert = CreateRsaCertificate(FixedNow.AddDays(-1), FixedNow.AddDays(30));
+        SetIdentity(cert.Thumbprint);
+        var sender = new RecordingSender(_ => Json(HttpStatusCode.Created, SessionBody));
+
+        AwsRolesAnywhereSessionExchange.CreateSession(
+            "aws-roles-anywhere", "encrypt", Options(cert.Thumbprint), sender, () => FixedNow, cert);
+
+        // The canonical request signs content-type as "application/json". If the wire
+        // carries "application/json; charset=utf-8", AWS recomputes with the received
+        // value and rejects the signature.
+        string transmitted = sender.Requests[0].Request.Content!.Headers.ContentType!.ToString();
+        Assert.Equal("application/json", transmitted);
+    }
+
+    [Fact]
+    public void SecretsManagerCall_TransmittedContentTypeEqualsTheSignedValue()
+    {
+        using var cert = CreateRsaCertificate(FixedNow.AddDays(-1), FixedNow.AddDays(30));
+        SetIdentity(cert.Thumbprint);
+        var sender = new RecordingSender(request =>
+            request.RequestUri!.AbsolutePath == "/sessions"
+                ? Json(HttpStatusCode.Created, SessionBody)
+                : Json(HttpStatusCode.OK, "{}"));
+        var provider = new AwsRolesAnywhereProvider(sender, cert, () => FixedNow);
+
+        provider.Encrypt("value", "ctx");
+
+        var secretsCall = sender.Requests.First(r => r.Request.RequestUri!.AbsolutePath == "/");
+        Assert.Equal("application/x-amz-json-1.1",
+            secretsCall.Request.Content!.Headers.ContentType!.ToString());
+    }
+
+    // ---- 7. certificate shape checks ----
+
+    [Fact]
+    public void CertificateValidation_RejectsAMissingOrExpiredOrKeylessCertificate()
+    {
+        using var expired = CreateRsaCertificate(FixedNow.AddDays(-30), FixedNow.AddDays(-1));
+        var ex = Assert.Throws<SecretProviderAuthFailedException>(() =>
+            CertificateStore.ValidateForRolesAnywhere("aws-roles-anywhere", "encrypt", expired, "AA", FixedNow));
+        Assert.Contains("expired", ex.Message);
+    }
+
+    [Fact]
+    public void CertificateValidation_RejectsACertificateWithoutDigitalSignatureKeyUsage()
+    {
+        using var cert = CreateNoDigitalSignatureCertificate();
+        var ex = Assert.Throws<SecretProviderAuthFailedException>(() =>
+            CertificateStore.ValidateForRolesAnywhere("aws-roles-anywhere", "encrypt", cert, "AA", FixedNow));
+        Assert.Contains("digital signature", ex.Message);
+    }
+
+    [Fact]
+    public void CertificateValidation_AcceptsAValidCertificateWhoseFirstExtensionIsNotKeyUsage()
+    {
+        // The fixtures add BasicConstraints before KeyUsage, so a reader that casts
+        // every extension to X509KeyUsageExtension must skip past the first one.
+        using var cert = CreateRsaCertificate(FixedNow.AddDays(-1), FixedNow.AddDays(30));
+        CertificateStore.ValidateForRolesAnywhere("aws-roles-anywhere", "encrypt", cert, cert.Thumbprint, FixedNow);
+    }
+
+    private static X509Certificate2 CreateNoDigitalSignatureCertificate()
+    {
+        using var key = RSA.Create(2048);
+        var request = new CertificateRequest("CN=env-manager-no-sign", key, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
+        request.CertificateExtensions.Add(new X509BasicConstraintsExtension(false, false, 0, true));
+        request.CertificateExtensions.Add(new X509KeyUsageExtension(X509KeyUsageFlags.KeyEncipherment, true));
+        return request.CreateSelfSigned(FixedNow.AddDays(-1), FixedNow.AddDays(30));
+    }
+
     // ---- 5. the probe declaration keeps the cloud account read-only ----
 
     [Fact]
