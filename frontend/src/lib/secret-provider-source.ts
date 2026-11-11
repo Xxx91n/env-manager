@@ -19,6 +19,8 @@ const SECRET_PROVIDER_MODULES = [
   'Secrets/Providers/OnePasswordProvider.cs',
   'Secrets/Providers/AwsSecretsManagerProvider.cs',
   'Secrets/Providers/AwsSecretTarget.cs',
+  'Secrets/Providers/AwsRegion.cs',
+  'Secrets/Providers/AwsEndpointOverride.cs',
   'Secrets/Providers/AwsJson.cs',
   'Secrets/Providers/AwsCredentials.cs',
   'Secrets/Providers/IAwsHttpSender.cs',
