@@ -467,7 +467,7 @@ Spec Phase 6 story 20 defines the family:
   `FromStatus` (status → subtype), `Send<T>` (transport wrapper), `Map`/`MapPreserveMessage`
   /`MappedWin32` (boundary mappers), `SwallowBestEffort` (scrubbed-and-dropped cleanup).
 
-Adapter rules: all 8 providers map boundary failures onto the family (Secrets-domain bare-catch
+Adapter rules: all 9 providers map boundary failures onto the family (Secrets-domain bare-catch
 count is zero); best-effort Delete/cleanup swallows report through `SwallowBestEffort`;
 envelope-format rejections keep their pinned message text (byte-identical to pre-ticket snapshots)
 while gaining the typed `SecretProviderInvalidEnvelopeException`. AWS is the audited adapter
@@ -526,7 +526,7 @@ Architecture-recovery (spec Phase 6 story 22) turns `ProfileData` (`src/Models.c
 
 ## Secret Provider Contract Test Suite (L0/L1/L2 layering)
 
-The eight `ISecretProvider` implementations share one contract suite in `tests/EnvManager.Engine.Tests/` (architecture-recovery): an abstract `SecretProviderContractTests` base asserts four behaviors — fail-closed decryption, round-trip, stable malformed-format error, plaintext-never-in-the-envelope — each expressed only through the `ISecretProviderHarness` seam (`CreateProvider` / `SeedSecret` neutral-write / `ReadRawSecret` neutral-read, so a symmetric read/write bug cannot hide). Every provider mounts one sealed subclass; the `SecretProviderContractComplianceTests` reflection gate fails the build when an implementation lacks a mount.
+The nine `ISecretProvider` implementations share one contract suite in `tests/EnvManager.Engine.Tests/` (architecture-recovery): an abstract `SecretProviderContractTests` base asserts four behaviors — fail-closed decryption, round-trip, stable malformed-format error, plaintext-never-in-the-envelope — each expressed only through the `ISecretProviderHarness` seam (`CreateProvider` / `SeedSecret` neutral-write / `ReadRawSecret` neutral-read, so a symmetric read/write bug cannot hide). Every provider mounts one sealed subclass; the `SecretProviderContractComplianceTests` reflection gate fails the build when an implementation lacks a mount. `aws-roles-anywhere` mounts through a skipped harness (no emulator implements CreateSession, and an enrolled certificate cannot live in CI), so it runs the provider-independent assertions there and the plaintext-never-in-envelope assertion in `AwsRolesAnywhereOfflineTests`.
 
 Test layering (per research/secret-provider-patterns.md):
 
@@ -534,9 +534,9 @@ Test layering (per research/secret-provider-patterns.md):
 |-------|-----------|-------------|----|
 | L0 | dpapi-current-user | real local DPAPI (crypt32 CurrentUser) | every PR |
 | L1 | credential-manager, powershell-secretmanagement, vault-kv2, sops | local CredMan / pwsh SecretStore / Vault dev server / sops binary | every PR, conditional |
-| L2 | azure-keyvault, 1password, aws-secretsmanager | real cloud services, credentials via env | scheduled / release pipeline |
+| L2 | azure-keyvault, 1password, aws-secretsmanager, aws-roles-anywhere | real cloud services, credentials via env | scheduled / release pipeline |
 
-In this first round only DPAPI runs its provider-dependent assertions against a real store; the other seven mounts run the provider-independent assertions (fail-closed, malformed-format) and `Skip` the provider-dependent ones with the layer reason. The L1 `Skip` surface is exercised in CI by the `verify-l1` job (ubuntu-latest + Docker, `EM_L1_MATRIX=1`, `--filter "Category=L1"` - see "Secret Provider L1 Emulator Matrix" below), so the locally-skipped assertions are covered on every PR/push/dispatch.
+In this first round only DPAPI runs its provider-dependent assertions against a real store; the other eight mounts run the provider-independent assertions (fail-closed, malformed-format) and `Skip` the provider-dependent ones with the layer reason. The L1 `Skip` surface is exercised in CI by the `verify-l1` job (ubuntu-latest + Docker, `EM_L1_MATRIX=1`, `--filter "Category=L1"` - see "Secret Provider L1 Emulator Matrix" below), so the locally-skipped assertions are covered on every PR/push/dispatch.
 
 
 ## Canary Zero-Leak Assertion Net and Golden/Snapshot Layers

@@ -60,7 +60,7 @@ Protected variables and PATH entries are disabled before deletion, and the exact
 
 **Threat model.** The project does not defend against a process running inside your own Windows user session. Such a process can already call `profile reveal-secret`, read a launched child's environment block, or catch the short-lived temp files the providers write. The design does limit the damage: DPAPI CurrentUser ciphertext cannot be decrypted by another user or on another machine, the secret commands cannot land a secret in the registry (the generic-command gap above aside), and the only places meant to carry a secret value are listed in the plaintext table linked below.
 
-**Plaintext boundary.** The full table — where plaintext can exist, for how long, and what removes it — is in [docs/plaintext-sinks.md](docs/plaintext-sinks.md). The Plaintext lifecycle section of `docs/architecture.md` is the authoritative per-surface list. Memory zeroing and log scrubbing are best-effort, not guarantees: `tests/canary-redaction.Tests.ps1` scans 7 output surfaces for a planted canary, and the shared contract suite plus the offline suite assert `plaintext-never-in-envelope` on all 9 providers.
+**Plaintext boundary.** The full table — where plaintext can exist, for how long, and what removes it — is in [docs/plaintext-sinks.md](docs/plaintext-sinks.md). The Plaintext lifecycle section of `docs/architecture.md` is the authoritative per-surface list. Memory zeroing and log scrubbing are best-effort, not guarantees: `tests/canary-redaction.Tests.ps1` scans 7 output surfaces for a planted canary, and the contract suite plus the offline suite assert `plaintext-never-in-envelope` on all nine providers (the `aws-roles-anywhere` mount has no emulator, so that assertion lives in its offline suite).
 
 ## Install
 
@@ -166,7 +166,7 @@ Nine secret providers, each checked when you switch to it. A failed check appear
 | Azure Key Vault | Service principal cert / managed identity | Yes | [Guide](docs/secret-providers-guide.md) |
 | 1Password CLI | OP_SERVICE_ACCOUNT_TOKEN | Yes | [Guide](docs/secret-providers-guide.md) |
 | AWS Secrets Manager | SigV4 + access keys | Yes | [Guide](docs/secret-providers-guide.md) |
-| AWS IAM Roles Anywhere | Certificate from the machine store exchanged for temporary credentials | Yes | [Guide](docs/secret-providers-guide.md) |
+| AWS IAM Roles Anywhere | Certificate from the machine store exchanged for temporary credentials | Yes (`Periodic`; the service-side gap is tracked in [this issue](https://github.com/Xxx91n/env-manager/issues/276)) | [Guide](docs/secret-providers-guide.md) |
 
 See [docs/secret-providers-guide.md](docs/secret-providers-guide.md) for per-provider prerequisites, one-time setup, and error fix steps.
 

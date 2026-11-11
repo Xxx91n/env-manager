@@ -4,11 +4,11 @@
 
 Env Manager ships nine secret providers. Secrets belong to Launch profiles only, because those put values into one child process; a Global profile cannot hold a secret. The active provider is selected in the Profile editor > Active provider dropdown. The activation probe runs once at selection time; if your environment is not configured, the selection is rejected with an inline error under the dropdown plus a toast -- you must fix the environment and retry.
 
-Three providers work offline with no setup:
+Three providers need no cloud account:
 
 1. **dpapi-current-user** (default) - Windows DPAPI CurrentUser encryption. Secrets are encrypted in the user profile; only the same Windows user on the same machine can decrypt. Zero configuration; recommended for single-user machines.
 2. **credential-manager** - Windows Credential Manager (advapi32 CredWriteW/CredReadW). Stores secrets in the Windows credential vault, blob encrypted via DPAPI before persist. No setup; the credential appears in Control Panel > Credential Manager.
-3. **powershell-secretmanagement** - PowerShell SecretStore. Needs the PowerShell 7 modules listed in its own section, but no cloud account.
+3. **powershell-secretmanagement** - PowerShell SecretStore. Needs the PowerShell 7 modules listed in its own section (a one-time `Install-Module`), but no cloud account.
 
 The six external providers below require host-side setup. Each section lists the exact prereqs, the error Env Manager surfaces when a prereq is missing, and the fix.
 
@@ -258,7 +258,7 @@ Fix: set `AWS_REGION` (and credentials) env vars, restart Env Manager, then retr
 
 Official docs: [Signing process for IAM Roles Anywhere](https://docs.aws.amazon.com/rolesanywhere/latest/userguide/authentication-sign-process.html) · [CreateSession API](https://docs.aws.amazon.com/rolesanywhere/latest/userguide/authentication-create-session.html) · [Trust model and certificate requirements](https://docs.aws.amazon.com/rolesanywhere/latest/userguide/trust-model.html).
 
-This provider reads the same remote Secrets Manager secrets as `aws-secretsmanager`, but it never keeps a long-lived access key. It presents a certificate from the machine certificate store, exchanges it for short-lived credentials, and uses those to read or write the secret. Both providers store the same envelope shape (`region|secretId`), so a profile written by one is readable by the other and switching between them is a re-encrypt rather than a migration of the remote secret.
+This provider reads the same remote Secrets Manager secrets as `aws-secretsmanager`, but it never keeps a long-lived access key. It presents a certificate from the machine certificate store, exchanges it for short-lived credentials, and uses those to read or write the secret. The two providers use the same envelope payload shape (`region|secretId`), but the envelope records which provider wrote it and a mismatch is rejected, so switching providers means re-adding the secret rather than just changing the dropdown. The remote secret itself does not move.
 
 ### How the exchange works
 
@@ -306,6 +306,21 @@ Fix: check that the trust anchor bundle includes the intermediate CA that issued
 ### What the probe does, and what it does not
 
 Selecting this provider exchanges your certificate for temporary credentials once, to prove the certificate, role, profile and trust anchor all line up. It does not create, read or delete any secret, so opening the profile editor never writes to your AWS account.
+
+### What is not covered by automated tests
+
+No emulator implements `CreateSession`, so the wire protocol is not exercised in CI. The offline suite proves the signature, the header set, the decimal serial in the credential scope and the envelope shape against a locally generated certificate, but only AWS can accept a real signature. Before relying on this provider, run it once against a throwaway trust anchor:
+
+1. Register a disposable CA as a trust anchor, a profile, and a role whose only permission is `secretsmanager:GetSecretValue` on one test secret.
+2. Import the test certificate into `Cert:\LocalMachine\My`, note its SHA-1, and set the five `AWS_ROLES_ANYWHERE_*` variables machine-wide.
+3. Set the provider active in a Launch profile and run a `profile apply` that points at that one test secret.
+4. Confirm the value matches, then delete the secret, the profile, the trust anchor and the certificate. Nothing about the run needs to stay.
+
+If step 3 fails with `CreateSession rejected certificate`, the failure is on the AWS side (trust anchor, revocation, role trust policy), not in the signature: the signature is deterministic and the offline suite already checks it against the certificate's public key.
+
+### The service does not refresh this provider yet
+
+`RefreshCapable` is `true` and the GUI offers `Periodic`, but the Rust service's periodic pass only stamps mount metadata; it does not call `Decrypt`. That gap is tracked in [#276](https://github.com/Xxx91n/env-manager/issues/276) and applies to every provider, not just this one. Until it lands, a `Periodic` mount keeps its last value until the CLI reads it again on launch.
 
 ---
 
