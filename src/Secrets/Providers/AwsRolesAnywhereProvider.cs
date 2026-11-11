@@ -9,9 +9,7 @@ using EnvManager.Secrets.Core;
 // re-encrypt, never a move.
 
 using System;
-using System.Collections.Generic;
 using System.Net.Http;
-using System.Text;
 using System.Text.Json;
 
 namespace EnvManager.Secrets.Providers;
