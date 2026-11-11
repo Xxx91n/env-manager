@@ -116,7 +116,7 @@ internal sealed class AwsSecretsManagerProvider : ISecretProvider
         // production deployments never set it; the L1 LocalStack emulator does.
         // TLS stays mandatory for the default endpoint; an explicit override may
         // use http:// (it is always an opt-in local/emulator endpoint by nature).
-        string? endpointOverride = Environment.GetEnvironmentVariable("AWS_ENDPOINT_URL_SECRETS_MANAGER");
+        string? endpointOverride = AwsEndpointOverride.SecretsManager;
         string accessKey = Environment.GetEnvironmentVariable("AWS_ACCESS_KEY_ID") ?? "";
         string secretKey = Environment.GetEnvironmentVariable("AWS_SECRET_ACCESS_KEY") ?? "";
         string sessionToken = Environment.GetEnvironmentVariable("AWS_SESSION_TOKEN") ?? "";

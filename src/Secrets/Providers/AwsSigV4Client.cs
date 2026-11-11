@@ -95,9 +95,18 @@ internal static class AwsSigV4Client
         if (!string.IsNullOrEmpty(endpointOverride))
             return endpointOverride!.TrimEnd('/') + path;
         // A region travels inside the host name. Anything outside the AWS alphabet could
-        // redirect the request (and its session token) to another host.
-        if (!AwsRegion.IsName(region))
-            throw new System.ArgumentException("Refusing to build a request URL for region '" + region + "'", nameof(region));
+        // redirect the request (and its session token) to another host. With an explicit
+        // endpoint override the region never reaches a host name, so only that path is
+        // exempt - and even there the value has to stay a legal scope label.
+        if (string.IsNullOrEmpty(endpointOverride))
+        {
+            if (!AwsRegion.IsName(region))
+                throw new System.ArgumentException("Refusing to build a request URL for region '" + region + "'", nameof(region));
+        }
+        else if (!AwsRegion.IsSafeScopeLabel(region))
+        {
+            throw new System.ArgumentException("Refusing to sign a credential scope for region '" + region + "'", nameof(region));
+        }
         return "https://" + service + "." + region + ".amazonaws.com" + path;
     }
 

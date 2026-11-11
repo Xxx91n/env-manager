@@ -569,6 +569,24 @@ public sealed class AwsRolesAnywhereOfflineTests : IDisposable
     }
 
     [Fact]
+    public void SharedSecretTarget_AllowsANonAwsRegionOnlyWhenAnEndpointOverrideIsConfigured()
+    {
+        // With an override the region only labels the credential scope, so a local
+        // emulator's label such as `local_test` must survive a write/read round trip.
+        // Rejecting it would let Encrypt store an envelope that Decrypt then refuses.
+        Assert.Null(AwsSecretTarget.Parse("local_test|em-shared"));
+        Environment.SetEnvironmentVariable("AWS_ENDPOINT_URL_SECRETS_MANAGER", "http://127.0.0.1:4566");
+        var target = AwsSecretTarget.Parse("local_test|em-shared");
+        Assert.NotNull(target);
+        Assert.Equal("em-shared", target!.Value.SecretId);
+        Assert.Equal("local_test", target.Value.Region);
+        // Host-injection characters stay rejected even with an override: the override
+        // supplies the whole host, so those characters have no legitimate use anywhere.
+        Assert.Null(AwsSecretTarget.Parse("evil.com/@attacker|em-shared"));
+        Environment.SetEnvironmentVariable("AWS_ENDPOINT_URL_SECRETS_MANAGER", null);
+    }
+
+    [Fact]
     public void SharedSecretTarget_RejectsARegionThatCouldRedirectTheRequest()
     {
         // The region is interpolated into the request host, so an envelope carrying

@@ -153,9 +153,8 @@ internal sealed class AwsRolesAnywhereProvider : ISecretProvider
     {
         var options = RequireOptions(operation);
         RolesAnywhereSession session = Session(options, operation);
-        string endpointOverride = Environment.GetEnvironmentVariable("AWS_ENDPOINT_URL_SECRETS_MANAGER") ?? "";
         return AwsSigV4Client.Call(Name, operation, secretsRegion, SERVICE, "/", target, body,
-            "application/x-amz-json-1.1", session.Credentials, endpointOverride.Length == 0 ? null : endpointOverride,
+            "application/x-amz-json-1.1", session.Credentials, AwsEndpointOverride.SecretsManager,
             Timeout, _sender);
     }
 

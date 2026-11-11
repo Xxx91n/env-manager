@@ -27,7 +27,14 @@ internal readonly record struct AwsSecretTarget(string Region, string SecretId)
         // The region ends up inside the request URL, so it is restricted to AWS's own
         // region alphabet. Without this, `evil.com/@host` in an envelope would build
         // https://secretsmanager.evil.com/... and hand the session token to that host.
-        if (!AwsRegion.IsName(parts[0])) return null;
+        // An explicit endpoint override builds the URL instead, so the region never
+        // reaches a host name there and a non-AWS label such as `local_test` is allowed -
+        // rejecting it would let Encrypt write an envelope that Decrypt then refuses. The
+        // scope-label rule still bans the characters that would break the signature.
+        bool regionOk = AwsEndpointOverride.SecretsManagerConfigured
+            ? AwsRegion.IsSafeScopeLabel(parts[0])
+            : AwsRegion.IsName(parts[0]);
+        if (!regionOk) return null;
         if (parts[1].Length == 0) return null;
         return new AwsSecretTarget(parts[0], parts[1]);
     }
