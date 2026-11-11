@@ -1,0 +1,226 @@
+using EnvManager.Secrets.Core;
+// AwsRolesAnywhereProvider.cs - Secrets Manager through IAM Roles Anywhere
+// License: Apache-2.0
+
+// Same remote store as aws-secretsmanager, different door: instead of a long-lived
+// access key on disk, a certificate in Cert:\LocalMachine\My is exchanged for a
+// short-lived session. The envelope stays `region|secretId`, so a profile written by
+// either provider names the same remote secret and rotation between them is a
+// re-encrypt, never a move.
+
+using System;
+using System.Collections.Generic;
+using System.Net.Http;
+using System.Text;
+using System.Text.Json;
+
+namespace EnvManager.Secrets.Providers;
+
+internal sealed class AwsRolesAnywhereProvider : ISecretProvider
+{
+    public string Name => "aws-roles-anywhere";
+
+    // Capability descriptors: declared per provider,
+    // consumed by SecretProviderManager.ListProviders and surfaced through
+    // `profile secret-provider list` so the GUI gates on data, not name lists.
+    public bool RefreshCapable => true;
+    public bool CertAuthRequired => true;
+    public bool RequiresNetwork => true;
+
+    // Certificate exchange only: a probe must never create a secret in the customer
+    // account. Profiles are opened often; writing on every open is not acceptable.
+    public bool ProbeWritesData => false;
+
+    // Cheap gate mirroring Encrypt's fail-fast preconditions (no network I/O).
+    public bool Available => AwsRolesAnywhereSessionExchange.ReadOptions() != null;
+
+    private const string SERVICE = "secretsmanager";
+    private static readonly TimeSpan Timeout = TimeSpan.FromSeconds(15);
+
+    // One session per process, refreshed ahead of expiry. The CLI is one process per
+    // command, so this covers a rotation pass and repeated calls in one run; a future
+    // service-side refresh needs its own cache across invocations.
+    private readonly object _gate = new object();
+    private string? _cachedKey;
+    private RolesAnywhereSession? _cachedSession;
+
+    // Test seam only: production always uses the parameterless constructor in
+    // SecretProviderManager._providers, so no environment switch can redirect a
+    // credential exchange.
+    private readonly IAwsHttpSender? _sender;
+    private readonly Func<DateTimeOffset>? _clock;
+    private readonly System.Security.Cryptography.X509Certificates.X509Certificate2? _certificate;
+
+    public AwsRolesAnywhereProvider() { }
+
+    internal AwsRolesAnywhereProvider(
+        IAwsHttpSender sender,
+        System.Security.Cryptography.X509Certificates.X509Certificate2? certificate,
+        Func<DateTimeOffset>? clock = null)
+    {
+        _sender = sender;
+        _certificate = certificate;
+        _clock = clock;
+    }
+
+    public void ProbeReadOnly()
+    {
+        var options = RequireOptions(SecretProviderErrors.OpEncrypt);
+        _ = Session(options, SecretProviderErrors.OpEncrypt);
+    }
+
+    public string Encrypt(string plaintext, string? context = null)
+    {
+        if (plaintext == null) return "";
+        var options = RequireOptions(SecretProviderErrors.OpEncrypt);
+        string region = options.Region;
+        string secretId = context != null ? SanitizeSecretId(context) : "env-manager-" + Guid.NewGuid().ToString("N").Substring(0, 12);
+
+        // ClientRequestToken: AWS-recommended idempotency token; LocalStack (L1
+        // lane) rejects CreateSecret without it.
+        string body = "{\"Name\":\"" + JsonEscape(secretId) + "\",\"SecretString\":\"" + JsonEscape(plaintext) +
+            "\",\"ClientRequestToken\":\"" + Guid.NewGuid().ToString("N") + "\"}";
+        var response = CallOnce(options, SecretProviderErrors.OpEncrypt, "secretsmanager.CreateSecret", body);
+        if (!response.IsSuccessStatusCode) throw SecretProviderErrors.FromStatus(Name, SecretProviderErrors.OpEncrypt, response.StatusCode, "create");
+
+        var env = new SecretEnvelope { Provider = Name, Version = 1, CreatedAt = DateTimeOffset.UtcNow.ToString("O"), TargetName = region + "|" + secretId };
+        return env.Serialize();
+    }
+
+    public string Decrypt(string envelope, string? context = null)
+    {
+        var parsed = SecretEnvelope.TryParse(envelope) ?? throw new SecretProviderInvalidEnvelopeException(Name, SecretProviderErrors.OpDecrypt, "Invalid secret envelope format");
+        if (parsed.Provider != Name) throw new SecretProviderInvalidEnvelopeException(Name, SecretProviderErrors.OpDecrypt, "Provider mismatch: expected " + Name + ", got " + parsed.Provider);
+        if (string.IsNullOrEmpty(parsed.TargetName)) throw new SecretProviderInvalidEnvelopeException(Name, SecretProviderErrors.OpDecrypt, "Missing targetName", parsed.TargetName);
+
+        var parts = parsed.TargetName.Split('|');
+        if (parts.Length < 2) throw new SecretProviderInvalidEnvelopeException(Name, SecretProviderErrors.OpDecrypt, "Invalid targetName format", parsed.TargetName);
+        string region = parts[0];
+        string secretId = parts[1];
+
+        string body = "{\"SecretId\":\"" + JsonEscape(secretId) + "\"}";
+        var options = RequireOptions(SecretProviderErrors.OpDecrypt, region);
+        var response = CallOnce(options, SecretProviderErrors.OpDecrypt, "secretsmanager.GetSecretValue", body);
+        if (!response.IsSuccessStatusCode)
+            throw SecretProviderErrors.FromStatus(Name, SecretProviderErrors.OpDecrypt, response.StatusCode, "read", mountId: parsed.TargetName);
+
+        return SecretProviderErrors.Send(Name, SecretProviderErrors.OpDecrypt, () =>
+        {
+            string json = response.Content.ReadAsStringAsync().GetAwaiter().GetResult();
+            using var doc = JsonDocument.Parse(json);
+            if (doc.RootElement.TryGetProperty("SecretString", out var val)) return val.GetString() ?? "";
+            throw new SecretProviderUnavailableException(Name, SecretProviderErrors.OpDecrypt, "AWS response does not contain SecretString", parsed.TargetName);
+        }, parsed.TargetName, discardRawMessage: true);
+    }
+
+    public void Delete(string envelope, string? context = null)
+    {
+        var parsed = SecretEnvelope.TryParse(envelope);
+        if (parsed == null || string.IsNullOrEmpty(parsed.TargetName)) return;
+        try
+        {
+            var parts = parsed.TargetName.Split('|');
+            if (parts.Length < 2) return;
+            string body = "{\"SecretId\":\"" + JsonEscape(parts[1]) + "\",\"ForceDeleteWithoutRecovery\":true}";
+            _ = CallOnce(RequireOptions(SecretProviderErrors.OpDelete, parts[0]), SecretProviderErrors.OpDelete,
+                "secretsmanager.DeleteSecret", body);
+        }
+        catch (Exception ex) { SecretProviderErrors.SwallowBestEffort(Name, SecretProviderErrors.OpDelete, ex); }
+    }
+
+    public bool CanRotate => true;
+    public string Rotate(string oldEnvelope, string? context = null)
+    {
+        string plaintext = Decrypt(oldEnvelope, context);
+        var parsed = SecretEnvelope.TryParse(oldEnvelope);
+        if (parsed == null || string.IsNullOrEmpty(parsed.TargetName)) return Encrypt(plaintext, context);
+        var parts = parsed.TargetName.Split('|');
+        if (parts.Length < 2) return Encrypt(plaintext, context);
+        string body = "{\"SecretId\":\"" + JsonEscape(parts[1]) + "\",\"SecretString\":\"" + JsonEscape(plaintext) + "\"}";
+        var response = CallOnce(RequireOptions(SecretProviderErrors.OpRotate, parts[0]), SecretProviderErrors.OpRotate,
+            "secretsmanager.PutSecretValue", body);
+        if (!response.IsSuccessStatusCode)
+            throw SecretProviderErrors.FromStatus(Name, SecretProviderErrors.OpRotate, response.StatusCode, "rotation (PutSecretValue)", mountId: parsed.TargetName);
+        return oldEnvelope;
+    }
+
+    /// <summary>
+    /// One Secrets Manager call with the cached session. A credential rejection
+    /// (401/403) most often means the session expired between the check and the call,
+    /// so the cache is dropped and the call retried exactly once - never in a loop.
+    /// </summary>
+    private HttpResponseMessage CallOnce(RolesAnywhereOptions options, string operation, string target, string body)
+    {
+        HttpResponseMessage first = CallWithSession(options, operation, target, body);
+        if (first.IsSuccessStatusCode) return first;
+        if ((int)first.StatusCode != 401 && (int)first.StatusCode != 403) return first;
+        first.Dispose();
+        Invalidate();
+        return CallWithSession(options, operation, target, body);
+    }
+
+    private HttpResponseMessage CallWithSession(RolesAnywhereOptions options, string operation, string target, string body)
+    {
+        RolesAnywhereSession session = Session(options, operation);
+        string endpointOverride = Environment.GetEnvironmentVariable("AWS_ENDPOINT_URL_SECRETS_MANAGER") ?? "";
+        return AwsSigV4Client.Call(Name, operation, options.Region, SERVICE, "/", target, body,
+            "application/x-amz-json-1.1", session.Credentials, endpointOverride.Length == 0 ? null : endpointOverride,
+            Timeout, _sender);
+    }
+
+    private RolesAnywhereSession Session(RolesAnywhereOptions options, string operation)
+    {
+        DateTimeOffset now = _clock != null ? _clock() : DateTimeOffset.UtcNow;
+        lock (_gate)
+        {
+            if (_cachedSession != null
+                && string.Equals(_cachedKey, options.CacheKey, StringComparison.Ordinal)
+                && !_cachedSession.NeedsRefresh(now))
+            {
+                return _cachedSession;
+            }
+        }
+
+        // Outside the lock: CreateSession is a network round trip, and the exchange is
+        // idempotent, so a rare duplicate on a race costs one extra session and is
+        // preferable to serialising every caller behind it.
+        RolesAnywhereSession fresh = AwsRolesAnywhereSessionExchange.CreateSession(Name, operation, options, _sender, _clock, _certificate);
+        lock (_gate)
+        {
+            _cachedKey = options.CacheKey;
+            _cachedSession = fresh;
+        }
+        return fresh;
+    }
+
+    private void Invalidate()
+    {
+        lock (_gate)
+        {
+            _cachedKey = null;
+            _cachedSession = null;
+        }
+    }
+
+    private RolesAnywhereOptions RequireOptions(string operation, string? regionOverride = null)
+    {
+        var options = AwsRolesAnywhereSessionExchange.ReadOptions();
+        if (options == null)
+            throw new SecretProviderUnavailableException(Name, operation,
+                "IAM Roles Anywhere is not configured; missing " + AwsRolesAnywhereSessionExchange.DescribeMissing());
+        if (regionOverride != null && regionOverride.Length > 0 &&
+            !string.Equals(regionOverride, options.Region, StringComparison.OrdinalIgnoreCase))
+            return options with { Region = regionOverride };
+        return options;
+    }
+
+    private static string SanitizeSecretId(string s)
+    {
+        var sb = new StringBuilder();
+        foreach (char c in s) { if (char.IsLetterOrDigit(c) || "/_+=.@-".IndexOf(c) >= 0) sb.Append(c); else sb.Append('-'); }
+        string r = sb.ToString();
+        return r.Length > 512 ? r.Substring(0, 512) : r;
+    }
+
+    private static string JsonEscape(string s) => AwsRolesAnywhereSessionExchange.JsonEscape(s);
+}
