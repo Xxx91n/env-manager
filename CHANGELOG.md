@@ -133,7 +133,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
-- 新增 `aws-roles-anywhere` 机密提供者：用机器证书库里的证书换取临时凭据后读写 Secrets Manager，不再需要长期 access key 落盘。与 `aws-secretsmanager` 共用同一套签名代码，信封格式一致，切换后跑一次轮换即可重新加密。签名完全在 .NET 内实现，不依赖 AWS SDK，也不调用官方 helper——后者只搜索当前用户证书库，服务账户拿不到机器证书。证书换凭据与读密钥的协议有离线测试覆盖；真实 AWS 是否接受该签名仍需一次最小权限账户的人工冒烟。
+- 新增 `aws-roles-anywhere` 机密提供者：用机器证书库里的证书换取临时凭据后读写 Secrets Manager，不再需要长期 access key 落盘。与 `aws-secretsmanager` 共用同一套签名代码，信封里的 `region|secretId` 形状一致；信封同时记录写入它的提供者，所以切换提供者要重新添加机密，不是改个下拉就能读。两个提供者指向同一账户同一区域时，重新添加会撞上已存在的机密名。签名完全在 .NET 内实现，不依赖 AWS SDK，也不调用官方 helper——后者只搜索当前用户证书库，服务账户拿不到机器证书。证书换凭据与读密钥的协议有离线测试覆盖；真实 AWS 是否接受该签名仍需一次最小权限账户的人工冒烟。
 
 ### Changed
 - 联网提供者的可用性探测新增只读模式：提供者声明不会写数据时，探测只验证身份，不再执行加密再删除。目前只有 `aws-roles-anywhere` 这样声明；`vault-kv2`、`azure-keyvault`、`aws-secretsmanager` 的行为保持不变。

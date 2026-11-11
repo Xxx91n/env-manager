@@ -311,12 +311,13 @@ Selecting this provider exchanges your certificate for temporary credentials onc
 
 No emulator implements `CreateSession`, so the wire protocol is not exercised in CI. The offline suite proves the signature, the header set, the decimal serial in the credential scope and the envelope shape against a locally generated certificate, but only AWS can accept a real signature. Before relying on this provider, run it once against a throwaway trust anchor:
 
-1. Register a disposable CA as a trust anchor, a profile, and a role whose only permission is `secretsmanager:GetSecretValue` on one test secret.
+1. Register a disposable CA as a trust anchor, a profile, and a role allowed to assume from `rolesanywhere.amazonaws.com` with `secretsmanager:CreateSecret` and `secretsmanager:GetSecretValue`.
 2. Import the test certificate into `Cert:\LocalMachine\My`, note its SHA-1, and set the five `AWS_ROLES_ANYWHERE_*` variables machine-wide.
-3. Set the provider active in a Launch profile and run a `profile apply` that points at that one test secret.
-4. Confirm the value matches, then delete the secret, the profile, the trust anchor and the certificate. Nothing about the run needs to stay.
+3. Add a secret to a Launch profile with `env-manager-cli profile add-secret <profile> <name> <value>`; this is the call that creates the envelope and, through the provider, the remote secret.
+4. Read it back with `env-manager-cli profile reveal-secret <profile> <name>` and confirm the value matches. `profile apply` cannot serve this step: it refuses Launch profiles outright, because applying would put a Launch profile's secrets into the registry.
+5. Delete the remote secret, the profile, the trust anchor and the certificate. Nothing about the run needs to stay.
 
-If step 3 fails with `CreateSession rejected certificate`, the failure is on the AWS side (trust anchor, revocation, role trust policy), not in the signature: the signature is deterministic and the offline suite already checks it against the certificate's public key.
+If step 4 fails with `CreateSession rejected certificate`, the failure is on the AWS side (trust anchor, revocation, role trust policy), not in the signature: the signature is deterministic and the offline suite already checks it against the certificate's public key.
 
 ### The service does not refresh this provider yet
 
