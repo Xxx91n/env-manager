@@ -169,30 +169,36 @@ internal sealed class SecretProviderManager : ISecretStore
     // Availability computation: declared Available gate, then the
     // sentinel round-trip for network providers. Internal so capability tests
     // can pin the composition with fake providers (no network, no cloud).
-    // A provider that declares ProbeWritesData=false is checked read-only instead,
-    // because its backend is a customer account that a profile-editor refresh must
-    // not write into.
     internal static bool IsProviderAvailable(ISecretProvider provider)
     {
         try
         {
             if (!provider.Available) return false;
-            if (!provider.RequiresNetwork) return true;
-            if (!provider.ProbeWritesData)
-            {
-                provider.ProbeReadOnly();
-                return true;
-            }
-            const string probeContext = "__env_manager_compat_probe__";
-            string envelope = provider.Encrypt("__probe_value__", probeContext);
-            try { provider.Decrypt(envelope, probeContext); } catch { /* async/network providers may not round-trip immediately */ }
-            try { provider.Delete(envelope, probeContext); } catch { /* best-effort cleanup */ }
+            ProbeProvider(provider);
             return true;
         }
         catch
         {
             return false;
         }
+    }
+
+    // The probe shared by `list` and `set`: local providers never probe, network
+    // providers run the sentinel Encrypt/Decrypt/Delete round-trip, and a provider
+    // that declares ProbeWritesData=false is checked read-only because its store is
+    // a customer account that opening the profile editor must not write into.
+    private static void ProbeProvider(ISecretProvider provider)
+    {
+        if (!provider.RequiresNetwork) return;
+        if (!provider.ProbeWritesData)
+        {
+            provider.ProbeReadOnly();
+            return;
+        }
+        const string probeContext = "__env_manager_compat_probe__";
+        string envelope = provider.Encrypt("__probe_value__", probeContext);
+        try { provider.Decrypt(envelope, probeContext); } catch { /* async/network providers may not round-trip immediately */ }
+        try { provider.Delete(envelope, probeContext); } catch { /* best-effort cleanup */ }
     }
 
     // Get the active provider name from config
@@ -219,19 +225,7 @@ internal sealed class SecretProviderManager : ISecretStore
             // Use a truly off-name sentinel so a real profile variable named
             // "__compat_probe__" never collides. Delete is best-effort because
             // some providers are pure-local and others have side effects.
-            // ProbeWritesData=false providers are checked read-only for the same
-            // reason as in IsProviderAvailable: no writes into a customer account.
-            if (provider.ProbeWritesData)
-            {
-                const string probeContext = "__env_manager_compat_probe__";
-                string envelope = provider.Encrypt("__probe_value__", probeContext);
-                try { provider.Decrypt(envelope, probeContext); } catch { /* async/network providers may not round-trip immediately */ }
-                try { provider.Delete(envelope, probeContext); } catch { /* best-effort cleanup */ }
-            }
-            else
-            {
-                provider.ProbeReadOnly();
-            }
+            ProbeProvider(provider);
         }
         catch (Exception ex)
         {
