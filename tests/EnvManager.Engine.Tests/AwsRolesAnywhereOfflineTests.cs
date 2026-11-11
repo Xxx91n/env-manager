@@ -574,6 +574,9 @@ public sealed class AwsRolesAnywhereOfflineTests : IDisposable
         // With an override the region only labels the credential scope, so a local
         // emulator's label such as `local_test` must survive a write/read round trip.
         // Rejecting it would let Encrypt store an envelope that Decrypt then refuses.
+        // A leaked override from an earlier test would make the first assertion pass for
+        // the wrong reason, so the variable is cleared before it runs.
+        Environment.SetEnvironmentVariable("AWS_ENDPOINT_URL_SECRETS_MANAGER", null);
         Assert.Null(AwsSecretTarget.Parse("local_test|em-shared"));
         Environment.SetEnvironmentVariable("AWS_ENDPOINT_URL_SECRETS_MANAGER", "http://127.0.0.1:4566");
         var target = AwsSecretTarget.Parse("local_test|em-shared");
@@ -599,6 +602,12 @@ public sealed class AwsRolesAnywhereOfflineTests : IDisposable
         Assert.True(AwsRegion.IsName("ap-southeast-2"));
         Assert.False(AwsRegion.IsName("evil.com/@host"));
         Assert.False(AwsRegion.IsName(""));
+        // With an override the label may differ from an AWS region name, but it still has
+        // to be a legal credential-scope label - which is checked on that branch too.
+        Assert.True(AwsRegion.IsSafeScopeLabel("local_test"));
+        Assert.False(AwsRegion.IsSafeScopeLabel("local/test"));
+        Assert.False(AwsRegion.IsSafeScopeLabel("evil.com/@host"));
+        Assert.False(AwsRegion.IsSafeScopeLabel(""));
     }
 
     [Fact]

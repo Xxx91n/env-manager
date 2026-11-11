@@ -89,24 +89,23 @@ internal static class AwsSigV4Client
             () => send.Send(request, timeout), discardRawMessage: true);
     }
 
-    /// <summary>Endpoint for a service, honouring the official override variable when one is set.</summary>
+    /// <summary>
+    /// Endpoint for a service, honouring the official override variable when one is set.
+    /// The region is checked in both branches: without an override it becomes part of the
+    /// host name, and with one it still labels the credential scope.
+    /// </summary>
     internal static string RequestUrl(string region, string service, string path, string? endpointOverride)
     {
         if (!string.IsNullOrEmpty(endpointOverride))
+        {
+            if (!AwsRegion.IsSafeScopeLabel(region))
+                throw new System.ArgumentException("Refusing to sign a credential scope for region '" + region + "'", nameof(region));
             return endpointOverride!.TrimEnd('/') + path;
+        }
         // A region travels inside the host name. Anything outside the AWS alphabet could
-        // redirect the request (and its session token) to another host. With an explicit
-        // endpoint override the region never reaches a host name, so only that path is
-        // exempt - and even there the value has to stay a legal scope label.
-        if (string.IsNullOrEmpty(endpointOverride))
-        {
-            if (!AwsRegion.IsName(region))
-                throw new System.ArgumentException("Refusing to build a request URL for region '" + region + "'", nameof(region));
-        }
-        else if (!AwsRegion.IsSafeScopeLabel(region))
-        {
-            throw new System.ArgumentException("Refusing to sign a credential scope for region '" + region + "'", nameof(region));
-        }
+        // redirect the request (and its session token) to another host.
+        if (!AwsRegion.IsName(region))
+            throw new System.ArgumentException("Refusing to build a request URL for region '" + region + "'", nameof(region));
         return "https://" + service + "." + region + ".amazonaws.com" + path;
     }
 
