@@ -24,10 +24,14 @@ public class SecretProviderCapabilityTests
         public bool RequiresNetwork { get; set; }
         public bool Available { get; set; } = true;
         public bool ProbeThrows { get; set; }
+        public bool ProbeWritesData { get; set; } = true;
+        public int ReadOnlyProbes { get; private set; }
+        public int Writes { get; private set; }
 
         public string Encrypt(string plaintext, string? context = null)
         {
             if (ProbeThrows) throw new InvalidOperationException("probe failed");
+            Writes++;
             return "fake-envelope";
         }
 
@@ -35,6 +39,12 @@ public class SecretProviderCapabilityTests
         {
             if (ProbeThrows) throw new InvalidOperationException("probe failed");
             return "fake-plaintext";
+        }
+
+        public void ProbeReadOnly()
+        {
+            if (ProbeThrows) throw new InvalidOperationException("probe failed");
+            ReadOnlyProbes++;
         }
     }
 
@@ -121,6 +131,32 @@ public class SecretProviderCapabilityTests
         Assert.True(p.RefreshCapable);
         Assert.False(p.CertAuthRequired);
         Assert.True(p.RequiresNetwork);
+    }
+
+    [Fact]
+    public void AwsRolesAnywhere_DeclaresCertAuthNetworkCapabilitiesAndAReadOnlyProbe()
+    {
+        var p = new AwsRolesAnywhereProvider();
+        Assert.Equal("aws-roles-anywhere", p.Name);
+        Assert.True(p.RefreshCapable);
+        Assert.True(p.CertAuthRequired);
+        Assert.True(p.RequiresNetwork);
+        // The certificate exchange must never create secrets in a customer account.
+        Assert.False(p.ProbeWritesData);
+    }
+
+    [Fact]
+    public void ReadOnlyProbe_IsUsedForProvidersThatDeclareNoWrites()
+    {
+        var probeOnly = new FakeProvider { RequiresNetwork = true, Available = true, ProbeWritesData = false };
+        Assert.True(SecretProviderManager.IsProviderAvailable(probeOnly));
+        // Encrypt/Decrypt were never called; the read-only probe ran instead.
+        Assert.Equal(1, probeOnly.ReadOnlyProbes);
+
+        var writeProbe = new FakeProvider { RequiresNetwork = true, Available = true, ProbeWritesData = true };
+        Assert.True(SecretProviderManager.IsProviderAvailable(writeProbe));
+        Assert.Equal(0, writeProbe.ReadOnlyProbes);
+        Assert.Equal(1, writeProbe.Writes);
     }
 
     // --- GetCapabilities surface ---
