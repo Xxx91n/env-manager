@@ -35,7 +35,7 @@ https://github.com/user-attachments/assets/7657b508-42bb-45a8-94b7-7c1fa052a4d0
 - **Two front ends** — `env-manager-cli` for scripting and CI, `env-manager.exe` (Tauri 2 + Svelte) for interactive editing. Both go through the same registry rules.
 - **Protected by default** — system variables and PATH entries cannot be deleted or renamed. A rename or scope change writes and checks the new value before deleting the old one. Every write holds all three locks: a Windows mutex in the CLI, a read/write lock in the Rust shell, and a write queue in the GUI.
 - **Profiles** — a Global profile writes its values into the registry; a Launch profile puts its values into the environment of one child process and never writes the registry. Profiles can inherit from other profiles, and the app previews conflicts before applying.
-- **Eight secret providers** — DPAPI, Credential Manager, SecretStore, HashiCorp Vault, SOPS, Azure Key Vault, 1Password, AWS Secrets Manager. Secret values are kept as encrypted envelopes or `mount:<id>` references. The generic `add-var` and `edit-var` commands can still write plaintext to the registry; the full boundary is in [Security](#security) and [docs/plaintext-sinks.md](docs/plaintext-sinks.md).
+- **Nine secret providers** — DPAPI, Credential Manager, SecretStore, HashiCorp Vault, SOPS, Azure Key Vault, 1Password, AWS Secrets Manager, AWS IAM Roles Anywhere. Secret values are kept as encrypted envelopes or `mount:<id>` references. The generic `add-var` and `edit-var` commands can still write plaintext to the registry; the full boundary is in [Security](#security) and [docs/plaintext-sinks.md](docs/plaintext-sinks.md).
 - **PATH health** — `path health` finds duplicate and dead entries; `--fix` rewrites the list, `--dry-run` only reports.
 - **Audit ledger** — append-only, SHA256 hash-chained history with rollback and a disaster-recovery export.
 
@@ -60,7 +60,7 @@ Protected variables and PATH entries are disabled before deletion, and the exact
 
 **Threat model.** The project does not defend against a process running inside your own Windows user session. Such a process can already call `profile reveal-secret`, read a launched child's environment block, or catch the short-lived temp files the providers write. The design does limit the damage: DPAPI CurrentUser ciphertext cannot be decrypted by another user or on another machine, the secret commands cannot land a secret in the registry (the generic-command gap above aside), and the only places meant to carry a secret value are listed in the plaintext table linked below.
 
-**Plaintext boundary.** The full table — where plaintext can exist, for how long, and what removes it — is in [docs/plaintext-sinks.md](docs/plaintext-sinks.md). The Plaintext lifecycle section of `docs/architecture.md` is the authoritative per-surface list. Memory zeroing and log scrubbing are best-effort, not guarantees: `tests/canary-redaction.Tests.ps1` scans 7 output surfaces for a planted canary, and the shared contract suite asserts `plaintext-never-in-envelope` on all 8 providers.
+**Plaintext boundary.** The full table — where plaintext can exist, for how long, and what removes it — is in [docs/plaintext-sinks.md](docs/plaintext-sinks.md). The Plaintext lifecycle section of `docs/architecture.md` is the authoritative per-surface list. Memory zeroing and log scrubbing are best-effort, not guarantees: `tests/canary-redaction.Tests.ps1` scans 7 output surfaces for a planted canary, and the shared contract suite plus the offline suite assert `plaintext-never-in-envelope` on all 9 providers.
 
 ## Install
 
@@ -154,7 +154,7 @@ flowchart LR
 
 ## Secret providers
 
-Eight secret providers, each checked when you switch to it. A failed check appears as an inline amber banner in the profile editor:
+Nine secret providers, each checked when you switch to it. A failed check appears as an inline amber banner in the profile editor:
 
 | Provider | Auth Method | Timer Refresh | Docs |
 |---|---|---|---|
@@ -166,6 +166,7 @@ Eight secret providers, each checked when you switch to it. A failed check appea
 | Azure Key Vault | Service principal cert / managed identity | Yes | [Guide](docs/secret-providers-guide.md) |
 | 1Password CLI | OP_SERVICE_ACCOUNT_TOKEN | Yes | [Guide](docs/secret-providers-guide.md) |
 | AWS Secrets Manager | SigV4 + access keys | Yes | [Guide](docs/secret-providers-guide.md) |
+| AWS IAM Roles Anywhere | Certificate from the machine store exchanged for temporary credentials | Yes | [Guide](docs/secret-providers-guide.md) |
 
 See [docs/secret-providers-guide.md](docs/secret-providers-guide.md) for per-provider prerequisites, one-time setup, and error fix steps.
 
