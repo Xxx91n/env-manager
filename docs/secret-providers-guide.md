@@ -258,7 +258,9 @@ Fix: set `AWS_REGION` (and credentials) env vars, restart Env Manager, then retr
 
 Official docs: [Signing process for IAM Roles Anywhere](https://docs.aws.amazon.com/rolesanywhere/latest/userguide/authentication-sign-process.html) · [CreateSession API](https://docs.aws.amazon.com/rolesanywhere/latest/userguide/authentication-create-session.html) · [Trust model and certificate requirements](https://docs.aws.amazon.com/rolesanywhere/latest/userguide/trust-model.html).
 
-This provider reads the same remote Secrets Manager secrets as `aws-secretsmanager`, but it never keeps a long-lived access key. It presents a certificate from the machine certificate store, exchanges it for short-lived credentials, and uses those to read or write the secret. The two providers use the same envelope payload shape (`region|secretId`), but the envelope records which provider wrote it and a mismatch is rejected, so switching providers means re-adding the secret rather than just changing the dropdown. The remote secret itself does not move.
+This provider reads the same remote Secrets Manager secrets as `aws-secretsmanager`, but it never keeps a long-lived access key. It presents a certificate from the machine certificate store, exchanges it for short-lived credentials, and uses those to read or write the secret. The two providers use the same envelope payload shape (`region|secretId`), but the envelope records which provider wrote it and a mismatch is rejected, so switching providers means re-adding the secret rather than just changing the dropdown.
+
+Re-adding under a new name is what `add-secret` does: it always calls `CreateSecret`, so reusing the same name that `aws-secretsmanager` already created fails with `ResourceExistsException`. To move an existing secret, pick a new name with the new provider and delete the old remote secret by hand; there is no in-product migration between the two providers.
 
 ### How the exchange works
 
@@ -317,7 +319,7 @@ No emulator implements `CreateSession`, so the wire protocol is not exercised in
 4. Read it back with `env-manager-cli profile reveal-secret <profile> <name>` and confirm the value matches. `profile apply` cannot serve this step: it refuses Launch profiles outright, because applying would put a Launch profile's secrets into the registry.
 5. Delete the remote secret, the profile, the trust anchor and the certificate. Nothing about the run needs to stay.
 
-If step 4 fails with `CreateSession rejected certificate`, the failure is on the AWS side (trust anchor, revocation, role trust policy), not in the signature: the signature is deterministic and the offline suite already checks it against the certificate's public key.
+If step 4 fails with `CreateSession rejected certificate`, the failure is on the AWS side (trust anchor, revocation, role trust policy). A local signature check does not exonerate the request that actually left the machine: it proves the signature matches the string this code built, not the request AWS received. Env Manager logs the upstream error and the certificate fingerprint; compare the response's complaint against the trust anchor and the role's trust policy before assuming the signing code is wrong.
 
 ### The service does not refresh this provider yet
 
