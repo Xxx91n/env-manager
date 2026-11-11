@@ -16,7 +16,7 @@ The six external providers below require host-side setup. Each section lists the
 
 ### Capability matrix
 
-Every provider declares its capability descriptors on `ISecretProvider`, and `profile secret-provider list` reports them per line as `[refresh=yes|no certauth=yes|no network=yes|no]` plus real availability (`(unavailable)` when the cheap environment gate fails):
+Every provider declares its capability descriptors on `ISecretProvider`, and `profile secret-provider list` reports them per line as `[refresh=yes|no certauth=yes|no network=yes|no]` plus real availability (`(unavailable)` when the cheap environment gate fails). The `Periodic refresh` column is what the provider declares, and it is what the GUI's refresh-policy dropdown allows; the service-side loop that actually re-reads a `Periodic` mount is still tracked in [this issue](https://github.com/Xxx91n/env-manager/issues/276), so a declared `yes` does not yet mean values refresh on their own.
 
 | Provider | Periodic refresh | Cert-bound auth | Network | Cheap availability gate |
 |----------|------------------|-----------------|---------|--------------------------|
