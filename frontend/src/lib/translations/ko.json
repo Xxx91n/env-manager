@@ -267,6 +267,7 @@
   "secrets.providerAzure": "Azure Key Vault",
   "secrets.provider1Password": "1Password CLI",
   "secrets.providerAws": "AWS Secrets Manager",
+  "secrets.providerAwsRolesAnywhere": "AWS IAM Roles Anywhere",
   "history.op.set": "설정",
   "history.op.delete": "삭제",
   "history.op.toggle": "토글",

@@ -9,7 +9,7 @@
   import { showToast } from '../stores'
   import { frontendLog } from '../settingsStore'
   function localizeProvider(provider: string, t: (k: string) => string): string {
-    const map: Record<string, string> = { 'dpapi-current-user': 'secrets.providerDpapi', 'credential-manager': 'secrets.providerCredMan', 'powershell-secretmanagement': 'secrets.providerPsm', 'vault-kv2': 'secrets.providerVault', 'sops': 'secrets.providerSops', 'azure-keyvault': 'secrets.providerAzure', '1password': 'secrets.provider1Password', 'aws-secretsmanager': 'secrets.providerAws' };
+    const map: Record<string, string> = { 'dpapi-current-user': 'secrets.providerDpapi', 'credential-manager': 'secrets.providerCredMan', 'powershell-secretmanagement': 'secrets.providerPsm', 'vault-kv2': 'secrets.providerVault', 'sops': 'secrets.providerSops', 'azure-keyvault': 'secrets.providerAzure', '1password': 'secrets.provider1Password', 'aws-secretsmanager': 'secrets.providerAws', 'aws-roles-anywhere': 'secrets.providerAwsRolesAnywhere' };
     const key = map[provider] || provider;
     const translated = t(key);
     return translated === key ? provider : translated;

@@ -87,12 +87,12 @@ describe('secret provider implementations', () => {
     expect(src).toContain('["azure-keyvault"] = new AzureKeyVaultProvider()')
   })
 
-  it('Total 6 providers in _providers dictionary', () => {
+  it('Total providers in _providers dictionary', () => {
     const src = readSecretProviderSources()
     const managerSection = src.slice(src.indexOf('internal sealed class SecretProviderManager'))
     const providerEntries = managerSection.match(/\["\w+-?[\w-]*"\] = new \w+Provider\(\)/g)
     expect(providerEntries).not.toBeNull()
-    expect(providerEntries!.length).toBe(8)
+    expect(providerEntries!.length).toBe(9)
   })
 
   it('i18n key secrets.providerSops exists in all 10 translation files', () => {
@@ -169,12 +169,43 @@ describe('secret provider implementations', () => {
     expect(src).toContain('AWS_REGION')
   })
 
-  it('Total 8 providers in _providers dictionary', () => {
+  it('Total 9 providers in _providers dictionary', () => {
     const src = readSecretProviderSources()
     const managerSection = src.slice(src.indexOf('internal sealed class SecretProviderManager'))
     const providerEntries = managerSection.match(/\["[^"]+"\] = new \w+Provider\(\)/g)
     expect(providerEntries).not.toBeNull()
-    expect(providerEntries!.length).toBe(8)
+    expect(providerEntries!.length).toBe(9)
+  })
+
+  it('Phase 9: AwsRolesAnywhereProvider signs CreateSession with the X.509 SigV4 variant', () => {
+    const src = readSecretProviderSources()
+    expect(src).toContain('class AwsRolesAnywhereProvider : ISecretProvider')
+    expect(src).toContain('public string Name => "aws-roles-anywhere"')
+    expect(src).toContain('AWS4-X509-RSA-SHA256')
+    expect(src).toContain('AWS4-X509-ECDSA-SHA256')
+    expect(src).toContain('X-Amz-X509')
+    // The certificate serial, not an access key, is the credential identity.
+    expect(src).toContain('SerialNumberDecimal')
+    // The machine store is the only store a service account can see.
+    expect(src).toContain('StoreLocation.LocalMachine')
+  })
+
+  it('AwsRolesAnywhereProvider never writes during an availability probe', () => {
+    const src = readSecretProviderSources()
+    const providerSection = src.slice(
+      src.indexOf('class AwsRolesAnywhereProvider'),
+      src.indexOf('internal sealed class SecretProviderManager'),
+    )
+    expect(providerSection).toContain('public bool ProbeWritesData => false')
+    expect(providerSection).toContain('public void ProbeReadOnly()')
+  })
+
+  it('i18n key secrets.providerAwsRolesAnywhere exists in all 10 translation files', () => {
+    const langs = ['en', 'zh', 'ja', 'ko', 'de', 'fr', 'es', 'pt', 'ru', 'ar']
+    for (const lang of langs) {
+      const json = JSON.parse(readFileSync(join(__dirname, '..', '..', '..', `frontend/src/lib/translations/${lang}.json`), 'utf8'))
+      expect(json['secrets.providerAwsRolesAnywhere'], `${lang}.json missing secrets.providerAwsRolesAnywhere`).toBeTruthy()
+    }
   })
 
   it('i18n keys for Phase 8-9 exist in all 10 files', () => {

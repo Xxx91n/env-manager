@@ -81,7 +81,7 @@ describe('parseSecretProviderList', () => {
 describe('i18n provider-name-list gate', () => {
   it('no translation string enumerates multiple provider ids', () => {
     const en = JSON.parse(readFileSync(join(process.cwd(), 'src/lib/translations/en.json'), 'utf8')) as Record<string, unknown>
-    const ids = ['dpapi-current-user', 'credential-manager', 'powershell-secretmanagement', 'vault-kv2', 'sops', 'azure-keyvault', '1password', 'aws-secretsmanager']
+    const ids = ['dpapi-current-user', 'credential-manager', 'powershell-secretmanagement', 'vault-kv2', 'sops', 'azure-keyvault', '1password', 'aws-secretsmanager', 'aws-roles-anywhere']
     const offenders: string[] = []
     for (const [key, value] of Object.entries(en)) {
       if (typeof value !== 'string') continue

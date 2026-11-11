@@ -267,6 +267,7 @@
   "secrets.providerAzure": "Azure 密钥保管库",
   "secrets.provider1Password": "1Password CLI",
   "secrets.providerAws": "AWS Secrets Manager",
+  "secrets.providerAwsRolesAnywhere": "AWS IAM Roles Anywhere",
   "history.op.set": "设置",
   "history.op.delete": "删除",
   "history.op.toggle": "开关",

@@ -18,6 +18,9 @@ const SECRET_PROVIDER_MODULES = [
   'Secrets/Providers/AzureKeyVaultProvider.cs',
   'Secrets/Providers/OnePasswordProvider.cs',
   'Secrets/Providers/AwsSecretsManagerProvider.cs',
+  'Secrets/Providers/AwsSigV4Client.cs',
+  'Secrets/Providers/AwsRolesAnywhereSession.cs',
+  'Secrets/Providers/AwsRolesAnywhereProvider.cs',
   'Secrets/Manager/SecretProviderManager.cs',
 ] as const
 
