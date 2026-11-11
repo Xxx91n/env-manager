@@ -433,6 +433,36 @@ public sealed class AwsRolesAnywhereOfflineTests : IDisposable
     // ---- 7. certificate shape checks ----
 
     [Fact]
+    public void SharedAwsPayload_KeepsTheWireShapeBothProvidersSignedFor()
+    {
+        // Both AWS providers build their request bodies from this one place; the shape is
+        // pinned here so a refactor cannot quietly change what a signature covers.
+        Assert.Equal("{\"SecretId\":\"em-shared\",\"SecretString\":\"v\"}",
+            AwsSecretsManagerPayload.PutSecretValue("em-shared", "v"));
+        Assert.Equal("{\"SecretId\":\"em-shared\"}",
+            AwsSecretsManagerPayload.GetSecretValue("em-shared"));
+        Assert.Equal("{\"SecretId\":\"em-shared\",\"ForceDeleteWithoutRecovery\":true}",
+            AwsSecretsManagerPayload.DeleteSecret("em-shared"));
+        Assert.Contains("\"ClientRequestToken\":\"tok\"",
+            AwsSecretsManagerPayload.CreateSecret("em-shared", "v", "tok"));
+    }
+
+    [Fact]
+    public void SharedSecretTarget_RoundTripsTheEnvelopeValueAndRejectsMalformedInput()
+    {
+        var target = new AwsSecretTarget("us-east-1", "em-shared");
+        Assert.Equal("us-east-1|em-shared", target.EnvelopeValue);
+        Assert.Equal(target, AwsSecretTarget.Parse(target.EnvelopeValue));
+        // A bare region or a bare id is not a target, and neither is a missing string.
+        Assert.Null(AwsSecretTarget.Parse("us-east-1"));
+        Assert.Null(AwsSecretTarget.Parse("|em-shared"));
+        Assert.Null(AwsSecretTarget.Parse(null));
+        // The AWS secret-name alphabet survives; anything else becomes a dash.
+        Assert.Equal("em-shared", AwsSecretTarget.SanitizeSecretId("em shared"));
+        Assert.Equal(512, AwsSecretTarget.SanitizeSecretId(new string('x', 600)).Length);
+    }
+
+    [Fact]
     public void CertificateValidation_RejectsAMissingOrExpiredOrKeylessCertificate()
     {
         using var expired = CreateRsaCertificate(FixedNow.AddDays(-30), FixedNow.AddDays(-1));

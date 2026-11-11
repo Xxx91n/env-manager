@@ -6,6 +6,8 @@ using EnvManager.Secrets.Core;
 // searches the CURRENT USER certificate store - which a service account does not
 // have. So the exchange is implemented here over the .NET certificate APIs: the
 // private key stays in the CNG key store and only ever signs, it is never exported.
+// The identity it reads, the session it returns, and the certificate lookup it uses
+// are their own files.
 
 using System;
 using System.Collections.Generic;
@@ -18,30 +20,10 @@ using System.Text.Json;
 
 namespace EnvManager.Secrets.Providers;
 
-/// <summary>Where a Roles Anywhere identity comes from, plus the session length asked for.</summary>
-internal sealed record RolesAnywhereOptions(
-    string Region,
-    string RoleArn,
-    string ProfileArn,
-    string TrustAnchorArn,
-    string CertificateSha1,
-    int DurationSeconds)
-{
-    /// <summary>Identity key for the session cache: a change to any part must refetch.</summary>
-    internal string CacheKey =>
-        Region + "|" + RoleArn + "|" + ProfileArn + "|" + TrustAnchorArn + "|" +
-        CertificateSha1.Replace(" ", "", StringComparison.Ordinal).ToUpperInvariant() + "|" + DurationSeconds;
-}
-
-/// <summary>Temporary credentials plus the moment they stop being usable.</summary>
-internal sealed record RolesAnywhereSession(AwsCredentials Credentials, DateTimeOffset ExpiresAt)
-{
-    // Refresh this far ahead of expiry so a long call cannot outlive its credentials.
-    internal static readonly TimeSpan RefreshLead = TimeSpan.FromMinutes(5);
-
-    internal bool NeedsRefresh(DateTimeOffset now) => now >= ExpiresAt - RefreshLead;
-}
-
+/// <summary>
+/// One CreateSession exchange: reads the identity from the machine environment, signs
+/// with the named certificate, and returns temporary credentials.
+/// </summary>
 internal static class AwsRolesAnywhereSessionExchange
 {
     private const string Service = "rolesanywhere";
@@ -59,26 +41,31 @@ internal static class AwsRolesAnywhereSessionExchange
     /// </summary>
     internal static RolesAnywhereOptions? ReadOptions()
     {
-        string region = FirstNonEmpty("AWS_REGION", "AWS_DEFAULT_REGION");
-        string role = FirstNonEmpty("AWS_ROLES_ANYWHERE_ROLE_ARN");
-        string profile = FirstNonEmpty("AWS_ROLES_ANYWHERE_PROFILE_ARN");
-        string trustAnchor = FirstNonEmpty("AWS_ROLES_ANYWHERE_TRUST_ANCHOR_ARN");
-        string sha1 = FirstNonEmpty("AWS_ROLES_ANYWHERE_CERT_SHA1");
-        if (region.Length == 0 || role.Length == 0 || profile.Length == 0 ||
-            trustAnchor.Length == 0 || sha1.Length == 0)
-            return null;
+        var missing = MissingVariables();
+        if (missing.Count > 0) return null;
 
+        string region = FirstNonEmpty("AWS_REGION", "AWS_DEFAULT_REGION");
         int duration = DefaultDurationSeconds;
         string? raw = Environment.GetEnvironmentVariable("AWS_ROLES_ANYWHERE_DURATION_SECONDS");
         if (!string.IsNullOrWhiteSpace(raw) && int.TryParse(raw, NumberStyles.Integer, CultureInfo.InvariantCulture, out int parsed))
             duration = parsed;
         duration = Math.Clamp(duration, MinDurationSeconds, MaxDurationSeconds);
 
-        return new RolesAnywhereOptions(region, role, profile, trustAnchor, sha1, duration);
+        return new RolesAnywhereOptions(
+            region,
+            FirstNonEmpty("AWS_ROLES_ANYWHERE_ROLE_ARN"),
+            FirstNonEmpty("AWS_ROLES_ANYWHERE_PROFILE_ARN"),
+            FirstNonEmpty("AWS_ROLES_ANYWHERE_TRUST_ANCHOR_ARN"),
+            FirstNonEmpty("AWS_ROLES_ANYWHERE_CERT_SHA1"),
+            duration);
     }
 
     /// <summary>Names every missing variable, so the CLI error is actionable in one read.</summary>
-    internal static string DescribeMissing()
+    internal static string DescribeMissing() => string.Join(", ", MissingVariables());
+
+    // The single list both ReadOptions and DescribeMissing read, so a new required
+    // variable cannot be enforced by one and silently absent from the other's message.
+    private static List<string> MissingVariables()
     {
         var missing = new List<string>();
         if (FirstNonEmpty("AWS_REGION", "AWS_DEFAULT_REGION").Length == 0) missing.Add("AWS_REGION or AWS_DEFAULT_REGION");
@@ -86,7 +73,7 @@ internal static class AwsRolesAnywhereSessionExchange
         if (FirstNonEmpty("AWS_ROLES_ANYWHERE_PROFILE_ARN").Length == 0) missing.Add("AWS_ROLES_ANYWHERE_PROFILE_ARN");
         if (FirstNonEmpty("AWS_ROLES_ANYWHERE_TRUST_ANCHOR_ARN").Length == 0) missing.Add("AWS_ROLES_ANYWHERE_TRUST_ANCHOR_ARN");
         if (FirstNonEmpty("AWS_ROLES_ANYWHERE_CERT_SHA1").Length == 0) missing.Add("AWS_ROLES_ANYWHERE_CERT_SHA1");
-        return string.Join(", ", missing);
+        return missing;
     }
 
     /// <summary>
@@ -118,9 +105,9 @@ internal static class AwsRolesAnywhereSessionExchange
         string algorithm = rsa != null ? "AWS4-X509-RSA-SHA256" : "AWS4-X509-ECDSA-SHA256";
 
         string body = "{\"durationSeconds\":" + options.DurationSeconds.ToString(CultureInfo.InvariantCulture) +
-            ",\"profileArn\":\"" + JsonEscape(options.ProfileArn) +
-            "\",\"roleArn\":\"" + JsonEscape(options.RoleArn) +
-            "\",\"trustAnchorArn\":\"" + JsonEscape(options.TrustAnchorArn) + "\"}";
+            ",\"profileArn\":\"" + AwsJson.Escape(options.ProfileArn) +
+            "\",\"roleArn\":\"" + AwsJson.Escape(options.RoleArn) +
+            "\",\"trustAnchorArn\":\"" + AwsJson.Escape(options.TrustAnchorArn) + "\"}";
 
         // No environment seam here: a variable that redirects the credential exchange
         // would let a planted setting hand the process forged temporary credentials.
@@ -226,24 +213,6 @@ internal static class AwsRolesAnywhereSessionExchange
         }
     }
 
-    internal static string JsonEscape(string s)
-    {
-        var sb = new StringBuilder(s.Length);
-        foreach (char c in s)
-        {
-            switch (c)
-            {
-                case '"': sb.Append("\\\""); break;
-                case '\\': sb.Append("\\\\"); break;
-                case '\n': sb.Append("\\n"); break;
-                case '\r': sb.Append("\\r"); break;
-                case '\t': sb.Append("\\t"); break;
-                default: sb.Append(c); break;
-            }
-        }
-        return sb.ToString();
-    }
-
     internal static string Fingerprint(string sha1) =>
         sha1.Replace(" ", "", StringComparison.Ordinal).ToUpperInvariant();
 
@@ -255,115 +224,5 @@ internal static class AwsRolesAnywhereSessionExchange
             if (!string.IsNullOrWhiteSpace(value)) return value!.Trim();
         }
         return "";
-    }
-}
-
-/// <summary>Machine-store certificate lookup. A service account cannot see a user store.</summary>
-internal static class CertificateStore
-{
-    /// <summary>
-    /// The one certificate named by its SHA-1 fingerprint. Anything else - missing,
-    /// expired, no key, failing the shape rules - is an authentication failure, never a
-    /// silent pick of a different certificate.
-    /// </summary>
-    internal static X509Certificate2 SelectForRolesAnywhere(
-        string provider, string operation, string sha1, DateTimeOffset now)
-    {
-        string wanted = AwsRolesAnywhereSessionExchange.Fingerprint(sha1);
-        using var store = new X509Store(StoreName.My, StoreLocation.LocalMachine);
-        try
-        {
-            store.Open(OpenFlags.ReadOnly | OpenFlags.OpenExistingOnly);
-        }
-        catch (Exception ex) when (ex is CryptographicException or System.Security.SecurityException)
-        {
-            throw new SecretProviderAuthFailedException(provider, operation,
-                "cannot open Cert:\\LocalMachine\\My (" + ex.GetType().Name + ")");
-        }
-
-        X509Certificate2Collection found = store.Certificates.Find(X509FindType.FindByThumbprint, wanted, validOnly: false);
-        X509Certificate2? cert = null;
-        for (int i = 0; i < found.Count; i++)
-        {
-            if (string.Equals(found[i].Thumbprint, wanted, StringComparison.OrdinalIgnoreCase))
-            {
-                cert = found[i];
-                break;
-            }
-        }
-        if (cert == null)
-            throw new SecretProviderAuthFailedException(provider, operation,
-                "certificate " + wanted + " is not in Cert:\\LocalMachine\\My");
-
-        ValidateForRolesAnywhere(provider, operation, cert, wanted, now);
-        return cert;
-    }
-
-    /// <summary>
-    /// The shape rules the service enforces on a certificate it is asked to sign with.
-    /// Split out from the store lookup so the rules can be checked without a machine
-    /// store, which is what the offline suite does.
-    /// </summary>
-    internal static void ValidateForRolesAnywhere(
-        string provider, string operation, X509Certificate2 cert, string sha1, DateTimeOffset now)
-    {
-        string wanted = AwsRolesAnywhereSessionExchange.Fingerprint(sha1);
-        if (cert.NotAfter.ToUniversalTime() <= now.UtcDateTime)
-            throw new SecretProviderAuthFailedException(provider, operation,
-                "certificate " + wanted + " expired on " + cert.NotAfter.ToUniversalTime().ToString("O", CultureInfo.InvariantCulture));
-        if (!cert.HasPrivateKey)
-            throw new SecretProviderAuthFailedException(provider, operation,
-                "certificate " + wanted + " has no private key in the machine store");
-        if (cert.Version != 3)
-            throw new SecretProviderAuthFailedException(provider, operation,
-                "certificate " + wanted + " is X.509 v" + cert.Version + "; Roles Anywhere requires v3");
-        if (!HasDigitalSignatureKeyUsage(cert))
-            throw new SecretProviderAuthFailedException(provider, operation,
-                "certificate " + wanted + " does not allow digital signature in its key usage");
-    }
-
-    /// <summary>
-    /// Intermediate certificates from the built chain, leaf and self-signed root
-    /// excluded, capped at the five the service accepts.
-    /// </summary>
-    internal static List<X509Certificate2> IntermediatesFor(X509Certificate2 leaf)
-    {
-        var result = new List<X509Certificate2>();
-        using var chain = new X509Chain();
-        chain.ChainPolicy.RevocationMode = X509RevocationMode.NoCheck;
-        chain.ChainPolicy.VerificationFlags = X509VerificationFlags.NoFlag;
-        if (!chain.Build(leaf))
-        {
-            // A chain that will not build offline is not fatal here: the trust anchor may
-            // hold what the local machine does not, and the service decides. Send nothing
-            // rather than a guess.
-            return result;
-        }
-        for (int i = 0; i < chain.ChainElements.Count; i++)
-        {
-            X509Certificate2 element = chain.ChainElements[i].Certificate;
-            if (i == 0) continue;                                    // the leaf travels separately
-            if (ElementIsSelfSigned(element)) continue;               // the trust anchor owns the root
-            if (result.Count >= 5) break;                             // the service accepts at most five
-            result.Add(new X509Certificate2(element.RawData));
-        }
-        return result;
-    }
-
-    private static bool ElementIsSelfSigned(X509Certificate2 cert) =>
-        string.Equals(cert.Subject, cert.Issuer, StringComparison.OrdinalIgnoreCase);
-
-    private static bool HasDigitalSignatureKeyUsage(X509Certificate2 cert)
-    {
-        // Other extensions (BasicConstraints, SubjectKeyIdentifier, ...) are common and
-        // may come first; casting every extension would throw on the first one that is
-        // not a key usage.
-        foreach (X509Extension extension in cert.Extensions)
-        {
-            if (extension is not X509KeyUsageExtension usage) continue;
-            return (usage.KeyUsages & X509KeyUsageFlags.DigitalSignature) != 0;
-        }
-        // No key-usage extension means unrestricted, which satisfies the requirement.
-        return true;
     }
 }

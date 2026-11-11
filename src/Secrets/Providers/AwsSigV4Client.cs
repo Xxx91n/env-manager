@@ -18,38 +18,6 @@ using System.Text;
 
 namespace EnvManager.Secrets.Providers;
 
-/// <summary>Credentials for one signed request.</summary>
-internal readonly record struct AwsCredentials(string AccessKeyId, string SecretAccessKey, string? SessionToken)
-{
-    internal string Scope(string dateStamp, string region, string service) =>
-        dateStamp + "/" + region + "/" + service + "/aws4_request";
-}
-
-/// <summary>
-/// Transport seam. Production sends over <see cref="HttpClient"/>; tests inject a fake so
-/// the wire bytes are asserted without any network. There is deliberately no environment
-/// variable that buys this seam in production: a switchable signing endpoint would let a
-/// planted variable hand the process forged temporary credentials.
-/// </summary>
-internal interface IAwsHttpSender
-{
-    HttpResponseMessage Send(HttpRequestMessage request, TimeSpan timeout);
-}
-
-internal sealed class HttpClientSender : IAwsHttpSender
-{
-    internal static readonly HttpClientSender Instance = new HttpClientSender();
-
-    public HttpResponseMessage Send(HttpRequestMessage request, TimeSpan timeout)
-    {
-        // A fresh client per call: the providers are invoked from short-lived CLI
-        // processes and a shared handler would outlive the process that owns it.
-        using var client = new System.Net.Http.HttpClient();
-        client.Timeout = timeout;
-        return client.SendAsync(request).GetAwaiter().GetResult();
-    }
-}
-
 internal static class AwsSigV4Client
 {
     /// <summary>

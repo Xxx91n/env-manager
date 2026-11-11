@@ -51,17 +51,17 @@ internal sealed class AwsSecretsManagerProvider : ISecretProvider
         string region = Environment.GetEnvironmentVariable("AWS_REGION")
             ?? Environment.GetEnvironmentVariable("AWS_DEFAULT_REGION")
             ?? throw new SecretProviderUnavailableException(Name, SecretProviderErrors.OpEncrypt, "AWS_REGION or AWS_DEFAULT_REGION not set");
-        string secretId = context != null ? SanitizeSecretId(context) : "env-manager-" + Guid.NewGuid().ToString("N").Substring(0, 12);
+        var target = new AwsSecretTarget(region,
+            context != null ? AwsSecretTarget.SanitizeSecretId(context) : AwsSecretTarget.NewSecretId());
 
-        // ClientRequestToken: AWS-recommended idempotency token; LocalStack (L1
-        // lane) rejects CreateSecret without it. A per-call UUID is the documented pattern
-        // and is safe in production (retries dedupe).
-        string body = "{\"Name\":\"" + JsonEscape(secretId) + "\",\"SecretString\":\"" + JsonEscape(plaintext) + "\",\"ClientRequestToken\":\"" + Guid.NewGuid().ToString("N") + "\"}";
+        // A per-call UUID is the documented idempotency pattern and is safe in production
+        // (retries dedupe).
+        string body = AwsSecretsManagerPayload.CreateSecret(target.SecretId, plaintext, Guid.NewGuid().ToString("N"));
         var response = SecretProviderErrors.Send(Name, SecretProviderErrors.OpEncrypt,
             () => CallAwsApi(region, "secretsmanager.CreateSecret", body), discardRawMessage: true);
         if (!response.IsSuccessStatusCode) throw SecretProviderErrors.FromStatus(Name, SecretProviderErrors.OpEncrypt, response.StatusCode, "create");
 
-        var env = new SecretEnvelope { Provider = Name, Version = 1, CreatedAt = DateTimeOffset.UtcNow.ToString("O"), TargetName = region + "|" + secretId };
+        var env = new SecretEnvelope { Provider = Name, Version = 1, CreatedAt = DateTimeOffset.UtcNow.ToString("O"), TargetName = target.EnvelopeValue };
         return env.Serialize();
     }
 
@@ -70,14 +70,11 @@ internal sealed class AwsSecretsManagerProvider : ISecretProvider
         var parsed = SecretEnvelope.TryParse(envelope) ?? throw new SecretProviderInvalidEnvelopeException(Name, SecretProviderErrors.OpDecrypt, "Invalid secret envelope format");
         if (parsed.Provider != Name) throw new SecretProviderInvalidEnvelopeException(Name, SecretProviderErrors.OpDecrypt, $"Provider mismatch: expected {Name}, got {parsed.Provider}");
         if (string.IsNullOrEmpty(parsed.TargetName)) throw new SecretProviderInvalidEnvelopeException(Name, SecretProviderErrors.OpDecrypt, "Missing targetName", parsed.TargetName);
+        var target = AwsSecretTarget.Parse(parsed.TargetName)
+            ?? throw new SecretProviderInvalidEnvelopeException(Name, SecretProviderErrors.OpDecrypt, "Invalid targetName format", parsed.TargetName);
 
-        var parts = parsed.TargetName.Split('|');
-        if (parts.Length < 2) throw new SecretProviderInvalidEnvelopeException(Name, SecretProviderErrors.OpDecrypt, "Invalid targetName format", parsed.TargetName);
-        string region = parts[0];
-        string secretId = parts[1];
-
-        string body = "{\"SecretId\":\"" + JsonEscape(secretId) + "\"}";
-        var response = CallAwsApi(region, "secretsmanager.GetSecretValue", body);
+        string body = AwsSecretsManagerPayload.GetSecretValue(target.SecretId);
+        var response = CallAwsApi(target.Region, "secretsmanager.GetSecretValue", body);
         if (!response.IsSuccessStatusCode) throw SecretProviderErrors.FromStatus(Name, SecretProviderErrors.OpDecrypt, response.StatusCode, "read", mountId: parsed.TargetName);
 
         return SecretProviderErrors.Send(Name, SecretProviderErrors.OpDecrypt, () =>
@@ -92,14 +89,13 @@ internal sealed class AwsSecretsManagerProvider : ISecretProvider
     public void Delete(string envelope, string? context = null)
     {
         var parsed = SecretEnvelope.TryParse(envelope);
-        if (parsed == null || string.IsNullOrEmpty(parsed.TargetName)) return;
+        var target = AwsSecretTarget.Parse(parsed?.TargetName);
+        if (target == null) return;
         try
         {
-            var parts = parsed.TargetName.Split('|');
-            if (parts.Length < 2) return;
-            string body = "{\"SecretId\":\"" + JsonEscape(parts[1]) + "\",\"ForceDeleteWithoutRecovery\":true}";
+            string body = AwsSecretsManagerPayload.DeleteSecret(target.Value.SecretId);
             SecretProviderErrors.Send(Name, SecretProviderErrors.OpDelete,
-                () => CallAwsApi(parts[0], "secretsmanager.DeleteSecret", body), discardRawMessage: true);
+                () => CallAwsApi(target.Value.Region, "secretsmanager.DeleteSecret", body), discardRawMessage: true);
         }
         catch (Exception ex) { SecretProviderErrors.SwallowBestEffort(Name, SecretProviderErrors.OpDelete, ex); }
     }
@@ -109,12 +105,11 @@ internal sealed class AwsSecretsManagerProvider : ISecretProvider
     {
         string plaintext = Decrypt(oldEnvelope, context);
         var parsed = SecretEnvelope.TryParse(oldEnvelope);
-        if (parsed == null || string.IsNullOrEmpty(parsed.TargetName)) return Encrypt(plaintext, context);
-        var parts = parsed.TargetName.Split('|');
-        if (parts.Length < 2) return Encrypt(plaintext, context);
-        string body = "{\"SecretId\":\"" + JsonEscape(parts[1]) + "\",\"SecretString\":\"" + JsonEscape(plaintext) + "\"}";
+        var target = AwsSecretTarget.Parse(parsed?.TargetName);
+        if (target == null) return Encrypt(plaintext, context);
+        string body = AwsSecretsManagerPayload.PutSecretValue(target.Value.SecretId, plaintext);
         var resp = SecretProviderErrors.Send(Name, SecretProviderErrors.OpRotate,
-            () => CallAwsApi(parts[0], "secretsmanager.PutSecretValue", body), parsed?.TargetName, discardRawMessage: true);
+            () => CallAwsApi(target.Value.Region, "secretsmanager.PutSecretValue", body), parsed?.TargetName, discardRawMessage: true);
         if (!resp.IsSuccessStatusCode) throw SecretProviderErrors.FromStatus(Name, SecretProviderErrors.OpRotate, resp.StatusCode, "rotation (PutSecretValue)", mountId: parsed?.TargetName);
         return oldEnvelope;
     }
@@ -141,29 +136,5 @@ internal sealed class AwsSecretsManagerProvider : ISecretProvider
             new AwsCredentials(accessKey, secretKey, string.IsNullOrEmpty(sessionToken) ? null : sessionToken),
             string.IsNullOrEmpty(endpointOverride) ? null : endpointOverride,
             Timeout);
-    }
-
-    private static string SanitizeSecretId(string s)
-    {
-        var sb = new StringBuilder();
-        foreach (char c in s) { if (char.IsLetterOrDigit(c) || "/_+=.@-".IndexOf(c) >= 0) sb.Append(c); else sb.Append('-'); }
-        string r = sb.ToString();
-        return r.Length > 512 ? r.Substring(0, 512) : r;
-    }
-
-    private static string JsonEscape(string s)
-    {
-        var sb = new StringBuilder();
-        foreach (char c in s) {
-            switch (c) {
-                case '"': sb.Append("\\\""); break;
-                case '\\': sb.Append("\\\\"); break;
-                case '\n': sb.Append("\\n"); break;
-                case '\r': sb.Append("\\r"); break;
-                case '\t': sb.Append("\\t"); break;
-                default: sb.Append(c); break;
-            }
-        }
-        return sb.ToString();
     }
 }
