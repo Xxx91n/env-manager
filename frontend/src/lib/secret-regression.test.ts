@@ -116,12 +116,14 @@ describe('Secret provider regression safety', () => {
   })
 
   it('AWS SigV4: canonical request includes all required components', () => {
+    // Signing moved into the shared client so the certificate-backed provider signs with
+    // the same builders rather than a copy; assert the components where they now live.
     const src = readSecretProviderSources()
-    const awsSection = src.slice(src.indexOf('class AwsSecretsManagerProvider'))
+    const awsSection = src.slice(src.indexOf('class AwsSigV4Client'))
     expect(awsSection).toContain('canonicalRequest')
     expect(awsSection).toContain('stringToSign')
     expect(awsSection).toContain('AWS4-HMAC-SHA256')
-    expect(awsSection).toContain('credentialScope')
+    expect(awsSection).toContain('aws4_request')
     expect(awsSection).toContain('HmacSHA256')
     expect(awsSection).toContain('BytesToHex')
   })

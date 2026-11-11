@@ -9,13 +9,8 @@ using EnvManager.Secrets.Core;
 // and any raw SDK/transport message - only the typed classification survives.
 
 using System;
-using System.Collections.Generic;
-using System.Globalization;
 using System.Net.Http;
-using System.Security.Cryptography;
-using System.Text;
 using System.Text.Json;
-using System.Text.Json.Serialization;
 
 namespace EnvManager.Secrets.Providers;
 
@@ -51,17 +46,17 @@ internal sealed class AwsSecretsManagerProvider : ISecretProvider
         string region = Environment.GetEnvironmentVariable("AWS_REGION")
             ?? Environment.GetEnvironmentVariable("AWS_DEFAULT_REGION")
             ?? throw new SecretProviderUnavailableException(Name, SecretProviderErrors.OpEncrypt, "AWS_REGION or AWS_DEFAULT_REGION not set");
-        string secretId = context != null ? SanitizeSecretId(context) : "env-manager-" + Guid.NewGuid().ToString("N").Substring(0, 12);
+        var target = new AwsSecretTarget(region,
+            context != null ? AwsSecretTarget.SanitizeSecretId(context) : AwsSecretTarget.NewSecretId());
 
-        // ClientRequestToken: AWS-recommended idempotency token; LocalStack (L1
-        // lane) rejects CreateSecret without it. A per-call UUID is the documented pattern
-        // and is safe in production (retries dedupe).
-        string body = "{\"Name\":\"" + JsonEscape(secretId) + "\",\"SecretString\":\"" + JsonEscape(plaintext) + "\",\"ClientRequestToken\":\"" + Guid.NewGuid().ToString("N") + "\"}";
+        // A per-call UUID is the documented idempotency pattern and is safe in production
+        // (retries dedupe).
+        string body = AwsSecretsManagerPayload.CreateSecret(target.SecretId, plaintext, Guid.NewGuid().ToString("N"));
         var response = SecretProviderErrors.Send(Name, SecretProviderErrors.OpEncrypt,
             () => CallAwsApi(region, "secretsmanager.CreateSecret", body), discardRawMessage: true);
         if (!response.IsSuccessStatusCode) throw SecretProviderErrors.FromStatus(Name, SecretProviderErrors.OpEncrypt, response.StatusCode, "create");
 
-        var env = new SecretEnvelope { Provider = Name, Version = 1, CreatedAt = DateTimeOffset.UtcNow.ToString("O"), TargetName = region + "|" + secretId };
+        var env = new SecretEnvelope { Provider = Name, Version = 1, CreatedAt = DateTimeOffset.UtcNow.ToString("O"), TargetName = target.EnvelopeValue };
         return env.Serialize();
     }
 
@@ -70,14 +65,11 @@ internal sealed class AwsSecretsManagerProvider : ISecretProvider
         var parsed = SecretEnvelope.TryParse(envelope) ?? throw new SecretProviderInvalidEnvelopeException(Name, SecretProviderErrors.OpDecrypt, "Invalid secret envelope format");
         if (parsed.Provider != Name) throw new SecretProviderInvalidEnvelopeException(Name, SecretProviderErrors.OpDecrypt, $"Provider mismatch: expected {Name}, got {parsed.Provider}");
         if (string.IsNullOrEmpty(parsed.TargetName)) throw new SecretProviderInvalidEnvelopeException(Name, SecretProviderErrors.OpDecrypt, "Missing targetName", parsed.TargetName);
+        var target = AwsSecretTarget.Parse(parsed.TargetName)
+            ?? throw new SecretProviderInvalidEnvelopeException(Name, SecretProviderErrors.OpDecrypt, "Invalid targetName format", parsed.TargetName);
 
-        var parts = parsed.TargetName.Split('|');
-        if (parts.Length < 2) throw new SecretProviderInvalidEnvelopeException(Name, SecretProviderErrors.OpDecrypt, "Invalid targetName format", parsed.TargetName);
-        string region = parts[0];
-        string secretId = parts[1];
-
-        string body = "{\"SecretId\":\"" + JsonEscape(secretId) + "\"}";
-        var response = CallAwsApi(region, "secretsmanager.GetSecretValue", body);
+        string body = AwsSecretsManagerPayload.GetSecretValue(target.SecretId);
+        var response = CallAwsApi(target.Region, "secretsmanager.GetSecretValue", body);
         if (!response.IsSuccessStatusCode) throw SecretProviderErrors.FromStatus(Name, SecretProviderErrors.OpDecrypt, response.StatusCode, "read", mountId: parsed.TargetName);
 
         return SecretProviderErrors.Send(Name, SecretProviderErrors.OpDecrypt, () =>
@@ -92,14 +84,13 @@ internal sealed class AwsSecretsManagerProvider : ISecretProvider
     public void Delete(string envelope, string? context = null)
     {
         var parsed = SecretEnvelope.TryParse(envelope);
-        if (parsed == null || string.IsNullOrEmpty(parsed.TargetName)) return;
+        var target = AwsSecretTarget.Parse(parsed?.TargetName);
+        if (target == null) return;
         try
         {
-            var parts = parsed.TargetName.Split('|');
-            if (parts.Length < 2) return;
-            string body = "{\"SecretId\":\"" + JsonEscape(parts[1]) + "\",\"ForceDeleteWithoutRecovery\":true}";
+            string body = AwsSecretsManagerPayload.DeleteSecret(target.Value.SecretId);
             SecretProviderErrors.Send(Name, SecretProviderErrors.OpDelete,
-                () => CallAwsApi(parts[0], "secretsmanager.DeleteSecret", body), discardRawMessage: true);
+                () => CallAwsApi(target.Value.Region, "secretsmanager.DeleteSecret", body), discardRawMessage: true);
         }
         catch (Exception ex) { SecretProviderErrors.SwallowBestEffort(Name, SecretProviderErrors.OpDelete, ex); }
     }
@@ -109,12 +100,11 @@ internal sealed class AwsSecretsManagerProvider : ISecretProvider
     {
         string plaintext = Decrypt(oldEnvelope, context);
         var parsed = SecretEnvelope.TryParse(oldEnvelope);
-        if (parsed == null || string.IsNullOrEmpty(parsed.TargetName)) return Encrypt(plaintext, context);
-        var parts = parsed.TargetName.Split('|');
-        if (parts.Length < 2) return Encrypt(plaintext, context);
-        string body = "{\"SecretId\":\"" + JsonEscape(parts[1]) + "\",\"SecretString\":\"" + JsonEscape(plaintext) + "\"}";
+        var target = AwsSecretTarget.Parse(parsed?.TargetName);
+        if (target == null) return Encrypt(plaintext, context);
+        string body = AwsSecretsManagerPayload.PutSecretValue(target.Value.SecretId, plaintext);
         var resp = SecretProviderErrors.Send(Name, SecretProviderErrors.OpRotate,
-            () => CallAwsApi(parts[0], "secretsmanager.PutSecretValue", body), parsed?.TargetName, discardRawMessage: true);
+            () => CallAwsApi(target.Value.Region, "secretsmanager.PutSecretValue", body), parsed?.TargetName, discardRawMessage: true);
         if (!resp.IsSuccessStatusCode) throw SecretProviderErrors.FromStatus(Name, SecretProviderErrors.OpRotate, resp.StatusCode, "rotation (PutSecretValue)", mountId: parsed?.TargetName);
         return oldEnvelope;
     }
@@ -126,103 +116,20 @@ internal sealed class AwsSecretsManagerProvider : ISecretProvider
         // production deployments never set it; the L1 LocalStack emulator does.
         // TLS stays mandatory for the default endpoint; an explicit override may
         // use http:// (it is always an opt-in local/emulator endpoint by nature).
-        string? endpointOverride = Environment.GetEnvironmentVariable("AWS_ENDPOINT_URL_SECRETS_MANAGER");
-        string requestUrl;
-        if (!string.IsNullOrEmpty(endpointOverride))
-        {
-            requestUrl = endpointOverride.TrimEnd('/') + "/";
-        }
-        else
-        {
-            string host = "secretsmanager." + region + ".amazonaws.com";
-            requestUrl = "https://" + host + "/";
-        }
+        string? endpointOverride = AwsEndpointOverride.SecretsManager;
         string accessKey = Environment.GetEnvironmentVariable("AWS_ACCESS_KEY_ID") ?? "";
         string secretKey = Environment.GetEnvironmentVariable("AWS_SECRET_ACCESS_KEY") ?? "";
         string sessionToken = Environment.GetEnvironmentVariable("AWS_SESSION_TOKEN") ?? "";
         if (string.IsNullOrEmpty(accessKey) || string.IsNullOrEmpty(secretKey))
             throw new SecretProviderAuthFailedException("aws-secretsmanager", "aws-api", "AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY required");
 
-        string amzDate = DateTimeOffset.UtcNow.ToString("yyyyMMddTHHmmssZ");
-        string dateStamp = DateTimeOffset.UtcNow.ToString("yyyyMMdd");
-        string credentialScope = dateStamp + "/" + region + "/" + SERVICE + "/aws4_request";
-
-        string signedHost = endpointOverride != null
-            ? new Uri(requestUrl).Host
-            : "secretsmanager." + region + ".amazonaws.com";
-        string canonicalHeaders = "content-type:application/x-amz-json-1.1\nhost:" + signedHost + "\nx-amz-date:" + amzDate + "\n" +
-            (!string.IsNullOrEmpty(sessionToken) ? "x-amz-security-token:" + sessionToken + "\n" : "");
-        string signedHeaders = "content-type;host;x-amz-date" + (!string.IsNullOrEmpty(sessionToken) ? ";x-amz-security-token" : "");
-        string payloadHash = HexSHA256(body);
-        string canonicalRequest = "POST\n/\n\n" + canonicalHeaders + "\n" + signedHeaders + "\n" + payloadHash;
-        string stringToSign = "AWS4-HMAC-SHA256\n" + amzDate + "\n" + credentialScope + "\n" + HexSHA256(canonicalRequest);
-
-        byte[] kDate = HmacSHA256(Encoding.UTF8.GetBytes("AWS4" + secretKey), dateStamp);
-        byte[] kRegion = HmacSHA256(kDate, region);
-        byte[] kService = HmacSHA256(kRegion, SERVICE);
-        byte[] kSigning = HmacSHA256(kService, "aws4_request");
-        byte[] signature = HmacSHA256(kSigning, stringToSign);
-        string auth = "AWS4-HMAC-SHA256 Credential=" + accessKey + "/" + credentialScope + ", SignedHeaders=" + signedHeaders + ", Signature=" + BytesToHex(signature);
-
-        using var client = new System.Net.Http.HttpClient();
-        client.Timeout = Timeout;
-        var content = new System.Net.Http.StringContent(body, Encoding.UTF8, "application/x-amz-json-1.1");
-        // Per AWS SigV4: Authorization, X-Amz-Target, X-Amz-Date, X-Amz-Security-Token
-        // are REQUEST headers, not content headers. Adding "Authorization" to
-        // HttpContent throws "Misused header name, 'Authorization'" because the
-        // .NET dispatcher treats it as a content header.
-        var request = new System.Net.Http.HttpRequestMessage(System.Net.Http.HttpMethod.Post, requestUrl);
-        request.Content = content;
-        request.Headers.Add("X-Amz-Target", target);
-        request.Headers.Add("X-Amz-Date", amzDate);
-        // TryAddWithoutValidation: the SigV4 value's base64-ish segments can trip the
-        // strict Authorization header parser on some .NET platforms (CI Linux lane,
-        // live-verified); the SigV4 string is well-formed by construction.
-        request.Headers.TryAddWithoutValidation("Authorization", auth);
-        if (!string.IsNullOrEmpty(sessionToken)) request.Headers.TryAddWithoutValidation("X-Amz-Security-Token", sessionToken);
-        // transport failures map at the boundary; the HttpRequestException can
-        // carry the request URL but never the signed Authorization header value, and the
-        // raw message is dropped entirely (classification-only mandate).
-        return SecretProviderErrors.Send("aws-secretsmanager", "aws-api", () => client.SendAsync(request).GetAwaiter().GetResult(), discardRawMessage: true);
-    }
-
-    private static string HexSHA256(string s)
-    {
-        using var sha = System.Security.Cryptography.SHA256.Create();
-        return BytesToHex(sha.ComputeHash(Encoding.UTF8.GetBytes(s)));
-    }
-
-    private static byte[] HmacSHA256(byte[] key, string data) => new System.Security.Cryptography.HMACSHA256(key).ComputeHash(Encoding.UTF8.GetBytes(data));
-    private static byte[] HmacSHA256(byte[] key, byte[] data) => new System.Security.Cryptography.HMACSHA256(key).ComputeHash(data);
-
-    private static string BytesToHex(byte[] bytes)
-    {
-        var sb = new StringBuilder(bytes.Length * 2);
-        foreach (byte b in bytes) sb.Append(b.ToString("x2"));
-        return sb.ToString();
-    }
-
-    private static string SanitizeSecretId(string s)
-    {
-        var sb = new StringBuilder();
-        foreach (char c in s) { if (char.IsLetterOrDigit(c) || "/_+=.@-".IndexOf(c) >= 0) sb.Append(c); else sb.Append('-'); }
-        string r = sb.ToString();
-        return r.Length > 512 ? r.Substring(0, 512) : r;
-    }
-
-    private static string JsonEscape(string s)
-    {
-        var sb = new StringBuilder();
-        foreach (char c in s) {
-            switch (c) {
-                case '"': sb.Append("\\\""); break;
-                case '\\': sb.Append("\\\\"); break;
-                case '\n': sb.Append("\\n"); break;
-                case '\r': sb.Append("\\r"); break;
-                case '\t': sb.Append("\\t"); break;
-                default: sb.Append(c); break;
-            }
-        }
-        return sb.ToString();
+        // Signing, canonical request and transport live in AwsSigV4Client so the
+        // Roles Anywhere provider signs with the same builders instead of a copy.
+        return AwsSigV4Client.Call(
+            "aws-secretsmanager", "aws-api", region, SERVICE, "/", target, body,
+            "application/x-amz-json-1.1",
+            new AwsCredentials(accessKey, secretKey, string.IsNullOrEmpty(sessionToken) ? null : sessionToken),
+            string.IsNullOrEmpty(endpointOverride) ? null : endpointOverride,
+            Timeout);
     }
 }

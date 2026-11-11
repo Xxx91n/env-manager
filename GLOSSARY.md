@@ -35,7 +35,7 @@ A value the tool stores encrypted instead of as plain text, so the plaintext nev
 _Avoid_: credential blob, encrypted value, masked value
 
 **Secret provider**:
-The component that encrypts a secret or fetches it from a remote store. The app ships eight providers.
+The component that encrypts a secret or fetches it from a remote store. The app ships nine providers.
 _Avoid_: backend, secret manager, broker
 
 **Secret envelope**:

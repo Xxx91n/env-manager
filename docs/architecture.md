@@ -433,6 +433,7 @@ Phase 6 (SOPS Encrypted Envelopes) and Phase 7 (Azure Key Vault) are implemented
 - PowerShell automation + CI on the same user account: Phase 4 (SecretManagement + SecretStore).
 - Team or production with network access: Phase 5 (HashiCorp Vault) or Phase 7 (Azure Key Vault).
 - GitOps workflow with secrets in version control: Phase 6 (sops).
+- On-premises or service-hosted AWS access without a long-lived access key: `aws-roles-anywhere`, which exchanges a certificate from `Cert:\LocalMachine\My` for short-lived credentials. Its availability probe exchanges the certificate once and writes nothing, unlike the other network providers' sentinel round-trip (`ISecretProvider.ProbeWritesData`), because the store it would write into is a customer account.
 
 Each phase is opt-in via secret-providers.json; the default remains Phase 0 so existing installations upgrade without reconfiguration.
 
@@ -443,7 +444,7 @@ Architecture-recovery (spec Phase 6 story 19) adds the domain facade port above 
 - **ISecretStore** (`src/Secrets/Core/ISecretStore.cs`, `EnvManager.Secrets.Core`): exactly five domain verbs - `Mount` (encrypt to envelope), `Reveal` (decrypt), `Rotate` (re-encrypt all profile secrets with the active provider), `Export` (DPAPI-encrypted backup blob), `Import` (restore from backup).
 - **SecretProviderManager** (`EnvManager.Secrets.Manager`) is the single implementation: `internal sealed class` + `internal static readonly SecretProviderManager.Instance`; the five verbs are explicit interface implementations delegating to the static routing core (Encrypt/Decrypt/RotateAll/ExportSecrets/ImportSecrets). That extraction changed no behavior; `Rotate` has since gained the envelope-holder parameter and the mount-reference resolution described below it.
 - **Call sites consume the port, not the manager**: `Program.SecretStore` (CliRuntime.cs, `internal static readonly ISecretStore`) is wired from `SecretProviderManager.Instance`; ProfileSecretCommand (add/edit/reveal/rotate/export/import), ProfileLaunchCommand (launch injection), CliRuntime.TryDecryptSafe (show-with-reveal), and AuditCommand encrypt-file all go through `SecretStore.<verb>`. Provider routing (GetActiveProvider/Delete/ListProviders/SetActiveProvider) stays on the manager.
-- **Adapter boundary**: `ISecretProvider` carries six actions: `Name`, `Encrypt`, `Decrypt`, `CanRotate`, `Rotate`, `Delete`, plus the capability descriptors. All 8 adapters are BCL-only (HttpClient/Process/P-Invoke) - external SDK types (KeyVaultSecret / AWSSDK.SecretsManager.* / op JSON) do not exist in the codebase and cannot cross the boundary; `SecretStorePortTests` pins the five-verb surface and fail-closed reveal routing.
+- **Adapter boundary**: `ISecretProvider` carries six actions: `Name`, `Encrypt`, `Decrypt`, `CanRotate`, `Rotate`, `Delete`, plus the capability descriptors. All 9 adapters are BCL-only (HttpClient/Process/P-Invoke/`X509Certificate2`) - external SDK types (KeyVaultSecret / AWSSDK.SecretsManager.* / op JSON) do not exist in the codebase and cannot cross the boundary; `SecretStorePortTests` pins the five-verb surface and fail-closed reveal routing. The two AWS adapters share one signing client (`AwsSigV4Client`), so the ordinary SigV4 and the Roles Anywhere X.509 variant cannot drift apart; the certificate exchange lives in `AwsRolesAnywhereSessionExchange`, which signs with the CNG key and never exports it.
 
 ## Typed Provider Error Family
 
@@ -466,7 +467,7 @@ Spec Phase 6 story 20 defines the family:
   `FromStatus` (status → subtype), `Send<T>` (transport wrapper), `Map`/`MapPreserveMessage`
   /`MappedWin32` (boundary mappers), `SwallowBestEffort` (scrubbed-and-dropped cleanup).
 
-Adapter rules: all 8 providers map boundary failures onto the family (Secrets-domain bare-catch
+Adapter rules: all 9 providers map boundary failures onto the family (Secrets-domain bare-catch
 count is zero); best-effort Delete/cleanup swallows report through `SwallowBestEffort`;
 envelope-format rejections keep their pinned message text (byte-identical to pre-ticket snapshots)
 while gaining the typed `SecretProviderInvalidEnvelopeException`. AWS is the audited adapter
@@ -525,7 +526,7 @@ Architecture-recovery (spec Phase 6 story 22) turns `ProfileData` (`src/Models.c
 
 ## Secret Provider Contract Test Suite (L0/L1/L2 layering)
 
-The eight `ISecretProvider` implementations share one contract suite in `tests/EnvManager.Engine.Tests/` (architecture-recovery): an abstract `SecretProviderContractTests` base asserts four behaviors — fail-closed decryption, round-trip, stable malformed-format error, plaintext-never-in-the-envelope — each expressed only through the `ISecretProviderHarness` seam (`CreateProvider` / `SeedSecret` neutral-write / `ReadRawSecret` neutral-read, so a symmetric read/write bug cannot hide). Every provider mounts one sealed subclass; the `SecretProviderContractComplianceTests` reflection gate fails the build when an implementation lacks a mount.
+The nine `ISecretProvider` implementations share one contract suite in `tests/EnvManager.Engine.Tests/` (architecture-recovery): an abstract `SecretProviderContractTests` base asserts four behaviors — fail-closed decryption, round-trip, stable malformed-format error, plaintext-never-in-the-envelope — each expressed only through the `ISecretProviderHarness` seam (`CreateProvider` / `SeedSecret` neutral-write / `ReadRawSecret` neutral-read, so a symmetric read/write bug cannot hide). Every provider mounts one sealed subclass; the `SecretProviderContractComplianceTests` reflection gate fails the build when an implementation lacks a mount. `aws-roles-anywhere` mounts through a skipped harness (no emulator implements CreateSession, and an enrolled certificate cannot live in CI), so it runs the provider-independent assertions there and the plaintext-never-in-envelope assertion in `AwsRolesAnywhereOfflineTests`.
 
 Test layering (per research/secret-provider-patterns.md):
 
@@ -533,9 +534,9 @@ Test layering (per research/secret-provider-patterns.md):
 |-------|-----------|-------------|----|
 | L0 | dpapi-current-user | real local DPAPI (crypt32 CurrentUser) | every PR |
 | L1 | credential-manager, powershell-secretmanagement, vault-kv2, sops | local CredMan / pwsh SecretStore / Vault dev server / sops binary | every PR, conditional |
-| L2 | azure-keyvault, 1password, aws-secretsmanager | real cloud services, credentials via env | scheduled / release pipeline |
+| L2 | azure-keyvault, 1password, aws-secretsmanager, aws-roles-anywhere | real cloud services, credentials via env | scheduled / release pipeline |
 
-In this first round only DPAPI runs its provider-dependent assertions against a real store; the other seven mounts run the provider-independent assertions (fail-closed, malformed-format) and `Skip` the provider-dependent ones with the layer reason. The L1 `Skip` surface is exercised in CI by the `verify-l1` job (ubuntu-latest + Docker, `EM_L1_MATRIX=1`, `--filter "Category=L1"` - see "Secret Provider L1 Emulator Matrix" below), so the locally-skipped assertions are covered on every PR/push/dispatch.
+In this first round only DPAPI runs its provider-dependent assertions against a real store; the other eight mounts run the provider-independent assertions (fail-closed, malformed-format) and `Skip` the provider-dependent ones with the layer reason. The L1 `Skip` surface is exercised in CI by the `verify-l1` job (ubuntu-latest + Docker, `EM_L1_MATRIX=1`, `--filter "Category=L1"` - see "Secret Provider L1 Emulator Matrix" below), so the locally-skipped assertions are covered on every PR/push/dispatch.
 
 
 ## Canary Zero-Leak Assertion Net and Golden/Snapshot Layers

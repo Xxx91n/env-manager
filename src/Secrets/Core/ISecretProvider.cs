@@ -48,4 +48,17 @@ bool RequiresNetwork => false;
 // env config / provider binary present. SecretProviderManager end-to-end probes
 // RequiresNetwork providers only when this gate passes.
 bool Available => true;
+
+// Whether an availability probe may write to the provider's backend. The default keeps
+// the sentinel Encrypt/Decrypt/Delete round-trip that network providers have always run;
+// a provider whose backend is a customer cloud account declares false and is probed
+// read-only through ProbeReadOnly, so opening the profile editor cannot create secrets
+// in an account nobody asked to modify. Not part of the `[refresh/certauth/network]`
+// line that `profile secret-provider list` prints; it only selects the probe below.
+bool ProbeWritesData => true;
+
+// The read-only probe itself: runs only when ProbeWritesData is false, and must fail
+// when the provider's identity or backend is unusable. Default no-op suits local
+// providers, which never probe at all.
+void ProbeReadOnly() { }
 }

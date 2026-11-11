@@ -8,7 +8,7 @@ This is the single-page distillation of the design review session (2026-08-02). 
 |---|---|---|
 | v0.8.0 | A | SecretMount schema v2 + one-shot migration + C# fsync + new fields nullable (refreshPolicy, refreshIntervalSeconds, bootstrapCertThumbprint). audit.json unchanged. |
 | v0.9.0 | B+C merged | env-manager-service.exe Rust binary, NT SERVICE\EnvManagerService, named pipe IPC, CLI service gateway subcommand, periodic full-scan refresh loop, GUI as control panel. The capability whitelist was proposed and is **not implemented**. |
-| v0.9.5 | D | Cert bootstrap: Vault AppRole/client cert, Azure SP cert — **removed before it was ever wired** (no caller, and its blocking `powershell` subprocess sat outside the stop-convergence contract). AWS Roles Anywhere documented but deferred. Env-var fallback retained. |
+| v0.9.5 | D | Cert bootstrap: Vault AppRole/client cert, Azure SP cert — **removed before it was ever wired** (no caller, and its blocking `powershell` subprocess sat outside the stop-convergence contract). AWS Roles Anywhere documented but deferred at that time; the provider itself shipped later ([#85](https://github.com/Xxx91n/env-manager/issues/85)). Env-var fallback retained. |
 | v1.0.0 | E | Unified audit-ledger.jsonl (append-only, hash-chained, 100MB rotation), Mount survival kit export, GUI recover-from-ledger, audit.json retired after migration. |
 
 ## Binding decisions
@@ -32,7 +32,7 @@ Detailed failure modes + regression tests for each domain are tracked as release
 1. Windows service lifecycle (SCM timeout, boot ordering, stop-during-refresh)
 2. Named pipe IPC security (DACL, impersonation, squatting, a stale client)
 3. Periodic refresh loop (lease TTL < tick, 429 throttle, clock skew, thundering herd, partial tick)
-4. Certificate lifecycle (expiry, ACL reset by GPO, Mimikatz CNG export, Windows-upgrade loss) — **historical**: the only certificate holder was the deleted bootstrap; nothing in the product stores a service certificate today.
+4. Certificate lifecycle (expiry, ACL reset by GPO, Mimikatz CNG export, Windows-upgrade loss) — **partly live**: nothing enrolls a certificate any more (the bootstrap was deleted), but `aws-roles-anywhere` reads one the operator names by SHA-1 fingerprint from `Cert:\LocalMachine\My`, so expiry and ACL breakage now show up as authentication failures on that provider rather than as a missing feature.
 5. Audit ledger tamper-resistance (hash-chain, unauthorized actor, rollover race, replay)
 6. Schema migration (crash orphan, rollback script completeness, service race, per-user)
 7. Existing codebase regressions (DPAPI `_EnvManager_disabled` orphan, mutex vs write_atomic race, frontend cache staleness)
@@ -45,4 +45,4 @@ Detailed failure modes + regression tests for each domain are tracked as release
 
 - **Local-admin attacker**: out of scope. NTFS ACLs, cert store ACLs, and named pipe ACLs all fall to a local admin. The release targets a single-user dev machine where the user IS the admin; this is documented in AGENTS.md hard boundary.
 - **Per-user-bound provider recovery**: out of scope for machine service. DPAPI/CredMan/pwsh SecretStore mounts lost by profile corruption are recreated by the user with fresh values (A5 "指向和引导" principle).
-- **AWS IAM Roles Anywhere**: documented in `docs/secret-providers-guide.md` but not shipped in v0.9.5 — deferred to v1.0.x if real demand surfaces.
+- **AWS IAM Roles Anywhere**: not shipped in v0.9.5; shipped as the ninth provider in [#85](https://github.com/Xxx91n/env-manager/issues/85). The nine-provider count and the certificate requirements are in `docs/secret-providers-guide.md`; the service-side refresh of its mounts is still a separate ticket.

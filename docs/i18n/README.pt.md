@@ -1,5 +1,5 @@
 <!-- canonical: ../../README.md -->
-<!-- sync: 7ef28678ebbb -->
+<!-- sync: 123a8b720480c6ee2acc9f9144445644152881bd -->
 
 <div align="center">
 
@@ -38,7 +38,7 @@ https://github.com/user-attachments/assets/7657b508-42bb-45a8-94b7-7c1fa052a4d0
 - **Duas interfaces** — use `env-manager-cli` em scripts e rotinas de CI, ou `env-manager.exe` (Tauri 2 + Svelte) para mexer pela interface gráfica. As duas passam pelas mesmas regras do registro do Windows.
 - **Protegido por padrão** — variáveis do sistema e pastas do PATH não podem ser apagadas nem renomeadas por engano. Ao renomear ou trocar o escopo, o app grava e confere o valor novo antes de apagar o antigo. Toda gravação segura três travas ao mesmo tempo: um mutex do Windows na CLI, uma trava de leitura/escrita no shell em Rust e uma fila de gravação na interface gráfica.
 - **Perfis** — um Perfil Global grava seus valores direto no registro do Windows; já um Perfil Launch coloca as variáveis apenas na memória de um processo filho e não mexe no registro. Perfis também podem herdar configurações de outros perfis, e o app mostra os conflitos antes de aplicar.
-- **Oito provedores de segredos** — DPAPI, Gerenciador de Credenciais, SecretStore, HashiCorp Vault, SOPS, Azure Key Vault, 1Password e AWS Secrets Manager. Os valores secretos ficam guardados em envelopes de segredos criptografados ou como referências `mount:<id>`. Os comandos comuns `add-var` e `edit-var` ainda podem gravar texto puro no registro; veja todos os detalhes em [Segurança](#segurança) e em [docs/plaintext-sinks.md](../../docs/plaintext-sinks.md).
+- **Nove provedores de segredos** — DPAPI, Gerenciador de Credenciais, SecretStore, HashiCorp Vault, SOPS, Azure Key Vault, 1Password, AWS Secrets Manager e AWS IAM Roles Anywhere. Os valores secretos ficam guardados em envelopes de segredos criptografados ou como referências `mount:<id>`. Os comandos comuns `add-var` e `edit-var` ainda podem gravar texto puro no registro; veja todos os detalhes em [Segurança](#segurança) e em [docs/plaintext-sinks.md](../../docs/plaintext-sinks.md).
 - **Diagnóstico do PATH** — o comando `path health` acha caminhos duplicados e pastas que não existem mais; use `--fix` para limpar a lista ou `--dry-run` apenas para ver o relatório sem alterar nada.
 - **Livro de registro de auditoria** — histórico permanente e encadeado por hash SHA256, com opção de desfazer alterações e exportar para recuperação de desastres.
 
@@ -63,7 +63,7 @@ Variáveis e pastas do PATH protegidas são desativadas antes de qualquer exclus
 
 **Modelo de ameaças.** O projeto não protege contra programas que estejam rodando na sua própria sessão de usuário do Windows. Qualquer processo na sua sessão já pode rodar `profile reveal-secret`, ler as variáveis de ambiente de processos que você abrir ou acessar os arquivos temporários criados na hora pelos provedores. O que o sistema faz é limitar o estrago: o texto cifrado pelo DPAPI CurrentUser não pode ser lido por outro usuário nem em outro computador, os comandos de segredo nunca jogam segredos em texto puro no registro (tirando os comandos genéricos já citados), e os únicos lugares onde um segredo pode aparecer estão listados na tabela de texto puro abaixo.
 
-**Onde o texto puro pode aparecer.** A tabela completa — mostrando onde o texto puro pode existir, por quanto tempo e como ele é limpo — está em [docs/plaintext-sinks.md](../../docs/plaintext-sinks.md). A seção de ciclo de vida do texto puro em `docs/architecture.md` traz a lista oficial detalhada. A limpeza de memória e de logs é feita na medida do possível, sem garantias absolutas: o teste `tests/canary-redaction.Tests.ps1` confere 7 pontos de saída procurando um texto de teste proposital, e a suíte de testes confere se o segredo nunca vaza em texto puro nos 8 provedores.
+**Onde o texto puro pode aparecer.** A tabela completa — mostrando onde o texto puro pode existir, por quanto tempo e como ele é limpo — está em [docs/plaintext-sinks.md](../../docs/plaintext-sinks.md). A seção de ciclo de vida do texto puro em `docs/architecture.md` traz a lista oficial detalhada. A limpeza de memória e de logs é feita na medida do possível, sem garantias absolutas: o teste `tests/canary-redaction.Tests.ps1` confere 7 pontos de saída procurando um texto de teste proposital, e a suíte de testes confere em oito provedores que o segredo nunca vaza em texto puro; o `aws-roles-anywhere` fica coberto pelo teste offline.
 
 ## Instalação
 
@@ -157,7 +157,7 @@ flowchart LR
 
 ## Provedores de segredos
 
-O sistema conta com oito provedores de segredos. Sempre que você escolhe um provedor, o app faz uma checagem rápida; se faltar alguma configuração, um aviso em amarelo aparece direto na edição do perfil:
+O sistema conta com nove provedores de segredos. Sempre que você escolhe um provedor, o app faz uma checagem rápida; se faltar alguma configuração, um aviso em amarelo aparece direto na edição do perfil:
 
 | Provedor | Como autentica | Atualização por temporizador | Documentação |
 |---|---|---|---|
@@ -169,6 +169,7 @@ O sistema conta com oito provedores de segredos. Sempre que você escolhe um pro
 | Azure Key Vault | Certificado Service Principal / Managed Identity | Sim | [Guia](../../docs/secret-providers-guide.md) |
 | 1Password CLI | OP_SERVICE_ACCOUNT_TOKEN | Sim | [Guia](../../docs/secret-providers-guide.md) |
 | AWS Secrets Manager | SigV4 + chaves de acesso | Sim | [Guia](../../docs/secret-providers-guide.md) |
+| AWS IAM Roles Anywhere | Certificado do armazenamento da máquina trocado por credenciais temporárias | Não, ainda não: dá para escolher `Periodic`, mas o serviço não relê o valor | [Guia](../../docs/secret-providers-guide.md) |
 
 Veja em [docs/secret-providers-guide.md](../../docs/secret-providers-guide.md) o que cada provedor precisa para funcionar e o passo a passo para resolver problemas comuns.
 

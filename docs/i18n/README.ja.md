@@ -1,5 +1,5 @@
 <!-- canonical: ../../README.md -->
-<!-- sync: 7ef28678ebbb -->
+<!-- sync: 123a8b720480c6ee2acc9f9144445644152881bd -->
 
 <div align="center">
 
@@ -38,7 +38,7 @@ https://github.com/user-attachments/assets/7657b508-42bb-45a8-94b7-7c1fa052a4d0
 - **CLI と GUI の 2 系統** — スクリプトや CI 自動化でサクッと動かせる `env-manager-cli` と、画面上で直感的に編集できる `env-manager.exe`（Tauri 2 + Svelte）。どちらを使っても同じレジストリルールに沿って安全に処理されます。
 - **安心のデフォルト保護** — システム変数や大事な PATH 項目は、うっかり削除したり名前を変えたりできないよう保護されています。名前やスコープを変更する際も、新しい値が正しく書き込めたことを確かめてから古い方を消す念の入れよう。書き込み時は毎回、CLI の Windows ミューテックス、Rust シェルの読み書きロック、GUI の書き込みキューという 3 つのロックをしっかり確保します。
 - **2 種類のプロファイル** — レジストリにまとめて書き込む「Global プロファイル」と、指定した子プロセスだけに環境変数を渡してレジストリを一切汚さない「Launch プロファイル」があります。他のプロファイルから設定を引き継ぐ（継承する）こともでき、適用前にぶつかる項目がないかプレビュー確認できます。
-- **8 つのシークレット管理に対応** — DPAPI、資格情報マネージャー、SecretStore、HashiCorp Vault、SOPS、Azure Key Vault、1Password、AWS Secrets Manager に対応。大事なパスワードやキーは暗号化されたエンベロープ、または `mount:<id>` 参照の形で保持します。なお、汎用の `add-var` や `edit-var` コマンドを使うと平文のままレジストリに書き込まれてしまうため、どこまで平文を許容するかの詳しい線引きは [Security](#security) や [docs/plaintext-sinks.md](../../docs/plaintext-sinks.md) をご覧ください。
+- **9 つのシークレット管理に対応** — DPAPI、資格情報マネージャー、SecretStore、HashiCorp Vault、SOPS、Azure Key Vault、1Password、AWS Secrets Manager、AWS IAM Roles Anywhere に対応。大事なパスワードやキーは暗号化されたエンベロープ、または `mount:<id>` 参照の形で保持します。なお、汎用の `add-var` や `edit-var` コマンドを使うと平文のままレジストリに書き込まれてしまうため、どこまで平文を許容するかの詳しい線引きは [Security](#security) や [docs/plaintext-sinks.md](../../docs/plaintext-sinks.md) をご覧ください。
 - **PATH のお掃除機能** — `path health` を実行するだけで、重複した項目やもう存在しないリンク切れフォルダをすぐに見つけてくれます。`--fix` を付ければ綺麗に整頓でき、`--dry-run` を付ければ実際には変更せず確認だけできます。
 - **改ざんを防ぐ監査台帳** — 変更履歴は SHA256 ハッシュチェーンによる追記専用の台帳に記録。いつでも過去の状態へロールバックでき、万が一に備えた障害復旧用エクスポートにも対応しています。
 
@@ -63,7 +63,7 @@ env-manager-cli agents --json     # 全コマンド一覧を構造化 JSON で�
 
 **脅威モデル:** 同じ Windows ユーザーセッション内で動いている別の悪意あるプロセスからの攻撃は防ぎきれません。同じユーザー権限があるプロセスなら、すでに `profile reveal-secret` を叩いたり、起動された子プロセスの環境変数を覗き見たり、プロバイダーが一時的に書き出す一時ファイルを捕捉できてしまうからです。ただし被害を最小限に抑える工夫はしています。DPAPI CurrentUser の暗号文は他のユーザーや別の PC では復号できませんし、シークレット操作コマンドからレジストリへシークレットが書き込まれることも防いでいます（前述の汎用変数の手動追加を除く）。シークレット値がどこに現れるかは、後述の平文取り扱い一覧にすべて明記しています。
 
-**平文の境界:** 平文データがどこに存在し、どのくらいの時間残り、何がそれを片付けるのかをまとめた一覧は、[docs/plaintext-sinks.md](../../docs/plaintext-sinks.md) に載せています。正式な取り扱いルールは `docs/architecture.md` の「Plaintext lifecycle」節をご確認ください。なお、メモリのゼロクリアやログのマスキングはベストエフォート（可能な限り努める）であり、完全な保証ではありません。自動テスト（`tests/canary-redaction.Tests.ps1`）では 7 か所の出力先をスキャンしてシークレット漏れがないか確認しており、共通テストでも 8 つのプロバイダーすべてにおいて `plaintext-never-in-envelope`（エンベロープ内に平文を残さないこと）をチェックしています。
+**平文の境界:** 平文データがどこに存在し、どのくらいの時間残り、何がそれを片付けるのかをまとめた一覧は、[docs/plaintext-sinks.md](../../docs/plaintext-sinks.md) に載せています。正式な取り扱いルールは `docs/architecture.md` の「Plaintext lifecycle」節をご確認ください。なお、メモリのゼロクリアやログのマスキングはベストエフォート（可能な限り努める）であり、完全な保証ではありません。自動テスト（`tests/canary-redaction.Tests.ps1`）では 7 か所の出力先をスキャンしてシークレット漏れがないか確認しており、共通テストでは 8 つのプロバイダーについて `plaintext-never-in-envelope`（エンベロープ内に平文を残さないこと）をチェックし、`aws-roles-anywhere` はオフラインのテストで別にチェックしています。
 
 ## Install
 
@@ -157,7 +157,7 @@ flowchart LR
 
 ## Secret providers
 
-全部で 8 種類のプロバイダーに対応しています。利用先を切り替えるたびに動作確認が行われ、もし設定が足りないなどの問題があれば、プロファイル編集画面にオレンジ色の警告メッセージがすぐ表示されます。
+全部で 9 種類のプロバイダーに対応しています。利用先を切り替えるたびに動作確認が行われ、もし設定が足りないなどの問題があれば、プロファイル編集画面にオレンジ色の警告メッセージがすぐ表示されます。
 
 | プロバイダー | 認証方法 | 定期リフレッシュ | ドキュメント |
 |---|---|---|---|
@@ -169,6 +169,7 @@ flowchart LR
 | Azure Key Vault | サービスプリンシパル証明書 / マネージド ID | あり | [ガイド](../../docs/secret-providers-guide.md) |
 | 1Password CLI | OP_SERVICE_ACCOUNT_TOKEN | あり | [ガイド](../../docs/secret-providers-guide.md) |
 | AWS Secrets Manager | SigV4 + アクセスキー | あり | [ガイド](../../docs/secret-providers-guide.md) |
+| AWS IAM Roles Anywhere | マシン証明書ストアの証明書を一時的な認証情報に交換 | いいえ、まだです。`Periodic` は選べますが、サービスは値を取り直しません | [ガイド](../../docs/secret-providers-guide.md) |
 
 各プロバイダーを使うための準備や初回設定、うまく動かないときの対処法は [docs/secret-providers-guide.md](../../docs/secret-providers-guide.md) をご覧ください。
 

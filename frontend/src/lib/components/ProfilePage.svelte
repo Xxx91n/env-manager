@@ -94,6 +94,7 @@ import { parseSecretProviderList } from '../secret-provider-list'
       'azure-keyvault': $t('secrets.providerAzure'),
       '1password': $t('secrets.provider1Password'),
       'aws-secretsmanager': $t('secrets.providerAws'),
+      'aws-roles-anywhere': $t('secrets.providerAwsRolesAnywhere'),
     }
     return map[name] ?? name
   }

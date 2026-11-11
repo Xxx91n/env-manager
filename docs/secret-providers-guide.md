@@ -1,13 +1,14 @@
 # Secret Providers Setup Guide
 
-> **Official upstream docs**: this guide mirrors vendor-canonical configuration. Per-provider primary references are linked inline at each section: [Microsoft.PowerShell.SecretManagement](https://www.powershellgallery.com/packages/Microsoft.PowerShell.SecretManagement) + [SecretStore](https://www.powershellgallery.com/packages/Microsoft.PowerShell.SecretStore); [HashiCorp Vault KV v2](https://developer.hashicorp.com/vault/docs/secrets/kv/kv-v2); [Mozilla SOPS](https://getsops.io/) and [age](https://github.com/FiloSottile/age); [Azure Key Vault REST API](https://learn.microsoft.com/en-us/rest/api/keyvault/) and [az CLI managed identity / SP](https://learn.microsoft.com/en-us/azure/key-vault/general/authentication); [1Password CLI](https://developer.1password.com/docs/cli/getting-started); [AWS Secrets Manager REST API + SigV4](https://docs.aws.amazon.com/secretsmanager/latest/userguide/).
+> **Official upstream docs**: this guide mirrors vendor-canonical configuration. Per-provider primary references are linked inline at each section: [Microsoft.PowerShell.SecretManagement](https://www.powershellgallery.com/packages/Microsoft.PowerShell.SecretManagement) + [SecretStore](https://www.powershellgallery.com/packages/Microsoft.PowerShell.SecretStore); [HashiCorp Vault KV v2](https://developer.hashicorp.com/vault/docs/secrets/kv/kv-v2); [Mozilla SOPS](https://getsops.io/) and [age](https://github.com/FiloSottile/age); [Azure Key Vault REST API](https://learn.microsoft.com/en-us/rest/api/keyvault/) and [az CLI managed identity / SP](https://learn.microsoft.com/en-us/azure/key-vault/general/authentication); [1Password CLI](https://developer.1password.com/docs/cli/getting-started); [AWS Secrets Manager REST API + SigV4](https://docs.aws.amazon.com/secretsmanager/latest/userguide/); [IAM Roles Anywhere signing process](https://docs.aws.amazon.com/rolesanywhere/latest/userguide/authentication-sign-process.html).
 
-Env Manager ships eight secret providers. Secrets belong to Launch profiles only, because those put values into one child process; a Global profile cannot hold a secret. The active provider is selected in the Profile editor > Active provider dropdown. The activation probe runs once at selection time; if your environment is not configured, the selection is rejected with an inline error under the dropdown plus a toast -- you must fix the environment and retry.
+Env Manager ships nine secret providers. Secrets belong to Launch profiles only, because those put values into one child process; a Global profile cannot hold a secret. The active provider is selected in the Profile editor > Active provider dropdown. The activation probe runs once at selection time; if your environment is not configured, the selection is rejected with an inline error under the dropdown plus a toast -- you must fix the environment and retry.
 
-Three providers work offline with no setup:
+Three providers need no cloud account:
 
 1. **dpapi-current-user** (default) - Windows DPAPI CurrentUser encryption. Secrets are encrypted in the user profile; only the same Windows user on the same machine can decrypt. Zero configuration; recommended for single-user machines.
 2. **credential-manager** - Windows Credential Manager (advapi32 CredWriteW/CredReadW). Stores secrets in the Windows credential vault, blob encrypted via DPAPI before persist. No setup; the credential appears in Control Panel > Credential Manager.
+3. **powershell-secretmanagement** - PowerShell SecretStore. Needs the PowerShell 7 modules listed in its own section (a one-time `Install-Module`), but no cloud account.
 
 The six external providers below require host-side setup. Each section lists the exact prereqs, the error Env Manager surfaces when a prereq is missing, and the fix.
 
@@ -15,7 +16,7 @@ The six external providers below require host-side setup. Each section lists the
 
 ### Capability matrix
 
-Every provider declares its capability descriptors on `ISecretProvider`, and `profile secret-provider list` reports them per line as `[refresh=yes|no certauth=yes|no network=yes|no]` plus real availability (`(unavailable)` when the cheap environment gate fails):
+Every provider declares its capability descriptors on `ISecretProvider`, and `profile secret-provider list` reports them per line as `[refresh=yes|no certauth=yes|no network=yes|no]` plus real availability (`(unavailable)` when the cheap environment gate fails). The `Periodic refresh` column is what the provider declares, and it is what the GUI's refresh-policy dropdown allows; the service-side loop that actually re-reads a `Periodic` mount is still tracked in [this issue](https://github.com/Xxx91n/env-manager/issues/276), so a declared `yes` does not yet mean values refresh on their own.
 
 | Provider | Periodic refresh | Cert-bound auth | Network | Cheap availability gate |
 |----------|------------------|-----------------|---------|--------------------------|
@@ -27,8 +28,9 @@ Every provider declares its capability descriptors on `ISecretProvider`, and `pr
 | azure-keyvault | yes (Periodic) | yes (SP certificate) | yes | AZURE_KEYVAULT_URI set |
 | 1password | yes (Periodic) | no | yes | resolved op binary exists |
 | aws-secretsmanager | yes (Periodic) | no (IAM role / keys) | yes | region + access key + secret key set |
+| aws-roles-anywhere | yes (Periodic) | yes (certificate) | yes | region + role, profile and trust-anchor ARNs + certificate SHA-1 set |
 
-Network providers additionally survive a sentinel Encrypt/Decrypt/Delete round-trip before `list` reports them available (same probe `set` has always run); local providers never probe.
+Network providers additionally survive a probe before `list` reports them available (the same check `set` has always run); local providers never probe. The probe kind differs by where the provider keeps its data: an ordinary network provider runs a sentinel Encrypt/Decrypt/Delete round-trip, while a provider that declares `ProbeWritesData` as false - `aws-roles-anywhere`, whose store is your AWS account - only exchanges its certificate for temporary credentials and writes nothing.
 
 ---
 
@@ -249,6 +251,79 @@ Refresh env vars (restart the shell / Env Manager), then re-select the provider.
 Error: `Cannot activate provider 'aws-secretsmanager': AWS_REGION or AWS_DEFAULT_REGION not set.`
 
 Fix: set `AWS_REGION` (and credentials) env vars, restart Env Manager, then retry.
+
+---
+
+## AWS IAM Roles Anywhere
+
+Official docs: [Signing process for IAM Roles Anywhere](https://docs.aws.amazon.com/rolesanywhere/latest/userguide/authentication-sign-process.html) · [CreateSession API](https://docs.aws.amazon.com/rolesanywhere/latest/userguide/authentication-create-session.html) · [Trust model and certificate requirements](https://docs.aws.amazon.com/rolesanywhere/latest/userguide/trust-model.html).
+
+This provider reads the same remote Secrets Manager secrets as `aws-secretsmanager`, but it never keeps a long-lived access key. It presents a certificate from the machine certificate store, exchanges it for short-lived credentials, and uses those to read or write the secret. The two providers use the same envelope payload shape (`region|secretId`), but the envelope records which provider wrote it and a mismatch is rejected, so switching providers means re-adding the secret rather than just changing the dropdown.
+
+Re-adding under a new name is what `add-secret` does: it always calls `CreateSecret`, so reusing the same name that `aws-secretsmanager` already created fails with `ResourceExistsException`. To move an existing secret, pick a new name with the new provider and delete the old remote secret by hand; there is no in-product migration between the two providers.
+
+### How the exchange works
+
+The request is a signed `POST /sessions`. The signature differs from ordinary SigV4 in four ways, all handled inside Env Manager: the algorithm name is `AWS4-X509-RSA-SHA256` or `AWS4-X509-ECDSA-SHA256`, the credential scope names the certificate serial number in decimal instead of an access key, the certificate itself travels in a signed `X-Amz-X509` header (with intermediates in `X-Amz-X509-Chain`), and the signature is made with the certificate's private key instead of a derived HMAC key.
+
+### Prerequisites
+
+- `AWS_REGION` or `AWS_DEFAULT_REGION` set to the region of the trust anchor.
+- `AWS_ROLES_ANYWHERE_ROLE_ARN`, `AWS_ROLES_ANYWHERE_PROFILE_ARN`, `AWS_ROLES_ANYWHERE_TRUST_ANCHOR_ARN`.
+- `AWS_ROLES_ANYWHERE_CERT_SHA1`: the SHA-1 fingerprint of the certificate, with or without spaces.
+- Optional `AWS_ROLES_ANYWHERE_DURATION_SECONDS`: how long to ask for, default 3600. Values outside the 900-43200 range AWS accepts are clamped.
+- The certificate in `Cert:\LocalMachine\My`, with its private key readable by the account that runs Env Manager. An interactive session uses your own account; the service uses `NT SERVICE\EnvManagerService`.
+- The role must allow `secretsmanager:GetSecretValue`, `CreateSecret`, `PutSecretValue` and `DeleteSecret` for the secrets you use. Creating a secret is needed because that is what storing one does.
+
+Machine-level environment variables are required, not per-user ones. `setx` without `/M` writes to your own account, which the service cannot see.
+
+### Certificate requirements
+
+- X.509 v3, `CA=false`, key usage including digital signature.
+- The private key must **not** be marked "strong private key protection". That flag makes Windows show a confirmation prompt on every key use, and a service running in session 0 has nobody to click it, so every call fails.
+- A non-exportable software key is not an absolute barrier: an administrator can still extract it. For real key isolation, generate the key on a TPM. Env Manager's threat model already excludes the local administrator, so the software key is the documented default.
+
+### One-time setup
+
+1. Obtain a certificate issued by the CA your trust anchor trusts.
+2. Import it into the machine store: `certutil -f -importpfx My identity.pfx`, or `Import-PfxCertificate -CertStoreLocation Cert:\LocalMachine\My`.
+3. Give the running account read access to the private key: `certlm.msc` > certificate > All Tasks > Manage Private Keys > add `NT SERVICE\EnvManagerService` with Read.
+4. Register the CA as a trust anchor, create a profile that allows the role, and allow the role to be assumed from `rolesanywhere.amazonaws.com`.
+5. Set the environment variables machine-wide and restart Env Manager.
+
+### Activation error and fix
+
+Error: `Cannot activate provider 'aws-roles-anywhere': IAM Roles Anywhere is not configured; missing AWS_ROLES_ANYWHERE_ROLE_ARN, AWS_ROLES_ANYWHERE_CERT_SHA1.`
+
+Fix: the message names every missing variable. Set them machine-wide, restart Env Manager, then retry.
+
+Error: `certificate <fingerprint> is not in Cert:\LocalMachine\My` (or `expired`, or `has no private key`).
+
+Fix: import the certificate into the machine store, or reissue and update `AWS_ROLES_ANYWHERE_CERT_SHA1`. Env Manager never falls back to a different certificate.
+
+Error: `CreateSession rejected certificate <fingerprint> (401): check the trust anchor contains the issuing CA`.
+
+Fix: check that the trust anchor bundle includes the intermediate CA that issued your certificate, and that the certificate is not revoked.
+
+### What the probe does, and what it does not
+
+Selecting this provider exchanges your certificate for temporary credentials once, to prove the certificate, role, profile and trust anchor all line up. It does not create, read or delete any secret, so opening the profile editor never writes to your AWS account.
+
+### What is not covered by automated tests
+
+No emulator implements `CreateSession`, so the wire protocol is not exercised in CI. The offline suite proves the signature, the header set, the decimal serial in the credential scope and the envelope shape against a locally generated certificate, but only AWS can accept a real signature. Before relying on this provider, run it once against a throwaway trust anchor:
+
+1. Register a disposable CA as a trust anchor, a profile, and a role allowed to assume from `rolesanywhere.amazonaws.com` with `secretsmanager:CreateSecret` and `secretsmanager:GetSecretValue`.
+2. Import the test certificate into `Cert:\LocalMachine\My`, note its SHA-1, and set the five `AWS_ROLES_ANYWHERE_*` variables machine-wide.
+3. Add a secret to a Launch profile with `env-manager-cli profile add-secret <profile> <name> <value>`; this is the call that creates the envelope and, through the provider, the remote secret.
+4. Read it back with `env-manager-cli profile reveal-secret <profile> <name>` and confirm the value matches. `profile apply` cannot serve this step: it refuses Launch profiles outright, because applying would put a Launch profile's secrets into the registry.
+5. Delete the remote secret, the profile, the trust anchor and the certificate. Nothing about the run needs to stay.
+
+If step 4 fails with `CreateSession rejected certificate`, the failure is on the AWS side (trust anchor, revocation, role trust policy). A local signature check does not exonerate the request that actually left the machine: it proves the signature matches the string this code built, not the request AWS received. Env Manager logs the upstream error and the certificate fingerprint; compare the response's complaint against the trust anchor and the role's trust policy before assuming the signing code is wrong.
+
+### The service does not refresh this provider yet
+
+`RefreshCapable` is `true` and the GUI offers `Periodic`, but the Rust service's periodic pass only stamps mount metadata; it does not call `Decrypt`. That gap is tracked in [#276](https://github.com/Xxx91n/env-manager/issues/276) and applies to every provider, not just this one. Until it lands, a `Periodic` mount keeps its last value until the CLI reads it again on launch.
 
 ---
 

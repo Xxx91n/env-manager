@@ -39,7 +39,8 @@ internal sealed class SecretProviderManager : ISecretStore
         ["sops"] = new SopsProvider(),
         ["azure-keyvault"] = new AzureKeyVaultProvider(),
         ["1password"] = new OnePasswordProvider(),
-        ["aws-secretsmanager"] = new AwsSecretsManagerProvider()
+        ["aws-secretsmanager"] = new AwsSecretsManagerProvider(),
+        ["aws-roles-anywhere"] = new AwsRolesAnywhereProvider()
     };
 
     private const string PROVIDER_CONFIG_FILE = "secret-providers.json";
@@ -173,17 +174,31 @@ internal sealed class SecretProviderManager : ISecretStore
         try
         {
             if (!provider.Available) return false;
-            if (!provider.RequiresNetwork) return true;
-            const string probeContext = "__env_manager_compat_probe__";
-            string envelope = provider.Encrypt("__probe_value__", probeContext);
-            try { provider.Decrypt(envelope, probeContext); } catch { /* async/network providers may not round-trip immediately */ }
-            try { provider.Delete(envelope, probeContext); } catch { /* best-effort cleanup */ }
+            ProbeProvider(provider);
             return true;
         }
         catch
         {
             return false;
         }
+    }
+
+    // The probe shared by `list` and `set`: local providers never probe, network
+    // providers run the sentinel Encrypt/Decrypt/Delete round-trip, and a provider
+    // that declares ProbeWritesData=false is checked read-only because its store is
+    // a customer account that opening the profile editor must not write into.
+    private static void ProbeProvider(ISecretProvider provider)
+    {
+        if (!provider.RequiresNetwork) return;
+        if (!provider.ProbeWritesData)
+        {
+            provider.ProbeReadOnly();
+            return;
+        }
+        const string probeContext = "__env_manager_compat_probe__";
+        string envelope = provider.Encrypt("__probe_value__", probeContext);
+        try { provider.Decrypt(envelope, probeContext); } catch { /* async/network providers may not round-trip immediately */ }
+        try { provider.Delete(envelope, probeContext); } catch { /* best-effort cleanup */ }
     }
 
     // Get the active provider name from config
@@ -210,10 +225,7 @@ internal sealed class SecretProviderManager : ISecretStore
             // Use a truly off-name sentinel so a real profile variable named
             // "__compat_probe__" never collides. Delete is best-effort because
             // some providers are pure-local and others have side effects.
-            const string probeContext = "__env_manager_compat_probe__";
-            string envelope = provider.Encrypt("__probe_value__", probeContext);
-            try { provider.Decrypt(envelope, probeContext); } catch { /* async/network providers may not round-trip immediately */ }
-            try { provider.Delete(envelope, probeContext); } catch { /* best-effort cleanup */ }
+            ProbeProvider(provider);
         }
         catch (Exception ex)
         {
