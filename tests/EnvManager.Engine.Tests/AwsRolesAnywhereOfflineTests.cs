@@ -534,6 +534,28 @@ public sealed class AwsRolesAnywhereOfflineTests : IDisposable
     }
 
     [Fact]
+    public void CreateSession_NullOrMistypedCredentialElement_FailsAsUnavailableRatherThanThrowing()
+    {
+        using var cert = CreateRsaCertificate(FixedNow.AddDays(-1), FixedNow.AddDays(30));
+        SetIdentity(cert.Thumbprint);
+
+        // A null element and a numeric accessKeyId both used to escape the provider error
+        // family as InvalidOperationException from JsonElement.
+        foreach (string body in new[]
+        {
+            "{\"credentialSet\":[null]}",
+            "{\"credentialSet\":[{\"credentials\":null}]}",
+            "{\"credentialSet\":[{\"credentials\":{\"accessKeyId\":123,\"secretAccessKey\":\"S\"}}]}",
+        })
+        {
+            var sender = new RecordingSender(_ => Json(HttpStatusCode.Created, body));
+            Assert.Throws<SecretProviderUnavailableException>(() =>
+                AwsRolesAnywhereSessionExchange.CreateSession(
+                    "aws-roles-anywhere", "encrypt", Options(cert.Thumbprint), sender, () => FixedNow, cert));
+        }
+    }
+
+    [Fact]
     public void SharedAwsPayload_EscapesEveryControlCharacterThatIsIllegalRawInJson()
     {
         // A value carrying \b, \f or another C0 character would otherwise travel raw
@@ -544,6 +566,42 @@ public sealed class AwsRolesAnywhereOfflineTests : IDisposable
         // The escaped body stays parseable, and the round trip returns the original value.
         using var doc = JsonDocument.Parse(escaped);
         Assert.Equal("a\bb\fc\u0001d", doc.RootElement.GetProperty("SecretString").GetString());
+    }
+
+    [Fact]
+    public void SharedSecretTarget_RejectsARegionThatCouldRedirectTheRequest()
+    {
+        // The region is interpolated into the request host, so an envelope carrying
+        // `evil.com/@attacker` would otherwise send the session token to that host.
+        Assert.Null(AwsSecretTarget.Parse("evil.com/@attacker|em-shared"));
+        Assert.Null(AwsSecretTarget.Parse("us-east-1/x|em-shared"));
+        Assert.Null(AwsSecretTarget.Parse("us east 1|em-shared"));
+        Assert.Null(AwsSecretTarget.Parse("US-EAST-1|em-shared"));
+        Assert.True(AwsRegion.IsName("us-east-1"));
+        Assert.True(AwsRegion.IsName("ap-southeast-2"));
+        Assert.False(AwsRegion.IsName("evil.com/@host"));
+        Assert.False(AwsRegion.IsName(""));
+    }
+
+    [Fact]
+    public void Decrypt_RejectsAnEnvelopeWithAHostileRegionInsteadOfSendingIt()
+    {
+        using var cert = CreateRsaCertificate(FixedNow.AddDays(-1), FixedNow.AddDays(30));
+        SetIdentity(cert.Thumbprint);
+        var sender = new RecordingSender(_ => Json(HttpStatusCode.Created, SessionBody));
+        var provider = new AwsRolesAnywhereProvider(sender, cert, () => FixedNow);
+
+        var envelope = new SecretEnvelope
+        {
+            Provider = "aws-roles-anywhere",
+            Version = 1,
+            CreatedAt = FixedNow.ToString("O"),
+            TargetName = "evil.com/@attacker|em-shared",
+        }.Serialize();
+
+        Assert.Throws<SecretProviderInvalidEnvelopeException>(() => provider.Decrypt(envelope, "ctx"));
+        // Nothing left the process: no request at all, hostile or otherwise.
+        Assert.Empty(sender.Requests);
     }
 
     [Fact]

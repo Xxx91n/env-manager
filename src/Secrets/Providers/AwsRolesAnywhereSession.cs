@@ -235,8 +235,15 @@ internal static class AwsRolesAnywhereSessionExchange
         // Reading them off the root would parse cleanly and report "does not contain
         // credentials" against every real response.
         if (!doc.RootElement.TryGetProperty("credentialSet", out var set)
-            || set.ValueKind != JsonValueKind.Array || set.GetArrayLength() == 0
-            || !set[0].TryGetProperty("credentials", out var creds))
+            || set.ValueKind != JsonValueKind.Array || set.GetArrayLength() == 0)
+            throw new SecretProviderUnavailableException(provider, operation,
+                "CreateSession response does not contain credentialSet");
+        // A null element or a non-object one would make TryGetProperty throw
+        // InvalidOperationException, which is outside the provider error family.
+        var first = set[0];
+        if (first.ValueKind != JsonValueKind.Object
+            || !first.TryGetProperty("credentials", out var creds)
+            || creds.ValueKind != JsonValueKind.Object)
             throw new SecretProviderUnavailableException(provider, operation,
                 "CreateSession response does not contain credentialSet[0].credentials");
 
@@ -244,20 +251,25 @@ internal static class AwsRolesAnywhereSessionExchange
             || !creds.TryGetProperty("secretAccessKey", out var secretKeyElement))
             throw new SecretProviderUnavailableException(provider, operation,
                 "CreateSession response is missing the access key or secret key");
-        string? accessKey = accessKeyElement.GetString();
-        string? secretKey = secretKeyElement.GetString();
+        // GetString() throws on a number or an object, so the type is checked first.
+        string? accessKey = accessKeyElement.ValueKind == JsonValueKind.String ? accessKeyElement.GetString() : null;
+        string? secretKey = secretKeyElement.ValueKind == JsonValueKind.String ? secretKeyElement.GetString() : null;
         if (string.IsNullOrEmpty(accessKey) || string.IsNullOrEmpty(secretKey))
             throw new SecretProviderUnavailableException(provider, operation,
                 "CreateSession response is missing the access key or secret key");
 
-        string? sessionToken = creds.TryGetProperty("sessionToken", out var token) ? token.GetString() : null;
-        string? expiration = creds.TryGetProperty("expiration", out var e) ? e.GetString() : null;
+        string? sessionToken = StringOrNull(creds, "sessionToken");
+        string? expiration = StringOrNull(creds, "expiration");
         DateTimeOffset expires = DateTimeOffset.TryParse(expiration, CultureInfo.InvariantCulture,
             DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal, out DateTimeOffset parsed)
             ? parsed
             : now.AddSeconds(options.DurationSeconds);
         return new RolesAnywhereSession(new AwsCredentials(accessKey!, secretKey!, sessionToken), expires);
     }
+
+    /// <summary>The string value, or null when absent or not a JSON string.</summary>
+    private static string? StringOrNull(JsonElement obj, string name) =>
+        obj.TryGetProperty(name, out var v) && v.ValueKind == JsonValueKind.String ? v.GetString() : null;
 
     internal static string Fingerprint(string sha1) =>
         sha1.Replace(" ", "", StringComparison.Ordinal).ToUpperInvariant();

@@ -94,6 +94,10 @@ internal static class AwsSigV4Client
     {
         if (!string.IsNullOrEmpty(endpointOverride))
             return endpointOverride!.TrimEnd('/') + path;
+        // A region travels inside the host name. Anything outside the AWS alphabet could
+        // redirect the request (and its session token) to another host.
+        if (!AwsRegion.IsName(region))
+            throw new System.ArgumentException("Refusing to build a request URL for region '" + region + "'", nameof(region));
         return "https://" + service + "." + region + ".amazonaws.com" + path;
     }
 

@@ -23,7 +23,12 @@ internal readonly record struct AwsSecretTarget(string Region, string SecretId)
     {
         if (string.IsNullOrEmpty(targetName)) return null;
         string[] parts = targetName.Split('|');
-        if (parts.Length < 2 || parts[0].Length == 0 || parts[1].Length == 0) return null;
+        if (parts.Length < 2) return null;
+        // The region ends up inside the request URL, so it is restricted to AWS's own
+        // region alphabet. Without this, `evil.com/@host` in an envelope would build
+        // https://secretsmanager.evil.com/... and hand the session token to that host.
+        if (!AwsRegion.IsName(parts[0])) return null;
+        if (parts[1].Length == 0) return null;
         return new AwsSecretTarget(parts[0], parts[1]);
     }
 
