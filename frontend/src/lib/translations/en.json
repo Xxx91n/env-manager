@@ -461,7 +461,6 @@
   "profiles.inheritsFrom": "inherited from",
   "profiles.fromProfile": "from",
   "secrets.policy.createdOnly": "Created only",
-  "secrets.policy.onDemand": "On-demand",
   "secrets.policy.periodic": "Periodic",
   "secrets.providerUnavailable": "unavailable",
   "errors.chunkLoadFailed": "Failed to load component. Please retry.",

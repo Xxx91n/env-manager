@@ -461,7 +461,6 @@
   "profiles.inheritsFrom": "상속됨",
   "profiles.fromProfile": "from",
   "secrets.policy.createdOnly": "생성 시에만",
-  "secrets.policy.onDemand": "주문형",
   "secrets.policy.periodic": "주기적",
   "secrets.providerUnavailable": "사용 불가",
   "errors.chunkLoadFailed": "컴포넌트 로드에 실패했습니다. 다시 시도해 주세요.",
