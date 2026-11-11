@@ -4,9 +4,10 @@ using EnvManager.Secrets.Core;
 
 // Same remote store as aws-secretsmanager, different door: instead of a long-lived
 // access key on disk, a certificate in Cert:\LocalMachine\My is exchanged for a
-// short-lived session. The envelope stays `region|secretId`, so a profile written by
-// either provider names the same remote secret and rotation between them is a
-// re-encrypt, never a move.
+// short-lived session. The envelope payload is the same `region|secretId` shape, but
+// the envelope records the provider that wrote it and a mismatch is rejected, so
+// switching providers means re-adding the secret rather than just changing the
+// dropdown. The remote secret itself never moves.
 
 using System;
 using System.Net.Http;
@@ -75,7 +76,7 @@ internal sealed class AwsRolesAnywhereProvider : ISecretProvider
             context != null ? AwsSecretTarget.SanitizeSecretId(context) : AwsSecretTarget.NewSecretId());
 
         string body = AwsSecretsManagerPayload.CreateSecret(target.SecretId, plaintext, Guid.NewGuid().ToString("N"));
-        var response = CallSecretsManager(options, SecretProviderErrors.OpEncrypt, "secretsmanager.CreateSecret", body);
+        var response = CallSecretsManager(target.Region, SecretProviderErrors.OpEncrypt, "secretsmanager.CreateSecret", body);
         if (!response.IsSuccessStatusCode) throw SecretProviderErrors.FromStatus(Name, SecretProviderErrors.OpEncrypt, response.StatusCode, "create");
 
         var env = new SecretEnvelope { Provider = Name, Version = 1, CreatedAt = DateTimeOffset.UtcNow.ToString("O"), TargetName = target.EnvelopeValue };
@@ -91,8 +92,7 @@ internal sealed class AwsRolesAnywhereProvider : ISecretProvider
             ?? throw new SecretProviderInvalidEnvelopeException(Name, SecretProviderErrors.OpDecrypt, "Invalid targetName format", parsed.TargetName);
 
         string body = AwsSecretsManagerPayload.GetSecretValue(target.SecretId);
-        var options = RequireOptions(SecretProviderErrors.OpDecrypt, target.Region);
-        var response = CallSecretsManager(options, SecretProviderErrors.OpDecrypt, "secretsmanager.GetSecretValue", body);
+        var response = CallSecretsManager(target.Region, SecretProviderErrors.OpDecrypt, "secretsmanager.GetSecretValue", body);
         if (!response.IsSuccessStatusCode)
             throw SecretProviderErrors.FromStatus(Name, SecretProviderErrors.OpDecrypt, response.StatusCode, "read", mountId: parsed.TargetName);
 
@@ -113,7 +113,7 @@ internal sealed class AwsRolesAnywhereProvider : ISecretProvider
         try
         {
             string body = AwsSecretsManagerPayload.DeleteSecret(target.Value.SecretId);
-            _ = CallSecretsManager(RequireOptions(SecretProviderErrors.OpDelete, target.Value.Region), SecretProviderErrors.OpDelete,
+            _ = CallSecretsManager(target.Value.Region, SecretProviderErrors.OpDelete,
                 "secretsmanager.DeleteSecret", body);
         }
         catch (Exception ex) { SecretProviderErrors.SwallowBestEffort(Name, SecretProviderErrors.OpDelete, ex); }
@@ -127,7 +127,7 @@ internal sealed class AwsRolesAnywhereProvider : ISecretProvider
         var target = AwsSecretTarget.Parse(parsed?.TargetName);
         if (target == null) return Encrypt(plaintext, context);
         string body = AwsSecretsManagerPayload.PutSecretValue(target.Value.SecretId, plaintext);
-        var response = CallSecretsManager(RequireOptions(SecretProviderErrors.OpRotate, target.Value.Region), SecretProviderErrors.OpRotate,
+        var response = CallSecretsManager(target.Value.Region, SecretProviderErrors.OpRotate,
             "secretsmanager.PutSecretValue", body);
         if (!response.IsSuccessStatusCode)
             throw SecretProviderErrors.FromStatus(Name, SecretProviderErrors.OpRotate, response.StatusCode, "rotation (PutSecretValue)", mountId: parsed?.TargetName);
@@ -135,25 +135,26 @@ internal sealed class AwsRolesAnywhereProvider : ISecretProvider
     }
 
     /// <summary>
-    /// One Secrets Manager call with the cached session. A credential rejection
-    /// (401/403) most often means the session expired between the check and the call,
-    /// so the cache is dropped and the call retried exactly once - never in a loop.
+    /// One Secrets Manager call with the cached session. The Secrets Manager region comes
+    /// from the envelope; the session keeps using the configured region, because a trust
+    /// anchor is a regional resource and exchanging it in the wrong region fails outright.
     /// </summary>
-    private HttpResponseMessage CallSecretsManager(RolesAnywhereOptions options, string operation, string target, string body)
+    private HttpResponseMessage CallSecretsManager(string secretsRegion, string operation, string target, string body)
     {
-        HttpResponseMessage first = SendWithSession(options, operation, target, body);
+        HttpResponseMessage first = SendWithSession(secretsRegion, operation, target, body);
         if (first.IsSuccessStatusCode) return first;
         if ((int)first.StatusCode != 401 && (int)first.StatusCode != 403) return first;
         first.Dispose();
         Invalidate();
-        return SendWithSession(options, operation, target, body);
+        return SendWithSession(secretsRegion, operation, target, body);
     }
 
-    private HttpResponseMessage SendWithSession(RolesAnywhereOptions options, string operation, string target, string body)
+    private HttpResponseMessage SendWithSession(string secretsRegion, string operation, string target, string body)
     {
+        var options = RequireOptions(operation);
         RolesAnywhereSession session = Session(options, operation);
         string endpointOverride = Environment.GetEnvironmentVariable("AWS_ENDPOINT_URL_SECRETS_MANAGER") ?? "";
-        return AwsSigV4Client.Call(Name, operation, options.Region, SERVICE, "/", target, body,
+        return AwsSigV4Client.Call(Name, operation, secretsRegion, SERVICE, "/", target, body,
             "application/x-amz-json-1.1", session.Credentials, endpointOverride.Length == 0 ? null : endpointOverride,
             Timeout, _sender);
     }
@@ -192,15 +193,10 @@ internal sealed class AwsRolesAnywhereProvider : ISecretProvider
         }
     }
 
-    private RolesAnywhereOptions RequireOptions(string operation, string? regionOverride = null)
+    private RolesAnywhereOptions RequireOptions(string operation)
     {
-        var options = AwsRolesAnywhereSessionExchange.ReadOptions();
-        if (options == null)
-            throw new SecretProviderUnavailableException(Name, operation,
+        return AwsRolesAnywhereSessionExchange.ReadOptions()
+            ?? throw new SecretProviderUnavailableException(Name, operation,
                 "IAM Roles Anywhere is not configured; missing " + AwsRolesAnywhereSessionExchange.DescribeMissing());
-        if (regionOverride != null && regionOverride.Length > 0 &&
-            !string.Equals(regionOverride, options.Region, StringComparison.OrdinalIgnoreCase))
-            return options with { Region = regionOverride };
-        return options;
     }
 }

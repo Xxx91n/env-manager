@@ -230,18 +230,28 @@ internal static class AwsRolesAnywhereSessionExchange
         string provider, string operation, string json, DateTimeOffset now, RolesAnywhereOptions options)
     {
         using var doc = JsonDocument.Parse(json);
-        if (!doc.RootElement.TryGetProperty("credentials", out var creds))
-            throw new SecretProviderUnavailableException(provider, operation,
-                "CreateSession response does not contain credentials");
 
-        string? accessKey = creds.GetProperty("accessKeyId").GetString();
-        string? secretKey = creds.GetProperty("secretAccessKey").GetString();
-        string? sessionToken = creds.GetProperty("sessionToken").GetString();
-        string? expiration = creds.TryGetProperty("expiration", out var e) ? e.GetString() : null;
+        // AWS nests the credentials: credentialSet[] > credentials > accessKeyId.
+        // Reading them off the root would parse cleanly and report "does not contain
+        // credentials" against every real response.
+        if (!doc.RootElement.TryGetProperty("credentialSet", out var set)
+            || set.ValueKind != JsonValueKind.Array || set.GetArrayLength() == 0
+            || !set[0].TryGetProperty("credentials", out var creds))
+            throw new SecretProviderUnavailableException(provider, operation,
+                "CreateSession response does not contain credentialSet[0].credentials");
+
+        if (!creds.TryGetProperty("accessKeyId", out var accessKeyElement)
+            || !creds.TryGetProperty("secretAccessKey", out var secretKeyElement))
+            throw new SecretProviderUnavailableException(provider, operation,
+                "CreateSession response is missing the access key or secret key");
+        string? accessKey = accessKeyElement.GetString();
+        string? secretKey = secretKeyElement.GetString();
         if (string.IsNullOrEmpty(accessKey) || string.IsNullOrEmpty(secretKey))
             throw new SecretProviderUnavailableException(provider, operation,
                 "CreateSession response is missing the access key or secret key");
 
+        string? sessionToken = creds.TryGetProperty("sessionToken", out var token) ? token.GetString() : null;
+        string? expiration = creds.TryGetProperty("expiration", out var e) ? e.GetString() : null;
         DateTimeOffset expires = DateTimeOffset.TryParse(expiration, CultureInfo.InvariantCulture,
             DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal, out DateTimeOffset parsed)
             ? parsed

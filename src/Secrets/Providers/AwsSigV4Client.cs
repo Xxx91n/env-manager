@@ -42,8 +42,11 @@ internal static class AwsSigV4Client
         string requestUrl = RequestUrl(region, service, path, endpointOverride);
         string signedHost = new Uri(requestUrl).Host;
 
-        string amzDate = DateTimeOffset.UtcNow.ToString("yyyyMMddTHHmmssZ", CultureInfo.InvariantCulture);
-        string dateStamp = DateTimeOffset.UtcNow.ToString("yyyyMMdd", CultureInfo.InvariantCulture);
+        // One clock read: two separate UtcNow calls can straddle UTC midnight, which
+        // leaves x-amz-date on one day and the credential scope on the next.
+        DateTime utcNow = DateTime.UtcNow;
+        string amzDate = utcNow.ToString("yyyyMMddTHHmmssZ", CultureInfo.InvariantCulture);
+        string dateStamp = utcNow.ToString("yyyyMMdd", CultureInfo.InvariantCulture);
         string scope = credentials.Scope(dateStamp, region, service);
 
         var headers = new List<(string Name, string Value)>

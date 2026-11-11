@@ -42,6 +42,7 @@ public sealed class AwsRolesAnywhereOfflineTests : IDisposable
         "AWS_ROLES_ANYWHERE_ROLE_ARN", "AWS_ROLES_ANYWHERE_PROFILE_ARN",
         "AWS_ROLES_ANYWHERE_TRUST_ANCHOR_ARN", "AWS_ROLES_ANYWHERE_CERT_SHA1",
         "AWS_ROLES_ANYWHERE_DURATION_SECONDS", "AWS_ENDPOINT_URL_SECRETS_MANAGER",
+        "AWS_ENDPOINT_URL_ROLES_ANYWHERE",
         "AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_SESSION_TOKEN",
     };
 
@@ -116,9 +117,15 @@ public sealed class AwsRolesAnywhereOfflineTests : IDisposable
     private static HttpResponseMessage Json(HttpStatusCode status, string body) =>
         new(status) { Content = new StringContent(body, Encoding.UTF8, "application/json") };
 
+    // The real response shape: credentialSet[] > credentials. Reading the credentials
+    // off the root parses cleanly but fails against every real response, so the fixture
+    // has to be the documented shape for the offline suite to mean anything.
     private const string SessionBody =
-        "{\"credentials\":{\"accessKeyId\":\"ASIAEXAMPLE\",\"secretAccessKey\":\"secret\",\"sessionToken\":\"token\"," +
-        "\"expiration\":\"2026-11-11T10:05:00Z\"},\"subjectArn\":\"arn:aws:rolesanywhere:us-east-1:111122223333:subject/abcd\"}";
+        "{\"credentialSet\":[{\"assumedRoleUser\":{\"arn\":\"arn:aws:sts::111122223333:assumed-role/env-manager/abcd\"," +
+        "\"assumedRoleId\":\"AROAEXAMPLE:abcd\"},\"credentials\":{\"accessKeyId\":\"ASIAEXAMPLE\"," +
+        "\"secretAccessKey\":\"secret\",\"sessionToken\":\"token\",\"expiration\":\"2026-11-11T10:05:00Z\"}," +
+        "\"packedPolicySize\":0,\"roleArn\":\"arn:aws:iam::111122223333:role/env-manager\"}]," +
+        "\"subjectArn\":\"arn:aws:rolesanywhere:us-east-1:111122223333:subject/abcd\"}";
 
     // ---- 1. request shape: exact canonical headers, serial, algorithm ----
 
@@ -311,6 +318,85 @@ public sealed class AwsRolesAnywhereOfflineTests : IDisposable
         Assert.Equal(2, sender.Requests.Count);
     }
 
+    [Fact]
+    public void Decrypt_UsesTheEnvelopeRegionForSecretsManager_ButTheConfiguredRegionForTheExchange()
+    {
+        using var cert = CreateRsaCertificate(FixedNow.AddDays(-1), FixedNow.AddDays(30));
+        SetIdentity(cert.Thumbprint);
+        var sender = new RecordingSender(request =>
+            request.RequestUri!.AbsolutePath == "/sessions"
+                ? Json(HttpStatusCode.Created, SessionBody)
+                : Json(HttpStatusCode.OK, "{\"SecretString\":\"v\"}"));
+        var provider = new AwsRolesAnywhereProvider(sender, cert, () => FixedNow);
+
+        // An envelope written in another region. The trust anchor is a regional resource,
+        // so the exchange must still go to the configured region; only the Secrets Manager
+        // call follows the envelope.
+        var envelope = new SecretEnvelope
+        {
+            Provider = "aws-roles-anywhere",
+            Version = 1,
+            CreatedAt = FixedNow.ToString("O"),
+            TargetName = "eu-west-1|em-elsewhere",
+        }.Serialize();
+        Assert.Equal("v", provider.Decrypt(envelope, "ctx"));
+
+        var requests = sender.Requests;
+        Assert.Contains(requests, r => r.Request.RequestUri!.Host == "rolesanywhere.us-east-1.amazonaws.com");
+        Assert.Contains(requests, r => r.Request.RequestUri!.Host == "secretsmanager.eu-west-1.amazonaws.com");
+        Assert.DoesNotContain(requests, r => r.Request.RequestUri!.Host == "rolesanywhere.eu-west-1.amazonaws.com");
+    }
+
+    [Fact]
+    public void CreateSession_ReadsTheCredentialsFromCredentialSetNotTheRoot()
+    {
+        using var cert = CreateRsaCertificate(FixedNow.AddDays(-1), FixedNow.AddDays(30));
+        SetIdentity(cert.Thumbprint);
+        var sender = new RecordingSender(_ => Json(HttpStatusCode.Created, SessionBody));
+
+        var session = AwsRolesAnywhereSessionExchange.CreateSession(
+            "aws-roles-anywhere", "encrypt", Options(cert.Thumbprint), sender, () => FixedNow, cert);
+
+        // The documented shape is credentialSet[0].credentials; a root-level read would
+        // have thrown "does not contain credentials" here.
+        Assert.Equal("ASIAEXAMPLE", session.Credentials.AccessKeyId);
+        Assert.Equal("secret", session.Credentials.SecretAccessKey);
+        Assert.Equal("token", session.Credentials.SessionToken);
+        Assert.Equal(new DateTimeOffset(2026, 11, 11, 10, 5, 0, TimeSpan.Zero), session.ExpiresAt);
+    }
+
+    [Fact]
+    public void CreateSession_SuccessWithoutCredentialSet_FailsAsUnavailableRatherThanThrowing()
+    {
+        using var cert = CreateRsaCertificate(FixedNow.AddDays(-1), FixedNow.AddDays(30));
+        SetIdentity(cert.Thumbprint);
+        // A success status with the wrong shape must map onto the typed family, not a
+        // KeyNotFoundException from JsonElement.GetProperty.
+        var sender = new RecordingSender(_ => Json(HttpStatusCode.Created,
+            "{\"subjectArn\":\"arn:aws:rolesanywhere:us-east-1:111122223333:subject/abcd\"}"));
+
+        var ex = Assert.Throws<SecretProviderUnavailableException>(() =>
+            AwsRolesAnywhereSessionExchange.CreateSession(
+                "aws-roles-anywhere", "encrypt", Options(cert.Thumbprint), sender, () => FixedNow, cert));
+
+        Assert.Contains("credentialSet", ex.Message);
+    }
+
+    [Fact]
+    public void CreateSession_CredentialWithoutKeys_FailsAsUnavailableRatherThanThrowing()
+    {
+        using var cert = CreateRsaCertificate(FixedNow.AddDays(-1), FixedNow.AddDays(30));
+        SetIdentity(cert.Thumbprint);
+        var sender = new RecordingSender(_ => Json(HttpStatusCode.Created,
+            "{\"credentialSet\":[{\"credentials\":{\"sessionToken\":\"T\"}}]}"));
+
+        var ex = Assert.Throws<SecretProviderUnavailableException>(() =>
+            AwsRolesAnywhereSessionExchange.CreateSession(
+                "aws-roles-anywhere", "encrypt", Options(cert.Thumbprint), sender, () => FixedNow, cert));
+
+        Assert.Contains("access key", ex.Message);
+    }
+
     // ---- 3. failure mapping ----
 
     [Fact]
@@ -366,7 +452,7 @@ public sealed class AwsRolesAnywhereOfflineTests : IDisposable
         using var cert = CreateRsaCertificate(FixedNow.AddDays(-1), FixedNow.AddDays(30));
         SetIdentity(cert.Thumbprint);
         var noExpiry = new RecordingSender(_ => Json(HttpStatusCode.Created,
-            "{\"credentials\":{\"accessKeyId\":\"A\",\"secretAccessKey\":\"S\",\"sessionToken\":\"T\"}}"));
+            "{\"credentialSet\":[{\"credentials\":{\"accessKeyId\":\"A\",\"secretAccessKey\":\"S\",\"sessionToken\":\"T\"}}]}"));
 
         var session = AwsRolesAnywhereSessionExchange.CreateSession(
             "aws-roles-anywhere", "encrypt", Options(cert.Thumbprint, 1800), noExpiry, () => FixedNow, cert);
@@ -445,6 +531,19 @@ public sealed class AwsRolesAnywhereOfflineTests : IDisposable
             AwsSecretsManagerPayload.DeleteSecret("em-shared"));
         Assert.Contains("\"ClientRequestToken\":\"tok\"",
             AwsSecretsManagerPayload.CreateSecret("em-shared", "v", "tok"));
+    }
+
+    [Fact]
+    public void SharedAwsPayload_EscapesEveryControlCharacterThatIsIllegalRawInJson()
+    {
+        // A value carrying \b, \f or another C0 character would otherwise travel raw
+        // inside the JSON string, and Secrets Manager rejects the whole request.
+        string escaped = AwsSecretsManagerPayload.PutSecretValue("em-shared", "a\bb\fc\u0001d");
+        Assert.Equal("{\"SecretId\":\"em-shared\",\"SecretString\":\"a\\bb\\fc\\u0001d\"}", escaped);
+
+        // The escaped body stays parseable, and the round trip returns the original value.
+        using var doc = JsonDocument.Parse(escaped);
+        Assert.Equal("a\bb\fc\u0001d", doc.RootElement.GetProperty("SecretString").GetString());
     }
 
     [Fact]
