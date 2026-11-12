@@ -413,6 +413,11 @@ public sealed class ReadOnlyProbeWireTests
     // `whoami` and not `item create`. The declaration is pinned in
     // SecretProviderCapabilityTests; the process shape is pinned here against a stub
     // executable, so no credential and no network are involved.
+    //
+    // The provider resolves its binary per instance, not per process (#297 review): a
+    // static readonly field would pin the first lookup for the whole test process, so
+    // this test's OP_PATH could be ignored depending on what ran first. Constructing the
+    // provider inside the WithEnv block is what exercises that.
 
     [Fact]
     public void OnePasswordProbe_RunsWhoami_NotItemCreate()
@@ -435,6 +440,8 @@ public sealed class ReadOnlyProbeWireTests
             // A zero-exit stub must be treated as a signed-in CLI: no exception.
             Assert.Null(thrown);
             string recorded = File.Exists(argsLog) ? File.ReadAllText(argsLog).Trim() : "";
+            // An empty log means the provider ran some other `op` than the stub - the
+            // exact failure the per-instance resolution exists to prevent.
             Assert.Equal("whoami", recorded);
             Assert.DoesNotContain("item create", recorded, StringComparison.OrdinalIgnoreCase);
         }
@@ -442,6 +449,39 @@ public sealed class ReadOnlyProbeWireTests
         {
             try { File.Delete(stub); } catch { /* best-effort */ }
             try { File.Delete(argsLog); } catch { /* best-effort */ }
+        }
+    }
+
+    [Fact]
+    public void OnePasswordResolver_ReadsOpPathPerInstance_NotOncePerProcess()
+    {
+        // The seam's own pin: two providers built around a change of OP_PATH must resolve
+        // different binaries. With a static cache the second construction would keep the
+        // first path, which is what made the probe test order-dependent.
+        //
+        // Each stub records its own calls, so which binary ran is observable. Availability
+        // alone would not prove it: the gate falls back to PATH when OP_PATH is unusable,
+        // and a host with `op` installed reports true either way.
+        string firstLog = Path.Combine(Path.GetTempPath(), "op-first-" + Guid.NewGuid().ToString("N") + ".txt");
+        string secondLog = Path.Combine(Path.GetTempPath(), "op-second-" + Guid.NewGuid().ToString("N") + ".txt");
+        string first = WriteStubOp(firstLog);
+        string second = WriteStubOp(secondLog);
+        try
+        {
+            WithEnv("OP_PATH", first, () => { OnePasswordProvider p = new(); p.ProbeReadOnly(); });
+            // Constructing the second one AFTER the variable moved: no new process, so a
+            // static cache would still run the first stub.
+            WithEnv("OP_PATH", second, () => { OnePasswordProvider p = new(); p.ProbeReadOnly(); });
+
+            Assert.Equal("whoami", File.ReadAllText(firstLog).Trim());
+            Assert.Equal("whoami", File.ReadAllText(secondLog).Trim());
+        }
+        finally
+        {
+            try { File.Delete(first); } catch { /* best-effort */ }
+            try { File.Delete(second); } catch { /* best-effort */ }
+            try { File.Delete(firstLog); } catch { /* best-effort */ }
+            try { File.Delete(secondLog); } catch { /* best-effort */ }
         }
     }
 

@@ -118,7 +118,13 @@ internal sealed class OnePasswordProvider : ISecretProvider
     // Envelope: { provider, version, createdAt, targetName (vault|itemId|field) }
     // The actual secret value is fetched via the 1Password CLI (op) at launch time.
 
-    private static readonly string OP_BINARY = FindOpBinary();
+    // Resolved once per instance, not once per process. It used to be a static readonly
+    // field, which pinned the very first lookup for the whole process: a test that sets
+    // OP_PATH afterwards was ignored, and a host that probed twice could keep a stale
+    // path. The providers are constructed per command process, so per-instance resolution
+    // costs one directory scan per invocation - the same order as the static version, and
+    // correct when OP_PATH changes.
+    private readonly string OP_BINARY = FindOpBinary();
 
     private static string FindOpBinary()
     {
@@ -152,7 +158,7 @@ internal sealed class OnePasswordProvider : ISecretProvider
     // budget stricter than the real calls (30s) reports slowness as a broken binary.
     private const int ProbeTimeoutMs = 30000;
 
-    private static void EnsureOpAvailable()
+    private void EnsureOpAvailable()
     {
         var psi = new System.Diagnostics.ProcessStartInfo
         {
