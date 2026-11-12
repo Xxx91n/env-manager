@@ -138,6 +138,52 @@ public sealed class AwsEndpointOverrideTests : IDisposable
         Assert.Equal(SecretProviderErrors.OpDecrypt, ex.Operation);
     }
 
+    // ---- the transport: a redirect must not re-send the request elsewhere ----
+
+    // A signed request carries the session token and, on a write, the plaintext secret in
+    // its body. A 307 from a loopback emulator would hand both to whatever host the
+    // Location header names, and that host never passed the endpoint check. The sender
+    // refuses to follow, so the redirect comes back as an ordinary response instead.
+    [Fact]
+    public void HttpClientSender_DoesNotFollowARedirect()
+    {
+        var listener = new System.Net.Sockets.TcpListener(System.Net.IPAddress.Loopback, 0);
+        listener.Start();
+        int port = ((System.Net.IPEndPoint)listener.LocalEndpoint).Port;
+        string received = "";
+
+        var serverThread = new System.Threading.Thread(() =>
+        {
+            using var socket = listener.AcceptTcpClient();
+            using var stream = socket.GetStream();
+            var buffer = new byte[8192];
+            int read = stream.Read(buffer, 0, buffer.Length);
+            received = System.Text.Encoding.ASCII.GetString(buffer, 0, read);
+            byte[] reply = System.Text.Encoding.ASCII.GetBytes(
+                "HTTP/1.1 307 Temporary Redirect\r\nLocation: http://127.0.0.1:1/elsewhere\r\nContent-Length: 0\r\nConnection: close\r\n\r\n");
+            stream.Write(reply, 0, reply.Length);
+        }) { IsBackground = true, Name = "em-redirect-stub" };
+        serverThread.Start();
+
+        try
+        {
+            using var request = new System.Net.Http.HttpRequestMessage(
+                System.Net.Http.HttpMethod.Post, "http://127.0.0.1:" + port + "/");
+            request.Content = new System.Net.Http.StringContent("{\"SecretString\":\"em-canary\"}");
+            request.Headers.TryAddWithoutValidation("X-Amz-Security-Token", "em-session-token");
+            // Fail fast if the sender does follow: port 1 has nothing listening.
+            using var response = new HttpClientSender().Send(request, TimeSpan.FromSeconds(5));
+
+            Assert.Equal(System.Net.HttpStatusCode.TemporaryRedirect, response.StatusCode);
+            Assert.True(serverThread.Join(TimeSpan.FromSeconds(10)), "redirect stub did not finish");
+            Assert.Contains("em-canary", received);
+        }
+        finally
+        {
+            listener.Stop();
+        }
+    }
+
     private static void SetCredentials(string endpoint)
     {
         Environment.SetEnvironmentVariable("AWS_REGION", "us-east-1");

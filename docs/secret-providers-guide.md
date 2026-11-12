@@ -258,9 +258,11 @@ Set `AWS_ENDPOINT_URL_SECRETS_MANAGER` to the emulator address to send every Sec
 
 ```powershell
 setx AWS_ENDPOINT_URL_SECRETS_MANAGER http://127.0.0.1:4566
+# The service runs as its own account and cannot see a per-user variable:
+setx /M AWS_ENDPOINT_URL_SECRETS_MANAGER http://127.0.0.1:4566
 ```
 
-`https://` works for any address. `http://` works only for a host on this machine (the loopback range, `localhost`, `[::1]`); plain http to any other host is refused, because the signed request and its session token would travel in clear text. An address that is neither `http://` nor `https://` is refused too. Production deployments leave this variable unset.
+`https://` works for any address. `http://` works only for a host on this machine (the loopback range, `localhost`, `[::1]`); plain http to any other host is refused, because the signed request and its session token would travel in clear text. An address that is neither `http://` nor `https://` is refused too. Production deployments leave this variable unset. Restart the service after setting the machine-level copy.
 
 ---
 

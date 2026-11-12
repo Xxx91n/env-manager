@@ -14,7 +14,13 @@ internal sealed class HttpClientSender : IAwsHttpSender
     {
         // A fresh client per call: the providers are invoked from short-lived CLI
         // processes and a shared handler would outlive the process that owns it.
-        using var client = new System.Net.Http.HttpClient();
+        //
+        // Redirects are off. A signed request carries the session token and, on a write,
+        // the plaintext secret in its body; following a redirect would hand both to
+        // whatever host the Location header names, and that host never passed the
+        // endpoint check. A local emulator has no reason to redirect.
+        using var handler = new HttpClientHandler { AllowAutoRedirect = false };
+        using var client = new System.Net.Http.HttpClient(handler);
         client.Timeout = timeout;
         return client.SendAsync(request).GetAwaiter().GetResult();
     }
