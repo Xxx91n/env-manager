@@ -308,6 +308,17 @@ let profilesCacheData: ProfileData[] = []
 let lastProfilesCacheTime = 0
 let profilesReadInFlight: Promise<ProfileData[]> | null = null
 
+// Secret-provider list cache. Every call probes the network providers, so without a
+// cache each profile-editor mount costs one round-trip per reachable provider (and a
+// CloudTrail / audit-log entry in the customer's account per call). The CLI runs as a
+// fresh process per invocation, so an in-process cache there would never survive; the
+// TTL lives here, on the side that mounts the page. A provider switch invalidates it
+// through the standard write path.
+const PROVIDER_LIST_CACHE_TTL_MS = 15000
+let providerListCacheData = ''
+let lastProviderListCacheTime = 0
+let providerListReadInFlight: Promise<string> | null = null
+
 /**
  * Invalidate all cached data. Called after any write operation to ensure
  * secondary pages see fresh data on their next read.
@@ -330,6 +341,10 @@ export function invalidateApiCache(): void {
   // Profiles cache: same SWR pattern
   lastProfilesCacheTime = 0
   profilesReadInFlight = null
+  // Provider availability is recomputed on the next read: a just-switched provider
+  // must not keep showing the previous selection's list.
+  lastProviderListCacheTime = 0
+  providerListReadInFlight = null
 }
 
 /**
@@ -1368,7 +1383,21 @@ export async function profileRevealSecret(profileName: string, varName: string):
  * CLI: `profile secret-provider list`
  */
 export async function secretProviderList(): Promise<string> {
-  return await runRead('profile', ['secret-provider', 'list'])
+  const fresh = Date.now() - lastProviderListCacheTime < PROVIDER_LIST_CACHE_TTL_MS
+  if (fresh && providerListReadInFlight === null) return providerListCacheData
+
+  // Single-flight: several surfaces mounting at once share one CLI run, which keeps
+  // the probe count per page load at one instead of one per mount.
+  if (providerListReadInFlight === null) {
+    providerListReadInFlight = runRead('profile', ['secret-provider', 'list'])
+      .then((data) => {
+        providerListCacheData = data
+        lastProviderListCacheTime = Date.now()
+        return data
+      })
+      .finally(() => { providerListReadInFlight = null })
+  }
+  return await providerListReadInFlight
 }
 
 /**

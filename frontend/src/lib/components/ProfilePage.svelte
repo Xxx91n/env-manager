@@ -58,8 +58,10 @@ import { parseSecretProviderList } from '../secret-provider-list'
   // v0.8 secret provider state
   let activeProvider = $state('dpapi-current-user')
   let availableProviders: string[] = $state([])
-  // Providers the CLI reports as (unavailable).
+  // Providers the CLI reports as (unavailable), and why: a probe failure carries a
+  // reason code the CLI emits in the marker. The gate-alone case has no code.
   let unavailableProviders: string[] = $state([])
+  let providerUnavailableReasons: Record<string, string> = $state({})
 
 
   // Input validation for variable names and PATH entries (v0.7.5 hard boundary).
@@ -97,6 +99,18 @@ import { parseSecretProviderList } from '../secret-provider-list'
     }
     return map[name] ?? name
   }
+  // Localized label for an unavailable provider. A probe failure carries a reason
+  // code from the CLI and gets its own sentence; the gate-alone case (nothing is
+  // configured yet) keeps the plain label.
+  function providerUnavailableLabel(name: string): string {
+    const reason = providerUnavailableReasons[name]
+    if (!reason) return $t('secrets.providerUnavailable')
+    const key = `secrets.providerUnavailable.${reason}`
+    const translated = $t(key)
+    // svelte-i18n returns the key itself when a message is missing; fall back rather
+    // than show a raw "secrets.providerUnavailable.unknown" in the dropdown.
+    return translated === key ? $t('secrets.providerUnavailable') : translated
+  }
   async function loadProviderInfo() {
     try {
       const result = await secretProviderList()
@@ -107,6 +121,13 @@ import { parseSecretProviderList } from '../secret-provider-list'
       if (parsed.activeProvider) activeProvider = parsed.activeProvider
       availableProviders = parsed.providers.map(p => p.name)
       unavailableProviders = parsed.providers.filter(p => !p.available).map(p => p.name)
+      // Reasons keyed by provider name; a provider whose gate alone failed has none,
+      // so it renders the plain "unavailable" label.
+      const reasons: Record<string, string> = {}
+      for (const p of parsed.providers) {
+        if (!p.available && p.reason) reasons[p.name] = p.reason
+      }
+      providerUnavailableReasons = reasons
     } catch {
       // keep defaults
     }
@@ -997,7 +1018,7 @@ import { parseSecretProviderList } from '../secret-provider-list'
                    >
                      {#each availableProviders as prov}
                        <option value={prov} selected={prov === activeProvider} disabled={unavailableProviders.includes(prov)}>
-                         {providerDisplayName(prov)}{prov === activeProvider ? ' (active)' : ''}{unavailableProviders.includes(prov) ? ` (${$t('secrets.providerUnavailable')})` : ''}
+                         {providerDisplayName(prov)}{prov === activeProvider ? ' (active)' : ''}{unavailableProviders.includes(prov) ? ` (${providerUnavailableLabel(prov)})` : ''}
                        </option>
                      {/each}
                    </select>
