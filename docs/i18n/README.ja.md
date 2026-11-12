@@ -169,7 +169,7 @@ flowchart LR
 | Azure Key Vault | サービスプリンシパル証明書 / マネージド ID | あり | [ガイド](../../docs/secret-providers-guide.md) |
 | 1Password CLI | OP_SERVICE_ACCOUNT_TOKEN | あり | [ガイド](../../docs/secret-providers-guide.md) |
 | AWS Secrets Manager | SigV4 + アクセスキー | あり | [ガイド](../../docs/secret-providers-guide.md) |
-| AWS IAM Roles Anywhere | マシン証明書ストアの証明書を一時的な認証情報に交換 | いいえ、まだです。サービスは `Periodic` の値を読み直しません | [ガイド](../../docs/secret-providers-guide.md) |
+| AWS IAM Roles Anywhere | マシン証明書ストアの証明書を一時的な認証情報に交換 | いいえ、まだです。サービスは `Periodic` マウントを読み直しません | [ガイド](../../docs/secret-providers-guide.md) |
 
 各プロバイダーを使うための準備や初回設定、うまく動かないときの対処法は [docs/secret-providers-guide.md](../../docs/secret-providers-guide.md) をご覧ください。
 

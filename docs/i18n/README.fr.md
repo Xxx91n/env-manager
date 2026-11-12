@@ -169,7 +169,7 @@ Neuf fournisseurs de secrets sont disponibles, chacun étant testé dès que vou
 | Azure Key Vault | Certificat de principal de service / identité managée | Oui | [Guide](../../docs/secret-providers-guide.md) |
 | 1Password CLI | OP_SERVICE_ACCOUNT_TOKEN | Oui | [Guide](../../docs/secret-providers-guide.md) |
 | AWS Secrets Manager | SigV4 + clés d'accès | Oui | [Guide](../../docs/secret-providers-guide.md) |
-| AWS IAM Roles Anywhere | Certificat du magasin machine échangé contre des identifiants temporaires | Non, pas encore : le service ne relit pas les entrées `Periodic` | [Guide](../../docs/secret-providers-guide.md) |
+| AWS IAM Roles Anywhere | Certificat du magasin machine échangé contre des identifiants temporaires | Non, pas encore : le service ne relit pas les montages de secrets `Periodic` | [Guide](../../docs/secret-providers-guide.md) |
 
 Consultez le [Guide des fournisseurs de secrets](../../docs/secret-providers-guide.md) pour voir les prérequis de chaque outil, la configuration initiale et comment corriger les erreurs courantes.
 
