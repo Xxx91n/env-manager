@@ -1,5 +1,5 @@
 <!-- canonical: ../../README.md -->
-<!-- sync: 952812b58e9c0d3cf82955667674f2f5e7c3ac5f -->
+<!-- sync: 87911a7f5084c33602f70da789a6bf2427757bf6 -->
 
 <div align="center">
 
@@ -170,6 +170,8 @@ Dispones de nueve secret providers. Cada vez que cambias a uno, la aplicación c
 | 1Password CLI | OP_SERVICE_ACCOUNT_TOKEN | Sí | [Guía](../../docs/secret-providers-guide.md) |
 | AWS Secrets Manager | SigV4 + claves de acceso | Sí | [Guía](../../docs/secret-providers-guide.md) |
 | AWS IAM Roles Anywhere | Certificado del almacén de máquina canjeado por credenciales temporales | No, todavía no: el servicio no vuelve a leer los secret mounts `Periodic` | [Guía](../../docs/secret-providers-guide.md) |
+
+En la columna «Comprobación periódica», «Sí» significa que el proveedor declara compatibilidad con `Periodic`; el servicio todavía no vuelve a leer esos secret mounts, así que los valores no se actualizan solos por ahora (ver [este issue](https://github.com/Xxx91n/env-manager/issues/276)).
 
 Consulta la [Guía de secret providers](../../docs/secret-providers-guide.md) para ver los requisitos de cada uno, cómo configurarlos y cómo resolver fallos habituales.
 

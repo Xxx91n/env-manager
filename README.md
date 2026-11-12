@@ -168,6 +168,8 @@ Nine secret providers, each checked when you switch to it. A failed check appear
 | AWS Secrets Manager | SigV4 + access keys | Yes | [Guide](docs/secret-providers-guide.md) |
 | AWS IAM Roles Anywhere | Certificate from the machine store exchanged for temporary credentials | No, not yet: `Periodic` mounts are not re-read by the service (see [this issue](https://github.com/Xxx91n/env-manager/issues/276)) | [Guide](docs/secret-providers-guide.md) |
 
+In the `Timer Refresh` column, `Yes` means the provider declares `Periodic` support; the service does not re-read those mounts yet, so values do not refresh on their own today (see [this issue](https://github.com/Xxx91n/env-manager/issues/276)).
+
 See [docs/secret-providers-guide.md](docs/secret-providers-guide.md) for per-provider prerequisites, one-time setup, and error fix steps.
 
 ## Service mode

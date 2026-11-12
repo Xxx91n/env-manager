@@ -1,5 +1,5 @@
 <!-- canonical: ../../README.md -->
-<!-- sync: 952812b58e9c0d3cf82955667674f2f5e7c3ac5f -->
+<!-- sync: 87911a7f5084c33602f70da789a6bf2427757bf6 -->
 
 <div align="center">
 
@@ -170,6 +170,8 @@ flowchart LR
 | 1Password CLI | OP_SERVICE_ACCOUNT_TOKEN | 是 | [配置指南](../../docs/secret-providers-guide.md) |
 | AWS Secrets Manager | SigV4 + 访问密钥 | 是 | [配置指南](../../docs/secret-providers-guide.md) |
 | AWS IAM Roles Anywhere | 用机器证书库里的证书换取临时凭据 | 还没有：`Periodic` 挂载不会被服务重新读取 | [配置指南](../../docs/secret-providers-guide.md) |
+
+「定时刷新」一列里的「是」，指的是提供者声明支持 `Periodic`；服务目前还不会重新读取这些挂载，机密值并不会自行刷新（见[这个 issue](https://github.com/Xxx91n/env-manager/issues/276)）。
 
 每种机密提供者的前置环境、初始配置步骤以及常见报错解决方法，请查阅 [docs/secret-providers-guide.md](../../docs/secret-providers-guide.md)。
 
