@@ -1,17 +1,15 @@
-// Capability-aware parser for `profile secret-provider list` output.
-// The GUI derives providers and their capability descriptors from CLI output
-// only (hard boundary v0.7.3) — no hardcoded provider id list lives here.
-// Line contract (v0.12+): "  <name> [(active)] [(unavailable)]
-// [refresh=yes|no certauth=yes|no network=yes|no]"; pre-capability output
-// (no bracket block) parses identically with all capability flags false.
+// Parser for `profile secret-provider list` output.
+// The GUI derives providers and their availability from CLI output only —
+// no hardcoded provider id list lives here.
+// Line contract: "  <name> [(active)] [(unavailable)]
+// [refresh=yes|no certauth=yes|no network=yes|no]"; the trailing capability
+// block is tolerated, not parsed — the GUI has no consumer for it.
+// Output without the bracket block parses the same way.
 
 export interface SecretProviderListEntry {
   name: string
   active: boolean
   available: boolean
-  refreshCapable: boolean
-  certAuthRequired: boolean
-  requiresNetwork: boolean
 }
 
 export interface SecretProviderList {
@@ -42,9 +40,6 @@ export function parseSecretProviderList(raw: string): SecretProviderList {
       name,
       active: rest.includes('(active)'),
       available: !rest.includes('(unavailable)'),
-      refreshCapable: /refresh=yes/.test(rest),
-      certAuthRequired: /certauth=yes/.test(rest),
-      requiresNetwork: /network=yes/.test(rest),
     })
   }
   return { activeProvider, providers }
