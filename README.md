@@ -166,7 +166,7 @@ Nine secret providers, each checked when you switch to it. A failed check appear
 | Azure Key Vault | Service principal cert / managed identity | Yes | [Guide](docs/secret-providers-guide.md) |
 | 1Password CLI | OP_SERVICE_ACCOUNT_TOKEN | Yes | [Guide](docs/secret-providers-guide.md) |
 | AWS Secrets Manager | SigV4 + access keys | Yes | [Guide](docs/secret-providers-guide.md) |
-| AWS IAM Roles Anywhere | Certificate from the machine store exchanged for temporary credentials | No, not yet: `Periodic` can be selected, but the service does not refetch it (see [this issue](https://github.com/Xxx91n/env-manager/issues/276)) | [Guide](docs/secret-providers-guide.md) |
+| AWS IAM Roles Anywhere | Certificate from the machine store exchanged for temporary credentials | No, not yet: `Periodic` mounts are not re-read by the service (see [this issue](https://github.com/Xxx91n/env-manager/issues/276)) | [Guide](docs/secret-providers-guide.md) |
 
 See [docs/secret-providers-guide.md](docs/secret-providers-guide.md) for per-provider prerequisites, one-time setup, and error fix steps.
 
