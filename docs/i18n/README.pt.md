@@ -169,7 +169,7 @@ O sistema conta com nove provedores de segredos. Sempre que você escolhe um pro
 | Azure Key Vault | Certificado Service Principal / Managed Identity | Sim | [Guia](../../docs/secret-providers-guide.md) |
 | 1Password CLI | OP_SERVICE_ACCOUNT_TOKEN | Sim | [Guia](../../docs/secret-providers-guide.md) |
 | AWS Secrets Manager | SigV4 + chaves de acesso | Sim | [Guia](../../docs/secret-providers-guide.md) |
-| AWS IAM Roles Anywhere | Certificado do armazenamento da máquina trocado por credenciais temporárias | Não, ainda não: o serviço não relê os valores `Periodic` | [Guia](../../docs/secret-providers-guide.md) |
+| AWS IAM Roles Anywhere | Certificado do armazenamento da máquina trocado por credenciais temporárias | Não, ainda não: o serviço não relê as montagens de segredos `Periodic` | [Guia](../../docs/secret-providers-guide.md) |
 
 Veja em [docs/secret-providers-guide.md](../../docs/secret-providers-guide.md) o que cada provedor precisa para funcionar e o passo a passo para resolver problemas comuns.
 
