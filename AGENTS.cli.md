@@ -163,7 +163,7 @@ Pass `--debug` or `-d` to enable verbose stderr logging with timestamps. Logs re
 - **System directory writes**: writes to `\Windows`, `\Program Files`, `\Program Files (x86)` blocked
 - **Backup file size**: 50 MB maximum
 - **No plaintext credential storage**: secret values are encrypted by the active secret provider. Plaintext exists only in the short-lived places listed in [docs/plaintext-sinks.md](docs/plaintext-sinks.md): process memory, provider child processes, and (for SOPS) a temp directory removed after the call. A profile stores an encrypted envelope or a `mount:<id>` reference, never plaintext. The generic `add-var`/`edit-var` commands bypass the secret marker and are the known exception.
-- **Network access**: limited to (a) `update check` to the GitHub releases API and (b) secret providers that talk to external vaults (Vault, Azure Key Vault, AWS Secrets Manager, 1Password). All TLS is mandatory (HTTPS) for non-localhost endpoints; localhost-only http is permitted only for 127.0.0.1/localhost/[::1]. All external calls have a 10-15s timeout and fail closed.
+- **Network access**: limited to (a) `update check` to the GitHub releases API and (b) secret providers that talk to external vaults (Vault, Azure Key Vault, AWS Secrets Manager, 1Password). All TLS is mandatory (HTTPS) for non-localhost endpoints; plain http is permitted only on a host of this machine (the loopback address range, `localhost`, `[::1]`). All external calls have a 10-15s timeout and fail closed.
 - **Audit integrity**: every mutating command records its operation. Unknown profile subcommands fail loud; `--force` is the only override and it still records the attempt.
 
 ## v0.8 Secret Providers
@@ -181,8 +181,8 @@ Registered providers:
 | `sops` | SOPS encrypted JSON envelope; supports Age, PGP, AWS KMS, Azure KV, GCP KMS, Vault | Provider-specific env vars | Yes for cloud KMS |
 | `azure-keyvault` | Azure Key Vault REST API (PUT/GET /secrets/<name>) | Managed Identity (IMDS) or Service Principal (`AZURE_CLIENT_ID`/`AZURE_CLIENT_SECRET`/`AZURE_TENANT_ID`) | Yes, HTTPS only |
 | `1password` | 1Password CLI (`op`) vault item | `OP_ACCOUNT` or `OP_SERVICE_ACCOUNT_TOKEN` | Yes |
-| `aws-secretsmanager` | AWS Secrets Manager REST API with SigV4 signed requests | `AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY`/`AWS_SESSION_TOKEN` | Yes, HTTPS only |
-| `aws-roles-anywhere` | AWS Secrets Manager REST API with SigV4 signed requests using short-lived credentials from IAM Roles Anywhere | X.509 certificate from the machine certificate store, exchanged via Roles Anywhere (`AWS_REGION`/`AWS_DEFAULT_REGION` + `AWS_ROLES_ANYWHERE_ROLE_ARN`/`AWS_ROLES_ANYWHERE_PROFILE_ARN`/`AWS_ROLES_ANYWHERE_TRUST_ANCHOR_ARN`/`AWS_ROLES_ANYWHERE_CERT_SHA1`) | Yes, HTTPS only |
+| `aws-secretsmanager` | AWS Secrets Manager REST API with SigV4 signed requests | `AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY`/`AWS_SESSION_TOKEN` | Yes, HTTPS; http only on this machine via `AWS_ENDPOINT_URL_SECRETS_MANAGER` |
+| `aws-roles-anywhere` | AWS Secrets Manager REST API with SigV4 signed requests using short-lived credentials from IAM Roles Anywhere | X.509 certificate from the machine certificate store, exchanged via Roles Anywhere (`AWS_REGION`/`AWS_DEFAULT_REGION` + `AWS_ROLES_ANYWHERE_ROLE_ARN`/`AWS_ROLES_ANYWHERE_PROFILE_ARN`/`AWS_ROLES_ANYWHERE_TRUST_ANCHOR_ARN`/`AWS_ROLES_ANYWHERE_CERT_SHA1`) | Yes, HTTPS; http only on this machine via `AWS_ENDPOINT_URL_SECRETS_MANAGER` |
 
 **Agent safety with secrets**:
 

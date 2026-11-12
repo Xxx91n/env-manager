@@ -38,6 +38,10 @@ _Avoid_: credential blob, encrypted value, masked value
 The component that encrypts a secret or fetches it from a remote store. The app ships nine providers.
 _Avoid_: backend, secret manager, broker
 
+**Endpoint override**:
+A setting that makes one provider send its requests to a different address instead of the real service, so you can run against a local stand-in. Production leaves it unset.
+_Avoid_: endpoint hook, custom endpoint, base URL
+
 **Secret envelope**:
 The stored form of one secret, written by the provider. It either holds the encrypted form or names where the provider keeps the value.
 _Avoid_: ciphertext blob, secret record, stored blob

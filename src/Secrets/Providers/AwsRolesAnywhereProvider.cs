@@ -65,6 +65,10 @@ internal sealed class AwsRolesAnywhereProvider : ISecretProvider
     public void ProbeReadOnly()
     {
         var options = RequireOptions("probe");
+        // A bad Secrets Manager endpoint makes the provider unusable even though the
+        // probe only touches the certificate exchange: answer at config time, where the
+        // user can still fix the variable, instead of on the first add-secret.
+        AwsEndpointOverride.RequireSafeEndpoint(Name, "probe", AwsEndpointOverride.SecretsManager);
         _ = Session(options, "probe");
     }
 
@@ -152,9 +156,12 @@ internal sealed class AwsRolesAnywhereProvider : ISecretProvider
     private HttpResponseMessage SendWithSession(string secretsRegion, string operation, string target, string body)
     {
         var options = RequireOptions(operation);
+        // Check the Secrets Manager endpoint before the certificate exchange: a request
+        // that can never be sent should not cost a session round trip first.
+        string? endpointOverride = AwsEndpointOverride.RequireSafeEndpoint(Name, operation, AwsEndpointOverride.SecretsManager);
         RolesAnywhereSession session = Session(options, operation);
         return AwsSigV4Client.Call(Name, operation, secretsRegion, SERVICE, "/", target, body,
-            "application/x-amz-json-1.1", session.Credentials, AwsEndpointOverride.SecretsManager,
+            "application/x-amz-json-1.1", session.Credentials, endpointOverride,
             Timeout, _sender);
     }
 

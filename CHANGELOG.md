@@ -139,6 +139,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - 联网提供者的可用性探测新增只读模式：提供者声明不会写数据时，探测只验证身份，不再执行加密再删除。目前只有 `aws-roles-anywhere` 这样声明；`vault-kv2`、`azure-keyvault`、`aws-secretsmanager` 的行为保持不变。
 
 ### Fixed
+- `AWS_ENDPOINT_URL_SECRETS_MANAGER` 指向非本机的 `http://` 地址时现在会被拒绝，报错点名变量但不会把地址本身写进日志。以前这个覆盖值直接拼进请求地址，不做协议和主机检查，签名请求和会话 token 会以明文发到任意主机。两个 AWS 提供者的读写共用同一处检查；`https://` 任何主机照常可用，本机的 http 照常可用，所以本地模拟器和现有测试不受影响。
 - sops 明文临时目录由服务拥有并回收：停服务打断 rotate 后，服务在被终止的 helper 释放句柄的窗口内删除整棵临时目录树（有限重试），不再无声遗留 `env-manager-sops-*`；回退与删除失败均留痕（#177）
 
 ## [0.12.0] - 2026-09-09

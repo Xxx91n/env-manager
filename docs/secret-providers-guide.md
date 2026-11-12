@@ -27,7 +27,7 @@ Every provider declares its capability descriptors on `ISecretProvider`, and `pr
 | sops | no (CreatedOnly) | no | no | resolved sops binary exists |
 | azure-keyvault | yes (Periodic) | yes (SP certificate) | yes | AZURE_KEYVAULT_URI set |
 | 1password | yes (Periodic) | no | yes | resolved op binary exists |
-| aws-secretsmanager | yes (Periodic) | no (IAM role / keys) | yes | region + access key + secret key set |
+| aws-secretsmanager | yes (Periodic) | no (static access keys) | yes | region + access key + secret key set |
 | aws-roles-anywhere | yes (Periodic) | yes (certificate) | yes | region + role, profile and trust-anchor ARNs + certificate SHA-1 set |
 
 Network providers additionally survive a probe before `list` reports them available (the same check `set` has always run); local providers never probe. The probe kind differs by where the provider keeps its data: an ordinary network provider runs a sentinel Encrypt/Decrypt/Delete round-trip, while a provider that declares `ProbeWritesData` as false - `aws-roles-anywhere`, whose store is your AWS account - only exchanges its certificate for temporary credentials and writes nothing.
@@ -231,7 +231,7 @@ Official docs: [Secrets Manager REST API](https://docs.aws.amazon.com/secretsman
 ### Prerequisites
 
 - `AWS_REGION` or `AWS_DEFAULT_REGION` env var set to the region hosting your secret (e.g. `us-east-1`).
-- Credentials: `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, optional `AWS_SESSION_TOKEN` (for STS-derived credentials). Or an IAM role via instance metadata in an EC2/ECS context.
+- Credentials: `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, optional `AWS_SESSION_TOKEN` (for STS-derived credentials).
 - IAM permission to `secretsmanager:GetSecretValue` / `PutSecretValue` / `DeleteSecretValue` for the secret.
 
 ### One-time setup
@@ -252,6 +252,18 @@ Error: `Cannot activate provider 'aws-secretsmanager': AWS_REGION or AWS_DEFAULT
 
 Fix: set `AWS_REGION` (and credentials) env vars, restart Env Manager, then retry.
 
+### Local emulator (LocalStack and similar)
+
+Set `AWS_ENDPOINT_URL_SECRETS_MANAGER` to the emulator address to send every Secrets Manager call there instead of AWS. This is the official AWS service-specific endpoint override.
+
+```powershell
+setx AWS_ENDPOINT_URL_SECRETS_MANAGER http://127.0.0.1:4566
+# The service runs as its own account and cannot see a per-user variable:
+setx /M AWS_ENDPOINT_URL_SECRETS_MANAGER http://127.0.0.1:4566
+```
+
+`https://` works for any address. `http://` works only for a host on this machine (the loopback range, `localhost`, `[::1]`); plain http to any other host is refused, because the signed request and its session token would travel in clear text. An address that is neither `http://` nor `https://` is refused too. Production deployments leave this variable unset. Restart the service after setting the machine-level copy.
+
 ---
 
 ## AWS IAM Roles Anywhere
@@ -265,6 +277,8 @@ Re-adding under a new name is what `add-secret` does: it always calls `CreateSec
 ### How the exchange works
 
 The request is a signed `POST /sessions`. The signature differs from ordinary SigV4 in four ways, all handled inside Env Manager: the algorithm name is `AWS4-X509-RSA-SHA256` or `AWS4-X509-ECDSA-SHA256`, the credential scope names the certificate serial number in decimal instead of an access key, the certificate itself travels in a signed `X-Amz-X509` header (with intermediates in `X-Amz-X509-Chain`), and the signature is made with the certificate's private key instead of a derived HMAC key.
+
+That exchange always goes to the real AWS address. `AWS_ENDPOINT_URL_SECRETS_MANAGER` does not redirect it, only the Secrets Manager calls that follow.
 
 ### Prerequisites
 
