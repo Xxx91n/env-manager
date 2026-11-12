@@ -151,17 +151,24 @@ public sealed class AwsEndpointOverrideTests : IDisposable
         listener.Start();
         int port = ((System.Net.IPEndPoint)listener.LocalEndpoint).Port;
         string received = "";
+        Exception? stubError = null;
 
+        // The stub runs on its own thread because the sender blocks the test thread for
+        // the whole round trip. Any fault is kept and re-thrown below: an unhandled
+        // exception on a thread stops the whole test process, background or not.
         var serverThread = new System.Threading.Thread(() =>
         {
-            using var socket = listener.AcceptTcpClient();
-            using var stream = socket.GetStream();
-            var buffer = new byte[8192];
-            int read = stream.Read(buffer, 0, buffer.Length);
-            received = System.Text.Encoding.ASCII.GetString(buffer, 0, read);
-            byte[] reply = System.Text.Encoding.ASCII.GetBytes(
-                "HTTP/1.1 307 Temporary Redirect\r\nLocation: http://127.0.0.1:1/elsewhere\r\nContent-Length: 0\r\nConnection: close\r\n\r\n");
-            stream.Write(reply, 0, reply.Length);
+            try
+            {
+                using var socket = listener.AcceptTcpClient();
+                using var stream = socket.GetStream();
+                stream.ReadTimeout = 5000;
+                received = ReadRequestThroughBody(stream);
+                byte[] reply = System.Text.Encoding.ASCII.GetBytes(
+                    "HTTP/1.1 307 Temporary Redirect\r\nLocation: http://127.0.0.1:1/elsewhere\r\nContent-Length: 0\r\nConnection: close\r\n\r\n");
+                stream.Write(reply, 0, reply.Length);
+            }
+            catch (Exception ex) { stubError = ex; }
         }) { IsBackground = true, Name = "em-redirect-stub" };
         serverThread.Start();
 
@@ -176,12 +183,44 @@ public sealed class AwsEndpointOverrideTests : IDisposable
 
             Assert.Equal(System.Net.HttpStatusCode.TemporaryRedirect, response.StatusCode);
             Assert.True(serverThread.Join(TimeSpan.FromSeconds(10)), "redirect stub did not finish");
+            if (stubError != null) throw new InvalidOperationException("redirect stub faulted", stubError);
             Assert.Contains("em-canary", received);
         }
         finally
         {
             listener.Stop();
+            serverThread.Join(TimeSpan.FromSeconds(5));
         }
+    }
+
+    // One Read can stop inside the headers, so the body is read separately by the length
+    // the headers declare. Returns the raw bytes so the caller can assert on the payload.
+    private static string ReadRequestThroughBody(System.Net.Sockets.NetworkStream stream)
+    {
+        var text = new System.Text.StringBuilder();
+        var buffer = new byte[4096];
+        int contentLength = -1;
+        int headerEnd = -1;
+        while (headerEnd < 0 || text.Length < headerEnd + 4 + contentLength)
+        {
+            int read = stream.Read(buffer, 0, buffer.Length);
+            if (read == 0) break;
+            text.Append(System.Text.Encoding.ASCII.GetString(buffer, 0, read));
+            if (headerEnd < 0)
+            {
+                int at = text.ToString().IndexOf("\r\n\r\n", StringComparison.Ordinal);
+                if (at >= 0)
+                {
+                    headerEnd = at;
+                    foreach (string line in text.ToString().Split("\r\n"))
+                    {
+                        if (line.StartsWith("Content-Length:", StringComparison.OrdinalIgnoreCase))
+                            contentLength = int.Parse(line.Substring("Content-Length:".Length).Trim());
+                    }
+                }
+            }
+        }
+        return text.ToString();
     }
 
     private static void SetCredentials(string endpoint)
