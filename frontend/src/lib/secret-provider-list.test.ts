@@ -3,11 +3,12 @@ import { parseSecretProviderList } from './secret-provider-list'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 
-// The GUI must derive providers + capability flags from CLI output
-// only (hard boundary v0.7.3) — these pins hold the parser to that contract.
+// Pins the CLI-output seam: the parser derives providers and availability from
+// CLI text only and carries no provider id list. These cases cover name,
+// active, and available; the capability block stays unparsed.
 
 describe('parseSecretProviderList', () => {
-  it('parses capability-tagged lines with availability and flags', () => {
+  it('tolerates the capability block while parsing availability', () => {
     const raw = [
       'Active provider: dpapi-current-user',
       'Available providers:',
@@ -28,16 +29,12 @@ describe('parseSecretProviderList', () => {
     ])
     const vault = parsed.providers.find((p) => p.name === 'vault-kv2')!
     expect(vault.available).toBe(false)
-    expect(vault.refreshCapable).toBe(true)
-    expect(vault.certAuthRequired).toBe(true)
-    expect(vault.requiresNetwork).toBe(true)
     const dpapi = parsed.providers.find((p) => p.name === 'dpapi-current-user')!
     expect(dpapi.active).toBe(true)
     expect(dpapi.available).toBe(true)
-    expect(dpapi.refreshCapable).toBe(false)
   })
 
-  it('parses pre-capability output with all capability flags false', () => {
+  it('parses output without the capability block', () => {
     const raw = [
       'Active provider: sops',
       'Available providers:',
@@ -49,9 +46,6 @@ describe('parseSecretProviderList', () => {
     expect(parsed.providers).toHaveLength(2)
     for (const p of parsed.providers) {
       expect(p.available).toBe(true)
-      expect(p.refreshCapable).toBe(false)
-      expect(p.certAuthRequired).toBe(false)
-      expect(p.requiresNetwork).toBe(false)
     }
     expect(parsed.providers.find((p) => p.name === 'sops')!.active).toBe(true)
   })

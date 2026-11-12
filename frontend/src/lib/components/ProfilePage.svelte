@@ -100,9 +100,9 @@ import { parseSecretProviderList } from '../secret-provider-list'
   async function loadProviderInfo() {
     try {
       const result = await secretProviderList()
-      // Capability-aware generic parse — no hardcoded provider id list
-      // (hard boundary v0.7.3). Availability flags come from the CLI
-      // line data; pre-capability CLI output parses with all flags false.
+      // Generic CLI-output parse (no hardcoded provider id list). Availability
+      // comes from the CLI line data; output without the capability block
+      // parses the same way.
       const parsed = parseSecretProviderList(result)
       if (parsed.activeProvider) activeProvider = parsed.activeProvider
       availableProviders = parsed.providers.map(p => p.name)
