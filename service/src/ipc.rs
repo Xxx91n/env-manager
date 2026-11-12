@@ -684,6 +684,46 @@ mod tests {
             }
         }
     }
+
+    /// The golden test above pins the samples *file* against a literal; this pins the
+    /// deprecated no-op handlers themselves to the same contract, so the response a
+    /// caller actually receives cannot drift from what the golden sample documents (#293).
+    #[tokio::test]
+    async fn deprecated_refresh_and_reload_answer_the_no_op_contract() {
+        let shutdown = CancellationToken::new();
+        let refresh = process_request(
+            &IpcRequest {
+                method: "refresh".to_string(),
+                mount_id: Some("vault-team".to_string()),
+                id: None,
+                request_id: None,
+            },
+            &shutdown,
+        )
+        .await;
+        assert!(refresh.ok, "a deprecated refresh must answer success");
+        let data = refresh.data.expect("the no-op response carries data");
+        assert_eq!(data["mountId"], "vault-team");
+        assert_eq!(data["refreshed"], false);
+        assert_eq!(data["noop"], true);
+        assert_eq!(data["reason"], DEPRECATED_NOOP_REASON);
+
+        let reload = process_request(
+            &IpcRequest {
+                method: "reload".to_string(),
+                mount_id: None,
+                id: None,
+                request_id: None,
+            },
+            &shutdown,
+        )
+        .await;
+        assert!(reload.ok, "a deprecated reload must answer success");
+        let data = reload.data.expect("the no-op response carries data");
+        assert_eq!(data["reloaded"], false);
+        assert_eq!(data["noop"], true);
+        assert_eq!(data["reason"], DEPRECATED_NOOP_REASON);
+    }
 }
 
 /// Pipe security: the DACL is a property of the instance, so it is asserted against a real
