@@ -382,11 +382,7 @@
       "stopped": "停止",
       "checking": "確認中...",
       "ping": "Ping",
-      "reload": "再読み込み",
       "shutdown": "シャットダウン",
-      "healthy": "正常",
-      "unhealthy": "異常",
-      "refreshBtn": "更新",
       "rotateBtn": "ローテーション"
     },
     "audit": {

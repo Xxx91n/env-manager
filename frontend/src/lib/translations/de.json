@@ -382,11 +382,7 @@
       "stopped": "Gestoppt",
       "checking": "Überprüfen...",
       "ping": "Ping",
-      "reload": "Neu laden",
       "shutdown": "Herunterfahren",
-      "healthy": "Gesund",
-      "unhealthy": "Fehlerhaft",
-      "refreshBtn": "Aktualisieren",
       "rotateBtn": "Rotieren"
     },
     "audit": {

@@ -382,11 +382,7 @@
       "stopped": "중지됨",
       "checking": "확인 중...",
       "ping": "Ping",
-      "reload": "새로고침",
       "shutdown": "종료",
-      "healthy": "정상",
-      "unhealthy": "비정상",
-      "refreshBtn": "새로고침",
       "rotateBtn": "로테이션"
     },
     "audit": {

@@ -278,8 +278,7 @@ pub(crate) async fn run_reconcile_tick_at(mount_path: &Path) -> Result<(), Strin
     }
 
     let now = Utc::now();
-    let mut refreshed_count = 0u32;
-    let mut failed_count = 0u32;
+    let mut checked_count = 0u32;
     let mut skipped_count = 0u32;
     let mut changed = false;
 
@@ -303,18 +302,15 @@ pub(crate) async fn run_reconcile_tick_at(mount_path: &Path) -> Result<(), Strin
             continue;
         }
 
-        match refresh_mount_internal(&mount.provider).await {
-            Ok(()) => {
-                tracing::info!("reconcile: refreshed mount {} (provider={})", mount.id, mount.provider);
-                mount.lastFetchedAt = Some(now.to_rfc3339());
-                refreshed_count += 1;
-                changed = true;
-            }
-            Err(e) => {
-                tracing::warn!("reconcile: failed to refresh mount {}: {}", mount.id, e);
-                failed_count += 1;
-            }
-        }
+        // The tick's only remaining per-mount duty is stamping `lastFetchedAt` to record
+        // that a metadata check ran - no provider call, no decryption (#293: the IPC
+        // `refresh` command no longer routes through anything here, it answers a
+        // deprecated no-op). The whole stamping scan goes away with the next ticket on
+        // the #292 spec.
+        tracing::info!("reconcile: metadata check on mount {} (provider={})", mount.id, mount.provider);
+        mount.lastFetchedAt = Some(now.to_rfc3339());
+        checked_count += 1;
+        changed = true;
     }
 
     if changed {
@@ -322,8 +318,8 @@ pub(crate) async fn run_reconcile_tick_at(mount_path: &Path) -> Result<(), Strin
     }
 
     tracing::info!(
-        "reconcile tick complete: {} refreshed, {} failed, {} skipped",
-        refreshed_count, failed_count, skipped_count
+        "reconcile tick complete: {} checked, {} skipped",
+        checked_count, skipped_count
     );
     Ok(())
 }
@@ -452,8 +448,9 @@ pub(crate) async fn rotate_mount_at_with_pipe_drain(
     // call: a delegated rotation writes each rotated envelope back into the mount that owns
     // it (the profile only holds `mount:<id>`), so `mounts` is stale by now and saving it
     // would restore the pre-rotation envelopes - silently undoing the rotation this call is
-    // about to record. Only the `lastRotatedAt` stamp is ours to write; `lastFetchedAt` is
-    // no longer written by the service at all (#293).
+    // about to record. Only the `lastRotatedAt` stamp is ours to write; the rotate path
+    // stopped stamping `lastFetchedAt` in #293 (the reconcile tick's stamp is retired with
+    // the next ticket on the #292 spec).
     //
     // The strict read is what keeps "the mount is gone" apart from "the child left a file
     // this build cannot read": the plain loader answers an empty list for both, and the
@@ -490,8 +487,14 @@ pub(crate) async fn rotate_mount_at_with_pipe_drain(
 
 /// Get mount health summary (IPC `health` method).
 pub async fn get_mount_health() -> Result<serde_json::Value, String> {
-    let path = crate::secret_mount_path();
-    let mounts = load_mounts(&path);
+    get_mount_health_at(&crate::secret_mount_path()).await
+}
+
+/// `get_mount_health` with the mount file taken as a parameter - the same seam shape
+/// `run_reconcile_tick_at` has (#293): the tri-state mapping is table-tested against a
+/// temp file instead of real `%LOCALAPPDATA%` / `ProgramData` state.
+pub(crate) async fn get_mount_health_at(path: &Path) -> Result<serde_json::Value, String> {
+    let mounts = load_mounts(path);
 
     let health_list: Vec<MountHealth> = mounts
         .iter()
@@ -529,17 +532,11 @@ pub async fn get_mount_health() -> Result<serde_json::Value, String> {
         })
         .collect();
 
-/// The reconcile tick's per-mount helper. It performs no provider call and no decryption:
-/// the tick's only remaining duty besides debugger detection is stamping `lastFetchedAt`
-/// on due `Periodic` mounts to record that a metadata check ran. The IPC `refresh` command
-/// no longer routes through anything here (#293) - it answers a deprecated no-op - and the
-/// whole stamping scan goes away with the next ticket on the #292 spec.
-async fn refresh_mount_internal(_provider: &str) -> Result<(), String> {
-    tracing::debug!("refresh_mount_internal: mount metadata check completed");
-    Ok(())
+    Ok(serde_json::json!({
+        "mounts": health_list,
+        "total": health_list.len(),
+    }))
 }
-
-/// Rotate a single mount by ID (IPC `rotate` method).
 
 /// Post-exit pipe drain budget paired with a two-way test handshake right before
 /// `drain_pipes_on_exit` starts its deadline (#205).

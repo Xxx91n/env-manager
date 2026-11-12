@@ -382,11 +382,7 @@
       "stopped": "Arrêté",
       "checking": "Vérification...",
       "ping": "Ping",
-      "reload": "Recharger",
       "shutdown": "Arrêter",
-      "healthy": "Sain",
-      "unhealthy": "Défaillant",
-      "refreshBtn": "Rafraîchir",
       "rotateBtn": "Pivoter"
     },
     "audit": {

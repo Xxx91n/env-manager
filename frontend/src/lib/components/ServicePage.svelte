@@ -29,14 +29,16 @@
       unparsableExpiry: 'settings.service.reasonUnparsableExpiry',
       expired: 'settings.service.reasonExpired'
     }
-    const labelKeys: Record<string, string> = {
-      valid: 'settings.service.stateValid',
-      expired: 'settings.service.stateExpired',
-      unverified: 'settings.service.stateUnverified'
+    const byState: Record<string, { label: string; class: string }> = {
+      valid: { label: 'settings.service.stateValid', class: 'text-green-600' },
+      expired: { label: 'settings.service.stateExpired', class: 'text-destructive' },
+      unverified: { label: 'settings.service.stateUnverified', class: 'text-muted-foreground' }
     }
+    const badge = byState[state]
     const reason = mount?.reason ? reasonKeys[mount.reason] : undefined
     return {
-      label: labelKeys[state],
+      label: badge.label,
+      class: badge.class,
       // Hover text: the machine-readable reason localized; fall back to the label itself
       // when the reason is unknown so the tooltip never shows a raw key.
       tooltip: reason ? t(reason) : undefined
@@ -176,7 +178,7 @@
             <span class="font-mono" title={mount.provider}>{localizeProvider(mount.provider, $t)}</span>
             <span class="text-muted-foreground">{mount.name}</span>
             <span
-              class="px-1 rounded {mount.state === 'valid' ? 'text-green-600' : mount.state === 'expired' ? 'text-destructive' : 'text-muted-foreground'}"
+              class="px-1 rounded {badge.class}"
               title={badge.tooltip}
             >{$t(badge.label)}</span>
             <span class="text-muted-foreground">{localizeRefreshPolicy(mount.refreshPolicy, $t)}</span>

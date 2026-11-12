@@ -382,11 +382,7 @@
       "stopped": "Остановлена",
       "checking": "Проверка...",
       "ping": "Ping",
-      "reload": "Перезагрузить",
       "shutdown": "Остановить",
-      "healthy": "Исправен",
-      "unhealthy": "Неисправен",
-      "refreshBtn": "Обновить",
       "rotateBtn": "Ротация"
     },
     "audit": {

@@ -382,11 +382,7 @@
       "stopped": "متوقف",
       "checking": "جارٍ الفحص...",
       "ping": "Ping",
-      "reload": "إعادة تحميل",
       "shutdown": "إيقاف",
-      "healthy": "سليم",
-      "unhealthy": "معطل",
-      "refreshBtn": "تحديث",
       "rotateBtn": "تدوير"
     },
     "audit": {

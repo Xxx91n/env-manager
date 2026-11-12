@@ -382,11 +382,7 @@
       "stopped": "已停止",
       "checking": "检查中...",
       "ping": "Ping",
-      "reload": "重载",
       "shutdown": "关闭",
-      "healthy": "健康",
-      "unhealthy": "异常",
-      "refreshBtn": "刷新",
       "rotateBtn": "轮换"
     },
     "audit": {
