@@ -16,7 +16,7 @@ The six external providers below require host-side setup. Each section lists the
 
 ### Capability matrix
 
-Every provider declares its capability descriptors on `ISecretProvider`, and `profile secret-provider list` reports them per line as `[refresh=yes|no certauth=yes|no network=yes|no]` plus real availability (`(unavailable)` when the cheap environment gate fails). The `Periodic refresh` column is what the provider declares, and it is what the GUI's refresh-policy dropdown allows; the service-side loop that actually re-reads a `Periodic` mount is still tracked in [this issue](https://github.com/Xxx91n/env-manager/issues/276), so a declared `yes` does not yet mean values refresh on their own.
+Every provider declares its capability descriptors on `ISecretProvider`, and `profile secret-provider list` reports them per line as `[refresh=yes|no certauth=yes|no network=yes|no]` plus real availability (`(unavailable)` when the cheap environment gate fails). The `Periodic refresh` column is what the provider declares, and it is what the Service page in the GUI shows read-only next to each mount (there is no policy picker in the GUI); the service-side loop that actually re-reads a `Periodic` mount is still tracked in [this issue](https://github.com/Xxx91n/env-manager/issues/276), so a declared `yes` does not yet mean values refresh on their own.
 
 | Provider | Periodic refresh | Cert-bound auth | Network | Cheap availability gate |
 |----------|------------------|-----------------|---------|--------------------------|
@@ -323,7 +323,7 @@ If step 4 fails with `CreateSession rejected certificate`, the failure is on the
 
 ### The service does not refresh this provider yet
 
-`RefreshCapable` is `true` and the GUI offers `Periodic`, but the Rust service's periodic pass only stamps mount metadata; it does not call `Decrypt`. That gap is tracked in [#276](https://github.com/Xxx91n/env-manager/issues/276) and applies to every provider, not just this one. Until it lands, a `Periodic` mount keeps its last value until the CLI reads it again on launch.
+`RefreshCapable` is `true`, but the Rust service's periodic pass only stamps mount metadata; it does not call `Decrypt`. That gap is tracked in [#276](https://github.com/Xxx91n/env-manager/issues/276) and applies to every provider, not just this one. Until it lands, a `Periodic` mount keeps its last value until the CLI reads it again on launch.
 
 ---
 

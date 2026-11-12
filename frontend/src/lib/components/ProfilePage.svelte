@@ -58,9 +58,8 @@ import { parseSecretProviderList } from '../secret-provider-list'
   // v0.8 secret provider state
   let activeProvider = $state('dpapi-current-user')
   let availableProviders: string[] = $state([])
-  // Providers the CLI reports as (unavailable) + declared capability flags.
+  // Providers the CLI reports as (unavailable).
   let unavailableProviders: string[] = $state([])
-  let providerCapabilities: Record<string, { refresh: boolean; certauth: boolean; network: boolean }> = {}
 
 
   // Input validation for variable names and PATH entries (v0.7.5 hard boundary).
@@ -102,15 +101,12 @@ import { parseSecretProviderList } from '../secret-provider-list'
     try {
       const result = await secretProviderList()
       // Capability-aware generic parse — no hardcoded provider id list
-      // (hard boundary v0.7.3). Availability and capability flags come from the CLI
+      // (hard boundary v0.7.3). Availability flags come from the CLI
       // line data; pre-capability CLI output parses with all flags false.
       const parsed = parseSecretProviderList(result)
       if (parsed.activeProvider) activeProvider = parsed.activeProvider
       availableProviders = parsed.providers.map(p => p.name)
       unavailableProviders = parsed.providers.filter(p => !p.available).map(p => p.name)
-      providerCapabilities = Object.fromEntries(
-        parsed.providers.map(p => [p.name, { refresh: p.refreshCapable, certauth: p.certAuthRequired, network: p.requiresNetwork }]),
-      )
     } catch {
       // keep defaults
     }

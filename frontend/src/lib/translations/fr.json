@@ -461,7 +461,6 @@
   "profiles.inheritsFrom": "hérité de",
   "profiles.fromProfile": "de",
   "secrets.policy.createdOnly": "Créé uniquement",
-  "secrets.policy.onDemand": "À la demande",
   "secrets.policy.periodic": "Périodique",
   "secrets.providerUnavailable": "indisponible",
   "errors.chunkLoadFailed": "Échec du chargement du composant. Veuillez réessayer.",

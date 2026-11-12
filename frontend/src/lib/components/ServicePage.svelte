@@ -15,7 +15,7 @@
     return translated === key ? provider : translated;
   }
   function localizeRefreshPolicy(policy: string, t: (k: string) => string): string {
-    const map: Record<string, string> = { 'CreatedOnly': 'secrets.policy.createdOnly', 'OnDemand': 'secrets.policy.onDemand', 'Periodic': 'secrets.policy.periodic' };
+    const map: Record<string, string> = { 'CreatedOnly': 'secrets.policy.createdOnly', 'Periodic': 'secrets.policy.periodic' };
     const key = map[policy] || policy;
     const translated = t(key);
     return translated === key ? policy : translated;
