@@ -311,8 +311,12 @@ public sealed class ReadOnlyProbeWireTests
     }
 
     [Fact]
-    public void AwsProbe_MapsAccessDeniedToThePermissionReason()
+    public void AwsProbe_ReportsARefusalAsUnknown_BecauseOneTargetCannotTellTheTwoCausesApart()
     {
+        // A policy scoped to specific secret ARNs refuses this probe name even though real
+        // reads work. Calling that "permission denied" would mark a working provider
+        // unavailable, so the code is `unknown` - the reading is spelled out in the
+        // message instead, and `set` still refuses to activate either way.
         var sender = new RecordingSender(HttpStatusCode.Forbidden,
             "{\"__type\":\"AccessDeniedException\",\"Message\":\"User is not authorized\"}");
         var provider = new AwsSecretsManagerProvider(sender);
@@ -327,7 +331,10 @@ public sealed class ReadOnlyProbeWireTests
                 })));
 
         Assert.NotNull(thrown);
-        Assert.Equal(SecretProviderErrors.ReasonPermission, SecretProviderErrors.ReasonCode(thrown!));
+        Assert.Equal(SecretProviderErrors.ReasonUnknown, SecretProviderErrors.ReasonCode(thrown!));
+        // The message has to name the likely fix, since the code cannot.
+        Assert.Contains("secretsmanager:GetSecretValue", thrown!.Message);
+        Assert.Contains("secret ARNs", thrown.Message);
     }
 
     [Fact]
@@ -352,11 +359,11 @@ public sealed class ReadOnlyProbeWireTests
     }
 
     [Fact]
-    public void AwsProbe_MapsAccessDeniedOnA400ToThePermissionReason()
+    public void AwsProbe_ReportsTheKmsDenialOnA400AsUnknownToo()
     {
         // The KMS-key form of AccessDenied arrives as 400, which FromStatus would class
-        // as "unavailable" - and the GUI would render as "unreachable", pointing the user
-        // at the network when the grant is the missing piece.
+        // as "unavailable" and the GUI would render as "unreachable" - pointing at the
+        // network. It is the same ambiguity as the 403 form: unknown, not permission.
         var sender = new RecordingSender(HttpStatusCode.BadRequest,
             "{\"__type\":\"AccessDeniedException\",\"Message\":\"not authorized for kms:Decrypt\"}");
         var provider = new AwsSecretsManagerProvider(sender);
@@ -371,7 +378,7 @@ public sealed class ReadOnlyProbeWireTests
                 })));
 
         Assert.NotNull(thrown);
-        Assert.Equal(SecretProviderErrors.ReasonPermission, SecretProviderErrors.ReasonCode(thrown!));
+        Assert.Equal(SecretProviderErrors.ReasonUnknown, SecretProviderErrors.ReasonCode(thrown!));
     }
 
     [Fact]

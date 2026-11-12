@@ -318,6 +318,9 @@ const PROVIDER_LIST_CACHE_TTL_MS = 15000
 let providerListCacheData = ''
 let lastProviderListCacheTime = 0
 let providerListReadInFlight: Promise<string> | null = null
+// Bumped by invalidateApiCache so a read that started before a write cannot repopulate
+// the cache with the pre-write answer.
+let providerListGeneration = 0
 
 /**
  * Invalidate all cached data. Called after any write operation to ensure
@@ -345,6 +348,7 @@ export function invalidateApiCache(): void {
   // must not keep showing the previous selection's list.
   lastProviderListCacheTime = 0
   providerListReadInFlight = null
+  providerListGeneration += 1
 }
 
 /**
@@ -1388,14 +1392,27 @@ export async function secretProviderList(): Promise<string> {
 
   // Single-flight: several surfaces mounting at once share one CLI run, which keeps
   // the probe count per page load at one instead of one per mount.
+  //
+  // A read that started BEFORE a write must not repopulate the cache afterwards: the
+  // write's invalidate could not cancel it, so its answer describes the old selection.
+  // The generation is read at start and re-checked on completion; a stale read still
+  // returns its data to its own caller (that caller asked before the write), but it
+  // leaves the cache alone. The in-flight slot is cleared only by the read that owns it,
+  // so a read superseded by a newer one cannot clear the newer one's slot.
   if (providerListReadInFlight === null) {
-    providerListReadInFlight = runRead('profile', ['secret-provider', 'list'])
+    const generation = providerListGeneration
+    const read: Promise<string> = runRead('profile', ['secret-provider', 'list'])
       .then((data) => {
-        providerListCacheData = data
-        lastProviderListCacheTime = Date.now()
+        if (generation === providerListGeneration) {
+          providerListCacheData = data
+          lastProviderListCacheTime = Date.now()
+        }
         return data
       })
-      .finally(() => { providerListReadInFlight = null })
+      .finally(() => {
+        if (providerListReadInFlight === read) providerListReadInFlight = null
+      })
+    providerListReadInFlight = read
   }
   return await providerListReadInFlight
 }

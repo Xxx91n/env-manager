@@ -81,6 +81,10 @@ internal sealed class OnePasswordProvider : ISecretProvider
         }
         if (proc == null)
             throw new SecretProviderUnavailableException(Name, SecretProviderErrors.OpProbe, "Failed to start op process");
+        // Every exit path below - success, nonzero exit, timeout - must release the
+        // process handle and its two redirected pipes. A long-lived host that probes
+        // repeatedly would otherwise accumulate them until a GC happens to run.
+        using var procHandle = proc;
 
         StringBuilder stdoutBuf = new StringBuilder();
         StringBuilder stderrBuf = new StringBuilder();

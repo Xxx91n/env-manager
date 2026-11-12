@@ -279,6 +279,8 @@ internal sealed class SecretProviderManager : ISecretStore
                 "Fix the provider environment first (check the address, TLS and network to the provider).",
             SecretProviderErrors.ReasonTimeout =>
                 "Fix the provider environment first (check the service is responsive and the network is up).",
+            SecretProviderErrors.ReasonUnknown =>
+                "Fix the provider environment first (the probe was refused, and the cause needs checking by hand - the error text above names what to look at).",
             _ => Generic
         };
     }

@@ -53,10 +53,16 @@ internal sealed class AwsSecretsManagerProvider : ISecretProvider
     private static readonly TimeSpan ProbeTimeout = TimeSpan.FromSeconds(5);
 
     // Read-only probe: signed GetSecretValue for a name that cannot exist. Asking for a
-    // missing secret is the cheapest way to prove the credentials may read secrets here,
-    // because it needs exactly the permission a real read needs - `secretsmanager:GetSecretValue`
-    // - and none of the extra ones a ListSecrets call would demand. AWS answers "not found"
-    // as HTTP 400 with `ResourceNotFoundException`, not 404, so the body decides.
+    // missing secret answers ResourceNotFoundException when the identity may read secrets
+    // - it needs exactly the permission a real read needs, `secretsmanager:GetSecretValue`,
+    // and none of the extra ones a ListSecrets call would demand - and AccessDenied when
+    // it may not. AWS answers "not found" as HTTP 400, not 404, so the body decides.
+    //
+    // Known limit: a policy that grants GetSecretValue only on specific secret ARNs
+    // (AWS's documented least-privilege shape) refuses this random name even though real
+    // reads work. One call cannot separate that from an identity that reads nothing, so
+    // the refusal is reported as `unknown` with both readings spelled out rather than
+    // guessed at as `permission`.
     public void ProbeReadOnly()
     {
         string region = Environment.GetEnvironmentVariable("AWS_REGION")
@@ -79,13 +85,17 @@ internal sealed class AwsSecretsManagerProvider : ISecretProvider
             string.Equals(errorType, "ResourceNotFoundException", StringComparison.Ordinal))
             return;
 
-        // AccessDenied arrives as 403 for the plain case and as 400 when the KMS key is
-        // the missing grant; both are a refusal, and FromStatus would call the 400 form
-        // "unavailable", which reads as "network" in the GUI.
+        // AccessDenied on a target that cannot exist is ambiguous, and the two readings
+        // send the user in opposite directions (see the method comment): a policy scoped
+        // to specific secret ARNs refuses this random name even though real reads work.
+        // Reporting `permission` would disable a working provider, so it is `unknown` with
+        // the likely fix spelled out. `set` still refuses to activate.
         if (string.Equals(errorType, "AccessDeniedException", StringComparison.Ordinal) ||
             string.Equals(errorType, "AccessDenied", StringComparison.Ordinal))
-            throw new SecretProviderPermissionDeniedException(Name, SecretProviderErrors.OpProbe,
-                Name + " probe refused (permission denied: " + errorType + ")");
+            throw new SecretProviderProbeInconclusiveException(Name, SecretProviderErrors.OpProbe,
+                Name + " probe was refused (" + errorType +
+                "): the policy may not cover this probe name, or the identity may not read secrets at all; " +
+                "check that the IAM policy grants secretsmanager:GetSecretValue on the secret ARNs this profile uses");
 
         throw SecretProviderErrors.FromStatus(Name, SecretProviderErrors.OpProbe, response.StatusCode, "probe", errorType);
     }

@@ -70,6 +70,18 @@ internal sealed class SecretProviderInvalidEnvelopeException : SecretProviderExc
         : base(provider, operation, message, mountId, inner) { }
 }
 
+// A probe answer that names more than one cause. The AWS probe cannot separate "your
+// policy is scoped to specific secret ARNs, so this probe name is outside it" from "this
+// identity may not read secrets at all"; both come back as AccessDenied. Reporting either
+// one would be a guess, so this family says "unknown" and the message carries both
+// readings. Unused outside the availability probe, which is the only caller that has to
+// classify without knowing.
+internal sealed class SecretProviderProbeInconclusiveException : SecretProviderException
+{
+    public SecretProviderProbeInconclusiveException(string provider, string operation, string message, string? mountId = null, Exception? inner = null)
+        : base(provider, operation, message, mountId, inner) { }
+}
+
 // Classification + mapping helpers shared by the 8 provider adapters.
 internal static class SecretProviderErrors
 {
@@ -93,13 +105,20 @@ internal static class SecretProviderErrors
     // Failure-kind -> reason code for the availability probe. `network` covers the
     // transported-behind-a-dead-end cases (unreachable host, TLS, malformed reply);
     // anything the probe cannot place falls to `unknown` rather than inventing a cause.
-    public static string ReasonCode(Exception ex) => Classify(ex) switch
+    // `unknown` is a real answer here, not a fallback: the AWS probe's AccessDenied covers
+    // both "the policy is scoped to other ARNs" and "this identity reads nothing", so the
+    // cause is genuinely undecidable from one call.
+    public static string ReasonCode(Exception ex) => ex switch
     {
-        CatAuthFailed => ReasonAuth,
-        CatPermissionDenied => ReasonPermission,
-        CatTimeout => ReasonTimeout,
-        CatUnavailable => ReasonNetwork,
-        _ => ReasonUnknown
+        SecretProviderProbeInconclusiveException => ReasonUnknown,
+        _ => Classify(ex) switch
+        {
+            CatAuthFailed => ReasonAuth,
+            CatPermissionDenied => ReasonPermission,
+            CatTimeout => ReasonTimeout,
+            CatUnavailable => ReasonNetwork,
+            _ => ReasonUnknown
+        }
     };
 
     // Adapter operation labels (SecretProviderException.Operation).

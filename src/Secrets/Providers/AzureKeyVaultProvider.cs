@@ -72,13 +72,18 @@ internal sealed class AzureKeyVaultProvider : ISecretProvider
         if (!vaultUri.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
             throw new SecretProviderPermissionDeniedException(Name, SecretProviderErrors.OpProbe, "Azure Key Vault requires HTTPS (TLS mandatory)");
 
-        string token = GetBearerToken(SecretProviderErrors.OpProbe, ProbeTimeout);
+        // One deadline for the whole probe, not 5s per stage: a managed-identity fetch
+        // that fails, a service-principal fetch that succeeds late, and the data-plane GET
+        // would otherwise add up to near 15s, and `list` probes providers one after
+        // another in front of a page load. `list` runs on each profile-editor mount.
+        var deadline = DateTimeOffset.UtcNow.Add(ProbeTimeout);
+        string token = GetBearerToken(SecretProviderErrors.OpProbe, RemainingProbeBudget(deadline));
         string probeName = "env-manager-probe-" + Guid.NewGuid().ToString("N").Substring(0, 12);
         string apiUrl = vaultUri.TrimEnd('/') + "/secrets/" + probeName + "?api-version=" + API_VERSION;
 
         using var client = CreateClient();
         client.DefaultRequestHeaders.Add("Authorization", "Bearer " + token);
-        client.Timeout = ProbeTimeout;
+        client.Timeout = RemainingProbeBudget(deadline);
 
         var response = SecretProviderErrors.Send(Name, SecretProviderErrors.OpProbe,
             () => client.GetAsync(apiUrl).GetAwaiter().GetResult());
@@ -91,6 +96,15 @@ internal sealed class AzureKeyVaultProvider : ISecretProvider
         // A 404 without SecretNotFound is not the answer the probe expects; everything
         // else maps onto the typed family (401 -> auth, 403 -> permission).
         throw SecretProviderErrors.FromStatus(Name, SecretProviderErrors.OpProbe, response.StatusCode, "probe", body);
+    }
+
+    // What is left of the probe budget. A spent budget cannot be handed to HttpClient
+    // (a zero Timeout means "no limit"), so the exhausted case gets a deliberately tiny
+    // positive window: the next request fails fast instead of stalling the page load.
+    private static TimeSpan RemainingProbeBudget(DateTimeOffset deadline)
+    {
+        TimeSpan left = deadline - DateTimeOffset.UtcNow;
+        return left > TimeSpan.FromMilliseconds(100) ? left : TimeSpan.FromMilliseconds(100);
     }
 
     // Envelope: { provider, version, createdAt, targetName (vaultUri|secretName) }
@@ -230,16 +244,22 @@ internal sealed class AzureKeyVaultProvider : ISecretProvider
         return Encrypt(plaintext, context);
     }
 
-    // `timeout` is the budget for each token request; the probe passes its shorter one
-    // so a probe cannot stall for the real calls' full allowance twice over.
+    // `timeout` is the budget for the token acquisition, shared between the two attempts
+    // (the probe passes its remaining deadline so the whole probe stays inside one window;
+    // the real calls keep the 10s default).
     private string GetBearerToken(string operation, TimeSpan? timeout = null)
     {
         if (_cachedToken != null && DateTimeOffset.UtcNow < _tokenExpiry.AddMinutes(-5))
             return _cachedToken;
 
         TimeSpan budget = timeout ?? TimeSpan.FromSeconds(10);
-        string? token = TryGetManagedIdentityToken(budget) ?? TryGetServicePrincipalToken(budget);
-
+        // The managed-identity attempt usually has nothing to talk to off Azure, and it is
+        // tried first. Giving it the whole budget means a service-principal fallback starts
+        // with nothing left, so it gets at most half.
+        TimeSpan firstAttempt = budget > TimeSpan.FromMilliseconds(200)
+            ? TimeSpan.FromMilliseconds(Math.Max(100, budget.TotalMilliseconds / 2))
+            : budget;
+        string? token = TryGetManagedIdentityToken(firstAttempt) ?? TryGetServicePrincipalToken(budget);
         if (string.IsNullOrEmpty(token))
             throw new SecretProviderAuthFailedException(Name, operation,
                 "Failed to obtain Azure access token. Either run on an Azure VM with managed identity, " +

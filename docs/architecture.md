@@ -433,7 +433,7 @@ Phase 6 (SOPS Encrypted Envelopes) and Phase 7 (Azure Key Vault) are implemented
 - PowerShell automation + CI on the same user account: Phase 4 (SecretManagement + SecretStore).
 - Team or production with network access: Phase 5 (HashiCorp Vault) or Phase 7 (Azure Key Vault).
 - GitOps workflow with secrets in version control: Phase 6 (sops).
-- On-premises or service-hosted AWS access without a long-lived access key: `aws-roles-anywhere`, which exchanges a certificate from `Cert:\LocalMachine\My` for short-lived credentials. Every network provider's probe now writes nothing (`ISecretProvider.ProbeWritesData` = false): Roles Anywhere exchanges the certificate once, and the other four read a name that cannot exist (#277), because the stores they would write into are customer accounts.
+- On-premises or service-hosted AWS access without a long-lived access key: `aws-roles-anywhere`, which exchanges a certificate from `Cert:\LocalMachine\My` for short-lived credentials. Every network provider's probe now writes nothing (`ISecretProvider.ProbeWritesData` = false), because the stores they would write into are customer accounts (#277): Vault and Azure read a name that cannot exist, AWS sends `GetSecretValue` for one, 1Password runs `op whoami`, and Roles Anywhere exchanges the certificate once.
 
 Each phase is opt-in via secret-providers.json; the default remains Phase 0 so existing installations upgrade without reconfiguration.
 

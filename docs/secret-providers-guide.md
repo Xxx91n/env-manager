@@ -36,15 +36,16 @@ Network providers additionally survive a probe before `list` reports them availa
 |----------|----------------------|-----------------------|
 | vault-kv2 | `GET /v1/secret/data/env-manager/__env_manager_probe__<random>` | 404 with an empty error list (the token may read that path). 403 is a refusal - a dead token and a missing policy answer the same way, on purpose |
 | azure-keyvault | `GET /secrets/env-manager-probe-<random>?api-version=7.4` | 404 `SecretNotFound` (the identity may read secret values). 401 means no token; 403 means no data-plane role - Key Vault Reader reads metadata and still fails here |
-| aws-secretsmanager | signed `GetSecretValue` for `env-manager-probe-<random>` | HTTP 400 `ResourceNotFoundException` - AWS answers "not found" as 400, not 404. `AccessDenied` is a refusal |
+| aws-secretsmanager | signed `GetSecretValue` for `env-manager-probe-<random>` | HTTP 400 `ResourceNotFoundException` - AWS answers "not found" as 400, not 404. `AccessDenied` is reported as `unknown`, not `permission`: a policy scoped to specific secret ARNs refuses this probe name while real reads still work, and one call cannot tell that apart from an identity that reads nothing |
 | 1password | `op whoami` | Exit code 0. Only the exit code is trusted; the CLI's stderr wording changes between releases |
 | aws-roles-anywhere | one certificate exchange for temporary credentials | The exchange returns a session, and nothing is written |
 
 A provider whose cheap gate fails (no `VAULT_ADDR`, no `op` binary) prints a bare `(unavailable)` and is never probed. When the probe itself fails, the marker names the cause - `(unavailable: auth)`, `permission`, `network`, `timeout`, or `unknown` - and the GUI shows that as a translated sentence. `profile secret-provider set` fails on the same probe and points at the missing credential or role.
 
-Three things the read-only probe does not promise:
+Four things the read-only probe does not promise:
 
 - It does not prove the account may **write**. A token that can read secrets still needs create rights before `add-secret` succeeds; the failure then appears at add-secret time rather than at provider-selection time.
+- An AWS policy that grants `secretsmanager:GetSecretValue` only on specific secret ARNs - the least-privilege shape AWS documents - refuses the random probe name. The marker then reads `(unavailable: unknown)` with the likely cause in the message. Widen the policy to cover `env-manager-probe-*` if you want the probe to pass, or read that marker as "the probe could not decide".
 - It still leaves a read entry in CloudTrail, Key Vault diagnostics, or the Vault audit log, and AWS bills per call. Opening the editor once probes each reachable provider once; the GUI holds the result for 15 seconds so tab switching does not repeat it.
 - A 1Password desktop session that needs a biometric unlock answers `op whoami` with "not signed in" even for a user who could still use the provider. The report is honest but pessimistic; run `op signin` or set `OP_SERVICE_ACCOUNT_TOKEN`.
 
