@@ -1,5 +1,5 @@
 <!-- canonical: ../../README.md -->
-<!-- sync: 952812b58e9c0d3cf82955667674f2f5e7c3ac5f -->
+<!-- sync: 87911a7f5084c33602f70da789a6bf2427757bf6 -->
 
 <div align="center">
 
@@ -170,6 +170,8 @@ Neuf fournisseurs de secrets sont disponibles, chacun étant testé dès que vou
 | 1Password CLI | OP_SERVICE_ACCOUNT_TOKEN | Oui | [Guide](../../docs/secret-providers-guide.md) |
 | AWS Secrets Manager | SigV4 + clés d'accès | Oui | [Guide](../../docs/secret-providers-guide.md) |
 | AWS IAM Roles Anywhere | Certificat du magasin machine échangé contre des identifiants temporaires | Non, pas encore : le service ne relit pas les montages de secrets `Periodic` | [Guide](../../docs/secret-providers-guide.md) |
+
+Dans la colonne « Rafraîchissement automatique », « Oui » signifie que le fournisseur déclare la prise en charge de `Periodic` ; le service ne relit pas encore ces montages de secrets, les valeurs ne se rafraîchissent donc pas d'elles-mêmes aujourd'hui (voir [ce ticket](https://github.com/Xxx91n/env-manager/issues/276)).
 
 Consultez le [Guide des fournisseurs de secrets](../../docs/secret-providers-guide.md) pour voir les prérequis de chaque outil, la configuration initiale et comment corriger les erreurs courantes.
 

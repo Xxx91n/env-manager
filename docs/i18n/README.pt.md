@@ -1,5 +1,5 @@
 <!-- canonical: ../../README.md -->
-<!-- sync: 952812b58e9c0d3cf82955667674f2f5e7c3ac5f -->
+<!-- sync: 87911a7f5084c33602f70da789a6bf2427757bf6 -->
 
 <div align="center">
 
@@ -170,6 +170,8 @@ O sistema conta com nove provedores de segredos. Sempre que você escolhe um pro
 | 1Password CLI | OP_SERVICE_ACCOUNT_TOKEN | Sim | [Guia](../../docs/secret-providers-guide.md) |
 | AWS Secrets Manager | SigV4 + chaves de acesso | Sim | [Guia](../../docs/secret-providers-guide.md) |
 | AWS IAM Roles Anywhere | Certificado do armazenamento da máquina trocado por credenciais temporárias | Não, ainda não: o serviço não relê as montagens de segredos `Periodic` | [Guia](../../docs/secret-providers-guide.md) |
+
+Na coluna "Atualização por temporizador", "Sim" significa que o provedor declara suporte a `Periodic`; o serviço ainda não relê essas montagens de segredos, então os valores não se atualizam sozinhos hoje (veja [este issue](https://github.com/Xxx91n/env-manager/issues/276)).
 
 Veja em [docs/secret-providers-guide.md](../../docs/secret-providers-guide.md) o que cada provedor precisa para funcionar e o passo a passo para resolver problemas comuns.
 

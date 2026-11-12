@@ -1,5 +1,5 @@
 <!-- canonical: ../../README.md -->
-<!-- sync: 952812b58e9c0d3cf82955667674f2f5e7c3ac5f -->
+<!-- sync: 87911a7f5084c33602f70da789a6bf2427757bf6 -->
 
 <div align="center">
 
@@ -170,6 +170,8 @@ flowchart LR
 | 1Password CLI | OP_SERVICE_ACCOUNT_TOKEN | あり | [ガイド](../../docs/secret-providers-guide.md) |
 | AWS Secrets Manager | SigV4 + アクセスキー | あり | [ガイド](../../docs/secret-providers-guide.md) |
 | AWS IAM Roles Anywhere | マシン証明書ストアの証明書を一時的な認証情報に交換 | いいえ、まだです。サービスは `Periodic` マウントを読み直しません | [ガイド](../../docs/secret-providers-guide.md) |
+
+「定期リフレッシュ」列の「あり」は、プロバイダーが `Periodic` 対応を宣言していることを意味します。サービスはまだこれらのマウントを読み直さないため、値が自動的に更新されるわけではありません（[この issue](https://github.com/Xxx91n/env-manager/issues/276) を参照）。
 
 各プロバイダーを使うための準備や初回設定、うまく動かないときの対処法は [docs/secret-providers-guide.md](../../docs/secret-providers-guide.md) をご覧ください。
 

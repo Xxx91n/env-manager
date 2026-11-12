@@ -1,5 +1,5 @@
 <!-- canonical: ../../README.md -->
-<!-- sync: 952812b58e9c0d3cf82955667674f2f5e7c3ac5f -->
+<!-- sync: 87911a7f5084c33602f70da789a6bf2427757bf6 -->
 
 <div align="center">
 
@@ -170,6 +170,8 @@ flowchart LR
 | 1Password CLI | OP_SERVICE_ACCOUNT_TOKEN | Да | [Руководство](../../docs/secret-providers-guide.md) |
 | AWS Secrets Manager | Ключи доступа SigV4 | Да | [Руководство](../../docs/secret-providers-guide.md) |
 | AWS IAM Roles Anywhere | Сертификат из хранилища машины в обмен на временные учётные данные | Нет, пока нет: служба не перечитывает значения `Periodic` | [Руководство](../../docs/secret-providers-guide.md) |
+
+В колонке «Обновление по таймеру» «Да» означает, что провайдер объявляет поддержку `Periodic`; служба пока не перечитывает эти значения, поэтому сами по себе они не обновляются (см. [этот issue](https://github.com/Xxx91n/env-manager/issues/276)).
 
 Подробные требования к каждому провайдеру, первичную настройку и инструкции по решению типичных ошибок смотрите в [docs/secret-providers-guide.md](../../docs/secret-providers-guide.md).
 

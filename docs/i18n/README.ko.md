@@ -1,5 +1,5 @@
 <!-- canonical: ../../README.md -->
-<!-- sync: 952812b58e9c0d3cf82955667674f2f5e7c3ac5f -->
+<!-- sync: 87911a7f5084c33602f70da789a6bf2427757bf6 -->
 
 <div align="center">
 
@@ -170,6 +170,8 @@ flowchart LR
 | 1Password CLI | OP_SERVICE_ACCOUNT_TOKEN | 예 | [가이드](../../docs/secret-providers-guide.md) |
 | AWS Secrets Manager | SigV4 + access keys | 예 | [가이드](../../docs/secret-providers-guide.md) |
 | AWS IAM Roles Anywhere | 컴퓨터 인증서 저장소의 인증서를 임시 자격 증명으로 교환 | 아직 아님: 서비스가 `Periodic` 마운트를 다시 읽지 않음 | [가이드](../../docs/secret-providers-guide.md) |
+
+`Timer Refresh` 열에서 '예'는 공급자가 `Periodic` 지원을 선언했음을 뜻합니다. 서비스가 아직 이 마운트를 다시 읽지 않으므로 값이 저절로 갱신되지는 않습니다 ([이 이슈](https://github.com/Xxx91n/env-manager/issues/276) 참조).
 
 각 제공자별 필수 준비 사항, 최초 설정 방법, 오류 해결 방법은 [docs/secret-providers-guide.md](../../docs/secret-providers-guide.md)를 참고하세요.
 

@@ -1,5 +1,5 @@
 <!-- canonical: ../../README.md -->
-<!-- sync: 952812b58e9c0d3cf82955667674f2f5e7c3ac5f -->
+<!-- sync: 87911a7f5084c33602f70da789a6bf2427757bf6 -->
 
 <div align="center">
 
@@ -170,6 +170,8 @@ Neun Provider stehen bereit und werden beim Auswählen direkt überprüft. Falls
 | 1Password CLI | OP_SERVICE_ACCOUNT_TOKEN | Ja | [Anleitung](../../docs/secret-providers-guide.md) |
 | AWS Secrets Manager | SigV4 + Zugriffsschlüssel | Ja | [Anleitung](../../docs/secret-providers-guide.md) |
 | AWS IAM Roles Anywhere | Zertifikat aus dem Maschinenspeicher gegen temporäre Zugangsdaten getauscht | Nein, noch nicht: Der Dienst liest `Periodic`-Mounts nicht neu | [Anleitung](../../docs/secret-providers-guide.md) |
+
+In der Spalte „Automatisches Auffrischen“ bedeutet „Ja“, dass der Anbieter `Periodic`-Unterstützung deklariert; der Dienst liest diese Mounts noch nicht neu, Werte aktualisieren sich also derzeit nicht von selbst (siehe [dieses Issue](https://github.com/Xxx91n/env-manager/issues/276)).
 
 In [docs/secret-providers-guide.md](../../docs/secret-providers-guide.md) erfahren Sie alles über die jeweiligen Voraussetzungen, die Ersteinrichtung und was bei Fehlern zu tun ist.
 
