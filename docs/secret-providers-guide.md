@@ -231,7 +231,7 @@ Official docs: [Secrets Manager REST API](https://docs.aws.amazon.com/secretsman
 ### Prerequisites
 
 - `AWS_REGION` or `AWS_DEFAULT_REGION` env var set to the region hosting your secret (e.g. `us-east-1`).
-- Credentials: `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, optional `AWS_SESSION_TOKEN` (for STS-derived credentials). Or an IAM role via instance metadata in an EC2/ECS context.
+- Credentials: `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, optional `AWS_SESSION_TOKEN` (for STS-derived credentials).
 - IAM permission to `secretsmanager:GetSecretValue` / `PutSecretValue` / `DeleteSecretValue` for the secret.
 
 ### One-time setup
@@ -252,6 +252,16 @@ Error: `Cannot activate provider 'aws-secretsmanager': AWS_REGION or AWS_DEFAULT
 
 Fix: set `AWS_REGION` (and credentials) env vars, restart Env Manager, then retry.
 
+### Local emulator (LocalStack and similar)
+
+Set `AWS_ENDPOINT_URL_SECRETS_MANAGER` to the emulator address to send every Secrets Manager call there instead of AWS. This is the official AWS service-specific endpoint override.
+
+```powershell
+setx AWS_ENDPOINT_URL_SECRETS_MANAGER http://127.0.0.1:4566
+```
+
+`https://` works for any address. `http://` works only for a host on this machine (`127.0.0.1`, `localhost`, `[::1]`); plain http to any other host is refused, because the signed request and its session token would travel in clear text. An address that is neither `http://` nor `https://` is refused too. Production deployments leave this variable unset.
+
 ---
 
 ## AWS IAM Roles Anywhere
@@ -265,6 +275,8 @@ Re-adding under a new name is what `add-secret` does: it always calls `CreateSec
 ### How the exchange works
 
 The request is a signed `POST /sessions`. The signature differs from ordinary SigV4 in four ways, all handled inside Env Manager: the algorithm name is `AWS4-X509-RSA-SHA256` or `AWS4-X509-ECDSA-SHA256`, the credential scope names the certificate serial number in decimal instead of an access key, the certificate itself travels in a signed `X-Amz-X509` header (with intermediates in `X-Amz-X509-Chain`), and the signature is made with the certificate's private key instead of a derived HMAC key.
+
+That exchange always goes to the real AWS address. `AWS_ENDPOINT_URL_SECRETS_MANAGER` does not redirect it, only the Secrets Manager calls that follow.
 
 ### Prerequisites
 

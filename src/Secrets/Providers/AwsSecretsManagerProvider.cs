@@ -35,7 +35,8 @@ internal sealed class AwsSecretsManagerProvider : ISecretProvider
         !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("AWS_SECRET_ACCESS_KEY"));
 
     // Envelope: { provider, version, createdAt, targetName (region|secretId) }
-    // Uses AWS SigV4 signed REST API calls. TLS mandatory (HTTPS only).
+    // Uses AWS SigV4 signed REST API calls. The default endpoint is https only; an
+    // endpoint override over http:// has to point at this machine.
 
     private const string SERVICE = "secretsmanager";
     private static readonly TimeSpan Timeout = TimeSpan.FromSeconds(15);
@@ -114,8 +115,9 @@ internal sealed class AwsSecretsManagerProvider : ISecretProvider
         // Official AWS service-specific endpoint override convention:
         // AWS_ENDPOINT_URL_SECRETS_MANAGER redirects all Secrets Manager calls -
         // production deployments never set it; the L1 LocalStack emulator does.
-        // TLS stays mandatory for the default endpoint; an explicit override may
-        // use http:// (it is always an opt-in local/emulator endpoint by nature).
+        // https:// works for any host; http:// is accepted only for a host on this
+        // machine, because a remote one would receive the signed request and the
+        // session token in clear text.
         string? endpointOverride = AwsEndpointOverride.SecretsManager;
         string accessKey = Environment.GetEnvironmentVariable("AWS_ACCESS_KEY_ID") ?? "";
         string secretKey = Environment.GetEnvironmentVariable("AWS_SECRET_ACCESS_KEY") ?? "";

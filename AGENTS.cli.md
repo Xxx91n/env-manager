@@ -181,8 +181,8 @@ Registered providers:
 | `sops` | SOPS encrypted JSON envelope; supports Age, PGP, AWS KMS, Azure KV, GCP KMS, Vault | Provider-specific env vars | Yes for cloud KMS |
 | `azure-keyvault` | Azure Key Vault REST API (PUT/GET /secrets/<name>) | Managed Identity (IMDS) or Service Principal (`AZURE_CLIENT_ID`/`AZURE_CLIENT_SECRET`/`AZURE_TENANT_ID`) | Yes, HTTPS only |
 | `1password` | 1Password CLI (`op`) vault item | `OP_ACCOUNT` or `OP_SERVICE_ACCOUNT_TOKEN` | Yes |
-| `aws-secretsmanager` | AWS Secrets Manager REST API with SigV4 signed requests | `AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY`/`AWS_SESSION_TOKEN` | Yes, HTTPS only |
-| `aws-roles-anywhere` | AWS Secrets Manager REST API with SigV4 signed requests using short-lived credentials from IAM Roles Anywhere | X.509 certificate from the machine certificate store, exchanged via Roles Anywhere (`AWS_REGION`/`AWS_DEFAULT_REGION` + `AWS_ROLES_ANYWHERE_ROLE_ARN`/`AWS_ROLES_ANYWHERE_PROFILE_ARN`/`AWS_ROLES_ANYWHERE_TRUST_ANCHOR_ARN`/`AWS_ROLES_ANYWHERE_CERT_SHA1`) | Yes, HTTPS only |
+| `aws-secretsmanager` | AWS Secrets Manager REST API with SigV4 signed requests | `AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY`/`AWS_SESSION_TOKEN` | Yes, HTTPS; http only on this machine via `AWS_ENDPOINT_URL_SECRETS_MANAGER` |
+| `aws-roles-anywhere` | AWS Secrets Manager REST API with SigV4 signed requests using short-lived credentials from IAM Roles Anywhere | X.509 certificate from the machine certificate store, exchanged via Roles Anywhere (`AWS_REGION`/`AWS_DEFAULT_REGION` + `AWS_ROLES_ANYWHERE_ROLE_ARN`/`AWS_ROLES_ANYWHERE_PROFILE_ARN`/`AWS_ROLES_ANYWHERE_TRUST_ANCHOR_ARN`/`AWS_ROLES_ANYWHERE_CERT_SHA1`) | Yes, HTTPS; http only on this machine via `AWS_ENDPOINT_URL_SECRETS_MANAGER` |
 
 **Agent safety with secrets**:
 

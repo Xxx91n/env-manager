@@ -39,7 +39,10 @@ internal static class AwsSigV4Client
         TimeSpan timeout,
         IAwsHttpSender? sender = null)
     {
-        string requestUrl = RequestUrl(region, service, path, endpointOverride);
+        // The override is checked here, the one place every AWS call passes through, so
+        // both providers' read and write paths are covered by the same rule.
+        string? safeOverride = AwsEndpointOverride.RequireSafeEndpoint(provider, operation, endpointOverride);
+        string requestUrl = RequestUrl(region, service, path, safeOverride);
         string signedHost = new Uri(requestUrl).Host;
 
         // One clock read: two separate UtcNow calls can straddle UTC midnight, which

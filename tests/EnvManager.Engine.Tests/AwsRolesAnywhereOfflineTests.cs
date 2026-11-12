@@ -348,6 +348,56 @@ public sealed class AwsRolesAnywhereOfflineTests : IDisposable
     }
 
     [Fact]
+    public void Encrypt_RefusesAPlainHttpOverrideForAnotherHostBeforeTheExchange()
+    {
+        // The endpoint override is shared with aws-secretsmanager, and the check runs
+        // before the certificate exchange: a request that can never be sent must not
+        // cost a session round trip, so nothing reaches the wire at all.
+        using var cert = CreateRsaCertificate(FixedNow.AddDays(-1), FixedNow.AddDays(30));
+        SetIdentity(cert.Thumbprint);
+        Environment.SetEnvironmentVariable("AWS_ENDPOINT_URL_SECRETS_MANAGER", "http://localhost.attacker.com:4566");
+        var sender = new RecordingSender(_ => Json(HttpStatusCode.OK, "{}"));
+        var provider = new AwsRolesAnywhereProvider(sender, cert, () => FixedNow);
+
+        Assert.Throws<SecretProviderPermissionDeniedException>(() => provider.Encrypt("v", "em-ra-ctx"));
+        Assert.Empty(sender.Requests);
+    }
+
+    [Fact]
+    public void Encrypt_StillUsesAPlainHttpOverrideOnThisMachine()
+    {
+        // The emulator case: a loopback override stays usable for the Secrets Manager call.
+        using var cert = CreateRsaCertificate(FixedNow.AddDays(-1), FixedNow.AddDays(30));
+        SetIdentity(cert.Thumbprint);
+        Environment.SetEnvironmentVariable("AWS_ENDPOINT_URL_SECRETS_MANAGER", "http://127.0.0.1:4566");
+        var sender = new RecordingSender(request =>
+            request.RequestUri!.AbsolutePath == "/sessions"
+                ? Json(HttpStatusCode.Created, SessionBody)
+                : Json(HttpStatusCode.OK, "{}"));
+        var provider = new AwsRolesAnywhereProvider(sender, cert, () => FixedNow);
+
+        provider.Encrypt("v", "em-ra-ctx");
+
+        Assert.Contains(sender.Requests, r => r.Request.RequestUri!.IsLoopback);
+    }
+
+    [Fact]
+    public void Probe_RefusesAPlainHttpOverrideForAnotherHost()
+    {
+        // The probe only exchanges the certificate, but a bad Secrets Manager endpoint
+        // makes the provider unusable all the same. It answers here, at config time,
+        // instead of on the first add-secret.
+        using var cert = CreateRsaCertificate(FixedNow.AddDays(-1), FixedNow.AddDays(30));
+        SetIdentity(cert.Thumbprint);
+        Environment.SetEnvironmentVariable("AWS_ENDPOINT_URL_SECRETS_MANAGER", "http://localstack:4566");
+        var sender = new RecordingSender(_ => Json(HttpStatusCode.Created, SessionBody));
+        var provider = new AwsRolesAnywhereProvider(sender, cert, () => FixedNow);
+
+        Assert.Throws<SecretProviderPermissionDeniedException>(() => provider.ProbeReadOnly());
+        Assert.Empty(sender.Requests);
+    }
+
+    [Fact]
     public void CreateSession_ReadsTheCredentialsFromCredentialSetNotTheRoot()
     {
         using var cert = CreateRsaCertificate(FixedNow.AddDays(-1), FixedNow.AddDays(30));
