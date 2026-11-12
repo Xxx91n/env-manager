@@ -418,12 +418,7 @@
   "settings.service.stopped": "متوقف",
   "settings.service.checking": "جارٍ الفحص...",
   "settings.service.ping": "Ping",
-  "settings.service.reload": "إعادة تحميل",
-  "settings.service.reloaded": "تمت إعادة تحميل الخدمة",
   "settings.service.shutdown": "إيقاف",
-  "settings.service.healthy": "سليم",
-  "settings.service.unhealthy": "غير سليم",
-  "settings.service.refreshBtn": "تحديث",
   "settings.service.rotated": "تم تدوير التحميل",
   "settings.service.rotateSkipped": "تم تخطي التحميل المُدار من المزوّد؛ لا توجد حاوية محلية لتدويرها",
   "settings.service.rotateBtn": "تدوير",
@@ -467,5 +462,11 @@
   "common.retry": "إعادة المحاولة",
   "app.minimize": "تصغير",
   "app.maximize": "تكبير",
-  "app.close": "إغلاق"
+  "app.close": "إغلاق",
+  "settings.service.stateValid": "صالح",
+  "settings.service.stateExpired": "منتهي",
+  "settings.service.stateUnverified": "غير مُتحقَّق منه",
+  "settings.service.reasonNoExpiry": "لا يوجد وقت انتهاء مسجل لهذا التحميل، لذا لا يمكن التحقق منه",
+  "settings.service.reasonUnparsableExpiry": "تعذر تحليل وقت الانتهاء المسجل",
+  "settings.service.reasonExpired": "وقت الانتهاء قد مضى"
 }

@@ -1475,32 +1475,12 @@ export async function servicePing(): Promise<{ ok: boolean; data?: any; message?
 }
 
 /**
- * Refresh a single mount by ID.
- * CLI: `service refresh <mountId>` (write — serialised)
- * Returns { ok, data?: { refreshed: true } }
- */
-export async function serviceRefreshMount(mountId: string): Promise<{ ok: boolean; data?: any; message?: string }> {
-  const output = await runWrite('service', ['refresh', mountId])
-  return parseServiceResponse(output)
-}
-
-/**
  * Rotate a single mount by ID.
  * CLI: `service rotate <mountId>` (write — serialised)
  * Returns { ok, data?: { rotated: true } | { rotated: false, skipped: true, skipReason: 'providerManaged' } }
  */
 export async function serviceRotateMount(mountId: string): Promise<{ ok: boolean; data?: any; message?: string }> {
   const output = await runWrite('service', ['rotate', mountId])
-  return parseServiceResponse(output)
-}
-
-/**
- * Reload service config.
- * CLI: `service reload` (write — serialised)
- * Returns { ok, data: { reloaded: true } }
- */
-export async function serviceReload(): Promise<{ ok: boolean; data?: any; message?: string }> {
-  const output = await runWrite('service', ['reload'])
   return parseServiceResponse(output)
 }
 
@@ -1552,8 +1532,9 @@ export async function auditList(): Promise<any> {
 /**
  * Recover mounts from audit ledger (Phase E recovery UX backend).
  * CLI: `audit list --json` then service recover_from_ledger.
- * For now, the recover action is triggered by calling service reload
- * after the migration script has run. The GUI button shows guidance.
+ * The service exposes no recovery entry point today: `service reload` is a deprecated
+ * no-op (#293), not a recovery trigger. This call only reads the ledger; recovery is
+ * triggered by running the migration script, and the GUI button shows guidance.
  */
 export async function auditRecoverFromLedger(): Promise<any> {
   // This is a read+write operation: read the ledger, then write recovered mounts.

@@ -13,11 +13,12 @@ partial class Program
     {
         if (args.Length < 2)
         {
-            Console.Error.WriteLine("Usage: env-manager service <status|ping|health|refresh <id>|rotate <id>|reload|shutdown>");
+            Console.Error.WriteLine("Usage: env-manager service <status|ping|health|refresh <id>|rotate <id>|reload|shutdown> (refresh/reload are deprecated no-ops, removal in v0.16.0)");
             return 1;
         }
 
         string subcommand = args[1].ToLowerInvariant();
+        WriteDeprecationWarningIfAny(subcommand);
         // request_id propagated from Rust run_cli via env var, or generated here.
         string reqId = Environment.GetEnvironmentVariable("ENVMANAGER_REQUEST_ID") ?? "";
         if (string.IsNullOrEmpty(reqId)) reqId = DateTime.Now.ToString("HHmmss") + (new System.Random().Next(0, 9999)).ToString("D4");
@@ -107,6 +108,27 @@ partial class Program
             Console.Error.WriteLine($"Error: failed to connect to service: {ScrubExceptionMessage(ex.Message)}");
             return 1;
         }
+    }
+
+    /// <summary>
+    /// Deprecation warning for the two no-op service verbs (#293): the service has no
+    /// refresh surface and no cache to reload, so both commands answer a success no-op
+    /// from the IPC layer. The warning goes to <c>stderr</c> only, so a script parsing
+    /// <c>stdout</c> keeps receiving the structured response JSON unpolluted; the exit
+    /// code stays 0. Removal is scheduled for v0.16.0.
+    /// </summary>
+    internal static string DeprecationWarningFor(string subcommand) => subcommand switch
+    {
+        "refresh" => "Warning: 'service refresh' is deprecated and performs no operation (values are fetched at CLI launch time); it will be removed in v0.16.0.",
+        "reload" => "Warning: 'service reload' is deprecated and performs no operation (the service reads from disk on every request); it will be removed in v0.16.0.",
+        _ => ""
+    };
+
+    static void WriteDeprecationWarningIfAny(string subcommand)
+    {
+        var warning = DeprecationWarningFor(subcommand);
+        if (warning.Length > 0)
+            Console.Error.WriteLine(warning);
     }
 
     static string EscapeJsonLocal(string s)

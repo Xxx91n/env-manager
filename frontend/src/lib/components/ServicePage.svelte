@@ -3,8 +3,8 @@
  import { t } from 'svelte-i18n'
  import { get as getStore } from 'svelte/store'
   import {
-    serviceStatus, serviceHealth, servicePing, serviceReload,
-    serviceStart, serviceStop, serviceRefreshMount, serviceRotateMount
+    serviceStatus, serviceHealth, servicePing,
+    serviceStart, serviceStop, serviceRotateMount
   } from '../api'
   import { showToast } from '../stores'
   import { frontendLog } from '../settingsStore'
@@ -19,6 +19,28 @@
     const key = map[policy] || policy;
     const translated = t(key);
     return translated === key ? policy : translated;
+  }
+  // Three-state health badge (#293): the old boolean mapped "no expiry data" to green,
+  // which said something the product never did. Unverified is neutral, never green.
+  function healthBadge(mount: any, t: (k: string) => string) {
+    const state = mount?.state === 'valid' || mount?.state === 'expired' ? mount.state : 'unverified'
+    const reasonKeys: Record<string, string> = {
+      noExpiry: 'settings.service.reasonNoExpiry',
+      unparsableExpiry: 'settings.service.reasonUnparsableExpiry',
+      expired: 'settings.service.reasonExpired'
+    }
+    const labelKeys: Record<string, string> = {
+      valid: 'settings.service.stateValid',
+      expired: 'settings.service.stateExpired',
+      unverified: 'settings.service.stateUnverified'
+    }
+    const reason = mount?.reason ? reasonKeys[mount.reason] : undefined
+    return {
+      label: labelKeys[state],
+      // Hover text: the machine-readable reason localized; fall back to the label itself
+      // when the reason is unknown so the tooltip never shows a raw key.
+      tooltip: reason ? t(reason) : undefined
+    }
   }
 
   const tStore = t
@@ -66,19 +88,6 @@
     } finally { serviceLoading = false }
   }
 
-  async function handleServiceReload() {
-    if (serviceLoading || !serviceRunning) return
-    serviceLoading = true
-    serviceError = null
-    try {
-      const result = await serviceReload()
-      if (!result.ok) { serviceError = result.message || 'reload failed' }
-      else { showToast(getStore(tStore)('settings.service.reloaded'), 'success') }
-      await refreshServiceStatus()
-     } catch (err) { serviceError = err instanceof Error ? err.message : String(err); void frontendLog('error', '[ServicePage] ' + (err instanceof Error ? err.message : String(err))).catch(() => {}) }
-    finally { serviceLoading = false }
-  }
-
   async function handleServiceShutdown() {
     if (serviceLoading || !serviceRunning) return
     serviceLoading = true
@@ -102,17 +111,6 @@
       await refreshServiceStatus()
       if (serviceRunning) { showToast(getStore(tStore)('settings.service.started'), 'success') }
       else { serviceError = getStore(tStore)('settings.service.startFailed') }
-     } catch (err) { serviceError = err instanceof Error ? err.message : String(err); void frontendLog('error', '[ServicePage] ' + (err instanceof Error ? err.message : String(err))).catch(() => {}) }
-    finally { serviceLoading = false }
-  }
-
-  async function handleMountRefresh(mountId: string) {
-    if (serviceLoading) return
-    serviceLoading = true
-    try {
-      const result = await serviceRefreshMount(mountId)
-      if (!result.ok) serviceError = result.message || 'refresh failed'
-      await refreshServiceStatus()
      } catch (err) { serviceError = err instanceof Error ? err.message : String(err); void frontendLog('error', '[ServicePage] ' + (err instanceof Error ? err.message : String(err))).catch(() => {}) }
     finally { serviceLoading = false }
   }
@@ -156,10 +154,6 @@
         class="px-2 py-0.5 text-xs font-medium text-muted-foreground border border-border rounded-md hover:bg-muted/20 transition disabled:opacity-50 text-foreground/80 border-border/80 hover:bg-accent">
         {$t('settings.service.ping')}
       </button>
-      <button onclick={handleServiceReload} disabled={serviceLoading || !serviceRunning}
-        class="px-2 py-0.5 text-xs font-medium text-muted-foreground border border-border rounded-md hover:bg-muted/20 transition disabled:opacity-50 text-foreground/80 border-border/80 hover:bg-accent">
-        {$t('settings.service.reload')}
-      </button>
       <button onclick={handleServiceShutdown} disabled={serviceLoading || !serviceRunning}
         class="px-2 py-0.5 text-xs font-medium text-destructive border border-destructive/30 rounded-md hover:bg-destructive/10 transition disabled:opacity-50 border-destructive hover:bg-destructive/20">
         {$t('settings.service.shutdown')}
@@ -177,20 +171,20 @@
     {#if serviceHealthData?.mounts?.length > 0}
       <div class="mt-2 space-y-1 max-h-40 overflow-y-auto list-container">
         {#each serviceHealthData.mounts as mount}
+          {@const badge = healthBadge(mount, $t)}
           <div class="flex items-center gap-2 text-xs px-2 py-1 rounded bg-muted/20 bg-card">
             <span class="font-mono" title={mount.provider}>{localizeProvider(mount.provider, $t)}</span>
             <span class="text-muted-foreground">{mount.name}</span>
-            <span class="px-1 rounded {mount.healthy ? 'text-green-600' : 'text-destructive'}">{mount.healthy ? $t('settings.service.healthy') : $t('settings.service.unhealthy')}</span>
+            <span
+              class="px-1 rounded {mount.state === 'valid' ? 'text-green-600' : mount.state === 'expired' ? 'text-destructive' : 'text-muted-foreground'}"
+              title={badge.tooltip}
+            >{$t(badge.label)}</span>
             <span class="text-muted-foreground">{localizeRefreshPolicy(mount.refreshPolicy, $t)}</span>
             {#if mount.lastFetchedAt}
               <span class="text-muted-foreground ml-auto text-[10px] whitespace-nowrap truncate max-w-[180px]" title={mount.lastFetchedAt}>
                 {new Date(mount.lastFetchedAt).toLocaleString()}
               </span>
             {/if}
-            <button onclick={() => handleMountRefresh(mount.id)} disabled={serviceLoading}
-              class="px-1 text-xs text-primary hover:underline disabled:opacity-50">
-              {$t('settings.service.refreshBtn')}
-            </button>
             <button onclick={() => handleMountRotate(mount.id)} disabled={serviceLoading}
               class="px-1 text-xs text-primary hover:underline disabled:opacity-50">
               {$t('settings.service.rotateBtn')}

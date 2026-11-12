@@ -418,12 +418,7 @@
   "settings.service.stopped": "Parado",
   "settings.service.checking": "Verificando...",
   "settings.service.ping": "Ping",
-  "settings.service.reload": "Recarregar",
-  "settings.service.reloaded": "Serviço recarregado",
   "settings.service.shutdown": "Desligar",
-  "settings.service.healthy": "Saudável",
-  "settings.service.unhealthy": "Com problemas",
-  "settings.service.refreshBtn": "Atualizar",
   "settings.service.rotated": "Montagem rotacionada",
   "settings.service.rotateSkipped": "Montagem gerenciada pelo provedor ignorada; não há envelope local para rotacionar",
   "settings.service.rotateBtn": "Rotacionar",
@@ -467,5 +462,11 @@
   "common.retry": "Tentar novamente",
   "app.minimize": "Minimizar",
   "app.maximize": "Maximizar",
-  "app.close": "Fechar"
+  "app.close": "Fechar",
+  "settings.service.stateValid": "Válido",
+  "settings.service.stateExpired": "Expirado",
+  "settings.service.stateUnverified": "Não verificado",
+  "settings.service.reasonNoExpiry": "Nenhuma hora de expiração registrada para esta montagem, portanto não é possível verificar",
+  "settings.service.reasonUnparsableExpiry": "A hora de expiração registrada não pôde ser interpretada",
+  "settings.service.reasonExpired": "A hora de expiração já passou"
 }

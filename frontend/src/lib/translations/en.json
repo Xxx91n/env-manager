@@ -418,12 +418,7 @@
   "settings.service.stopped": "Stopped",
   "settings.service.checking": "Checking...",
   "settings.service.ping": "Ping",
-  "settings.service.reload": "Reload",
-  "settings.service.reloaded": "Service reloaded",
   "settings.service.shutdown": "Shutdown",
-  "settings.service.healthy": "Healthy",
-  "settings.service.unhealthy": "Unhealthy",
-  "settings.service.refreshBtn": "Refresh",
   "settings.service.rotated": "Mount rotated",
   "settings.service.rotateSkipped": "Provider-managed mount was skipped; no local envelope to rotate",
   "settings.service.rotateBtn": "Rotate",
@@ -467,5 +462,11 @@
   "common.retry": "Retry",
   "app.minimize": "Minimize",
   "app.maximize": "Maximize",
-  "app.close": "Close"
+  "app.close": "Close",
+  "settings.service.stateValid": "Valid",
+  "settings.service.stateExpired": "Expired",
+  "settings.service.stateUnverified": "Unverified",
+  "settings.service.reasonNoExpiry": "No expiry time is recorded for this mount, so it cannot be verified",
+  "settings.service.reasonUnparsableExpiry": "The recorded expiry time could not be parsed",
+  "settings.service.reasonExpired": "The expiry time is in the past"
 }

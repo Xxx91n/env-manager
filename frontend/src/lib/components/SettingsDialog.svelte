@@ -6,7 +6,7 @@
   import { onMount } from 'svelte'
   import { t, locale } from 'svelte-i18n'
   import { locales, defaultLanguage } from '../i18n'
-  import { isCliInPath, addCliToPath, removeCliFromPath, listPathEntries, appVersion, checkUpdatePlugin, downloadAndInstall, bulkImport, bulkExport, pickOpenFile, pickSaveFile, serviceStatus, serviceHealth, servicePing, serviceRefreshMount, serviceRotateMount, serviceShutdown, serviceReload, serviceStart, serviceStop, exportState, importState } from '../api'
+  import { isCliInPath, addCliToPath, removeCliFromPath, listPathEntries, appVersion, checkUpdatePlugin, downloadAndInstall, bulkImport, bulkExport, pickOpenFile, pickSaveFile, serviceStatus, serviceHealth, servicePing, serviceRotateMount, serviceShutdown, serviceStart, serviceStop, exportState, importState } from '../api'
   import { get } from 'svelte/store'
   import { setSetting, frontendLog, getLightweightConfig as getLwConfig, setLightweightConfig as setLwConfig } from '../settingsStore'
   import { showToast } from '../stores'
@@ -186,25 +186,6 @@
     }
   }
 
-  async function handleServiceReload() {
-    if (serviceLoading || !serviceRunning) return
-    serviceLoading = true
-    serviceError = null
-    try {
-      const result = await serviceReload()
-      if (!result.ok) {
-        serviceError = result.message || 'reload failed'
-      } else {
-        showToast(get(tStore)('settings.service.reloaded'), 'success')
-      }
-      await refreshServiceStatus()
-    } catch (err) { void frontendLog('error', '[SettingsDialog] ' + (err instanceof Error ? err.message : String(err))).catch(() => {});
-      serviceError = err instanceof Error ? err.message : String(err)
-    } finally {
-      serviceLoading = false
-    }
-  }
-
   async function handleServiceShutdown() {
     if (serviceLoading || !serviceRunning) return
     serviceLoading = true
@@ -249,22 +230,6 @@
     }
   }
 
-
-  async function handleMountRefresh(mountId: string) {
-    if (serviceLoading) return
-    serviceLoading = true
-    try {
-      const result = await serviceRefreshMount(mountId)
-      if (!result.ok) {
-        serviceError = result.message || 'refresh failed'
-      }
-      await refreshServiceStatus()
-    } catch (err) { void frontendLog('error', '[SettingsDialog] ' + (err instanceof Error ? err.message : String(err))).catch(() => {});
-      serviceError = err instanceof Error ? err.message : String(err)
-    } finally {
-      serviceLoading = false
-    }
-  }
 
   async function handleMountRotate(mountId: string) {
     if (serviceLoading) return

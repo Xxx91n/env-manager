@@ -76,26 +76,49 @@
     },
     {
       "name": "ok_health",
+      "note": "Three-state health (#293). expiresAt is the only health signal and is never written today: absent or unparsable maps to unverified with a machine-readable reason, never to green.",
       "payload": {
         "data": {
           "mounts": [
             {
-              "healthy": true,
               "id": "vault-team",
               "lastFetchedAt": "2026-08-31T10:00:00+00:00",
               "lastRotatedAt": null,
-              "message": null,
               "name": "TEAM_TOKEN",
               "provider": "vault-kv2",
-              "refreshPolicy": "Renew"
+              "reason": null,
+              "refreshPolicy": "Renew",
+              "state": "valid"
             },
             {
-              "healthy": false,
               "id": "cred-app",
-              "message": "expired",
+              "lastFetchedAt": null,
+              "lastRotatedAt": "2026-01-01T00:00:00+00:00",
               "name": "APP_KEY",
               "provider": "credential-manager",
-              "refreshPolicy": "CreatedOnly"
+              "reason": "expired",
+              "refreshPolicy": "CreatedOnly",
+              "state": "expired"
+            },
+            {
+              "id": "sops-docs",
+              "lastFetchedAt": null,
+              "lastRotatedAt": null,
+              "name": "DOC_KEY",
+              "provider": "sops",
+              "reason": "noExpiry",
+              "refreshPolicy": "CreatedOnly",
+              "state": "unverified"
+            },
+            {
+              "id": "aws-stale",
+              "lastFetchedAt": null,
+              "lastRotatedAt": null,
+              "name": "AWS_KEY",
+              "provider": "aws-secretsmanager",
+              "reason": "unparsableExpiry",
+              "refreshPolicy": "Renew",
+              "state": "unverified"
             }
           ]
         },
@@ -103,12 +126,14 @@
       }
     },
     {
-      "name": "ok_refresh",
+      "name": "ok_refresh_noop",
+      "note": "Deprecated no-op (#293): the command stays accepted for old scripts but no longer touches the mount file.",
       "payload": {
         "data": {
-          "lastFetchedAt": "2026-08-31T10:00:00+00:00",
           "mountId": "vault-team",
-          "refreshed": true
+          "noop": true,
+          "reason": "deprecated: this command performs no operation; scheduled for removal in v0.16.0",
+          "refreshed": false
         },
         "ok": true
       }
@@ -129,10 +154,13 @@
       }
     },
     {
-      "name": "ok_reload",
+      "name": "ok_reload_noop",
+      "note": "Deprecated no-op (#293): the service holds no cache, so there is nothing to reload.",
       "payload": {
         "data": {
-          "reloaded": true
+          "noop": true,
+          "reason": "deprecated: this command performs no operation; scheduled for removal in v0.16.0",
+          "reloaded": false
         },
         "ok": true
       }

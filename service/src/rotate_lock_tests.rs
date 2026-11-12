@@ -9,8 +9,8 @@
 // Separate module from `rotate_stop_tests` on purpose: that file pins how a rotation ends
 // when a stop lands, this one pins only what the lock and the in-flight gate cover while it
 // runs - that a second rotation is not blocked behind the first one's child, and that the
-// other two writers of the same file (`refresh_mount` and `run_reconcile_tick_at`) stand down
-// instead of saving a pre-rotation snapshot over it, then resume stamping once no rotation is
+// one other writer of the same file (`run_reconcile_tick_at`) stands down
+// instead of saving a pre-rotation snapshot over it, then resumes stamping once no rotation is
 // in flight (#193).
 //
 // Isolation: temp mount files under `%TEMP%`, removed on drop; no registry, no real
@@ -21,7 +21,7 @@ use std::time::Duration;
 use tokio_util::sync::CancellationToken;
 
 use crate::reconcile::{
-    refresh_mount, rotate_mount_at, rotation_in_flight, run_reconcile_tick_at, ROTATION_TIME_LIMIT,
+    rotate_mount_at, rotation_in_flight, run_reconcile_tick_at, ROTATION_TIME_LIMIT,
 };
 use crate::rotate_stop_tests::{MountFixture, ROTATION_SUITE_GATE};
 use crate::SHUTDOWN_DRAIN;
@@ -112,56 +112,6 @@ async fn a_slow_rotation_does_not_hold_the_reconcile_lock() {
     );
 }
 
-/// Scenario for #161: `refresh_mount`, one of the two other writers of the mount file, stands
-/// down instead of saving a snapshot it took before the child rewrote the envelopes.
-///
-/// Driven through a real rotation rather than a test-only marker, so what is asserted is the
-/// production path: the rotation gets a temp mount file, and `refresh_mount` answers before it
-/// reads any state, so the assertion is the refusal itself. The gate is per service, not per
-/// mount (`ROTATIONS_IN_FLIGHT` is a process-wide count, and a refresh saves the whole mount
-/// file), which is why the id here only names the call. It also pins the "fails fast" half -
-/// the old lock made this call block for the whole delegation, which for a wedged child meant
-/// until it died.
-#[tokio::test]
-async fn refresh_stands_down_while_a_rotation_is_in_flight() {
-    let _suite = ROTATION_SUITE_GATE.read().await;
-    let slow = MountFixture::new("refresh-stand-down");
-    let shutdown = CancellationToken::new();
-    let token = shutdown.clone();
-    let slow_path = slow.path.clone();
-
-    let in_flight = tokio::spawn(async move {
-        rotate_mount_at(
-            &slow_path,
-            STUB_EXE,
-            &STUB_SLOW_ARGS,
-            "mount-1",
-            &token,
-            ROTATION_TIME_LIMIT,
-        )
-        .await
-    });
-
-    // The same ordering the lock test relies on: the rotation has reached its child wait.
-    tokio::time::sleep(Duration::from_millis(300)).await;
-
-    let err = tokio::time::timeout(LOCK_FREE_BUDGET, refresh_mount("mount-1"))
-        .await
-        .expect("a refresh must answer, not queue behind a rotation that may never finish")
-        .expect_err("a refresh must not write the mount file while a rotation owns it");
-    assert!(
-        err.contains("in flight"),
-        "the refusal has to say why, so a caller can retry instead of reporting a broken \
-         mount, got: {err}"
-    );
-
-    // End the slow rotation instead of waiting the 30s stub out.
-    shutdown.cancel();
-    let _ = tokio::time::timeout(SHUTDOWN_DRAIN, in_flight)
-        .await
-        .expect("the stop must terminate and reap the slow child inside SHUTDOWN_DRAIN");
-}
-
 /// Bounded wait for a rotation spawned under the exclusive `ROTATION_SUITE_GATE` write lock to
 /// enter `RotationInFlight` (#193).
 ///
@@ -191,8 +141,9 @@ async fn wait_for_rotation_in_flight<T>(
     }
 }
 
-/// Scenario for #193: the reconcile tick is the third writer of `secretMount.json`, and like
-/// `refresh_mount` it saves a whole snapshot. While a delegated rotation is in flight, the tick
+/// Scenario for #193: the reconcile tick is the one writer left that saves a whole snapshot
+/// of `secretMount.json` (`refresh` stopped touching the file in #293). While a delegated
+/// rotation is in flight, the tick
 /// must skip the interval without touching the file at all - byte-identical on disk and no
 /// `lastFetchedAt` stamp - and without blocking behind the child wait; once the rotation ends and
 /// releases `RotationInFlight`, the next tick stamps `lastFetchedAt` as usual.

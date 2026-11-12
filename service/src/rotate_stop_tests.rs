@@ -273,7 +273,12 @@ async fn completed_rotation_records_the_mount() {
         serde_json::Value::Null,
         "a completed rotate must be recorded, or every later tick replays it"
     );
-    assert_ne!(mounts[0]["lastFetchedAt"], serde_json::Value::Null);
+    assert_eq!(
+        mounts[0]["lastFetchedAt"],
+        serde_json::Value::Null,
+        "a rotation records lastRotatedAt only; the service no longer stamps the \
+         \"value fetched\" time (#293)"
+    );
 }
 
 /// A temp file the tree stub writes its grandchild's pid into, removed on drop so a failing
