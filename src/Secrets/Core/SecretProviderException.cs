@@ -81,11 +81,35 @@ internal static class SecretProviderErrors
     public const string CatInvalidEnvelope = "invalidEnvelope";
     public const string CatUnknown = "unknown";
 
+    // Reason codes carried to the CLI/GUI by an availability-probe failure. They are the
+    // machine-readable half of the `(unavailable: <code>)` marker; the human sentence
+    // lives in the translation files, so a code is never sent as prose.
+    public const string ReasonAuth = "auth";
+    public const string ReasonPermission = "permission";
+    public const string ReasonNetwork = "network";
+    public const string ReasonTimeout = "timeout";
+    public const string ReasonUnknown = "unknown";
+
+    // Failure-kind -> reason code for the availability probe. `network` covers the
+    // transported-behind-a-dead-end cases (unreachable host, TLS, malformed reply);
+    // anything the probe cannot place falls to `unknown` rather than inventing a cause.
+    public static string ReasonCode(Exception ex) => Classify(ex) switch
+    {
+        CatAuthFailed => ReasonAuth,
+        CatPermissionDenied => ReasonPermission,
+        CatTimeout => ReasonTimeout,
+        CatUnavailable => ReasonNetwork,
+        _ => ReasonUnknown
+    };
+
     // Adapter operation labels (SecretProviderException.Operation).
     public const string OpEncrypt = "encrypt";
     public const string OpDecrypt = "decrypt";
     public const string OpRotate = "rotate";
     public const string OpDelete = "delete";
+    // The read-only availability probe (`ISecretProvider.ProbeReadOnly`), so a probe
+    // failure reaching the CLI is labelled as a probe, not as a failed encrypt.
+    public const string OpProbe = "probe";
 
     // Failure-kind bucket for SecretProviderManager.RotateAll classified counting and tests.
     public static string Classify(Exception ex) => ex switch

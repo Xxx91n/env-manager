@@ -18,6 +18,15 @@ namespace EnvManager.Secrets.Providers;
 
 internal sealed class AwsSecretsManagerProvider : ISecretProvider
 {
+    // Test seam only: production always uses the parameterless constructor, so no
+    // environment switch can redirect a signed request. Same shape and same reasoning as
+    // AwsRolesAnywhereProvider's seam.
+    private readonly IAwsHttpSender? _sender;
+
+    public AwsSecretsManagerProvider() { }
+
+    internal AwsSecretsManagerProvider(IAwsHttpSender sender) { _sender = sender; }
+
     public string Name => "aws-secretsmanager";
 
     // Capability descriptors: declared per provider,
@@ -33,6 +42,85 @@ internal sealed class AwsSecretsManagerProvider : ISecretProvider
          !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("AWS_DEFAULT_REGION"))) &&
         !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("AWS_ACCESS_KEY_ID")) &&
         !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("AWS_SECRET_ACCESS_KEY"));
+
+    // The availability probe reads; it never writes. `list` runs on every profile-editor
+    // mount, and the old sentinel round-trip created and then deleted a secret in the
+    // customer's account each time.
+    public bool ProbeWritesData => false;
+
+    // Budget for the read-only probe. Shorter than the real calls' 15s: it sits in front
+    // of a GUI page load.
+    private static readonly TimeSpan ProbeTimeout = TimeSpan.FromSeconds(5);
+
+    // Read-only probe: signed GetSecretValue for a name that cannot exist. Asking for a
+    // missing secret is the cheapest way to prove the credentials may read secrets here,
+    // because it needs exactly the permission a real read needs - `secretsmanager:GetSecretValue`
+    // - and none of the extra ones a ListSecrets call would demand. AWS answers "not found"
+    // as HTTP 400 with `ResourceNotFoundException`, not 404, so the body decides.
+    public void ProbeReadOnly()
+    {
+        string region = Environment.GetEnvironmentVariable("AWS_REGION")
+            ?? Environment.GetEnvironmentVariable("AWS_DEFAULT_REGION")
+            ?? throw new SecretProviderUnavailableException(Name, SecretProviderErrors.OpProbe, "AWS_REGION or AWS_DEFAULT_REGION not set");
+
+        string probeId = "env-manager-probe-" + Guid.NewGuid().ToString("N").Substring(0, 12);
+        string body = AwsSecretsManagerPayload.GetSecretValue(probeId);
+
+        var response = CallAwsApi(region, SecretProviderErrors.OpProbe, "secretsmanager.GetSecretValue", body,
+            () => ProbeTimeout);
+        // The body is read here on purpose: AWS answers "not found" as HTTP 400 with
+        // `ResourceNotFoundException`, not 404, and a refusal as 400/403 with
+        // `AccessDeniedException`, so the exception name is what separates them. The
+        // status still gates the match - a 200 or 500 carrying that name is not the
+        // answer this probe is looking for.
+        string payload = response.Content.ReadAsStringAsync().GetAwaiter().GetResult();
+        string? errorType = ProbeErrorType(payload);
+        if (response.StatusCode == System.Net.HttpStatusCode.BadRequest &&
+            string.Equals(errorType, "ResourceNotFoundException", StringComparison.Ordinal))
+            return;
+
+        // AccessDenied arrives as 403 for the plain case and as 400 when the KMS key is
+        // the missing grant; both are a refusal, and FromStatus would call the 400 form
+        // "unavailable", which reads as "network" in the GUI.
+        if (string.Equals(errorType, "AccessDeniedException", StringComparison.Ordinal) ||
+            string.Equals(errorType, "AccessDenied", StringComparison.Ordinal))
+            throw new SecretProviderPermissionDeniedException(Name, SecretProviderErrors.OpProbe,
+                Name + " probe refused (permission denied: " + errorType + ")");
+
+        throw SecretProviderErrors.FromStatus(Name, SecretProviderErrors.OpProbe, response.StatusCode, "probe", errorType);
+    }
+
+    // The exception name only. AWS error bodies carry the caller ARN and the resource
+    // name, never the secret value, but the adapter's standing rule is to keep raw
+    // service text out of surfaced errors (the service otherwise echoes
+    // `arn:aws:iam::<account>:user/...` into the message). Classification needs nothing
+    // else, so nothing else is read out.
+    private static string? ProbeErrorType(string payload)
+    {
+        if (string.IsNullOrWhiteSpace(payload)) return null;
+        try
+        {
+            using var doc = System.Text.Json.JsonDocument.Parse(payload);
+            // AWS JSON 1.1 spells the discriminator `__type`; some error shapes use `Code`.
+            foreach (string key in new[] { "__type", "Code" })
+            {
+                if (!doc.RootElement.TryGetProperty(key, out var value)) continue;
+                if (value.ValueKind != System.Text.Json.JsonValueKind.String) continue;
+                string exceptionName = value.GetString() ?? "";
+                // Some names arrive namespace-qualified (`com.amazon...:AccessDeniedException`);
+                // the tail is the useful part.
+                int lastColon = exceptionName.LastIndexOf(':');
+                if (lastColon >= 0) exceptionName = exceptionName.Substring(lastColon + 1);
+                if (exceptionName.Length > 64) exceptionName = exceptionName.Substring(0, 64);
+                return exceptionName;
+            }
+            return null;
+        }
+        catch (System.Text.Json.JsonException)
+        {
+            return null;
+        }
+    }
 
     // Envelope: { provider, version, createdAt, targetName (region|secretId) }
     // Uses AWS SigV4 signed REST API calls. The default endpoint is https only; an
@@ -110,7 +198,7 @@ internal sealed class AwsSecretsManagerProvider : ISecretProvider
         return oldEnvelope;
     }
 
-    private static System.Net.Http.HttpResponseMessage CallAwsApi(string region, string operation, string target, string body)
+    private System.Net.Http.HttpResponseMessage CallAwsApi(string region, string operation, string target, string body, Func<TimeSpan>? timeout = null)
     {
         // Official AWS service-specific endpoint override convention:
         // AWS_ENDPOINT_URL_SECRETS_MANAGER redirects all Secrets Manager calls -
@@ -132,6 +220,7 @@ internal sealed class AwsSecretsManagerProvider : ISecretProvider
             "application/x-amz-json-1.1",
             new AwsCredentials(accessKey, secretKey, string.IsNullOrEmpty(sessionToken) ? null : sessionToken),
             string.IsNullOrEmpty(endpointOverride) ? null : endpointOverride,
-            Timeout);
+            timeout?.Invoke() ?? Timeout,
+            _sender);
     }
 }

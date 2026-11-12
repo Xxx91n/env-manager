@@ -20,6 +20,23 @@ namespace EnvManager.Secrets.Providers;
 
 internal sealed class AzureKeyVaultProvider : ISecretProvider
 {
+    // Test seam only: production always uses the parameterless constructor, so no
+    // environment switch can redirect a request. Same shape as AwsRolesAnywhereProvider.
+    private readonly HttpMessageHandler? _handler;
+
+    public AzureKeyVaultProvider() { }
+
+    internal AzureKeyVaultProvider(HttpMessageHandler handler) { _handler = handler; }
+
+    // One place that builds the client, so the seam above covers every request this
+    // adapter sends and a test can assert the probe's own wire traffic.
+    private HttpClient CreateClient()
+    {
+        return _handler == null
+            ? new System.Net.Http.HttpClient()
+            : new System.Net.Http.HttpClient(_handler, disposeHandler: false);
+    }
+
     public string Name => "azure-keyvault";
 
     // Capability descriptors: declared per provider,
@@ -31,6 +48,50 @@ internal sealed class AzureKeyVaultProvider : ISecretProvider
 
     // Cheap gate mirroring Encrypt's fail-fast precondition (no network I/O).
     public bool Available => !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("AZURE_KEYVAULT_URI"));
+
+    // The availability probe reads; it never writes. `list` runs on every
+    // profile-editor mount, and the old sentinel round-trip created and then deleted a
+    // secret in the customer's vault each time.
+    public bool ProbeWritesData => false;
+
+    // Budget for the read-only probe. Shorter than the real calls' 15s for the same
+    // reason the Vault probe is 5s: it sits in front of a GUI page load.
+    private static readonly TimeSpan ProbeTimeout = TimeSpan.FromSeconds(5);
+
+    // Read-only probe: GET a secret name that cannot exist. `SecretNotFound` (404) proves
+    // the identity may read secret values in this vault; 401 means the token could not be
+    // obtained and 403 means the identity authenticated but lacks the data-plane role.
+    // The roles matter here: Key Vault Reader can list metadata and still cannot read a
+    // value, so "the request got an answer" is not enough - only 404 is.
+    public void ProbeReadOnly()
+    {
+        string vaultUri = Environment.GetEnvironmentVariable("AZURE_KEYVAULT_URI")
+            ?? throw new SecretProviderUnavailableException(Name, SecretProviderErrors.OpProbe,
+                "AZURE_KEYVAULT_URI environment variable not set (e.g. https://myvault.vault.azure.net)");
+
+        if (!vaultUri.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
+            throw new SecretProviderPermissionDeniedException(Name, SecretProviderErrors.OpProbe, "Azure Key Vault requires HTTPS (TLS mandatory)");
+
+        string token = GetBearerToken(SecretProviderErrors.OpProbe, ProbeTimeout);
+        string probeName = "env-manager-probe-" + Guid.NewGuid().ToString("N").Substring(0, 12);
+        string apiUrl = vaultUri.TrimEnd('/') + "/secrets/" + probeName + "?api-version=" + API_VERSION;
+
+        using var client = CreateClient();
+        client.DefaultRequestHeaders.Add("Authorization", "Bearer " + token);
+        client.Timeout = ProbeTimeout;
+
+        var response = SecretProviderErrors.Send(Name, SecretProviderErrors.OpProbe,
+            () => client.GetAsync(apiUrl).GetAwaiter().GetResult());
+        string body = response.Content.ReadAsStringAsync().GetAwaiter().GetResult();
+
+        if ((int)response.StatusCode == 404 &&
+            body.Contains("SecretNotFound", StringComparison.OrdinalIgnoreCase))
+            return;
+
+        // A 404 without SecretNotFound is not the answer the probe expects; everything
+        // else maps onto the typed family (401 -> auth, 403 -> permission).
+        throw SecretProviderErrors.FromStatus(Name, SecretProviderErrors.OpProbe, response.StatusCode, "probe", body);
+    }
 
     // Envelope: { provider, version, createdAt, targetName (vaultUri|secretName) }
     // The profile stores only the vault URI and secret name.
@@ -63,7 +124,7 @@ internal sealed class AzureKeyVaultProvider : ISecretProvider
         string payload = "{\"value\":\"" + JsonEscape(plaintext) + "\"}";
         string apiUrl = vaultUri.TrimEnd('/') + "/secrets/" + secretName + "?api-version=" + API_VERSION;
 
-        using var client = new System.Net.Http.HttpClient();
+        using var client = CreateClient();
         client.DefaultRequestHeaders.Add("Authorization", "Bearer " + token);
         client.Timeout = Timeout;
 
@@ -108,7 +169,7 @@ internal sealed class AzureKeyVaultProvider : ISecretProvider
         string token = GetBearerToken(SecretProviderErrors.OpDecrypt);
         string apiUrl = vaultUri.TrimEnd('/') + "/secrets/" + secretName + "?api-version=" + API_VERSION;
 
-        using var client = new System.Net.Http.HttpClient();
+        using var client = CreateClient();
         client.DefaultRequestHeaders.Add("Authorization", "Bearer " + token);
         client.Timeout = Timeout;
 
@@ -151,7 +212,7 @@ internal sealed class AzureKeyVaultProvider : ISecretProvider
                 string token = GetBearerToken(SecretProviderErrors.OpDelete);
                 string apiUrl = vaultUri.TrimEnd('/') + "/secrets/" + secretName + "?api-version=" + API_VERSION;
 
-                using var client = new System.Net.Http.HttpClient();
+                using var client = CreateClient();
                 client.DefaultRequestHeaders.Add("Authorization", "Bearer " + token);
                 client.Timeout = Timeout;
                 SecretProviderErrors.Send(Name, SecretProviderErrors.OpDelete,
@@ -169,12 +230,15 @@ internal sealed class AzureKeyVaultProvider : ISecretProvider
         return Encrypt(plaintext, context);
     }
 
-    private string GetBearerToken(string operation)
+    // `timeout` is the budget for each token request; the probe passes its shorter one
+    // so a probe cannot stall for the real calls' full allowance twice over.
+    private string GetBearerToken(string operation, TimeSpan? timeout = null)
     {
         if (_cachedToken != null && DateTimeOffset.UtcNow < _tokenExpiry.AddMinutes(-5))
             return _cachedToken;
 
-        string? token = TryGetManagedIdentityToken() ?? TryGetServicePrincipalToken();
+        TimeSpan budget = timeout ?? TimeSpan.FromSeconds(10);
+        string? token = TryGetManagedIdentityToken(budget) ?? TryGetServicePrincipalToken(budget);
 
         if (string.IsNullOrEmpty(token))
             throw new SecretProviderAuthFailedException(Name, operation,
@@ -185,7 +249,7 @@ internal sealed class AzureKeyVaultProvider : ISecretProvider
         return token;
     }
 
-    private string? TryGetManagedIdentityToken()
+    private string? TryGetManagedIdentityToken(TimeSpan timeout)
     {
         try
         {
@@ -205,14 +269,14 @@ internal sealed class AzureKeyVaultProvider : ISecretProvider
                     "?api-version=2018-02-01&resource=https://vault.azure.net";
             }
 
-            using var client = new System.Net.Http.HttpClient();
+            using var client = CreateClient();
             client.DefaultRequestHeaders.Add("Metadata", "true");
             string? identityHeader = Environment.GetEnvironmentVariable("IDENTITY_HEADER");
             if (!string.IsNullOrEmpty(identityEndpoint) && !string.IsNullOrEmpty(identityHeader))
             {
                 client.DefaultRequestHeaders.Add("X-IDENT-HEADER", identityHeader);
             }
-            client.Timeout = TimeSpan.FromSeconds(10);
+            client.Timeout = timeout;
 
             var response = client.GetAsync(imdsUrl).GetAwaiter().GetResult();
             if (!response.IsSuccessStatusCode)
@@ -245,7 +309,7 @@ internal sealed class AzureKeyVaultProvider : ISecretProvider
         }
     }
 
-    private string? TryGetServicePrincipalToken()
+    private string? TryGetServicePrincipalToken(TimeSpan timeout)
     {
         string? clientId = Environment.GetEnvironmentVariable("AZURE_CLIENT_ID");
         string? clientSecret = Environment.GetEnvironmentVariable("AZURE_CLIENT_SECRET");
@@ -263,8 +327,8 @@ internal sealed class AzureKeyVaultProvider : ISecretProvider
                 "&scope=" + Uri.EscapeDataString("https://vault.azure.net/.default") +
                 "&grant_type=client_credentials";
 
-            using var client = new System.Net.Http.HttpClient();
-            client.Timeout = TimeSpan.FromSeconds(10);
+            using var client = CreateClient();
+            client.Timeout = timeout;
 
             var content = new System.Net.Http.StringContent(formData, Encoding.UTF8, "application/x-www-form-urlencoded");
             var response = client.PostAsync(tokenUrl, content).GetAwaiter().GetResult();

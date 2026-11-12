@@ -34,6 +34,83 @@ internal sealed class OnePasswordProvider : ISecretProvider
     // falls back to the bare "op" literal when the CLI was not found).
     public bool Available => File.Exists(OP_BINARY);
 
+    // The availability probe reads; it never writes. `list` runs on every profile-editor
+    // mount, and the old sentinel round-trip created and then archived an item in the
+    // customer's account each time.
+    public bool ProbeWritesData => false;
+
+    // Read-only probe: `op whoami` proves the CLI is signed in and its token works
+    // without touching any item. Only the exit code is trusted - the stderr wording
+    // changes between releases, so matching text would make the probe brittle.
+    // Known trade-off: a desktop-app session that needs a biometric unlock answers
+    // "not signed in" here even though an attended user could still use the provider, so
+    // the report is honest but pessimistic. `op --version` stays out of this path; it
+    // proves the binary exists, which the cheap gate already established.
+    public void ProbeReadOnly()
+    {
+        var psi = new System.Diagnostics.ProcessStartInfo
+        {
+            FileName = OP_BINARY,
+            Arguments = "whoami",
+            UseShellExecute = false,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            CreateNoWindow = true,
+            StandardOutputEncoding = Encoding.UTF8,
+            StandardErrorEncoding = Encoding.UTF8
+        };
+
+        string[] opEnvVars = { "OP_ACCOUNT", "OP_SERVICE_ACCOUNT_TOKEN", "OP_ACCESS_TOKEN" };
+        foreach (var envVar in opEnvVars)
+        {
+            var v = Environment.GetEnvironmentVariable(envVar);
+            if (v != null) psi.EnvironmentVariables[envVar] = v;
+        }
+        psi.EnvironmentVariables["NO_PROXY"] = "localhost,127.0.0.1,::1";
+        psi.EnvironmentVariables["no_proxy"] = "localhost,127.0.0.1,::1";
+
+        System.Diagnostics.Process? proc;
+        try
+        {
+            proc = System.Diagnostics.Process.Start(psi);
+        }
+        catch (System.ComponentModel.Win32Exception ex)
+        {
+            throw new SecretProviderNotFoundException(Name, SecretProviderErrors.OpProbe,
+                "1Password CLI (op) not found. Install op and ensure it is on PATH, or set OP_PATH env var.", null, ex);
+        }
+        if (proc == null)
+            throw new SecretProviderUnavailableException(Name, SecretProviderErrors.OpProbe, "Failed to start op process");
+
+        StringBuilder stdoutBuf = new StringBuilder();
+        StringBuilder stderrBuf = new StringBuilder();
+        proc.OutputDataReceived += (_, e) => { if (e.Data != null) stdoutBuf.AppendLine(e.Data); };
+        proc.ErrorDataReceived += (_, e) => { if (e.Data != null) stderrBuf.AppendLine(e.Data); };
+        proc.BeginOutputReadLine();
+        proc.BeginErrorReadLine();
+
+        if (!proc.WaitForExit(ProbeTimeoutMs))
+        {
+            try { proc.Kill(entireProcessTree: true); } catch (Exception killEx) { SecretProviderErrors.SwallowBestEffort(Name, SecretProviderErrors.OpProbe, killEx); }
+            throw new SecretProviderTimeoutException(Name, SecretProviderErrors.OpProbe,
+                "op whoami did not answer within " + (ProbeTimeoutMs / 1000) + "s");
+        }
+        proc.WaitForExit();
+
+        if (proc.ExitCode != 0)
+        {
+            // Exit 1 is the documented "no accounts are currently authenticated" answer
+            // (a missing or expired session, or an invalid service-account token). Any
+            // other code is the CLI failing for a reason the probe cannot name - a bad
+            // Connect configuration, a wrapper error, a crashed binary - so it is reported
+            // as unknown rather than mislabelled as a rejected credential.
+            string detail = "op whoami exited " + proc.ExitCode + ": " + stderrBuf.ToString().Trim();
+            if (proc.ExitCode == 1)
+                throw new SecretProviderAuthFailedException(Name, SecretProviderErrors.OpProbe, detail);
+            throw new SecretProviderUnavailableException(Name, SecretProviderErrors.OpProbe, detail);
+        }
+    }
+
     // Envelope: { provider, version, createdAt, targetName (vault|itemId|field) }
     // The actual secret value is fetched via the 1Password CLI (op) at launch time.
 
