@@ -27,7 +27,7 @@ Every provider declares its capability descriptors on `ISecretProvider`, and `pr
 | sops | no (CreatedOnly) | no | no | resolved sops binary exists |
 | azure-keyvault | yes (Periodic) | yes (SP certificate) | yes | AZURE_KEYVAULT_URI set |
 | 1password | yes (Periodic) | no | yes | resolved op binary exists |
-| aws-secretsmanager | yes (Periodic) | no (IAM role / keys) | yes | region + access key + secret key set |
+| aws-secretsmanager | yes (Periodic) | no (static access keys) | yes | region + access key + secret key set |
 | aws-roles-anywhere | yes (Periodic) | yes (certificate) | yes | region + role, profile and trust-anchor ARNs + certificate SHA-1 set |
 
 Network providers additionally survive a probe before `list` reports them available (the same check `set` has always run); local providers never probe. The probe kind differs by where the provider keeps its data: an ordinary network provider runs a sentinel Encrypt/Decrypt/Delete round-trip, while a provider that declares `ProbeWritesData` as false - `aws-roles-anywhere`, whose store is your AWS account - only exchanges its certificate for temporary credentials and writes nothing.
@@ -260,7 +260,7 @@ Set `AWS_ENDPOINT_URL_SECRETS_MANAGER` to the emulator address to send every Sec
 setx AWS_ENDPOINT_URL_SECRETS_MANAGER http://127.0.0.1:4566
 ```
 
-`https://` works for any address. `http://` works only for a host on this machine (`127.0.0.1`, `localhost`, `[::1]`); plain http to any other host is refused, because the signed request and its session token would travel in clear text. An address that is neither `http://` nor `https://` is refused too. Production deployments leave this variable unset.
+`https://` works for any address. `http://` works only for a host on this machine (the loopback range, `localhost`, `[::1]`); plain http to any other host is refused, because the signed request and its session token would travel in clear text. An address that is neither `http://` nor `https://` is refused too. Production deployments leave this variable unset.
 
 ---
 

@@ -24,7 +24,7 @@ internal sealed class AwsSecretsManagerProvider : ISecretProvider
     // consumed by SecretProviderManager.ListProviders and surfaced through
     // `profile secret-provider list` so the GUI gates on data, not name lists.
     public bool RefreshCapable => true;
-    public bool CertAuthRequired => false;  // IAM role / static keys, no cert
+    public bool CertAuthRequired => false;  // static access keys, no certificate
     public bool RequiresNetwork => true;
 
     // Cheap gate mirroring Encrypt's fail-fast preconditions (no network I/O).
@@ -54,7 +54,7 @@ internal sealed class AwsSecretsManagerProvider : ISecretProvider
         // (retries dedupe).
         string body = AwsSecretsManagerPayload.CreateSecret(target.SecretId, plaintext, Guid.NewGuid().ToString("N"));
         var response = SecretProviderErrors.Send(Name, SecretProviderErrors.OpEncrypt,
-            () => CallAwsApi(region, "secretsmanager.CreateSecret", body), discardRawMessage: true);
+            () => CallAwsApi(region, SecretProviderErrors.OpEncrypt, "secretsmanager.CreateSecret", body), discardRawMessage: true);
         if (!response.IsSuccessStatusCode) throw SecretProviderErrors.FromStatus(Name, SecretProviderErrors.OpEncrypt, response.StatusCode, "create");
 
         var env = new SecretEnvelope { Provider = Name, Version = 1, CreatedAt = DateTimeOffset.UtcNow.ToString("O"), TargetName = target.EnvelopeValue };
@@ -70,7 +70,7 @@ internal sealed class AwsSecretsManagerProvider : ISecretProvider
             ?? throw new SecretProviderInvalidEnvelopeException(Name, SecretProviderErrors.OpDecrypt, "Invalid targetName format", parsed.TargetName);
 
         string body = AwsSecretsManagerPayload.GetSecretValue(target.SecretId);
-        var response = CallAwsApi(target.Region, "secretsmanager.GetSecretValue", body);
+        var response = CallAwsApi(target.Region, SecretProviderErrors.OpDecrypt, "secretsmanager.GetSecretValue", body);
         if (!response.IsSuccessStatusCode) throw SecretProviderErrors.FromStatus(Name, SecretProviderErrors.OpDecrypt, response.StatusCode, "read", mountId: parsed.TargetName);
 
         return SecretProviderErrors.Send(Name, SecretProviderErrors.OpDecrypt, () =>
@@ -91,7 +91,7 @@ internal sealed class AwsSecretsManagerProvider : ISecretProvider
         {
             string body = AwsSecretsManagerPayload.DeleteSecret(target.Value.SecretId);
             SecretProviderErrors.Send(Name, SecretProviderErrors.OpDelete,
-                () => CallAwsApi(target.Value.Region, "secretsmanager.DeleteSecret", body), discardRawMessage: true);
+                () => CallAwsApi(target.Value.Region, SecretProviderErrors.OpDelete, "secretsmanager.DeleteSecret", body), discardRawMessage: true);
         }
         catch (Exception ex) { SecretProviderErrors.SwallowBestEffort(Name, SecretProviderErrors.OpDelete, ex); }
     }
@@ -105,12 +105,12 @@ internal sealed class AwsSecretsManagerProvider : ISecretProvider
         if (target == null) return Encrypt(plaintext, context);
         string body = AwsSecretsManagerPayload.PutSecretValue(target.Value.SecretId, plaintext);
         var resp = SecretProviderErrors.Send(Name, SecretProviderErrors.OpRotate,
-            () => CallAwsApi(target.Value.Region, "secretsmanager.PutSecretValue", body), parsed?.TargetName, discardRawMessage: true);
+            () => CallAwsApi(target.Value.Region, SecretProviderErrors.OpRotate, "secretsmanager.PutSecretValue", body), parsed?.TargetName, discardRawMessage: true);
         if (!resp.IsSuccessStatusCode) throw SecretProviderErrors.FromStatus(Name, SecretProviderErrors.OpRotate, resp.StatusCode, "rotation (PutSecretValue)", mountId: parsed?.TargetName);
         return oldEnvelope;
     }
 
-    private static System.Net.Http.HttpResponseMessage CallAwsApi(string region, string target, string body)
+    private static System.Net.Http.HttpResponseMessage CallAwsApi(string region, string operation, string target, string body)
     {
         // Official AWS service-specific endpoint override convention:
         // AWS_ENDPOINT_URL_SECRETS_MANAGER redirects all Secrets Manager calls -
@@ -123,12 +123,12 @@ internal sealed class AwsSecretsManagerProvider : ISecretProvider
         string secretKey = Environment.GetEnvironmentVariable("AWS_SECRET_ACCESS_KEY") ?? "";
         string sessionToken = Environment.GetEnvironmentVariable("AWS_SESSION_TOKEN") ?? "";
         if (string.IsNullOrEmpty(accessKey) || string.IsNullOrEmpty(secretKey))
-            throw new SecretProviderAuthFailedException("aws-secretsmanager", "aws-api", "AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY required");
+            throw new SecretProviderAuthFailedException("aws-secretsmanager", operation, "AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY required");
 
         // Signing, canonical request and transport live in AwsSigV4Client so the
         // Roles Anywhere provider signs with the same builders instead of a copy.
         return AwsSigV4Client.Call(
-            "aws-secretsmanager", "aws-api", region, SERVICE, "/", target, body,
+            "aws-secretsmanager", operation, region, SERVICE, "/", target, body,
             "application/x-amz-json-1.1",
             new AwsCredentials(accessKey, secretKey, string.IsNullOrEmpty(sessionToken) ? null : sessionToken),
             string.IsNullOrEmpty(endpointOverride) ? null : endpointOverride,

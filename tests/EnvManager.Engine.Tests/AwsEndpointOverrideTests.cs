@@ -7,7 +7,7 @@
 // path: a rejected override fails before any request leaves the process.
 
 using System;
-using System.Net.Http;
+using System.Collections.Generic;
 
 using EnvManager.Secrets.Core;
 using EnvManager.Secrets.Providers;
@@ -26,7 +26,7 @@ public sealed class AwsEndpointOverrideTests : IDisposable
         "AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_SESSION_TOKEN",
     };
 
-    private readonly System.Collections.Generic.Dictionary<string, string?> _saved = new();
+    private readonly Dictionary<string, string?> _saved = new();
 
     public AwsEndpointOverrideTests()
     {
@@ -92,8 +92,12 @@ public sealed class AwsEndpointOverrideTests : IDisposable
 
     // ---- the provider path: a rejected override never reaches the wire ----
 
+    // The provider has no sender seam, so "nothing was sent" is guaranteed structurally:
+    // the check runs inside AwsSigV4Client.Call before any request object exists. What
+    // these tests pin is the refusal itself plus the operation label, which used to be
+    // the constant "aws-api" and now names the verb the caller asked for.
     [Fact]
-    public void SecretsManagerProvider_RefusesPlainHttpToAnotherHostBeforeSending()
+    public void SecretsManagerProvider_RefusesPlainHttpToAnotherHostOnEncrypt()
     {
         SetCredentials("http://localhost.attacker.com:4566");
 
@@ -102,10 +106,12 @@ public sealed class AwsEndpointOverrideTests : IDisposable
 
         Assert.Contains(AwsEndpointOverride.VariableName, ex.Message);
         Assert.Equal("aws-secretsmanager", ex.Provider);
+        Assert.Equal(SecretProviderErrors.OpEncrypt, ex.Operation);
+        Assert.Equal(SecretProviderErrors.CatPermissionDenied, SecretProviderErrors.Classify(ex));
     }
 
     [Fact]
-    public void SecretsManagerProvider_RefusesAnUnparseableOverrideBeforeSending()
+    public void SecretsManagerProvider_RefusesAnUnparseableOverrideOnEncrypt()
     {
         SetCredentials("not an address");
 
@@ -113,9 +119,6 @@ public sealed class AwsEndpointOverrideTests : IDisposable
         Assert.Throws<SecretProviderPermissionDeniedException>(() => provider.Encrypt("value-f1", "em\\VAR"));
     }
 
-    // Decrypt reaches the same CallAwsApi helper, so one path is checked here and the
-    // other two providers' calls are covered by the shared helper above. The envelope is
-    // well-formed so the failure can only come from the endpoint check.
     [Fact]
     public void SecretsManagerProvider_RefusesPlainHttpToAnotherHostOnDecrypt()
     {
@@ -130,7 +133,9 @@ public sealed class AwsEndpointOverrideTests : IDisposable
         };
 
         var provider = new AwsSecretsManagerProvider();
-        Assert.Throws<SecretProviderPermissionDeniedException>(() => provider.Decrypt(parsed.Serialize(), "em\\VAR"));
+        var ex = Assert.Throws<SecretProviderPermissionDeniedException>(() => provider.Decrypt(parsed.Serialize(), "em\\VAR"));
+
+        Assert.Equal(SecretProviderErrors.OpDecrypt, ex.Operation);
     }
 
     private static void SetCredentials(string endpoint)

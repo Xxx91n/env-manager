@@ -43,8 +43,8 @@ internal static class AwsEndpointOverride
         if (endpoint.Scheme == Uri.UriSchemeHttp && !endpoint.IsLoopback)
         {
             throw new SecretProviderPermissionDeniedException(provider, operation,
-                VariableName + " may use http:// only for this machine (127.0.0.1, localhost, [::1]); " +
-                "every other host needs https://");
+                VariableName + " may use http:// only for a host on this machine (the loopback range, " +
+                "localhost, [::1]); every other host needs https://");
         }
 
         return endpointOverride;

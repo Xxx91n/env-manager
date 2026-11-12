@@ -163,7 +163,7 @@ Pass `--debug` or `-d` to enable verbose stderr logging with timestamps. Logs re
 - **System directory writes**: writes to `\Windows`, `\Program Files`, `\Program Files (x86)` blocked
 - **Backup file size**: 50 MB maximum
 - **No plaintext credential storage**: secret values are encrypted by the active secret provider. Plaintext exists only in the short-lived places listed in [docs/plaintext-sinks.md](docs/plaintext-sinks.md): process memory, provider child processes, and (for SOPS) a temp directory removed after the call. A profile stores an encrypted envelope or a `mount:<id>` reference, never plaintext. The generic `add-var`/`edit-var` commands bypass the secret marker and are the known exception.
-- **Network access**: limited to (a) `update check` to the GitHub releases API and (b) secret providers that talk to external vaults (Vault, Azure Key Vault, AWS Secrets Manager, 1Password). All TLS is mandatory (HTTPS) for non-localhost endpoints; localhost-only http is permitted only for 127.0.0.1/localhost/[::1]. All external calls have a 10-15s timeout and fail closed.
+- **Network access**: limited to (a) `update check` to the GitHub releases API and (b) secret providers that talk to external vaults (Vault, Azure Key Vault, AWS Secrets Manager, 1Password). All TLS is mandatory (HTTPS) for non-localhost endpoints; plain http is permitted only on a host of this machine (the loopback address range, `localhost`, `[::1]`). All external calls have a 10-15s timeout and fail closed.
 - **Audit integrity**: every mutating command records its operation. Unknown profile subcommands fail loud; `--force` is the only override and it still records the attempt.
 
 ## v0.8 Secret Providers
