@@ -189,17 +189,24 @@ partial class Program
                 string active = SecretProviderManager.GetActiveProviderName();
                 Console.WriteLine($"Active provider: {active}");
                 Console.WriteLine("Available providers:");
-                foreach (var (name, available) in providers)
+                foreach (var (name, available, reason) in providers)
                 {
                     string marker = name.Equals(active, StringComparison.OrdinalIgnoreCase) ? " (active)" : "";
+                    // The reason code rides the marker as
+                    // `(unavailable: auth|permission|network|timeout|unknown)` and stays
+                    // machine-readable on purpose: the GUI turns the code into a localized
+                    // sentence, so the CLI never ships prose a non-English UI would have to
+                    // translate at runtime. A gate failure (nothing configured yet) carries
+                    // no code and prints the bare `(unavailable)`.
+                    string unavailable = available ? "" : " (unavailable" + (reason == null ? "" : ": " + reason) + ")";
                     // Machine-readable capability descriptors ride the same line; the
                     // GUI parser stays generic (no hardcoded provider id list).
                     var caps = SecretProviderManager.GetCapabilities(name);
                     Console.WriteLine(
-                        $"  {name}{marker}{(available ? "" : " (unavailable)")}" +
+                        $"  {name}{marker}{unavailable}" +
                         $" [refresh={(caps.RefreshCapable ? "yes" : "no")}" +
                         $" certauth={(caps.CertAuthRequired ? "yes" : "no")}" +
-                        $" network={(caps.RequiresNetwork ? "yes" : "no")}");
+                        $" network={(caps.RequiresNetwork ? "yes" : "no")}]");
                 }
                 return 0;
 

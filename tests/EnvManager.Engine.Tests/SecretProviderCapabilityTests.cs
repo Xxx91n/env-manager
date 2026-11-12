@@ -24,26 +24,29 @@ public class SecretProviderCapabilityTests
         public bool RequiresNetwork { get; set; }
         public bool Available { get; set; } = true;
         public bool ProbeThrows { get; set; }
+        /// <summary>When set, the probe throws this instead of a generic exception, so the
+        /// reason-code tests can pin a specific failure family.</summary>
+        public Exception? ProbeThrown { get; set; }
         public bool ProbeWritesData { get; set; } = true;
         public int ReadOnlyProbes { get; private set; }
         public int Writes { get; private set; }
 
         public string Encrypt(string plaintext, string? context = null)
         {
-            if (ProbeThrows) throw new InvalidOperationException("probe failed");
+            if (ProbeThrows) throw ProbeThrown ?? new InvalidOperationException("probe failed");
             Writes++;
             return "fake-envelope";
         }
 
         public string Decrypt(string envelope, string? context = null)
         {
-            if (ProbeThrows) throw new InvalidOperationException("probe failed");
+            if (ProbeThrows) throw ProbeThrown ?? new InvalidOperationException("probe failed");
             return "fake-plaintext";
         }
 
         public void ProbeReadOnly()
         {
-            if (ProbeThrows) throw new InvalidOperationException("probe failed");
+            if (ProbeThrows) throw ProbeThrown ?? new InvalidOperationException("probe failed");
             ReadOnlyProbes++;
         }
     }
@@ -145,6 +148,33 @@ public class SecretProviderCapabilityTests
         Assert.False(p.ProbeWritesData);
     }
 
+    // --- the four cloud/CLI providers: the probe must not write (#277) ---
+
+    // Opening the profile editor calls `serve list`, which probes every network
+    // provider. All four of these keep their data in a customer account, so the
+    // probe has to be read-only: the old sentinel Encrypt/Decrypt/Delete round-trip
+    // created and then deleted a secret on each mount. One row per provider, naming
+    // what the read-only probe is expected to prove.
+    [Theory]
+    [InlineData("vault-kv2")]
+    [InlineData("azure-keyvault")]
+    [InlineData("aws-secretsmanager")]
+    [InlineData("1password")]
+    public void CloudProvider_DeclaresAReadOnlyProbe(string name)
+    {
+        ISecretProvider provider = name switch
+        {
+            "vault-kv2" => new VaultKV2Provider(),
+            "azure-keyvault" => new AzureKeyVaultProvider(),
+            "aws-secretsmanager" => new AwsSecretsManagerProvider(),
+            "1password" => new OnePasswordProvider(),
+            _ => throw new ArgumentOutOfRangeException(nameof(name), name, "unknown provider")
+        };
+        Assert.Equal(name, provider.Name);
+        Assert.True(provider.RequiresNetwork);
+        Assert.False(provider.ProbeWritesData);
+    }
+
     [Fact]
     public void ReadOnlyProbe_IsUsedForProvidersThatDeclareNoWrites()
     {
@@ -157,6 +187,58 @@ public class SecretProviderCapabilityTests
         Assert.True(SecretProviderManager.IsProviderAvailable(writeProbe));
         Assert.Equal(0, writeProbe.ReadOnlyProbes);
         Assert.Equal(1, writeProbe.Writes);
+    }
+
+    // --- the reason reaches the caller instead of being swallowed ---
+
+    [Fact]
+    public void FailedProbe_ReportsAReasonCode_InsteadOfSwallowingIt()
+    {
+        // auth / permission failures carry their own code, so the CLI and the GUI can
+        // say what went wrong instead of printing a bare "(unavailable)".
+        var auth = new FakeProvider
+        {
+            RequiresNetwork = true,
+            ProbeWritesData = false,
+            ProbeThrows = true,
+            ProbeThrown = new SecretProviderAuthFailedException("fake", "probe", "credential rejected")
+        };
+        var (available, reason) = SecretProviderManager.ProbeAvailability(auth);
+        Assert.False(available);
+        Assert.Equal(SecretProviderErrors.ReasonAuth, reason);
+
+        var permission = new FakeProvider
+        {
+            RequiresNetwork = true,
+            ProbeWritesData = false,
+            ProbeThrows = true,
+            ProbeThrown = new SecretProviderPermissionDeniedException("fake", "probe", "permission denied")
+        };
+        var (available2, reason2) = SecretProviderManager.ProbeAvailability(permission);
+        Assert.False(available2);
+        Assert.Equal(SecretProviderErrors.ReasonPermission, reason2);
+    }
+
+    [Fact]
+    public void GateFailure_CarriesNoReason_BecauseNothingWasProbed()
+    {
+        // "unavailable" without a reason is a configuration gap (no VAULT_ADDR, no
+        // op binary); inventing a reason there would send the user chasing a credential
+        // that was never sent.
+        var neverConfigured = new FakeProvider { RequiresNetwork = true, Available = false, ProbeWritesData = false };
+        var (available, reason) = SecretProviderManager.ProbeAvailability(neverConfigured);
+        Assert.False(available);
+        Assert.Null(reason);
+        Assert.Equal(0, neverConfigured.ReadOnlyProbes);
+    }
+
+    [Fact]
+    public void SuccessfulProbe_CarriesNoReason()
+    {
+        var ok = new FakeProvider { RequiresNetwork = true, Available = true, ProbeWritesData = false };
+        var (available, reason) = SecretProviderManager.ProbeAvailability(ok);
+        Assert.True(available);
+        Assert.Null(reason);
     }
 
     // --- GetCapabilities surface ---
@@ -231,9 +313,47 @@ public class SecretProviderCapabilityTests
 
             Environment.SetEnvironmentVariable("VAULT_ADDR", "https://127.0.0.1:1"); // loopback, connect refused instantly - hermetic
             Environment.SetEnvironmentVariable("VAULT_TOKEN", "test-token");
-            // Gate passes; the sentinel probe then fails closed against a
-            // loopback port that refuses connections instantly (no real network).
-            Assert.False(SecretProviderManager.IsProviderAvailable(new VaultKV2Provider()));
+            // Gate passes; the probe then fails closed against a loopback port that
+            // refuses connections instantly (no real network). The failed read is
+            // mapped to the network reason, so `list` can say why.
+            var (available, reason) = SecretProviderManager.ProbeAvailability(new VaultKV2Provider());
+            Assert.False(available);
+            Assert.Equal(SecretProviderErrors.ReasonNetwork, reason);
+        }
+        finally
+        {
+            foreach (var kv in saved) Environment.SetEnvironmentVariable(kv.Key, kv.Value);
+        }
+    }
+
+    // The activate error is parsed by the GUI:
+    //   ProfilePage.svelte: /^Cannot activate provider '([^']+)':\s*(.+?)\s*\.\s*Fix the
+    //   provider environment first/i
+    // Rewording either half silently turns the localized message back into raw CLI text,
+    // so both halves are pinned here. A probe failure is the case worth pinning: the old
+    // message claimed the environment was unconfigured, and that is no longer the likely
+    // cause once the probe is read-only.
+    [Fact]
+    public void ActivateError_KeepsTheTemplateProfilePageParses()
+    {
+        var vars = new[] { "VAULT_ADDR", "VAULT_TOKEN" };
+        var saved = vars.ToDictionary(v => v, v => Environment.GetEnvironmentVariable(v));
+        try
+        {
+            foreach (var v in vars) Environment.SetEnvironmentVariable(v, null);
+            Environment.SetEnvironmentVariable("VAULT_ADDR", "https://127.0.0.1:1");
+            Environment.SetEnvironmentVariable("VAULT_TOKEN", "test-token");
+
+            var ex = Assert.Throws<InvalidOperationException>(() => SecretProviderManager.SetActiveProvider("vault-kv2"));
+
+            // The GUI regex needs this exact skeleton: name in single quotes, the upstream
+            // text, then the trailing hint sentence.
+            Assert.Matches(
+                new System.Text.RegularExpressions.Regex("^Cannot activate provider 'vault-kv2':\\s*.+?\\.\\s*Fix the provider environment first"),
+                ex.Message);
+            // The reason-specific hint must still start with the phrase the regex anchors on.
+            Assert.Equal(SecretProviderErrors.ReasonNetwork,
+                SecretProviderErrors.ReasonCode(new SecretProviderUnavailableException("x", "probe", "probe failed")));
         }
         finally
         {

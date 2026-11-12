@@ -142,17 +142,21 @@ internal sealed class SecretProviderManager : ISecretStore
     }
 
     // List providers with REAL availability: the provider's cheap
-    // declared Available gate first (env config / binary presence, no I/O), then
-    // an end-to-end sentinel probe (same Encrypt/Decrypt/Delete round-trip
-    // SetActiveProvider has used since v0.7.5) for network providers only.
+    // declared Available gate first (env config / binary presence, no I/O), then a
+    // probe for network providers only. The probe's kind is the provider's own choice
+    // (`ISecretProvider.ProbeWritesData`): the four cloud/CLI providers declare false
+    // and are checked read-only, so `list` never creates or deletes a secret in a
+    // customer account. A failure carries a reason code so the caller can say why
+    // instead of printing a bare "(unavailable)".
     // Local providers never probe, so a scrubbed environment stays deterministic
     // with zero network I/O.
-    public static List<(string Name, bool Available)> ListProviders()
+    public static List<(string Name, bool Available, string? Reason)> ListProviders()
     {
-        var result = new List<(string, bool)>();
+        var result = new List<(string, bool, string?)>();
         foreach (var kvp in _providers)
         {
-            result.Add((kvp.Key, IsProviderAvailable(kvp.Value)));
+            var (available, reason) = ProbeAvailability(kvp.Value);
+            result.Add((kvp.Key, available, reason));
         }
         return result;
     }
@@ -166,22 +170,33 @@ internal sealed class SecretProviderManager : ISecretStore
         return (provider.RefreshCapable, provider.CertAuthRequired, provider.RequiresNetwork);
     }
 
-    // Availability computation: declared Available gate, then the
-    // sentinel round-trip for network providers. Internal so capability tests
-    // can pin the composition with fake providers (no network, no cloud).
-    internal static bool IsProviderAvailable(ISecretProvider provider)
+    // Availability computation that keeps the failure reason: declared Available gate
+    // first, then the probe. Internal so capability tests can pin the composition with
+    // fake providers (no network, no cloud). A gate failure is not a probe failure, so
+    // it returns no reason - the environment simply is not configured.
+    internal static (bool Available, string? Reason) ProbeAvailability(ISecretProvider provider)
     {
         try
         {
-            if (!provider.Available) return false;
+            if (!provider.Available) return (false, null);
             ProbeProvider(provider);
-            return true;
+            return (true, null);
         }
-        catch
+        catch (Exception ex)
         {
-            return false;
+            // The reason code is what the CLI and GUI show; this line is what a support
+            // request needs. Without it a failed probe leaves only "(unavailable)", and
+            // issue #277's rule was that the failure must not be silent. DebugLog writes
+            // to stderr only under --debug, so the message is already scrubbed by the
+            // exception family's constructor and never carries a token.
+            Program.DebugLog(provider.Name + " availability probe failed: " + ex.Message);
+            return (false, SecretProviderErrors.ReasonCode(ex));
         }
     }
+
+    // Availability without the reason; the shape the existing pins and the `set`
+    // gate already use.
+    internal static bool IsProviderAvailable(ISecretProvider provider) => ProbeAvailability(provider).Available;
 
     // The probe shared by `list` and `set`: local providers never probe, network
     // providers run the sentinel Encrypt/Decrypt/Delete round-trip, and a provider
@@ -213,26 +228,23 @@ internal sealed class SecretProviderManager : ISecretStore
         if (!_providers.TryGetValue(name, out var provider))
             throw new InvalidOperationException($"Unknown secret provider: {name}");
 
-        // probe the provider with a sentinel Encrypt/Decrypt round-trip
-        // before committing it as the active provider. A provider that cannot
-        // complete the round-trip (pwsh missing module, Vault no VAULT_ADDR,
-        // cloud credentials missing) is REJECTED here so the user gets an
-        // actionable error at config time instead of a CLIXML catastrophe at
-        // add-secret time. This matches the PowerToys pattern of validating
-        // extension dependencies at config time, not at use time.
+        // probe the provider before committing it as the active provider. The probe is
+        // read-only for providers that declare ProbeWritesData=false, so switching
+        // provider cannot create a secret in the customer's account either. A provider
+        // that cannot pass (pwsh missing module, Vault no VAULT_ADDR, cloud credentials
+        // missing, missing role/policy) is REJECTED here so the user gets an actionable
+        // error at config time instead of a CLIXML catastrophe at add-secret time.
+        // The outer template is frozen: ProfilePage.svelte parses this message with a
+        // regex, so only the upstream text below changes with the probe's shape.
         try
         {
-            // Use a truly off-name sentinel so a real profile variable named
-            // "__compat_probe__" never collides. Delete is best-effort because
-            // some providers are pure-local and others have side effects.
             ProbeProvider(provider);
         }
         catch (Exception ex)
         {
             throw new InvalidOperationException(
                 "Cannot activate provider '" + name + "': " + ex.Message +
-                ". Fix the provider environment first (e.g. install pwsh modules, " +
-                "set VAULT_ADDR, or configure cloud credentials).");
+                ". " + ActivationHint(SecretProviderErrors.ReasonCode(ex)));
         }
 
         string dir = Path.Combine(
@@ -244,6 +256,31 @@ internal sealed class SecretProviderManager : ISecretStore
         config.ActiveProvider = name;
         string json = JsonSerializer.Serialize(config, ProviderConfigJsonContext.Default.ProviderConfig);
         File.WriteAllText(GetConfigPath(), json);
+    }
+
+    // The sentence that follows the upstream failure text in the activate error. It used
+    // to be one canned "fix the provider environment" line; a read-only probe now fails
+    // most often on a missing credential or a missing role/policy, so the sentence names
+    // the likely fix per reason code. The exact phrasing is contractual:
+    // ProfilePage.svelte matches `/^Cannot activate provider '([^']+)': ...\.\s*Fix the
+    // provider environment first/i` to localize the error, so this text must keep both
+    // the leading template (at the throw site) and this trailing phrase. The parenthesised
+    // example list is what stays in every case.
+    private static string ActivationHint(string reason)
+    {
+        const string Generic = "Fix the provider environment first (e.g. install pwsh modules, set VAULT_ADDR, or configure cloud credentials).";
+        return reason switch
+        {
+            SecretProviderErrors.ReasonAuth =>
+                "Fix the provider environment first (check the token, key or account the provider was started with).",
+            SecretProviderErrors.ReasonPermission =>
+                "Fix the provider environment first (check the role, policy or vault access the provider was granted).",
+            SecretProviderErrors.ReasonNetwork =>
+                "Fix the provider environment first (check the address, TLS and network to the provider).",
+            SecretProviderErrors.ReasonTimeout =>
+                "Fix the provider environment first (check the service is responsive and the network is up).",
+            _ => Generic
+        };
     }
 
     // Phase 3: Key Rotation - re-encrypt all locally-held envelopes in all profiles with the active provider.
