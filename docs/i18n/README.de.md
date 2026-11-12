@@ -1,5 +1,5 @@
 <!-- canonical: ../../README.md -->
-<!-- sync: bee789ee431b47a125e3d0702628eec03c95c33c -->
+<!-- sync: 55daccb8e73e8f14bbfe54452fe7c2969337492d -->
 
 <div align="center">
 
@@ -169,7 +169,7 @@ Neun Provider stehen bereit und werden beim Auswählen direkt überprüft. Falls
 | Azure Key Vault | Zertifikat / Managed Identity | Ja | [Anleitung](../../docs/secret-providers-guide.md) |
 | 1Password CLI | OP_SERVICE_ACCOUNT_TOKEN | Ja | [Anleitung](../../docs/secret-providers-guide.md) |
 | AWS Secrets Manager | SigV4 + Zugriffsschlüssel | Ja | [Anleitung](../../docs/secret-providers-guide.md) |
-| AWS IAM Roles Anywhere | Zertifikat aus dem Maschinenspeicher gegen temporäre Zugangsdaten getauscht | Nein, noch nicht: `Periodic` ist wählbar, aber der Dienst liest den Wert nicht neu | [Anleitung](../../docs/secret-providers-guide.md) |
+| AWS IAM Roles Anywhere | Zertifikat aus dem Maschinenspeicher gegen temporäre Zugangsdaten getauscht | Nein, noch nicht: Der Dienst liest `Periodic`-Mounts nicht neu | [Anleitung](../../docs/secret-providers-guide.md) |
 
 In [docs/secret-providers-guide.md](../../docs/secret-providers-guide.md) erfahren Sie alles über die jeweiligen Voraussetzungen, die Ersteinrichtung und was bei Fehlern zu tun ist.
 

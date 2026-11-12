@@ -1,5 +1,5 @@
 <!-- canonical: ../../README.md -->
-<!-- sync: bee789ee431b47a125e3d0702628eec03c95c33c -->
+<!-- sync: 55daccb8e73e8f14bbfe54452fe7c2969337492d -->
 
 <div align="center">
 
@@ -169,7 +169,7 @@ flowchart LR
 | Azure Key Vault | 서비스 주체 인증서 / managed identity | 예 | [가이드](../../docs/secret-providers-guide.md) |
 | 1Password CLI | OP_SERVICE_ACCOUNT_TOKEN | 예 | [가이드](../../docs/secret-providers-guide.md) |
 | AWS Secrets Manager | SigV4 + access keys | 예 | [가이드](../../docs/secret-providers-guide.md) |
-| AWS IAM Roles Anywhere | 컴퓨터 인증서 저장소의 인증서를 임시 자격 증명으로 교환 | 아직 아님: `Periodic`을 고를 수 있지만 서비스가 값을 다시 읽지 않음 | [가이드](../../docs/secret-providers-guide.md) |
+| AWS IAM Roles Anywhere | 컴퓨터 인증서 저장소의 인증서를 임시 자격 증명으로 교환 | 아직 아님: 서비스가 `Periodic` 마운트를 다시 읽지 않음 | [가이드](../../docs/secret-providers-guide.md) |
 
 각 제공자별 필수 준비 사항, 최초 설정 방법, 오류 해결 방법은 [docs/secret-providers-guide.md](../../docs/secret-providers-guide.md)를 참고하세요.
 
