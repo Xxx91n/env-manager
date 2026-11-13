@@ -137,7 +137,8 @@ updates:
         versions: [">= 9.0.0"]
       # tailwindcss：当前栈 3.x（frontend/package.json ^3.4.0）。钉住的只有 5.x 及以上
       # ——主版本跨代要单独开窗评审（#305 裁定）；4.x 是迁移目标，不拦：迁移窗升上 4.x
-      # 后，其 minor/patch（含安全更新）走 npm-minor-patch 组自动合并。
+      # 后，其 minor/patch 走 npm-minor-patch 组自动合并；安全更新走 npm-security-updates
+      # 独立组，不混批。
       - dependency-name: "tailwindcss"
         versions: [">= 5.0.0"]
       # jsdom：当前测试环境 jsdom 25.x（frontend/package.json ^25.0.1）；26 起跨多个 major，须重测 DOM 模拟
