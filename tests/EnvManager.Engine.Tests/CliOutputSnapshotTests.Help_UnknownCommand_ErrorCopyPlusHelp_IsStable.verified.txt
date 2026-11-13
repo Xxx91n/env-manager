@@ -24,7 +24,7 @@ Commands:
   agents [--path|--json|--summary] Output CLI spec. --path: file only. --json: machine-readable. --summary: brief
   help                       Show help
   update check                Check for latest version
-  service status|ping|health|refresh <id>|rotate <id>|reload|shutdown  Interact with the secret lifecycle service
+  service status|ping|health|refresh <id>|rotate <id>|reload|shutdown  IPC service (Background by default; --service-pipe selects SCM Service mode)
   audit list|verify|encrypt-file|migrate-audit|verify-ledger|export-survival-kit|recover-from-ledger  Manage the audit ledger
   export-state --output <file>  Export internal config as a DPAPI-encrypted archive
   import-state --input <file> [--dry-run]  Import a DPAPI-encrypted state archive

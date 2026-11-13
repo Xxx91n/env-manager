@@ -2,7 +2,7 @@
 //
 // Why this exists: `Child::kill()` is TerminateProcess on the process *this* crate
 // spawned. The C# provider layer starts helpers of its own - `op`, `sops`, `pwsh` in
-// `src/Secrets/Providers/` - and those outlive a stop that only terminates the CLI. They
+// `src/Secrets/Providers/` - and those outlive a Background-mode shutdown that only terminates the CLI. They
 // no longer write `profiles.json` / `secretMount.json`, so the write window #153 closed
 // stays closed, but sops writes plaintext into `%TEMP%\env-manager-sops-<guid>\` and the
 // deletion of that directory is the CLI's own `finally` (`SopsProvider.Decrypt`): a

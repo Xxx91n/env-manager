@@ -58,6 +58,20 @@ describe('IPC schema contract (golden samples from Rust service)', () => {
     expect(parsed.data).toHaveProperty('mountPath')
   })
 
+  it('Service-mode status does not point to a machine-level mount file (#296)', () => {
+    const sample = samples.responses.find((s) => s.name === 'ok_status_service_mode_unavailable')
+    expect(sample).toBeDefined()
+    const parsed = parseServiceResponse(JSON.stringify(sample!.payload))
+    expect(parsed.ok).toBe(true)
+    expect(parsed.data).toMatchObject({
+      running: true,
+      mountFile: false,
+      mountPath: null,
+      mountsAvailable: false,
+      unavailableReason: 'serviceMode',
+    })
+  })
+
   it('degraded gateway envelope (state field) keeps message visible to the GUI', () => {
     const sample = samples.responses.find((s) => s.name === 'cli_degraded_not_running')
     expect(sample).toBeDefined()
@@ -93,6 +107,20 @@ describe('IPC schema contract (golden samples from Rust service)', () => {
       // expiry data is missing.
       expect(m).not.toHaveProperty('healthy')
     }
+  })
+
+  it('Service-mode health sample explains why the mount list is empty (#296)', () => {
+    const sample = samples.responses.find((s) => s.name === 'ok_health_service_mode_unavailable')
+    expect(sample).toBeDefined()
+    const parsed = parseServiceResponse(JSON.stringify(sample!.payload))
+    expect(parsed.ok).toBe(true)
+    expect(parsed.data).toMatchObject({
+      mounts: [],
+      total: 0,
+      mountsAvailable: false,
+      unavailableReason: 'serviceMode',
+      message: 'Secret mounts are unavailable in Service mode.',
+    })
   })
 
   it('ok_refresh_noop sample is a successful, explicit no-op (#293)', () => {

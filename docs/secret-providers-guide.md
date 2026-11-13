@@ -16,9 +16,9 @@ The six external providers below require host-side setup. Each section lists the
 
 ### Capability matrix
 
-Every provider declares its capability descriptors on `ISecretProvider`, and `profile secret-provider list` reports them per line as `[refresh=yes|no certauth=yes|no network=yes|no]` plus real availability (`(unavailable)` when the cheap environment gate fails). The `Periodic refresh` column is what the provider declares, and it is what the Service page in the GUI shows read-only next to each mount (there is no policy picker in the GUI); the service-side loop that actually re-reads a `Periodic` mount is still tracked in [this issue](https://github.com/Xxx91n/env-manager/issues/276), so a declared `yes` does not yet mean values refresh on their own.
+Every provider declares its capabilities on `ISecretProvider`, and `profile secret-provider list` reports them as `[refresh=yes|no certauth=yes|no network=yes|no]` plus current availability (`(unavailable)` when a quick environment check fails). The `Provider periodic-read capability` column shows what a provider declares; the Background-mode Service page displays it as read-only. It does not mean Env Manager fetches values on a timer: the service has no timer-based fetch today. The `refreshPolicy` field stays in mount files for compatibility and continues to mark provider-managed `Periodic` mounts for rotation handling; its periodic-fetch meaning is reserved. Secret values are read when a Launch profile starts, and an already-running program keeps the value it started with.
 
-| Provider | Periodic refresh | Cert-bound auth | Network | Cheap availability gate |
+| Provider | Provider periodic-read capability | Cert-bound auth | Network | Cheap availability gate |
 |----------|------------------|-----------------|---------|--------------------------|
 | dpapi-current-user | no (CreatedOnly) | no | no | always usable on Windows |
 | credential-manager | no (CreatedOnly) | no | no | always usable on Windows |
@@ -352,9 +352,9 @@ No emulator implements `CreateSession`, so the wire protocol is not exercised in
 
 If step 4 fails with `CreateSession rejected certificate`, the failure is on the AWS side (trust anchor, revocation, role trust policy). A local signature check does not exonerate the request that actually left the machine: it proves the signature matches the string this code built, not the request AWS received. Env Manager logs the upstream error and the certificate fingerprint; compare the response's complaint against the trust anchor and the role's trust policy before assuming the signing code is wrong.
 
-### The service does not refresh this provider yet
+### This provider is not refreshed on a timer
 
-`RefreshCapable` is `true`, but the Rust service's periodic pass only stamps mount metadata; it does not call `Decrypt`. That gap is tracked in [#276](https://github.com/Xxx91n/env-manager/issues/276) and applies to every provider, not just this one. Until it lands, a `Periodic` mount keeps its last value until the CLI reads it again on launch.
+`RefreshCapable` reports what the provider supports; it does not mean Env Manager fetches values periodically. The service does not fetch secrets on a timer. `refreshPolicy` remains in mount files and still identifies provider-managed `Periodic` mounts for rotation handling, but its periodic-fetch meaning is reserved. Values are read when a Launch profile starts. A program that is already running keeps the value it started with.
 
 ---
 

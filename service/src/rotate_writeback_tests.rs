@@ -26,8 +26,8 @@ use crate::rotate_stop_tests::MountFixture;
 const WRITEBACK_TIMEOUT: Duration = Duration::from_secs(20);
 
 /// A provider-managed Periodic mount has no local envelope for the delegated CLI to rotate.
-/// The service reports a visible skip without launching a child or advancing rotation/fetch
-/// stamps; otherwise an exit-0 no-op would falsely claim that the provider value was rotated.
+/// The Background-mode handler reports a visible skip without launching a child or
+/// advancing rotation/fetch stamps; otherwise an exit-0 no-op would falsely claim that the provider value was rotated.
 #[tokio::test]
 async fn provider_managed_periodic_mount_without_envelope_is_skipped_without_stamping_or_delegating() {
     for (label, envelope) in [

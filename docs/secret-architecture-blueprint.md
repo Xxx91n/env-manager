@@ -107,9 +107,11 @@ Rejected alternative: keep secrets inside the Profile but add the metadata field
 
 ### P2: External authority + reconciliation loop, modeled on External Secrets Operator
 
-A Secrets coordinator (see P3) runs as a background service (`env-manager-service.exe` with `--mode=service` or `--mode=background`) that periodically refreshes each SecretMount against its provider, refreshes the envelope if needed, records the audit, and surfaces new state to subscribers (the GUI, the CLI on next read). The refresh contract is `spec.refreshPolicy: Periodic | CreatedOnly | OnChange` with `spec.refreshIntervalSeconds` default 300. This removes L1/L4.
+The original proposal was for a Secrets coordinator (see P3) running as a background service (`env-manager-service.exe` with `--mode=service` or `--mode=background`) that periodically refreshed each SecretMount against its provider, refreshed the envelope if needed, recorded the audit, and surfaced new state to subscribers (the GUI, the CLI on next read). Its proposed contract was `spec.refreshPolicy: Periodic | CreatedOnly | OnChange` with `spec.refreshIntervalSeconds` default 300. This would remove L1/L4.
 
-Rejected alternative: on-demand fetch only, no refresh loop. This is the current behaviour and it leaks stale credentials. On-demand only belongs at the very-low-end of provider sophistication (DPAPI) and is the wrong default for the network providers.
+> **Shipped behavior:** The proposed value-fetching loop was never implemented. The former 300-second scan checked metadata and wrote `lastFetchedAt` without fetching secret values; it was removed in [#294](https://github.com/Xxx91n/env-manager/issues/294). Background mode supports manual rotation, while Service mode has no mount file. Neither mode fetches secret values on a timer; see the [Decision Summary](secret-architecture-decision-summary.md).
+
+Rejected alternative in the original proposal: on-demand fetch only, no refresh loop. That proposal called it a poor fit for network providers; it was not adopted as a product requirement. Shipped behavior remains fetch-at-Launch, and an already-running program keeps the value it started with.
 
 ### P3: Replace single `secret-providers.json` with a `SecretStore` controller
 
@@ -125,7 +127,7 @@ Rejected alternative: treat passkey as a provider. We considered this and decide
 
 ### P5: Per-secret rotation policy driven by the SecretStore, not by `Rotate-all`
 
-`profile secret-provider rotate` re-encrypts everything today. We propose per-secret `Rotate(id, newProvider? = keep)` with an on-disk `secretMount.json` (per-mount metadata) capturing `lastRotatedAt` and `nextRotationDueAt`. The refresh loop drives rotation based on policy without user intervention. Auto-rotation applies only to providers that declare `CanRotate=true` (Vault KV2, Azure, AWS, 1Password do). This removes L7/L9.
+`profile secret-provider rotate` re-encrypts everything today. The original proposal was per-secret `Rotate(id, newProvider? = keep)` with an on-disk `secretMount.json` (per-mount metadata) capturing `lastRotatedAt` and `nextRotationDueAt`. Under that proposal, a refresh loop would drive rotation based on policy without user intervention, only for providers that declare `CanRotate=true` (Vault KV2, Azure, AWS, 1Password do). This remains a proposal; the loop was not shipped, and the old metadata-only scan was removed in [#294](https://github.com/Xxx91n/env-manager/issues/294) (see P2's shipped-behavior note).
 
 ### P6: Capability-scoped agentic surface
 
@@ -156,7 +158,7 @@ Rejected alternative: command-string allow-list. Already what AGENTS.md document
 - `SecretEnvelope` grows from `{ provider, version, targetName, createdAt }` to `{ provider, version, targetName, createdAt, expiresAt, rotationPolicyId, schemaVersion: 2 }`. v0.8 envelopes have only the first four; the new fields are auto-prefilled on next read.
 - New CLI commands: `mount list/show/add/remove/refresh/rotate/set-policy`, `secret-store list-providers/set-default/health/audit`. Secret-oriented `profile *` commands become aliases for back-compat.
 - The agent JSON under `agents --json` was proposed to add a `capabilities` array per command and a new `authZ` field. **Not implemented.**
-- A background service ships as a portable `env-manager-service.exe` that the GUI starts on demand and the Windows Service Manager can install. The shipped service starts the refresh loop in both service and background mode; the loop is idle by default because new mounts are created only, and it wakes on a timer only when a mount is set to refresh that way.
+- The original proposal was a portable `env-manager-service.exe` that the GUI could start on demand or the Windows Service Manager could install, with a refresh loop in both modes. That loop was not implemented as described: the former metadata-only scan was removed in [#294](https://github.com/Xxx91n/env-manager/issues/294), and Service mode has no mount file or server-side timer fetch. See the [Decision Summary](secret-architecture-decision-summary.md) for the shipped behavior.
 
 ---
 
@@ -175,13 +177,13 @@ The original Phase A-E roadmap below assumed a `secrets-agent.exe` refresh proce
 | Version | Phase | Ship criteria |
 | --- | --- | --- |
 | v0.8.0 | A | SecretMount schema v2 + one-shot migration + C# fsync + new nullable fields (refreshPolicy, refreshIntervalSeconds, bootstrapCertThumbprint). audit.json unchanged. |
-| v0.9.0 | B+C merged | env-manager-service.exe Rust binary, NT SERVICE\EnvManagerService, Named Pipe IPC, CLI service gateway subcommand, periodic full-scan refresh, GUI as control panel, three-level capability whitelist (proposed; not implemented). |
+| v0.9.0 | B+C merged | `env-manager-service.exe` Rust binary, `NT SERVICE\EnvManagerService`, named-pipe IPC, and CLI service gateway shipped. The periodic full-scan refresh and three-level capability whitelist were proposed but not implemented; the former metadata-only scan was removed in [#294](https://github.com/Xxx91n/env-manager/issues/294). |
 | v0.9.5 | D | Cert bootstrap: Vault AppRole/client cert, Azure SP cert — **removed before it was ever wired** (no caller, and its blocking `powershell` subprocess sat outside the stop-convergence contract). AWS Roles Anywhere documented but deferred. Env-var fallback retained. |
 | v1.0.0 | E | Unified audit-ledger.jsonl (append-only, hash-chained, 100MB rotation), Mount survival kit export, GUI recover-from-ledger, audit.json retired after migration. |
 
 ### Key reversals from the original blueprint
 
-- **Phase C**: the original `secrets-agent.exe` standalone process is rejected. It is now a Windows system service (`env-manager-service.exe` with `--mode=service`) under `NT SERVICE\EnvManagerService` virtual service account. In-process tokio task inside the GUI is also rejected (GUI close = refresh stops). See the Design notes at the top of `service/src/main.rs` and `service/src/ipc.rs`.
+- **Phase C**: the original `secrets-agent.exe` standalone process was rejected. The `env-manager-service.exe` binary and named-pipe IPC shipped under `NT SERVICE\EnvManagerService`, but Service mode has no mount file and the proposed value-refresh loop was not shipped; the old metadata-only scan was removed in [#294](https://github.com/Xxx91n/env-manager/issues/294). Background mode supports manual rotation. An in-process tokio task inside the GUI was also rejected (GUI close would stop it). See the Design notes at the top of `service/src/main.rs` and `service/src/ipc.rs`.
 - **Phase D**: the original passkey/Windows Hello identity layer is rejected — a session 0 service cannot show biometric UI. The planned replacement, a certificate-based bootstrap at `Cert:\LocalMachine\My` with a non-exportable private key ACL'd to the per-service SID, was deleted before it was ever called. Wiring it would have promoted three cloud credential bootstraps (Vault AppRole/client cert, Azure service principal, AWS Roles Anywhere — the last still deferred) into the supported service interface with no product trigger, and its blocking `powershell` subprocess sat outside the stop-convergence contract the service relies on. No service-side credential bootstrap exists today.
 - **Phase E**: the original wrap-key escrow is rejected. The escrow solved a recovery problem that A5/A6/A8 proved empty (for cloud providers the provider IS the recovery source; for user-bound providers loss is by-design). It is replaced by unified audit-ledger + Mount survival kit export + GUI recover-from-ledger UX. The survival kit export is a CLI verb (`audit export-survival-kit`), not a service path. See the Design note at the top of `service/src/audit_ledger.rs` and the [Decision Summary](secret-architecture-decision-summary.md).
 - **Phase B and Phase C merged into a single v0.9.0 release** (user chose Option 2). See the four-version cadence in the [Decision Summary](secret-architecture-decision-summary.md).
@@ -190,16 +192,16 @@ The original Phase A-E roadmap below assumed a `secrets-agent.exe` refresh proce
 
 The original blueprint had an anti-rejection checklist as a per-phase gate. The revised roadmap replaces it with an 11-domain release-gate risk matrix:
 
-1. Windows service lifecycle (SCM timeout, boot ordering, stop-during-refresh)
+1. Windows service lifecycle (SCM timeout, boot ordering, stop-during-rotation)
 2. Named pipe IPC security (DACL, impersonation, squatting, a stale client)
-3. Periodic refresh loop (lease TTL < tick, 429 throttle, clock skew, thundering herd, partial tick)
+3. Periodic refresh loop — historical proposal, not shipped; the old metadata-only scan was removed in [#294](https://github.com/Xxx91n/env-manager/issues/294) because it never fetched secret values.
 4. Certificate lifecycle (expiry, ACL reset by GPO, Mimikatz CNG export, Windows-upgrade loss) — **historical**: the only certificate holder was the deleted bootstrap; nothing in the product stores a service certificate today.
 5. Audit ledger tamper-resistance (hash-chain, unauthorized actor, rollover race, replay)
 6. Schema migration (crash orphan, rollback script completeness, service race, per-user)
 7. Existing codebase regressions (DPAPI `_EnvManager_disabled` orphan, mutex vs write_atomic race, frontend cache staleness)
 8. Cert-enroll cancellation mid-flight (3 sub-states, temp dir cleanup, cloud revoke path) — **historical**: the enroll flow this guards was never built, and the module was deleted before it was wired.
 9. MSI major-upgrade outage (child survives, schema mismatch, mid-write profiles.json)
-10. Memory pressure / startup timeout (SCM event 7009/7000, OOM-by-mount skipping, deferred cold-start full scan)
+10. Memory pressure / startup timeout (SCM event 7009/7000, OOM-by-mount skipping) — the deferred full mount scan is historical; the current service does not scan mounts at startup.
 11. IPC endpoint name (Global\pipe\ scope, RDP per-session CLI routing, machine rename no-op, locale no-op)
 
 Detailed failure modes + regression tests for each domain live in the release-gate risk matrix of [docs/secret-architecture-decision-summary.md](secret-architecture-decision-summary.md).
@@ -244,7 +246,9 @@ Problem solved: L6, L8, L10.
 
 ### Phase C (v0.9.0): Optional refresh loop (`env-manager-service.exe`)
 
-Problem solved: L1, L4 (partial).
+> **Historical proposal, not shipped behavior:** the service executable and named-pipe IPC shipped, but the value-refresh loop described below did not. The only 300-second scan checked metadata and wrote `lastFetchedAt` without fetching values; it was removed in [#294](https://github.com/Xxx91n/env-manager/issues/294). Neither mode fetches secrets on a timer.
+
+Problem solved by the proposal: L1, L4 (partial).
 
 - Ship `env-manager-service.exe` as a separate binary bundled in `release/portable/` and `release/cli-only/`. GUI Settings toggle opt-in.
 - Default refresh interval 300s. Only providers with `CanRotate=true` get a lease concept (`VaultKV2Provider`'s 1000s lease, Azure's 90-day secret expiry, AWS rotation Lambda's `pending/current/staged`).
@@ -293,7 +297,7 @@ Single TODO row in the per-phase ledger:
 ```
 Phase A: SecretMount schema v2 + secretMount.json + mount CLI + audit enrich   - not started
 Phase B: SecretStore controller + capability agentic surface                    - not started
-Phase C: env-manager-service.exe optional refresh loop                       - DONE (v0.9.0)
+Phase C: service binary and named-pipe IPC shipped; proposed refresh loop not implemented; metadata-only scan removed in #294
 Phase D: WindowsHelloIdentityProvider (passkey)                                  - not started
 Phase E: Schema v3 unified audit ledger + wrapping-key escrow                    - not started
 ```

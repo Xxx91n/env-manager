@@ -13,7 +13,7 @@ partial class Program
     {
         if (args.Length < 2)
         {
-            Console.Error.WriteLine("Usage: env-manager service <status|ping|health|refresh <id>|rotate <id>|reload|shutdown> (refresh/reload are deprecated no-ops, removal in v0.16.0)");
+            Console.Error.WriteLine("Usage: env-manager service <status|ping|health|refresh <id>|rotate <id>|reload|shutdown> [--service-pipe] (Background pipe by default; --service-pipe selects SCM Service mode; refresh/reload are deprecated no-ops, removal in v0.16.0)");
             return 1;
         }
 

@@ -1,12 +1,11 @@
 // env-manager-service.exe
-// Windows system service for secret mount lifecycle management.
-// Design: reconcile is a real Windows service, not an in-GUI task and not a second agent binary,
-// because provider leases must refresh while the GUI is closed. 6 of 9 providers work under the
-// NT SERVICE identity; the 3 user-bound ones - and sops, machine-level but with no service-side
-// refresh surface - stay fetch-on-launch (CreatedOnly).
+// Windows service host for the Env Manager IPC endpoint.
+// Background mode uses the launching user's secretMount.json. Service mode has no mount file:
+// the old ProgramData design was never implemented, and this service does not fetch secrets
+// on a timer.
 
 use std::env;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
 use tokio_util::sync::CancellationToken;
@@ -48,6 +47,10 @@ pub enum ServiceMode {
     Background,
     Cli,
 }
+
+pub const SERVICE_MOUNTS_UNAVAILABLE_MESSAGE: &str =
+    "Secret mounts are unavailable in Service mode.";
+pub const SERVICE_MOUNTS_UNAVAILABLE_REASON: &str = "serviceMode";
 
 impl ServiceMode {
     /// Resolve from --mode=<x> argv or SCM service args.
@@ -92,7 +95,7 @@ fn main() {
     // Write service logs to a file so Session 0 service output is
     // not lost (stderr goes nowhere in Session 0). In Background mode, write
     // to %LOCALAPPDATA% alongside env-manager.log; in Service mode, write to
-    // %ProgramData% alongside secretMount.json/audit-ledger.jsonl.
+    // %ProgramData% alongside the audit ledger. No mount file is stored there.
     let log_dir = match mode {
         ServiceMode::Service => {
             let pd = std::env::var("ProgramData").unwrap_or_else(|_| "C:\\ProgramData".to_string());
@@ -122,6 +125,9 @@ tracing_subscriber::fmt()
     .init();
 std::mem::forget(guard);
     tracing::info!("env-manager-service starting in {:?} mode", mode);
+    if mode == ServiceMode::Service {
+        tracing::warn!("{}", SERVICE_MOUNTS_UNAVAILABLE_MESSAGE);
+    }
 
     // Entry guard (A7): refuse direct double-click launch with no --mode.
     // If interactive session and no --mode flag, print guidance and exit.
@@ -235,13 +241,12 @@ pub async fn run_server(
         return ServerExit::Requested;
     }
 
-    // Startup sweep of leftover sops plaintext roots (#219), in the only placement that
-    // satisfies both constraints at once: after the RUNNING report (a slow sweep must not
-    // push the report past ServicesPipeTimeout, the #149 red line) and before the spawns
-    // below. The IPC handlers (the delegation path) are the only creators of new scratch
-    // roots, so sweeping here makes "a root this instance created is never swept" true by
-    // ordering rather than by timestamp judgement; the 24h threshold in `sops_tempdir` is
-    // a second guard, not the mechanism.
+    // Service-mode startup sweep of leftover sops plaintext roots (#219). Keep it after
+    // the RUNNING report so a slow sweep cannot push that report past ServicesPipeTimeout,
+    // and before task spawns so no handler can create a root concurrently. Background mode
+    // runs the same sweep before starting its IPC task in `run_background_server`.
+    // The 24h threshold is a second guard, not the mechanism that protects this instance's
+    // roots; placement before handlers is.
     sops_tempdir::sweep_stale_roots(&env::temp_dir(), sops_tempdir::SWEEP_MIN_AGE);
 
     // Three things the body owns once RUNNING is reported: the pipe listener it just
@@ -254,27 +259,29 @@ pub async fn run_server(
     run_until_exit(ipc, guard, &shutdown).await
 }
 
-/// Run the server body used by Background mode. Keeps its historical order - the
-/// background tasks start immediately and the IPC server creates the pipe on its own,
-/// retrying a failure every 5s instead of ending the process - because the GUI owns the
-/// lifecycle there and a missing listener must not starve anything the service runs.
+/// Run the server body used by Background mode. Reclaim stale scratch roots before
+/// starting IPC handlers, so a process killed during rotation leaves no permanent
+/// plaintext behind. Unlike Service mode, Background mode has no SCM RUNNING report to
+/// protect; its process guard and IPC task start immediately after the sweep.
 pub async fn run_background_server(
     pipe_name: &'static str,
     shutdown: Arc<CancellationToken>,
 ) -> ServerExit {
     tracing::info!("IPC pipe: {}", pipe_name);
+    sops_tempdir::sweep_stale_roots(&env::temp_dir(), sops_tempdir::SWEEP_MIN_AGE);
     let ipc = tokio::spawn(ipc::start_ipc_server(pipe_name, shutdown.clone(), false));
     let guard = tokio::spawn(process_guard::debugger_watch_loop(shutdown.clone()));
     run_until_exit(ipc, guard, &shutdown).await
 }
 
 /// Wait for either task to finish, then drain the other one under a bounded timeout,
-/// so the caller can report a stopped service knowing the pipe handle is closed.
+/// so the caller can report a stopped process knowing the pipe handle is closed.
 ///
 /// The IPC task's budget covers its own connection handlers: `ipc::accept_loop` joins
-/// them before returning, which is what keeps a delegated CLI rotate from outliving the
-/// `SERVICE_STOPPED` report (#153). The process guard answers the same stop token, so a
-/// stop ends its wait at once instead of sleeping an interval out (#294).
+/// them before returning. In Background mode, a rotate handler can own a delegated CLI
+/// child, so this keeps that child from outliving process shutdown (#153); Service mode
+/// refuses rotate and reports `SERVICE_STOPPED` only after the pipe is closed. The process
+/// guard answers the same stop token, so shutdown ends its wait at once (#294).
 async fn run_until_exit(
     mut ipc: tokio::task::JoinHandle<()>,
     mut guard: tokio::task::JoinHandle<()>,
@@ -311,29 +318,52 @@ async fn run_until_exit(
     exit
 }
 
-/// Resolve the secretMount.json path.
-/// Machine-level: %ProgramData%\EnvManager\secretMount.json (service identity).
-/// User-level: %LOCALAPPDATA%\EnvManager\secretMount.json (background/CLI mode).
-pub fn secret_mount_path() -> PathBuf {
-    // Service mode uses ProgramData (machine-level, A8).
-    // Background/CLI mode uses LocalAppData (user-level, compatibility with v0.8.0).
+/// Resolve the user-level secretMount.json path. Service mode has no mount file.
+fn secret_mount_path_for(mode: ServiceMode, local_app_data: &Path) -> Option<PathBuf> {
+    if mode == ServiceMode::Service {
+        return None;
+    }
+
+    Some(local_app_data.join("EnvManager").join("secretMount.json"))
+}
+
+pub fn secret_mount_path() -> Option<PathBuf> {
     let args: Vec<String> = env::args().collect();
     let mode = ServiceMode::resolve(&args);
+    if mode == ServiceMode::Service {
+        return None;
+    }
+    let local_app_data = env::var_os("LOCALAPPDATA")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from("."));
+    let path = secret_mount_path_for(mode, &local_app_data)?;
+    if let Some(dir) = path.parent() {
+        std::fs::create_dir_all(dir).ok();
+    }
+    Some(path)
+}
 
-    match mode {
-        ServiceMode::Service => {
-            let program_data = env::var("ProgramData")
-                .unwrap_or_else(|_| "C:\\ProgramData".to_string());
-            let dir = PathBuf::from(program_data).join("EnvManager");
-            std::fs::create_dir_all(&dir).ok();
-            dir.join("secretMount.json")
-        }
-        ServiceMode::Background | ServiceMode::Cli => {
-            let local_app = env::var("LOCALAPPDATA")
-                .unwrap_or_else(|_| ".".to_string());
-            let dir = PathBuf::from(local_app).join("EnvManager");
-            std::fs::create_dir_all(&dir).ok();
-            dir.join("secretMount.json")
+#[cfg(test)]
+mod mount_path_tests {
+    use super::*;
+
+    #[test]
+    fn service_mode_has_no_mount_path() {
+        let local_app_data = PathBuf::from("service-local-app-data");
+        assert!(secret_mount_path_for(ServiceMode::Service, &local_app_data).is_none());
+    }
+
+    #[test]
+    fn background_and_cli_modes_use_local_app_data() {
+        let local_app_data = PathBuf::from("user-local-app-data");
+        let expected = Some(
+            local_app_data
+                .join("EnvManager")
+                .join("secretMount.json"),
+        );
+
+        for mode in [ServiceMode::Background, ServiceMode::Cli] {
+            assert_eq!(secret_mount_path_for(mode, &local_app_data), expected);
         }
     }
 }
@@ -351,8 +381,9 @@ mod startup_contract_tests {
     //! from the report firing before the spawns.
     //!
     //! The stop side of the same contract lives here too (#153): when the body returns,
-    //! the caller reports `SERVICE_STOPPED`, so the body must have released the pipe *and*
-    //! joined the connection handlers that may own a delegated CLI child.
+    //! the caller can report `SERVICE_STOPPED`, so the body must have released the pipe and
+    //! joined its connection handlers. A Background-mode rotate handler may own a delegated
+    //! CLI child; Service mode refuses rotate.
     use super::*;
     use std::sync::atomic::{AtomicBool, AtomicU8, Ordering};
     use std::time::Duration;
@@ -448,14 +479,14 @@ mod startup_contract_tests {
         );
     }
 
-    /// Scenario: `Stop-Service` with a connection already accepted and a request still
-    /// being served. The body must not return until that handler does: the caller reports
-    /// `SERVICE_STOPPED` the moment the body returns, and a `rotate` handler owns the CLI
-    /// child that is allowed to write profiles.json (#153).
+    /// Scenario: shutdown with a connection already accepted and a request still being
+    /// served. The body must not return until that handler does, so the caller can report
+    /// `SERVICE_STOPPED` only after the pipe is closed. In Background mode a rotate handler
+    /// may own the CLI child that writes profiles.json; Service mode refuses rotation (#153).
     ///
     /// Regression pin for the shape before this ticket: the accept loop used to return on
     /// cancellation with the handler still detached, so the body resolved while the
-    /// handler was parked and the child survived into a service the SCM called Stopped.
+    /// handler was parked and its work outlived shutdown.
     #[tokio::test]
     async fn stop_waits_for_an_in_flight_connection_handler() {
         let (mut server, shutdown) = spawn_body_until_listening(IN_FLIGHT_PIPE).await;

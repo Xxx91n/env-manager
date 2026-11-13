@@ -1456,10 +1456,6 @@ export async function secretProviderRotate(): Promise<string> {
 // to env-manager-service.exe named pipe.
 
 /**
- * Get service status (running, mount file path, etc).
- * CLI: `service status` (read-only)
- */
-/**
  * Typed contract of the env-manager-service IPC response envelope
  * (mirrors Rust IpcResponse in service/src/ipc.rs — the authoritative schema;
  * golden files in docs/schemas/ are exported from it, see docs/architecture.md
@@ -1491,9 +1487,10 @@ export function parseServiceResponse(raw: string): ServiceIpcResponse {
 }
 
 /**
- * Get service status (running, mount file path, etc).
- * CLI: `service status` (read-only)
- * Returns { ok, data: { running, mountFile, mountPath } }
+ * Get service status (running, mount file availability, etc).
+ * CLI: `service status` (read-only; the GUI uses Background mode)
+ * Background mode includes the user mount path. Service mode returns `mountPath: null`,
+ * `mountsAvailable: false`, and an unavailable reason/message instead of a machine path.
  */
 export async function serviceStatus(): Promise<{ ok: boolean; data?: any; message?: string }> {
   const output = await runRead('service', ['status'])
@@ -1502,8 +1499,8 @@ export async function serviceStatus(): Promise<{ ok: boolean; data?: any; messag
 
 /**
  * Get service health (mount health summary).
- * CLI: `service health` (read-only)
- * Returns { ok, data: { mounts: [...] } }
+ * CLI: `service health` (read-only; the GUI uses Background mode)
+ * Service mode returns an empty mount list with `mountsAvailable: false` and an explanation.
  */
 export async function serviceHealth(): Promise<{ ok: boolean; data?: any; message?: string }> {
   const output = await runRead('service', ['health'])

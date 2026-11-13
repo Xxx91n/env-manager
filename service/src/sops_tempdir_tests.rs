@@ -2,9 +2,9 @@
 //
 // Evidence seam: the same one `rotate_stop_tests` uses - `reconcile::run_cli_child`
 // driven against a real child process - because the property under test is what happens to
-// a directory when that child is terminated, and the layer above it (a literal
-// `Stop-Service`) would need an installed service and a rotation slow enough to still be
-// in flight when the stop lands.
+// a directory when that child is terminated. SCM Service mode has no mount file and
+// refuses rotation, so these fixtures drive Background-mode shutdown directly rather than
+// attempting a literal `Stop-Service` rotation.
 //
 // The stub stands in for the C# provider: it reads `TEMP_DIR_ENV`, creates one
 // `env-manager-sops-<guid>` directory in it with a `secret.json`, records the two paths it
@@ -37,8 +37,8 @@ const ALWAYS_TOO_LONG: Duration = Duration::from_secs(20);
 /// the marker file is not read hundreds of times a second.
 const POLL_STEP: Duration = Duration::from_millis(100);
 
-/// What the stub left behind, in the order it wrote it: the scratch root the service handed
-/// it, then the plaintext file inside that root.
+/// What the stub left behind, in the order it wrote it: the scratch root the Background-mode
+/// process handed it, then the plaintext file inside that root.
 struct StubReport {
     path: PathBuf,
 }
@@ -130,13 +130,13 @@ async fn poll_until<T>(budget: Duration, mut probe: impl FnMut() -> Option<T>) -
     }
 }
 
-/// The root the service hands over is its own, not the provider's fallback: the assertion
-/// would otherwise pass on a delegation that ignored the variable entirely.
-fn assert_service_owned_root(root: &str) {
+/// The root the Background-mode process hands over is its own, not the provider's fallback:
+/// the assertion would otherwise pass on a delegation that ignored the variable entirely.
+fn assert_background_owned_root(root: &str) {
     let root = Path::new(root);
     assert!(
         root.starts_with(std::env::temp_dir()),
-        "the scratch root {root:?} must sit under the service identity's %TEMP%"
+        "the scratch root {root:?} must sit under the Background-mode user's %TEMP%"
     );
     let name = root
         .file_name()
@@ -144,7 +144,7 @@ fn assert_service_owned_root(root: &str) {
         .unwrap_or_default();
     assert!(
         name.starts_with("env-manager-rotate-scratch-"),
-        "the scratch root {root:?} must carry the service's own prefix, not the provider's"
+        "the scratch root {root:?} must carry the Background-mode process's own prefix, not the provider's"
     );
 }
 
@@ -180,11 +180,11 @@ async fn completed_delegation_reclaims_the_scratch_root() {
     let (root, file) = report
         .read()
         .expect("the stub must record the root and the plaintext file it wrote");
-    assert_service_owned_root(&root);
+    assert_background_owned_root(&root);
     assert!(
         !Path::new(&root).exists(),
         "the scratch root {root} outlived a completed delegation: the provider's own \
-         `finally` deleted {file}, and the service root holding it has to go too"
+         `finally` deleted {file}, and the Background-mode scratch root holding it has to go too"
     );
 }
 
@@ -223,7 +223,7 @@ async fn interrupted_delegation_reclaims_the_scratch_root() {
         "the stub never recorded its scratch root; the assertion below would prove nothing",
     );
     let (root, file) = reported;
-    assert_service_owned_root(&root);
+    assert_background_owned_root(&root);
     assert!(
         Path::new(&file).exists(),
         "the stub must have plaintext on disk before the stop lands, or the reclaim this \
@@ -488,12 +488,10 @@ fn drop_logs_when_the_last_attempt_also_fails() {
 }
 
 // Startup sweep of leftovers (#219). Evidence seam: `sops_tempdir::sweep_stale_roots`
-// driven against real directories under `%TEMP%`, plus one leg through `run_server` itself,
-// because the property under test is what a service start does to directories a previous
-// instance left behind. The race half of the ticket - "this instance's own roots are never
-// swept" - is not a timestamp property here but an ordering property, pinned by the call's
-// placement between the RUNNING report and the task spawns; the run_server leg below
-// exercises that exact sequence on a stale and a fresh fixture.
+// driven against real directories under `%TEMP%`, plus Service- and Background-mode startup
+// legs. The property under test is that either mode reclaims roots left by an older process;
+// "this instance's own roots are never swept" is an ordering property, pinned by the sweeps'
+// placement before IPC handlers can start (after the RUNNING report in Service mode).
 
 /// The two prefixes the sweep owns, spelled out so a rename in `sops_tempdir` fails these
 /// tests instead of silently orphaning one family.
@@ -535,10 +533,9 @@ fn sweep_now() {
     );
 }
 
-/// Scenario for the ticket's evidence criterion, stale half: an expired service root and an
-/// expired pre-#177 provider directory are both gone after one sweep. The legacy family is
-/// the one no code path ever reclaimed, which is why it gets its own fixture instead of
-/// sharing the service root's.
+/// Scenario for the ticket's evidence criterion, stale half: an expired delegated scratch
+/// root and an expired pre-#177 provider directory are both gone after one sweep. The legacy
+/// family is the one no code path ever reclaimed, which is why it gets its own fixture.
 #[test]
 fn sweep_removes_stale_roots_of_both_families() {
     let stale_root = make_root(ROOT_PREFIX, "sweep-stale");
@@ -550,7 +547,7 @@ fn sweep_removes_stale_roots_of_both_families() {
 
     assert!(
         !stale_root.exists(),
-        "an expired service scratch root must be removed by the startup sweep: {}",
+        "an expired delegated scratch root must be removed by the startup sweep: {}",
         stale_root.display()
     );
     assert!(
@@ -664,10 +661,8 @@ fn sweep_leaves_unrelated_names_alone() {
     let _ = std::fs::remove_file(&prefixed_file);
 }
 
-/// The run_server leg: a service start removes a stale root and spares a fresh one, through
-/// the same body the SCM drives. This is also the only test that observes the placement the
-/// ordering guarantee rests on - the sweep runs inside the body, between the report point
-/// and the task spawns, so the deletion happens without any test-side prodding.
+/// The Service-mode leg: `run_server` removes a stale root and spares a fresh one after the
+/// RUNNING callback and before its task spawns, through the body the SCM drives.
 #[tokio::test]
 async fn service_start_sweeps_stale_roots_and_spares_fresh_ones() {
     let stale = make_root(ROOT_PREFIX, "sweep-startup");
@@ -683,11 +678,11 @@ async fn service_start_sweeps_stale_roots_and_spares_fresh_ones() {
 
     poll_until(ALWAYS_TOO_LONG, || (!stale.exists()).then_some(()))
         .await
-        .expect("the service start never removed the stale root; the sweep did not run");
+        .expect("the Service-mode start never removed the stale root; the sweep did not run");
 
     assert!(
         fresh.exists(),
-        "a root inside the age threshold must survive a service start: {}",
+        "a root inside the age threshold must survive a Service-mode start: {}",
         fresh.display()
     );
 
@@ -696,6 +691,42 @@ async fn service_start_sweeps_stale_roots_and_spares_fresh_ones() {
         tokio::time::timeout(ALWAYS_TOO_LONG, server)
             .await
             .expect("the server body must return after shutdown")
+            .expect("server task"),
+        crate::ServerExit::Requested,
+    );
+
+    let _ = std::fs::remove_dir_all(&fresh);
+}
+
+/// The Background-mode leg: its user-session start must reclaim stale rotation roots before
+/// its IPC task starts accepting requests, while leaving a recent root alone.
+#[tokio::test]
+async fn background_start_sweeps_stale_roots_and_spares_fresh_ones() {
+    let stale = make_root(ROOT_PREFIX, "background-sweep-startup");
+    let fresh = make_root(ROOT_PREFIX, "background-sweep-startup-fresh");
+    backdate_creation(&stale, 25);
+
+    let shutdown = Arc::new(CancellationToken::new());
+    let server = tokio::spawn(crate::run_background_server(
+        r"\\.\pipe\EnvManager.TestBackgroundSweepStartup",
+        shutdown.clone(),
+    ));
+
+    poll_until(ALWAYS_TOO_LONG, || (!stale.exists()).then_some(()))
+        .await
+        .expect("the Background-mode start never removed the stale root; the sweep did not run");
+
+    assert!(
+        fresh.exists(),
+        "a root inside the age threshold must survive a Background-mode start: {}",
+        fresh.display()
+    );
+
+    shutdown.cancel();
+    assert_eq!(
+        tokio::time::timeout(ALWAYS_TOO_LONG, server)
+            .await
+            .expect("the Background-mode server body must return after shutdown")
             .expect("server task"),
         crate::ServerExit::Requested,
     );

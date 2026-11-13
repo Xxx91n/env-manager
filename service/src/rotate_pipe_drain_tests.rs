@@ -300,7 +300,7 @@ async fn await_drain_signal<T: std::fmt::Debug>(
 }
 
 /// The production default is the bound, not a second unbounded wait. Keeps a future
-/// edit from quietly raising the exit drain to a duration a stopped service would pay for.
+/// edit from quietly raising the exit drain to a duration a stopping Background-mode process would pay for.
 #[test]
 fn the_production_pipe_drain_is_bounded() {
     assert!(

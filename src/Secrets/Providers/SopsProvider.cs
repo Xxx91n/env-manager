@@ -141,13 +141,14 @@ internal sealed class SopsProvider : ISecretProvider
     // creates the directory; a DACL that cannot be applied is logged and the provider keeps
     // working, while a directory that cannot be created still throws.
     //
-    // A service-delegated rotation is handed a parent directory the service owns through
-    // ENVMANAGER_SOPS_SCRATCH_DIR and deletes once the CLI child is gone: that is the only
-    // shape that also covers a stop, because the CLI's own `finally` never runs when it is
-    // terminated. Unset, or set to something that cannot be written, this falls back to
-    // %TEMP% exactly as before - a CLI started by hand has no service to reclaim anything
-    // for it, and an unusable scratch root is a configuration problem, never a reason to
-    // refuse to encrypt or decrypt. Both fallback shapes write one line to stderr: the
+    // A Background-mode delegated rotation is handed a parent directory the IPC process
+    // owns through ENVMANAGER_SOPS_SCRATCH_DIR and deletes once the CLI child is gone: that
+    // is the only shape that also covers shutdown, because the CLI's own `finally` never
+    // runs when it is terminated. Unset, or set to something that cannot be written, this
+    // falls back to %TEMP% exactly as before - a CLI started by hand has no IPC process to
+    // reclaim anything for it, and an unusable scratch root is a configuration problem,
+    // never a reason to refuse to encrypt or decrypt. Both fallback shapes write one line
+    // to stderr: the
     // ticket requires the fallback to leave a trace, and from in here an un-delegated call
     // and a delegation whose variable never arrived are indistinguishable.
     private const string ScratchRootEnvVar = "ENVMANAGER_SOPS_SCRATCH_DIR";
@@ -192,10 +193,10 @@ internal sealed class SopsProvider : ISecretProvider
         {
             // Design: sops is file-in/file-out, so plaintext must reach disk as its input.
             // This file and secret.dec.json in Decrypt are the documented on-disk plaintext
-            // exception (docs/architecture.md "Plaintext lifecycle"). Under the service the
-            // directory lives inside the root `run_cli_child` owns and reclaims, so a stop
-            // that kills this process still ends with the file deleted; run by hand, the
-            // delete below is best-effort.
+            // exception (docs/architecture.md "Plaintext lifecycle"). Under a Background-mode
+            // delegation the directory lives inside the root `run_cli_child` owns and reclaims,
+            // so shutdown that kills this process still ends with the file deleted; run by
+            // hand, the delete below is best-effort.
             // Write JSON: { "value": "<plaintext>" }
             // write UTF-8 WITHOUT BOM. Encoding.UTF8 emits a BOM (0xEF 0xBB 0xBF)
             // and sops >= 3.x rejects BOM-prefixed JSON with "invalid character 'ï'

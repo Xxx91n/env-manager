@@ -1407,8 +1407,8 @@ std::mem::forget(_guard);
                         "quit" => {
                             info!("[tray] quit requested — service stays alive (user-managed lifecycle)");
                             // GUI exit does NOT kill the background service.
-                            // The service is a persistent daemon for secret mount refresh.
-                            // Only clear our PID tracking; the process survives.
+                            // The Background-mode process stays available for named-pipe IPC.
+                            // It does not fetch secrets on a timer; only clear PID tracking here.
                             if let Ok(mut guard) = SERVICE_PID.write() {
                                 *guard = None;
                             }
@@ -1513,8 +1513,8 @@ std::mem::forget(_guard);
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
         .run(|_app_handle, event| {
-            // GUI exit does NOT kill the background service.
-            // The service persists for secret mount refresh even when GUI is closed.
+            // GUI exit does NOT kill the Background-mode IPC process.
+            // It stays available after the GUI closes but does not fetch secrets on a timer.
             // Only clear PID tracking to avoid stale references.
             if let tauri::RunEvent::ExitRequested { .. } = event {
                 info!("[exit] ExitRequested — clearing service PID tracking (service stays alive)");

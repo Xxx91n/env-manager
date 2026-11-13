@@ -445,7 +445,7 @@
   "notes.deleteNote": "删除备注",
   "notes.notePlaceholder": "在此输入备注...",
   "notes.noteEmpty": "暂无备注",
-  "service.description": "管理后台机密挂载服务，用于定期刷新机密令牌",
+  "service.description": "Background 模式使用当前用户的挂载文件，支持手动轮换。Service 模式没有挂载文件，也不会定时读取机密。",
   "profiles": {
     "unapplyToEdit": "请先取消应用配置文件，再添加或修改变量"
   },

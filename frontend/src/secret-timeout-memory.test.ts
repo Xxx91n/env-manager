@@ -90,7 +90,7 @@ describe('Phase 5: Long-session memory safety', () => {
     expect(src).toContain('Zeroizing')
   })
 
-  it('Service reconcile.rs: Periodic refresh does not accumulate decrypted material', () => {
+  it('Service reconcile.rs: mount metadata handling does not retain decrypted material', () => {
     const srcPath = path.resolve(__dirname, '..', '..', 'service', 'src', 'reconcile.rs')
     if (!fs.existsSync(srcPath)) {
       expect(true).toBe(true)

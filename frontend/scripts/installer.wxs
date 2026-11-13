@@ -35,7 +35,7 @@
           </Directory>
         </Directory>
       <?endif ?>
-      <!-- ProgramData directory for machine-level secret mount files -->
+      <!-- ProgramData directory for the audit ledger and service logs; no mount file is stored here. -->
       <Directory Id="ProgramDataFolder">
         <Directory Id="EnvManagerDataDir" Name="EnvManager" />
       </Directory>
@@ -89,12 +89,12 @@
         <File Id="AgentGuideFile" Source="$(var.SourceDir)\AGENTS.cli.md" KeyPath="yes" />
         <RemoveFile Id="RemoveResidue_AgentGuide" Name="*.*" On="uninstall" />
       </Component>
-      <!-- env-manager-service.exe — Windows service binary for secret mount lifecycle -->
+      <!-- env-manager-service.exe — Windows service binary for named-pipe IPC -->
       <Component Id="ServiceExecutable" Guid="e61585c6-4c5b-437c-be39-082f8b64bade" Win64="$(var.Win64)">
         <File Id="ServiceFile" Source="$(var.SourceDir)\env-manager-service.exe" KeyPath="yes" />
         <RemoveFile Id="RemoveResidue_ServiceExecutable" Name="*.*" On="uninstall" />
         <ServiceInstall Id="EnvManagerService" Name="EnvManagerService" Type="ownProcess"
-                        Start="auto" ErrorControl="normal" Description="Env Manager secret mount lifecycle service"
+                        Start="auto" ErrorControl="normal" Description="Env Manager named-pipe service"
                         Arguments="--mode=service">
           <util:ServiceConfig
             FirstFailureActionType="restart"

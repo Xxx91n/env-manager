@@ -75,7 +75,7 @@ internal static class AgentsCommand
                     new { cmd = "expand", desc = "Resolve nested %VAR% references", args = "<value>", scope = false, @async = true },
                     new { cmd = "protection", desc = "List/add/remove protected vars and PATH entries", args = "list|add-var|remove-var|add-path|remove-path", scope = false, @async = true },
                     new { cmd = "update", desc = "Check GitHub releases for newer version", args = "check", scope = false, @async = true },
-                    new { cmd = "service", desc = "IPC gateway to the secret lifecycle service", args = "status|ping|health|refresh <id>|rotate <id>|reload|shutdown", scope = false, @async = true },
+                    new { cmd = "service", desc = "IPC gateway (Background by default; --service-pipe selects SCM Service mode)", args = "status|ping|health|refresh <id>|rotate <id>|reload|shutdown [--service-pipe]", scope = false, @async = true },
                     new { cmd = "audit", desc = "Manage the audit ledger (hash-chained, tamper-evident)", args = "list|verify|encrypt-file|migrate-audit|verify-ledger|export-survival-kit|recover-from-ledger", scope = false, @async = true },
                     new { cmd = "export-state", desc = "Export internal config as a DPAPI-encrypted archive", args = "--output <file>", scope = false, @async = false },
                     new { cmd = "import-state", desc = "Import a DPAPI-encrypted state archive", args = "--input <file> [--dry-run]", scope = false, @async = false },

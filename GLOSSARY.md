@@ -55,11 +55,11 @@ A separate record for one secret. A profile can point to it by id instead of hol
 _Avoid_: mount point, secret reference, secret link
 
 **Refresh**:
-Checking a mount's metadata and recording when it was last fetched. It does not decrypt or replace the secret.
+Check a mount's metadata only. It does not fetch or decrypt the secret.
 _Avoid_: reload, re-fetch, poll
 
 **Refresh policy**:
-Whether a secret is fetched only when a Launch profile starts, or also checked on a timer.
+The `refreshPolicy` field is reserved for future server-side fetching; no service fetches values on a timer today. Existing `Periodic` values still mark provider-managed mounts for rotation handling.
 _Avoid_: refresh mode, fetch mode, lease policy
 
 **Rotation**:

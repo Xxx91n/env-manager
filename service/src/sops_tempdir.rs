@@ -1,12 +1,13 @@
-// Service-owned scratch root for the delegated CLI's sops plaintext (#177).
+// Background-mode scratch root for the delegated CLI's sops plaintext (#177).
 //
 // Why this exists: sops is file-in/file-out, so `SopsProvider` writes the value it is
 // about to encrypt - or the value it just decrypted - into
-// `%TEMP%\env-manager-sops-<guid>\` and removes that directory in a `finally`. A service
-// stop terminates the CLI before the `finally` runs (#153), and the kill-on-close job
-// object ends processes, not files (#160), so one stop that landed on a rotation left one
-// plaintext file per secret on disk under the service identity's `%TEMP%`: no expiry, no
-// sweep, no audit. The plaintext lifecycle table in `docs/architecture.md` had to carry a
+// `%TEMP%\env-manager-sops-<guid>\` and removes that directory in a `finally`. A
+// Background-mode shutdown terminates the CLI before the `finally` runs (#153), and the
+// kill-on-close job object ends processes, not files (#160), so one stop that landed on a
+// rotation left one plaintext file per secret on disk under the user's `%TEMP%`. Before the
+// startup sweep, those files had no expiry, no sweep, and no audit trail. The plaintext
+// lifecycle table in `docs/architecture.md` had to carry a
 // stop note for it, i.e. the table documented a routine operational action as an
 // exception to its own rule.
 //
@@ -33,25 +34,24 @@ use std::time::{Duration, SystemTime};
 /// `ENVMANAGER_LOCALAPPDATA` seam rather than with the `ENV_MANAGER_` split.
 pub(crate) const TEMP_DIR_ENV: &str = "ENVMANAGER_SOPS_SCRATCH_DIR";
 
-/// Prefix of the service-owned root. Deliberately *not* `env-manager-sops-`: that is the
-/// name of the provider's own working directories, and a root left behind by a service
-/// that was killed rather than stopped has to be recognisable as a service artefact
-/// instead of as something the provider wrote.
+/// Prefix of the Background-mode-owned root. Deliberately *not* `env-manager-sops-`: that is
+/// the name of the provider's own working directories, and a root left by a Background-mode
+/// process killed rather than stopped must be recognisable as an Env Manager artefact.
 const ROOT_PREFIX: &str = "env-manager-rotate-scratch-";
 
 /// Prefix of the provider's own working directories. `SecretTempDirectory` composes it as
 /// `env-manager-` + provider name + `-<guid>` and the sops provider is `sops`, so before
 /// #177 these were created directly under `%TEMP%` by every sops call, with no sweeper
-/// anywhere in the codebase. A service identity that rotated through the pre-#177 era
-/// therefore carries them on disk forever; the startup sweep treats them exactly like the
-/// service's own roots. Under the service today the provider only creates this shape inside
-/// the delegation's scratch root, never at the top level of `%TEMP%`.
+/// anywhere in the codebase. A Background-mode process that rotated through the pre-#177
+/// era may leave them on disk; the startup sweep treats them exactly like the process's
+/// own roots. Today the provider only creates this shape inside the
+/// delegation's scratch root, never at the top level of `%TEMP%`.
 pub(crate) const LEGACY_SOPS_PREFIX: &str = "env-manager-sops-";
 
 /// Retry budget for a delete that still meets a held handle. Closing the job handle asks
 /// the kernel to terminate its members, which is asynchronous, so a `sops` process can
-/// still own the plaintext file for a moment after the stop path returns. Five 200ms
-/// attempts stay inside `crate::SHUTDOWN_DRAIN`, the window the stop path shares with
+/// still own the plaintext file for a moment after Background-mode shutdown begins. Five
+/// 200ms attempts stay inside `crate::SHUTDOWN_DRAIN`, the window the stop path shares with
 /// terminate-and-reap.
 ///
 /// Why not the five-second helper budget `service/src/rotate_stop_tests.rs` measures: that
@@ -64,8 +64,9 @@ pub(crate) const LEGACY_SOPS_PREFIX: &str = "env-manager-sops-";
 const RECLAIM_ATTEMPTS: u32 = 5;
 const RECLAIM_BACKOFF: Duration = Duration::from_millis(200);
 
-/// A directory this service created for one delegated CLI child and owns until it is
-/// gone. Dropping it without reclaiming it is the leak #177 is about, so `Drop` makes one
+/// A directory the Background-mode process created for one delegated CLI child and owns
+/// until it is gone. Dropping it without reclaiming it is the leak #177 is about, so `Drop`
+/// makes one
 /// last attempt: that path is only reachable when the caller's future is dropped
 /// mid-await, the same class of exit `Child::kill_on_drop` covers for the child.
 pub(crate) struct SopsTempDir {
@@ -159,27 +160,26 @@ fn remove_tree(root: &Path) -> Result<(), String> {
 /// How old a root must be before the startup sweep will delete it.
 ///
 /// A live delegation cannot own a root this old: the hang budget bounds a rotate child at
-/// 15 minutes and the stop-path reclaim finishes about a second after the child is reaped,
-/// so anything past 24h is an orphan - a service that was killed rather than stopped, or a
-/// pre-#177 provider run. The threshold is a second guard, not the mechanism that protects
-/// this instance's own roots (that is the sweep's placement in `run_server`); it also keeps
+/// 15 minutes and the shutdown-path reclaim finishes about a second after the child is reaped,
+/// so anything past 24h is an orphan - a killed Background-mode process or a pre-#177
+/// provider run. The threshold is a second guard, not the mechanism that protects
+/// this instance's own roots (that is the sweep's placement in `run_server` and
+/// `run_background_server`); it also keeps
 /// a clock skew or a root whose writer is winding down from turning into a delete.
 pub(crate) const SWEEP_MIN_AGE: Duration = Duration::from_secs(24 * 60 * 60);
 
-/// Both families the sweep owns: the service's own per-delegation roots and the legacy
+/// Both families the sweep owns: per-delegation roots and the legacy
 /// provider shape. Kept next to `ROOT_PREFIX` so a rename has to touch both.
 const SWEEP_PREFIXES: [&str; 2] = [ROOT_PREFIX, LEGACY_SOPS_PREFIX];
 
 /// Sweep leftover plaintext roots a previous instance left behind (issue #219).
 ///
-/// Called once per service start, after the RUNNING report and before the IPC server and
-/// the process guard are spawned. That placement is the ticket's race criterion made
-/// structural: the only writer of a new root is an IPC rotate handler, and no handler can
-/// exist yet, so a root created by this instance can never be seen here. The function is
-/// synchronous blocking I/O on purpose - the runtime has no other tasks at this point, and
-/// the alternative (a spawned sweep racing the first rotate) is exactly what the ordering
-/// exists to avoid. A slow sweep also cannot delay the RUNNING report: that already
-/// happened, which is the #149 red line.
+/// Called at both server starts, before any IPC rotate handler can create a new root.
+/// Service mode calls it after the RUNNING report and before its task spawns; Background
+/// mode calls it before starting its IPC task. This makes "a root this instance created is
+/// never swept" an ordering property rather than a timestamp judgement. The function is
+/// synchronous blocking I/O on purpose - no handlers exist yet, so a spawned sweep cannot
+/// race the first rotate. In Service mode it also cannot delay the RUNNING report (#149).
 ///
 /// An occupied directory is skipped, not fought for: one attempt, no retry budget, and the
 /// failure at error level naming the path. Unlike the stop-path reclaim there is no window

@@ -1,8 +1,9 @@
 // Hang budget of a delegated CLI rotate (#161): a rotation must not sit in its child forever.
 //
-// The stop path (#153, #160) answers "the SCM wants us to stop"; this file answers the other
-// question the ticket left open - "nobody stopped us, the CLI is simply wedged". Both end the
-// same way (terminate, reap, close the job object), which is why `reconcile::run_cli_child`
+// The Background-mode shutdown path (#153, #160) answers "the process is shutting down";
+// this file answers the other question the ticket left open - "nobody stopped us, the CLI is
+// simply wedged". Both end the same way (terminate, reap, close the job object), which is
+// why `reconcile::run_cli_child`
 // shares one convergence path between them, and the assertions here are about what makes the
 // budget path *distinguishable*: an `OverHangBudget` outcome, a message that does not read as a
 // service stop, and a mount file the failed rotation never touched.
