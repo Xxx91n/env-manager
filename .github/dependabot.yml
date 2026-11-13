@@ -135,10 +135,11 @@ updates:
       # minor/patch（含安全更新）不再被压制。
       - dependency-name: "vite"
         versions: [">= 9.0.0"]
-      # tailwind-merge：当前栈 2.x 与 tailwindcss 3.x 匹配；3.x 改 API + 改 typescript 类型
-      # 导出，触发所有 `twMerge` 调用点重新评审，#99 的触发条件门控，故钉在 3.x。
-      - dependency-name: "tailwind-merge"
-        versions: ["3.x"]
+      # tailwindcss：当前栈 3.x（frontend/package.json ^3.4.0）。钉住的只有 5.x 及以上
+      # ——主版本跨代要单独开窗评审（#305 裁定）；4.x 的 minor/patch（含安全更新）走
+      # npm-minor-patch 组自动合并，不再被压制。
+      - dependency-name: "tailwindcss"
+        versions: [">= 5.0.0"]
       # jsdom：当前测试环境 jsdom 25.x（frontend/package.json ^25.0.1）；26 起跨多个 major，须重测 DOM 模拟
       # 行为差异（MutationObserver / IntersectionObserver 语义），故钉 26.0.0 及以上。
       - dependency-name: "jsdom"
