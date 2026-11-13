@@ -1,6 +1,47 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
+
+/* v4 theme migrated from the deleted tailwind.config.js (#313).
+   Runtime-variable mappings must live in `@theme inline`: the utility gets the
+   `hsl(var(--…))` expression inlined, so the 12 dual-axis token blocks below
+   keep driving theme switches. A plain @theme would resolve the values once
+   at :root and freeze the colors. */
+@theme inline {
+  --color-border: hsl(var(--border));
+  --color-input: hsl(var(--input));
+  --color-ring: hsl(var(--ring));
+  --color-background: hsl(var(--background));
+  --color-foreground: hsl(var(--foreground));
+  --color-primary: hsl(var(--primary));
+  --color-primary-foreground: hsl(var(--primary-foreground));
+  --color-secondary: hsl(var(--secondary));
+  --color-secondary-foreground: hsl(var(--secondary-foreground));
+  --color-destructive: hsl(var(--destructive));
+  --color-destructive-foreground: hsl(var(--destructive-foreground));
+  --color-muted: hsl(var(--muted));
+  --color-muted-foreground: hsl(var(--muted-foreground));
+  --color-accent: hsl(var(--accent));
+  --color-accent-foreground: hsl(var(--accent-foreground));
+  --color-popover: hsl(var(--popover));
+  --color-popover-foreground: hsl(var(--popover-foreground));
+  --color-card: hsl(var(--card));
+  --color-card-foreground: hsl(var(--card-foreground));
+  --color-chart-1: hsl(var(--chart-1));
+  --color-chart-2: hsl(var(--chart-2));
+  --color-chart-3: hsl(var(--chart-3));
+  --color-chart-4: hsl(var(--chart-4));
+  --color-chart-5: hsl(var(--chart-5));
+  --radius-lg: var(--radius);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-sm: calc(var(--radius) - 4px);
+}
+
+/* Dead values with no runtime-variable indirection (gray-750 has no call
+   sites; it stays only so the generated class-name set is unchanged). */
+@theme {
+  --color-gray-750: #2d2d35;
+  --text-xs: 12px;
+  --text-xs--line-height: 1.4;
+}
 
 /* v0.9.21 Dual-axis theme token system
    Axis 1: data-theme="light" | "dark" (on <html>)

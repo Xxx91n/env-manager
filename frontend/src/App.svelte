@@ -466,10 +466,6 @@
   <InputDialog />
 
 <style>
-  @tailwind base;
-  @tailwind components;
-  @tailwind utilities;
-
   :global(body) {
     /* Microsoft YaHei UI first so Chinese glyphs render with the canonical Windows
        CJK UI face; Segoe UI keeps Latin/digits looking native on Windows 10/11;
