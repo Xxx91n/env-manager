@@ -28,10 +28,10 @@ use tokio::sync::oneshot;
 use tokio_util::sync::CancellationToken;
 
 use crate::reconcile::{
-    rotate_mount_at_with_pipe_drain, rotation_in_flight, run_cli_child,
-    ChildOutcome, LatchedPipeDrain, PIPE_DRAIN_ON_EXIT, ROTATION_TIME_LIMIT,
+    rotate_mount_at_with_pipe_drain, run_cli_child, ChildOutcome, LatchedPipeDrain,
+    PIPE_DRAIN_ON_EXIT, ROTATION_TIME_LIMIT,
 };
-use crate::rotate_stop_tests::{MountFixture, ROTATION_SUITE_GATE};
+use crate::rotate_stop_tests::MountFixture;
 
 /// The stub "CLI": `cmd.exe` starts a `ping` grandchild in the background and exits.
 /// `/s` makes cmd strip the quotes Rust puts around the command string; `/d` keeps
@@ -50,10 +50,6 @@ const FAST_ARGS: [&str; 4] = ["/d", "/s", "/c", "echo rotated"];
 /// Injected post-exit drain: long enough for `ping` to start and hold the handles,
 /// short enough that CI never waits the 30s helper out.
 const SHORT_PIPE_DRAIN: Duration = Duration::from_millis(400);
-/// Injected post-exit drain for the recovery test once `LatchedPipeDrain` releases the
-/// deadline (#205): stand-down probes run while the two-way gate holds the drain open, so
-/// the post-release budget only needs to expire promptly without waiting the 30s helper out.
-const RECOVERY_DRAIN: Duration = SHORT_PIPE_DRAIN;
 
 /// Every wait in this file is bounded, so a regression fails the test instead of
 /// wedging the runner until the job timeout. 20s is far short of the 30s helper.
@@ -77,8 +73,7 @@ const CANCEL_PATH_BUDGET: Duration = Duration::from_secs(4);
 /// registering thread's default (`NoSubscriber`), caching `INTEREST_NEVER` on the callsite.
 /// Taking an exclusive write lock around `capture_warns` while the other `PIPE_HOLDING_ARGS`
 /// emitters hold shared read locks guarantees no `NoSubscriber` thread races callsite
-/// registration or capture. Lock order when combined with `ROTATION_SUITE_GATE`: always
-/// `ROTATION_SUITE_GATE` -> `DRAIN_WARN_GATE` -> `CAPTURE_GUARD` -> `LOG_BYTES`.
+/// registration or capture. Lock order: always `DRAIN_WARN_GATE` -> `CAPTURE_GUARD` -> `LOG_BYTES`.
 static DRAIN_WARN_GATE: tokio::sync::RwLock<()> = tokio::sync::RwLock::const_new(());
 
 /// The WARN+ buffer is process-global. Only the held-handle test captures WARNs today, but
@@ -237,7 +232,6 @@ async fn a_child_that_closes_its_pipes_keeps_complete_output() {
 /// looking untouched and tell the IPC client that completed work failed.
 #[tokio::test]
 async fn an_incomplete_diagnostic_does_not_fail_a_completed_rotation() {
-    let _suite = ROTATION_SUITE_GATE.read().await;
     let _warn_shared = DRAIN_WARN_GATE.read().await;
     let fixture = MountFixture::new("pipe-incomplete");
     let shutdown = CancellationToken::new();
@@ -303,85 +297,6 @@ async fn await_drain_signal<T: std::fmt::Debug>(
             panic!("delegation did not {phase} inside {budget:?}");
         }
     }
-}
-
-/// The liveness half of #192: the RAII marker is dropped when the call returns, so
-/// `rotation_in_flight()` returns to zero even though the pipe drain outlived the child.
-/// The count is probed directly through `rotation_in_flight()`, the same snapshot its
-/// only production reader used before that reader - the periodic sweep - was deleted
-/// (#294), keeping `ROTATIONS_IN_FLIGHT` itself private with no test-only accessor. Holds the exclusive
-/// `ROTATION_SUITE_GATE` write lock so no sibling `cargo test` worker can raise the
-/// process-wide counter while this test proves quiescent recovery.
-#[tokio::test]
-async fn the_in_flight_gate_recovers_after_the_drain_budget() {
-    let _quiet = ROTATION_SUITE_GATE.write().await;
-    let _warn_shared = DRAIN_WARN_GATE.read().await;
-    assert!(
-        !rotation_in_flight(),
-        "exclusive ROTATION_SUITE_GATE must start with no rotation in flight"
-    );
-    let fixture = MountFixture::new("pipe-inflight");
-    let shutdown = CancellationToken::new();
-    let token = shutdown.clone();
-    let path = fixture.path.clone();
-    let (drain_tx, drain_rx) = oneshot::channel();
-    let (release_tx, release_rx) = oneshot::channel();
-    let mut in_flight = tokio::spawn(async move {
-        rotate_mount_at_with_pipe_drain(
-            &path,
-            STUB_EXE,
-            &PIPE_HOLDING_ARGS,
-            "mount-1",
-            &token,
-            ROTATION_TIME_LIMIT,
-            LatchedPipeDrain {
-                budget: RECOVERY_DRAIN,
-                entered: drain_tx,
-                release: release_rx,
-                started: None,
-            },
-        )
-        .await
-    });
-
-    // Synchronize deterministically on entry into `drain_pipes_on_exit` (#205): by the
-    // time this returns, `child.wait()` has won the outer `select!` and the two-way latch
-    // holds the drain open before its deadline starts while `RotationInFlight` is still
-    // held, so scheduler jitter cannot expire `RECOVERY_DRAIN` before the gate is probed.
-    await_drain_signal(
-        drain_rx,
-        ALWAYS_TOO_LONG,
-        "entering the post-exit pipe drain",
-        &shutdown,
-        &mut in_flight,
-    )
-    .await;
-
-    assert!(
-        rotation_in_flight(),
-        "the drain itself must keep ROTATIONS_IN_FLIGHT non-zero while the delegation \
-         is still inside its post-exit drain"
-    );
-    assert!(
-        !in_flight.is_finished(),
-        "our own delegation must still be inside its post-exit drain while the gate is \
-         raised, proving the drain itself held ROTATIONS_IN_FLIGHT"
-    );
-
-    let _ = release_tx.send(());
-
-    let info = tokio::time::timeout(ALWAYS_TOO_LONG, in_flight)
-        .await
-        .expect("the post-exit drain must not keep ROTATIONS_IN_FLIGHT at 1 forever")
-        .expect("the rotate task must not panic")
-        .expect("an exited-0 child completes the rotation");
-    assert_eq!(info["rotated"], true);
-
-    assert!(
-        !rotation_in_flight(),
-        "ROTATIONS_IN_FLIGHT never returned to zero: once the marker stops dropping, the \
-         count stays at 1 forever"
-    );
 }
 
 /// The production default is the bound, not a second unbounded wait. Keeps a future

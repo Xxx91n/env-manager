@@ -8,8 +8,8 @@
 //
 // The other writer this module used to pin is gone (#294): the periodic sweep took the same
 // lock and stamped `lastFetchedAt` in between, so its stand-down and stamping cases lived
-// here too. Both went with the sweep. The in-flight counter itself survives until the ticket
-// that removes the gate (#295), and `rotate_pipe_drain_tests` still probes it directly.
+// here too. Both went with the sweep. The in-flight counter the sweep stood down on is gone
+// with #295; this module only pins that the child wait sits outside `RECONCILE_LOCK`.
 //
 // Isolation: temp mount files under `%TEMP%`, removed on drop; no registry, no real
 // `%LOCALAPPDATA%\EnvManager` or `ProgramData\EnvManager` state.
@@ -19,7 +19,7 @@ use std::time::Duration;
 use tokio_util::sync::CancellationToken;
 
 use crate::reconcile::{rotate_mount_at, ROTATION_TIME_LIMIT};
-use crate::rotate_stop_tests::{MountFixture, ROTATION_SUITE_GATE};
+use crate::rotate_stop_tests::MountFixture;
 use crate::SHUTDOWN_DRAIN;
 
 /// The rotation that is already in flight: one `ping.exe` doing 30 one-second round trips,
@@ -41,7 +41,6 @@ const LOCK_FREE_BUDGET: Duration = Duration::from_secs(10);
 /// first one is still running".
 #[tokio::test]
 async fn a_slow_rotation_does_not_hold_the_reconcile_lock() {
-    let _suite = ROTATION_SUITE_GATE.read().await;
     let slow = MountFixture::new("lock-slow");
     let fast = MountFixture::new("lock-fast");
     let slow_shutdown = CancellationToken::new();

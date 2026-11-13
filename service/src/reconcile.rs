@@ -16,7 +16,6 @@ use std::io::Write;
 use chrono::{DateTime, Utc};
 use tokio_util::sync::CancellationToken;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicUsize, Ordering}; // in-flight delegations, read under the lock (#161)
 use tokio::io::AsyncReadExt; // draining the CLI child's pipes while it runs
 use std::process::Stdio; // piped stdout/stderr on the CLI child (tokio takes std's type)
 use tokio::sync::Mutex; // Phase 4C: TOCTOU protection
@@ -43,8 +42,7 @@ const STDERR_DRAIN_ON_STOP: Duration = Duration::from_millis(200);
 /// cannot keep the handle open, because each one redirects its own std handles", an assumption
 /// no test pinned: one helper that inherits stdout/stderr (`UseShellExecute`, a future adapter,
 /// anything the CLI spawns without redirecting) leaves the CLI gone and both pipes open, so
-/// `run_cli_child` never returned and `ROTATIONS_IN_FLIGHT` stayed at 1 forever, so the
-/// count never came back down.
+/// `run_cli_child` never returned, so the call never came back down.
 ///
 /// 200ms is the same size as the stop drain: long enough for a normal pipe to close in the
 /// instant after `wait()` reaps the child, short enough that a held handle cannot turn a
@@ -167,47 +165,6 @@ pub struct MountHealth {
 /// re-encrypts per secret, and the CLI replaces the mount file atomically.
 static RECONCILE_LOCK: Mutex<()> = Mutex::const_new(());
 
-/// How many delegated CLI rotations are running in this service right now (#161).
-///
-/// Releasing `RECONCILE_LOCK` for the child wait is what made this count necessary: the
-/// writer that saves a whole snapshot of the mount file had to know whether a rotation's
-/// child was rewriting that file in place, or it would restore pre-rotation envelopes. The
-/// count is taken under the lock (see `rotate_mount_at`), so a reader holding the lock can
-/// never see it *rise*: zero means no child can be writing, and a value that falls to zero
-/// under the reader means that rotation's child is already reaped and its write-back done -
-/// the marker outlives the write-back, which needs the lock itself.
-static ROTATIONS_IN_FLIGHT: AtomicUsize = AtomicUsize::new(0);
-
-/// RAII marker for one running delegation; see `ROTATIONS_IN_FLIGHT`. Dropped when the
-/// rotation returns - after the child is reaped and the write-back is done - so a writer that
-/// sees zero cannot race a child that is still writing.
-struct RotationInFlight;
-
-impl RotationInFlight {
-    fn enter() -> Self {
-        ROTATIONS_IN_FLIGHT.fetch_add(1, Ordering::SeqCst);
-        Self
-    }
-}
-
-impl Drop for RotationInFlight {
-    fn drop(&mut self) {
-        ROTATIONS_IN_FLIGHT.fetch_sub(1, Ordering::SeqCst);
-    }
-}
-
-/// Whether a delegated rotation currently owns the mount file's envelopes (#161).
-///
-/// Tests poll it as a readiness and drain snapshot (#192), keeping `ROTATIONS_IN_FLIGHT`
-/// itself private with no test-only accessor on the static. Production has no reader left:
-/// the writer that used to consult it was the periodic sweep, deleted in #294. The counter
-/// and this function go away with the gate they serve (#295), so the `allow` is deliberate
-/// and temporary rather than a promise that someone will read it again.
-#[allow(dead_code)]
-pub(crate) fn rotation_in_flight() -> bool {
-    ROTATIONS_IN_FLIGHT.load(Ordering::SeqCst) > 0
-}
-
 /// Rotate a single mount by ID (IPC `rotate` method).
 ///
 /// `shutdown` is the service stop token, handed down by the connection handler that owns
@@ -282,11 +239,6 @@ pub(crate) async fn rotate_mount_at_with_pipe_drain(
     // deleted while the child runs (the write-back re-reads and skips it), and a second
     // rotation of the same mount can start (harmless - `RotateAll` decrypts then re-encrypts
     // per secret, and the CLI replaces the mount file atomically).
-    // The in-flight marker is taken *inside* the locked block (#161): a writer holding the lock
-    // that reads zero must not be able to race a child which is about to start, so the count
-    // may only go up while the lock is held. It is released when this function returns, after
-    // the child is reaped and the write-back is done.
-    let _in_flight;
     {
         let _guard = RECONCILE_LOCK.lock().await; // Phase 4C: TOCTOU protection
         let mounts = load_mounts(mount_path);
@@ -313,7 +265,6 @@ pub(crate) async fn rotate_mount_at_with_pipe_drain(
                 "lastFetchedAt": mount.lastFetchedAt,
             }));
         }
-        _in_flight = RotationInFlight::enter();
     }
 
     // Any error here - a failing child, an interrupted one, or one that outlived its hang
@@ -586,7 +537,7 @@ impl Ending {
 ///
 /// The exit branch has its own bound (#192): `pipe_drain` caps the wait for the two pipe
 /// readers after the child is gone, so a helper that inherited the std handles cannot keep
-/// `run_cli_child`, and with it `ROTATIONS_IN_FLIGHT`, alive forever. A child that exited 0
+/// `run_cli_child` itself alive forever. A child that exited 0
 /// is still a successful rotation; only its diagnostic text can be incomplete. See
 /// `ChildOutcome::Finished` for why that answer, not "failure", is the chosen one.
 ///
@@ -724,8 +675,7 @@ async fn spawn_cli_child(
             // redirect theirs today (`src/Secrets/Providers/`), yet nothing pinned that,
             // and one helper that does not - a future adapter, `UseShellExecute`, anything
             // the CLI spawns without redirecting - leaves the CLI gone and both pipes
-            // open. That was a permanent `run_cli_child` and a permanent
-            // `ROTATIONS_IN_FLIGHT == 1`.
+            // open. That was a permanent `run_cli_child`.
             // Both readers now share one
             // deadline, so the exit path is bounded by a single number; a reader that
             // panics or errors is reported as incomplete output, not a closed pipe.

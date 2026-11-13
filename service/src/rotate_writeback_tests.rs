@@ -18,7 +18,7 @@ use std::time::Duration;
 use tokio_util::sync::CancellationToken;
 
 use crate::reconcile::{delegated_rotate_argv, rotate_mount_at, ROTATION_TIME_LIMIT};
-use crate::rotate_stop_tests::{MountFixture, ROTATION_SUITE_GATE};
+use crate::rotate_stop_tests::MountFixture;
 
 /// Every wait here is bounded, so a regression fails the test instead of wedging the runner
 /// until the job timeout. The stub scripts finish in milliseconds; 20s is the same budget the
@@ -30,7 +30,6 @@ const WRITEBACK_TIMEOUT: Duration = Duration::from_secs(20);
 /// stamps; otherwise an exit-0 no-op would falsely claim that the provider value was rotated.
 #[tokio::test]
 async fn provider_managed_periodic_mount_without_envelope_is_skipped_without_stamping_or_delegating() {
-    let _quiet = ROTATION_SUITE_GATE.write().await;
     for (label, envelope) in [
         ("null-envelope", serde_json::Value::Null),
         ("empty-envelope", serde_json::json!("")),
@@ -134,7 +133,6 @@ impl Drop for RewriteScript {
 /// rotation it is recording, while still reporting success to the client.
 #[tokio::test]
 async fn completed_rotation_keeps_the_envelopes_the_child_wrote() {
-    let _suite = ROTATION_SUITE_GATE.read().await;
     let fixture = MountFixture::new("child-wrote");
     let shutdown = std::sync::Arc::new(CancellationToken::new());
     let rewritten = serde_json::json!([
@@ -190,7 +188,6 @@ async fn completed_rotation_keeps_the_envelopes_the_child_wrote() {
 /// and rewriting the list would resurrect a mount file that lost the mount.
 #[tokio::test]
 async fn completed_rotation_skips_a_mount_that_vanished() {
-    let _suite = ROTATION_SUITE_GATE.read().await;
     let fixture = MountFixture::new("vanished");
     let shutdown = std::sync::Arc::new(CancellationToken::new());
     let script = RewriteScript::writing(&fixture.path, "[]");
@@ -231,7 +228,6 @@ async fn completed_rotation_skips_a_mount_that_vanished() {
 /// happened - so it is a skip, not a failure, and the service must not recreate the file.
 #[tokio::test]
 async fn completed_rotation_tolerates_a_deleted_mount_file() {
-    let _suite = ROTATION_SUITE_GATE.read().await;
     let fixture = MountFixture::new("deleted");
     let shutdown = std::sync::Arc::new(CancellationToken::new());
     let script = RewriteScript::deleting(&fixture.path);
@@ -270,7 +266,6 @@ async fn completed_rotation_tolerates_a_deleted_mount_file() {
 /// reads strictly.
 #[tokio::test]
 async fn completed_rotation_reports_an_unreadable_mount_file() {
-    let _suite = ROTATION_SUITE_GATE.read().await;
     let fixture = MountFixture::new("unreadable");
     let shutdown = std::sync::Arc::new(CancellationToken::new());
     let script = RewriteScript::writing(&fixture.path, "{ this is not a mount list");
@@ -380,7 +375,6 @@ const CHILD_STAMP: &str = "2026-01-02T03:04:05Z";
 
 #[tokio::test]
 async fn completed_rotation_stamps_only_the_named_mount() {
-    let _suite = ROTATION_SUITE_GATE.read().await;
     let fixture = TwoMountFixture::new();
     let shutdown = std::sync::Arc::new(CancellationToken::new());
     let rewritten = serde_json::json!([
