@@ -25,6 +25,11 @@ use crate::reconcile::{run_cli_child, ChildOutcome, PIPE_DRAIN_ON_EXIT, ROTATION
 use crate::sops_tempdir::{SopsTempDir, TEMP_DIR_ENV};
 use crate::SHUTDOWN_DRAIN;
 
+static SWEEP_SERIAL: std::sync::OnceLock<std::sync::Mutex<()>> = std::sync::OnceLock::new();
+fn sweep_serial() -> &'static std::sync::Mutex<()> {
+    SWEEP_SERIAL.get_or_init(|| std::sync::Mutex::new(()))
+}
+
 /// The stub "CLI": PowerShell, because the fixture needs to write two files and read an
 /// environment variable, and `cmd /c` can do neither without a second script on disk.
 const STUB_EXE: &str = "powershell.exe";
@@ -538,6 +543,7 @@ fn sweep_now() {
 /// family is the one no code path ever reclaimed, which is why it gets its own fixture.
 #[test]
 fn sweep_removes_stale_roots_of_both_families() {
+    let _sweep_guard = sweep_serial().lock().expect("sweep serial");
     let stale_root = make_root(ROOT_PREFIX, "sweep-stale");
     let stale_legacy = make_root(LEGACY_PREFIX, "sweep-stale");
     backdate_creation(&stale_root, 25);
@@ -561,6 +567,7 @@ fn sweep_removes_stale_roots_of_both_families() {
 /// live delegation's maximum lifetime cannot be assumed orphaned.
 #[test]
 fn sweep_spares_roots_inside_the_threshold() {
+    let _sweep_guard = sweep_serial().lock().expect("sweep serial");
     let fresh_root = make_root(ROOT_PREFIX, "sweep-fresh");
     let fresh_legacy = make_root(LEGACY_PREFIX, "sweep-fresh");
 
@@ -586,6 +593,7 @@ fn sweep_spares_roots_inside_the_threshold() {
 /// window closes behind it, so it does not retry what the next start can sweep again.
 #[test]
 fn sweep_skips_an_occupied_stale_root_and_logs_it() {
+    let _sweep_guard = sweep_serial().lock().expect("sweep serial");
     use std::os::windows::fs::OpenOptionsExt;
 
     let root = make_root(ROOT_PREFIX, "sweep-occupied");
@@ -639,6 +647,7 @@ fn sweep_skips_an_occupied_stale_root_and_logs_it() {
 /// and a non-directory carrying a swept prefix both survive untouched.
 #[test]
 fn sweep_leaves_unrelated_names_alone() {
+    let _sweep_guard = sweep_serial().lock().expect("sweep serial");
     let unrelated = make_root("env-manager-scratch-sweep-guard-", "unrelated");
     let prefixed_file = std::env::temp_dir().join(format!("{LEGACY_PREFIX}{}.txt", uuid::Uuid::new_v4()));
     std::fs::write(&prefixed_file, "not a plaintext root")
@@ -663,8 +672,9 @@ fn sweep_leaves_unrelated_names_alone() {
 
 /// The Service-mode leg: `run_server` removes a stale root and spares a fresh one after the
 /// RUNNING callback and before its task spawns, through the body the SCM drives.
-#[tokio::test]
+#[tokio::test(flavor = "current_thread")]
 async fn service_start_sweeps_stale_roots_and_spares_fresh_ones() {
+    let _sweep_guard = sweep_serial().lock().expect("sweep serial");
     let stale = make_root(ROOT_PREFIX, "sweep-startup");
     let fresh = make_root(ROOT_PREFIX, "sweep-startup-fresh");
     backdate_creation(&stale, 25);
@@ -700,8 +710,9 @@ async fn service_start_sweeps_stale_roots_and_spares_fresh_ones() {
 
 /// The Background-mode leg: its user-session start must reclaim stale rotation roots before
 /// its IPC task starts accepting requests, while leaving a recent root alone.
-#[tokio::test]
+#[tokio::test(flavor = "current_thread")]
 async fn background_start_sweeps_stale_roots_and_spares_fresh_ones() {
+    let _sweep_guard = sweep_serial().lock().expect("sweep serial");
     let stale = make_root(ROOT_PREFIX, "background-sweep-startup");
     let fresh = make_root(ROOT_PREFIX, "background-sweep-startup-fresh");
     backdate_creation(&stale, 25);
