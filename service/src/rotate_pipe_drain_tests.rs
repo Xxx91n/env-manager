@@ -306,13 +306,12 @@ async fn await_drain_signal<T: std::fmt::Debug>(
 }
 
 /// The liveness half of #192: the RAII marker is dropped when the call returns, so
-/// `rotation_in_flight()` returns to zero and the tick (the one remaining reader of the
-/// gate, since #293 retired `refresh` from it) stops standing down. The gate itself is
-/// probed directly through the same `rotation_in_flight()` snapshot production readers
-/// use; the tick's end-to-end `%TEMP%` assertion lives in `rotate_lock_tests` via
-/// `run_reconcile_tick_at` (#193). Holds the exclusive
+/// `rotation_in_flight()` returns to zero even though the pipe drain outlived the child.
+/// The gate is probed directly through the same `rotation_in_flight()` snapshot its one
+/// remaining reader used before the periodic sweep was deleted (#294), keeping
+/// `ROTATIONS_IN_FLIGHT` itself private with no test-only accessor. Holds the exclusive
 /// `ROTATION_SUITE_GATE` write lock so no sibling `cargo test` worker can raise the
-/// process-wide `ROTATIONS_IN_FLIGHT` counter while this test proves quiescent recovery.
+/// process-wide counter while this test proves quiescent recovery.
 #[tokio::test]
 async fn the_in_flight_gate_recovers_after_the_drain_budget() {
     let _quiet = ROTATION_SUITE_GATE.write().await;
@@ -380,13 +379,13 @@ async fn the_in_flight_gate_recovers_after_the_drain_budget() {
 
     assert!(
         !rotation_in_flight(),
-        "ROTATIONS_IN_FLIGHT never returned to zero: the tick would skip every interval \
-         forever once the marker stopped dropping"
+        "ROTATIONS_IN_FLIGHT never returned to zero: once the marker stops dropping, the \
+         count stays at 1 forever"
     );
 }
 
 /// The production default is the bound, not a second unbounded wait. Keeps a future
-/// edit from quietly raising the exit drain to a duration only the 300s tick notices.
+/// edit from quietly raising the exit drain to a duration a stopped service would pay for.
 #[test]
 fn the_production_pipe_drain_is_bounded() {
     assert!(

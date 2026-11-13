@@ -172,14 +172,14 @@ const SWEEP_PREFIXES: [&str; 2] = [ROOT_PREFIX, LEGACY_SOPS_PREFIX];
 
 /// Sweep leftover plaintext roots a previous instance left behind (issue #219).
 ///
-/// Called once per service start, after the RUNNING report and before the reconcile loop
-/// and IPC server are spawned. That placement is the ticket's race criterion made
-/// structural: the only writers of a new root are the reconcile replay and the IPC rotate
-/// handlers, neither of which exists yet, so a root created by this instance can never be
-/// seen here. The function is synchronous blocking I/O on purpose - the runtime has no
-/// other tasks at this point, and the alternative (a spawned sweep racing the first
-/// replay) is exactly what the ordering exists to avoid. A slow sweep also cannot delay
-/// the RUNNING report: that already happened, which is the #149 red line.
+/// Called once per service start, after the RUNNING report and before the IPC server and
+/// the process guard are spawned. That placement is the ticket's race criterion made
+/// structural: the only writer of a new root is an IPC rotate handler, and no handler can
+/// exist yet, so a root created by this instance can never be seen here. The function is
+/// synchronous blocking I/O on purpose - the runtime has no other tasks at this point, and
+/// the alternative (a spawned sweep racing the first rotate) is exactly what the ordering
+/// exists to avoid. A slow sweep also cannot delay the RUNNING report: that already
+/// happened, which is the #149 red line.
 ///
 /// An occupied directory is skipped, not fought for: one attempt, no retry budget, and the
 /// failure at error level naming the path. Unlike the stop-path reclaim there is no window

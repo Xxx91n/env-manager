@@ -11,9 +11,9 @@
 // the dispatcher thread. Only windows-sys is used; no service crate is added.
 //
 // Startup order (hard constraint): SERVICE_RUNNING is reported as soon as the
-// named-pipe listener exists, before the reconcile backlog. The ordering itself lives
-// in `crate::run_server`, which calls the report callback between "listener created"
-// and "reconcile spawned"; moving slow work ahead of that point reintroduces 1053.
+// named-pipe listener exists, before any background task starts. The ordering itself
+// lives in `crate::run_server`, which calls the report callback between "listener
+// created" and the task spawns; moving slow work ahead of that point reintroduces 1053.
 
 use std::ffi::c_void;
 use std::sync::{Arc, Mutex, MutexGuard, OnceLock};
@@ -72,7 +72,7 @@ static STATUS_LOCK: Mutex<()> = Mutex::new(());
 static LAST_STATUS: Mutex<Option<SERVICE_STATUS>> = Mutex::new(None);
 
 /// Cancellation shared with the server body. The control handler trips it, which is
-/// what makes a STOP/SHUTDOWN request reach the IPC listener and the reconcile loop.
+/// what makes a STOP/SHUTDOWN request reach the IPC listener and the process guard.
 static SHUTDOWN: OnceLock<Arc<CancellationToken>> = OnceLock::new();
 
 fn to_wide(s: &str) -> Vec<u16> {

@@ -429,7 +429,9 @@ const DEPRECATED_NOOP_REASON: &str =
 async fn process_request(req: &IpcRequest, shutdown: &CancellationToken) -> IpcResponse {
     tracing::info!("IPC request: method={} request_id={}", req.method, req.request_id.as_deref().unwrap_or("-"));
     match req.method.as_str() {
-        // enriched ping with heartbeat data (uptime, reconcile status, mount health)
+        // ping carries the uptime, so the GUI watchdog can tell "busy" from "deadlocked".
+        // The mount health summary is its own method, and there is no reconcile status to
+        // report any more: the periodic sweep it named is gone (#294).
         "ping" => {
             let uptime = crate::get_process_uptime();
             IpcResponse::ok(serde_json::json!({
