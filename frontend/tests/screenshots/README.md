@@ -57,11 +57,12 @@ never sees.
 
 The v3 baseline carried a latent rendering bug, not a design choice. The app
 shell's second global style (`@tailwind base` inside `App.svelte`) was scoped
-by Svelte into `.svelte-1n46o8q, .svelte-1n46o8q::before, …::after { border-width: 0; … }` —
-class-level specificity, injected after `app.css` — which silently zeroed
-`border-bottom: 1px solid hsl(var(--border))` on `.titlebar` (verified via
-computed styles on a v3 dev server: `border-bottom-width: 0px`). Deleting that
-shell block, as #313 requires, lets the titlebar's own declared border render.
+by Svelte into the shell's scope class (`.svelte-<hash>, …::before, …::after`)
+with `border-width: 0` among its declarations — class-level specificity,
+injected after `app.css` — which silently zeroed `border-bottom: 1px solid
+hsl(var(--border))` on `.titlebar` (verified via computed styles on a v3 dev
+server: `border-bottom-width: 0px`). Deleting that shell block, as #313
+requires, lets the titlebar's own declared border render.
 The 32px bar now spends 1px on the border, so the titlebar text sits 0.5px
 higher (rasterizes 1px up); everything else on all 28 shots is pixel-identical
 to the v3 baseline below the pixelmatch threshold.
