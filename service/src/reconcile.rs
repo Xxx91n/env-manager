@@ -1,8 +1,12 @@
-// Reconcile loop.
-// tokio::time::interval(300s) periodic full-scan.
-// Idempotent per-item handler: read observed state, fetch desired, write only if diff.
-// Crash resume on next start by reading file state.
-// No SQLite queue, no file watcher, no WAL.
+// Secret-mount state for the service: read and write `secretMount.json`, delegate a
+// rotation to the CLI child, and answer the machine-readable mount health summary.
+//
+// The 300-second periodic sweep that gave this file its old name is gone (#294). It never
+// fetched a value: it stamped `lastFetchedAt` after a metadata check nobody could act on.
+// Nothing in this file writes that field any more. The debugger check it carried as a side
+// duty lives in `crate::process_guard` as its own task.
+//
+// No SQLite queue, no file watcher, no WAL. Crash resume on next start by reading file state.
 // See CONTEXT.md A5(revised), A8 (Domain 3).
 
 use serde::{Deserialize, Serialize};
@@ -39,8 +43,8 @@ const STDERR_DRAIN_ON_STOP: Duration = Duration::from_millis(200);
 /// cannot keep the handle open, because each one redirects its own std handles", an assumption
 /// no test pinned: one helper that inherits stdout/stderr (`UseShellExecute`, a future adapter,
 /// anything the CLI spawns without redirecting) leaves the CLI gone and both pipes open, so
-/// `run_cli_child` never returned and `ROTATIONS_IN_FLIGHT` stayed at 1 forever - the tick
-/// skipped every 300s interval.
+/// `run_cli_child` never returned and `ROTATIONS_IN_FLIGHT` stayed at 1 forever, so the
+/// count never came back down.
 ///
 /// 200ms is the same size as the stop drain: long enough for a normal pipe to close in the
 /// instant after `wait()` reaps the child, short enough that a held handle cannot turn a
@@ -73,7 +77,7 @@ pub(crate) const PIPE_DRAIN_ON_EXIT: Duration = Duration::from_millis(200);
 /// moment the token is cancelled, so `SHUTDOWN_DRAIN` + `RUNTIME_DRAIN` stay inside
 /// `STOP_WAIT_HINT_MS`. What it buys is that a wedged child - a provider round-trip that never
 /// returns, a DPAPI prompt nobody can answer, a CLI deadlock - ends the rotation instead of
-/// holding it, and the reconcile loop behind it, forever.
+/// holding it, and every rotation queued behind it, forever.
 pub(crate) const ROTATION_TIME_LIMIT: Duration = Duration::from_secs(15 * 60);
 
 /// The CLI argv a rotation delegates to. Rotation is not a circular dependency: it is a
@@ -150,35 +154,28 @@ pub struct MountHealth {
     pub lastRotatedAt: Option<String>,
 }
 
-/// Phase 4C: Global lock to prevent TOCTOU between reconcile tick and CLI mount mutations.
+/// Phase 4C: Global lock around this module's access to the mount file.
 ///
 /// Scope (#161): the lock covers the mount-file read and the write-back, never the wait for a
-/// delegated CLI child. `rotate_mount_at` releases it around that wait because the reconcile
-/// tick (`run_reconcile_tick`, 300s interval) queues on this same lock: held across a child
-/// that never returns, one rotation starved every later `rotate` and the tick
-/// itself for as long as the child lived, which is the defect this ticket closes.
+/// delegated CLI child. `rotate_mount_at` releases it around that wait, so a second `rotate`
+/// can start while the first one's child is still running, and a wedged child cannot hold the
+/// lock forever - that starvation was the defect the release closes.
 ///
-/// What the lock still buys is that a write-back cannot interleave with another mount-file
-/// writer. What it no longer buys is exclusivity between two rotations of the same mount;
-/// that is accepted, because a duplicate rotation is harmless by design - `RotateAll`
-/// decrypts then re-encrypts per secret, and the CLI replaces the mount file atomically. The
-/// one other writer - `run_reconcile_tick` - would otherwise save a pre-rotation snapshot
-/// over the envelopes the child just rewrote, so it consults `ROTATIONS_IN_FLIGHT` under
-/// this lock and stands down while a delegation runs. (`refresh` used to be the second
-/// reader of this gate; it no longer touches the mount file at all since #293.)
+/// What the lock buys is that a write-back cannot interleave with another mount-file writer.
+/// What it does not buy is exclusivity between two rotations of the same mount; that is
+/// accepted, because a duplicate rotation is harmless by design - `RotateAll` decrypts then
+/// re-encrypts per secret, and the CLI replaces the mount file atomically.
 static RECONCILE_LOCK: Mutex<()> = Mutex::const_new(());
 
 /// How many delegated CLI rotations are running in this service right now (#161).
 ///
-/// It exists because releasing `RECONCILE_LOCK` for the child wait let the other writer of
-/// the mount file - `run_reconcile_tick` - run *while* a rotation's child is
-/// rewriting that file in place. The tick saves a whole snapshot it loaded before the child's
-/// writes, which would restore the pre-rotation envelopes; the lock used to exclude it only
-/// by keeping them blocked for the entire delegation. The count is taken under the lock (see
-/// `rotate_mount_at`), so a reader holding the lock can never see it *rise*: zero means no
-/// child can be writing, and a value that falls to zero under the reader means that rotation's
-/// child is already reaped and its write-back done - the guard outlives the write-back, which
-/// needs the lock itself.
+/// Releasing `RECONCILE_LOCK` for the child wait is what made this count necessary: the
+/// writer that saves a whole snapshot of the mount file had to know whether a rotation's
+/// child was rewriting that file in place, or it would restore pre-rotation envelopes. The
+/// count is taken under the lock (see `rotate_mount_at`), so a reader holding the lock can
+/// never see it *rise*: zero means no child can be writing, and a value that falls to zero
+/// under the reader means that rotation's child is already reaped and its write-back done -
+/// the marker outlives the write-back, which needs the lock itself.
 static ROTATIONS_IN_FLIGHT: AtomicUsize = AtomicUsize::new(0);
 
 /// RAII marker for one running delegation; see `ROTATIONS_IN_FLIGHT`. Dropped when the
@@ -199,129 +196,16 @@ impl Drop for RotationInFlight {
     }
 }
 
-/// Whether a delegated rotation currently owns the mount file's envelopes (#161). Production
-/// callers read it while holding `RECONCILE_LOCK`; tests also poll it as a readiness / drain
-/// snapshot (#192, #193), keeping `ROTATIONS_IN_FLIGHT` itself private with no test-only
-/// accessor on the static.
+/// Whether a delegated rotation currently owns the mount file's envelopes (#161).
+///
+/// Tests poll it as a readiness and drain snapshot (#192), keeping `ROTATIONS_IN_FLIGHT`
+/// itself private with no test-only accessor on the static. Production has no reader left:
+/// the writer that used to consult it was the periodic sweep, deleted in #294. The counter
+/// and this function go away with the gate they serve (#295), so the `allow` is deliberate
+/// and temporary rather than a promise that someone will read it again.
+#[allow(dead_code)]
 pub(crate) fn rotation_in_flight() -> bool {
     ROTATIONS_IN_FLIGHT.load(Ordering::SeqCst) > 0
-}
-
-/// Main reconcile loop. Runs indefinitely (300s interval).
-/// Domain 10: defer first tick 30s to avoid SCM timeout on boot.
-pub async fn refresh_loop(shutdown: Arc<CancellationToken>) {
-    tracing::info!("reconcile loop starting (30s warmup, 300s interval)");
-    tokio::select! {
-        _ = tokio::time::sleep(Duration::from_secs(30)) => {}
-        _ = shutdown.cancelled() => {
-            tracing::info!("reconcile loop cancelled during warmup, exiting");
-            return;
-        }
-    }
-    if shutdown.is_cancelled() {
-        tracing::info!("reconcile loop cancelled, exiting");
-        return;
-    }
-    let mut interval = tokio::time::interval(Duration::from_secs(300));
-    interval.tick().await; // consume the immediate first tick
-    loop {
-        tokio::select! {
-            _ = interval.tick() => {
-                // Phase 2C: Periodic debugger detection (every tick = 300s)
-                if crate::process_guard::check_debugger() {
-                    tracing::warn!("debugger detected during reconcile tick");
-                }
-                if let Err(e) = run_reconcile_tick().await {
-                    tracing::error!("reconcile tick failed: {}", e);
-                }
-            }
-            _ = shutdown.cancelled() => {
-                tracing::info!("reconcile loop cancelled, exiting gracefully");
-                return;
-            }
-        }
-    }
-}
-
-/// Production entry called by `refresh_loop`: binds `run_reconcile_tick_at` to
-/// `crate::secret_mount_path()`. That one-line binding stays covered by inspection until
-/// `refresh_loop` itself takes warmup and mount-path parameters (#193).
-async fn run_reconcile_tick() -> Result<(), String> {
-    run_reconcile_tick_at(&crate::secret_mount_path()).await
-}
-
-/// `run_reconcile_tick` with the mount file taken as a parameter (#193).
-///
-/// Same seam shape as `rotate_mount_at`: production resolves `crate::secret_mount_path()`,
-/// while tests pass a temp file under `%TEMP%` so exercising the tick never touches real
-/// `%LOCALAPPDATA%` or `ProgramData` state.
-pub(crate) async fn run_reconcile_tick_at(mount_path: &Path) -> Result<(), String> {
-    // Phase 4C: Acquire global lock for the entire tick to prevent TOCTOU with CLI mutations.
-    let _guard = RECONCILE_LOCK.lock().await;
-    // A delegated rotation owns the envelopes in the mount file while its child runs (#161):
-    // the CLI rewrites them in place, and the snapshot this tick would save predates that.
-    // Saving it would restore the pre-rotation envelopes the rotation is about to record, so
-    // the tick stands down for this interval instead. Nothing is lost by doing so - the tick
-    // only stamps `lastFetchedAt`, and the next one does that - and the rotation cannot start
-    // while this tick holds the lock, so the answer read here cannot go stale underneath it.
-    if rotation_in_flight() {
-        tracing::info!("reconcile tick: a delegated rotation is in flight, skipping this tick");
-        return Ok(());
-    }
-    tracing::info!("reconcile tick: scanning secretMount.json");
-
-    let mut mounts = load_mounts(mount_path);
-
-    if mounts.is_empty() {
-        tracing::info!("reconcile tick: no mounts found, skipping");
-        return Ok(());
-    }
-
-    let now = Utc::now();
-    let mut checked_count = 0u32;
-    let mut skipped_count = 0u32;
-    let mut changed = false;
-
-    for mount in &mut mounts {
-        if mount.refreshPolicy != "Periodic" {
-            skipped_count += 1;
-            continue;
-        }
-
-        let interval_secs = mount.refreshIntervalSeconds.unwrap_or(300);
-        let needs_refresh = match &mount.lastFetchedAt {
-            Some(ts) => match DateTime::parse_from_rfc3339(ts) {
-                Ok(last) => (now - last.with_timezone(&Utc)).num_seconds() >= interval_secs,
-                Err(_) => true,
-            },
-            None => true,
-        };
-
-        if !needs_refresh {
-            skipped_count += 1;
-            continue;
-        }
-
-        // The tick's only remaining per-mount duty is stamping `lastFetchedAt` to record
-        // that a metadata check ran - no provider call, no decryption (#293: the IPC
-        // `refresh` command no longer routes through anything here, it answers a
-        // deprecated no-op). The whole stamping scan goes away with the next ticket on
-        // the #292 spec.
-        tracing::info!("reconcile: metadata check on mount {} (provider={})", mount.id, mount.provider);
-        mount.lastFetchedAt = Some(now.to_rfc3339());
-        checked_count += 1;
-        changed = true;
-    }
-
-    if changed {
-        save_mounts(mount_path, &mounts)?;
-    }
-
-    tracing::info!(
-        "reconcile tick complete: {} checked, {} skipped",
-        checked_count, skipped_count
-    );
-    Ok(())
 }
 
 /// Rotate a single mount by ID (IPC `rotate` method).
@@ -393,8 +277,8 @@ pub(crate) async fn rotate_mount_at_with_pipe_drain(
     let pipe_drain: PipeDrain = pipe_drain.into();
     // Check-then-delegate, with the lock released for the delegation itself (#161). The child
     // wait is the only long part of a rotation, and holding the lock across it made one slow
-    // or wedged child stall every later `rotate` and the 300s reconcile tick, which
-    // queues on this same lock. Two windows open and both are handled: the mount can be
+    // or wedged child stall every later `rotate`, each of which queues on this same lock.
+    // Two windows open and both are handled: the mount can be
     // deleted while the child runs (the write-back re-reads and skips it), and a second
     // rotation of the same mount can start (harmless - `RotateAll` decrypts then re-encrypts
     // per secret, and the CLI replaces the mount file atomically).
@@ -434,9 +318,9 @@ pub(crate) async fn rotate_mount_at_with_pipe_drain(
 
     // Any error here - a failing child, an interrupted one, or one that outlived its hang
     // budget - returns before the metadata is touched. That is the replay half of #153's
-    // recovery semantics: the mount still reads as un-rotated, so the next `rotate` or the
-    // reconcile tick does the work again, and re-rotating is harmless (`RotateAll` decrypts
-    // then re-encrypts per secret, `src/Secrets/Manager/SecretProviderManager.cs`).
+    // recovery semantics: the mount still reads as un-rotated, so the next `rotate` does the
+    // work again, and re-rotating is harmless (`RotateAll` decrypts then re-encrypts per
+    // secret, `src/Secrets/Manager/SecretProviderManager.cs`).
     let result = call_cli_rotate(cli_exe, cli_args, shutdown, hang_budget, pipe_drain).await?;
     let now = Utc::now().to_rfc3339();
 
@@ -448,9 +332,9 @@ pub(crate) async fn rotate_mount_at_with_pipe_drain(
     // call: a delegated rotation writes each rotated envelope back into the mount that owns
     // it (the profile only holds `mount:<id>`), so `mounts` is stale by now and saving it
     // would restore the pre-rotation envelopes - silently undoing the rotation this call is
-    // about to record. Only the `lastRotatedAt` stamp is ours to write; the rotate path
-    // stopped stamping `lastFetchedAt` in #293 (the reconcile tick's stamp is retired with
-    // the next ticket on the #292 spec).
+    // about to record. Only the `lastRotatedAt` stamp is ours to write: `lastFetchedAt` is
+    // no longer written anywhere in production, here or anywhere else (#293 retired this
+    // path, #294 retired the periodic sweep that was the last writer).
     //
     // The strict read is what keeps "the mount is gone" apart from "the child left a file
     // this build cannot read": the plain loader answers an empty list for both, and the
@@ -491,8 +375,8 @@ pub async fn get_mount_health() -> Result<serde_json::Value, String> {
 }
 
 /// `get_mount_health` with the mount file taken as a parameter - the same seam shape
-/// `run_reconcile_tick_at` has (#293): the tri-state mapping is table-tested against a
-/// temp file instead of real `%LOCALAPPDATA%` / `ProgramData` state.
+/// `rotate_mount_at` has (#293): the tri-state mapping is table-tested against a temp file
+/// instead of real `%LOCALAPPDATA%` / `ProgramData` state.
 pub(crate) async fn get_mount_health_at(path: &Path) -> Result<serde_json::Value, String> {
     let mounts = load_mounts(path);
 
@@ -840,8 +724,8 @@ async fn spawn_cli_child(
             // redirect theirs today (`src/Secrets/Providers/`), yet nothing pinned that,
             // and one helper that does not - a future adapter, `UseShellExecute`, anything
             // the CLI spawns without redirecting - leaves the CLI gone and both pipes
-            // open. That was a permanent `run_cli_child`, a permanent
-            // `ROTATIONS_IN_FLIGHT == 1` and a tick that skipped every 300s interval.
+            // open. That was a permanent `run_cli_child` and a permanent
+            // `ROTATIONS_IN_FLIGHT == 1`.
             // Both readers now share one
             // deadline, so the exit path is bounded by a single number; a reader that
             // panics or errors is reported as incomplete output, not a closed pipe.

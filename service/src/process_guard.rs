@@ -8,7 +8,10 @@
 // All checks are best-effort: log warn, never exit (keep service debuggable).
 
 use std::path::PathBuf;
+use std::sync::Arc;
+use std::time::Duration;
 use sha2::{Digest, Sha256};
+use tokio_util::sync::CancellationToken;
 
 #[cfg(windows)]
 use windows_sys::{
@@ -89,7 +92,7 @@ pub fn verify_binary_hash() {
 
 /// Phase 2C: Lightweight debugger detection.
 /// IsDebuggerPresent + CheckRemoteDebuggerPresent.
-/// Called periodically (60s) from reconcile loop.
+/// Called once at startup by `init` and every interval by `debugger_watch_loop`.
 pub fn check_debugger() -> bool {
     #[cfg(windows)]
     unsafe {
@@ -119,6 +122,51 @@ pub fn check_debugger() -> bool {
     #[cfg(not(windows))]
     {
         false
+    }
+}
+
+/// How often the running service looks for an attached debugger.
+///
+/// The interval belongs to this task now (#294). It used to be borrowed from the reconcile
+/// tick - one check per 300-second sweep that otherwise only stamped a timestamp.
+pub(crate) const DEBUGGER_CHECK_INTERVAL: Duration = Duration::from_secs(300);
+
+/// The debugger check as its own periodic task (#294).
+///
+/// The wait is one `select!` over the timer *and* the stop token, so a stop ends it the
+/// moment it lands. That shape is a requirement of this ticket, not a habit inherited from
+/// the sweep it replaces: a loop that slept the interval and only then looked at a flag
+/// would sit out up to five minutes of a stop, and a brand-new task is the wrong place to
+/// reintroduce that pattern. Nothing here touches the mount file, and no value is fetched.
+///
+/// `shutdown` is the same token the IPC server answers, so a stop ends both background
+/// tasks inside the same window.
+pub async fn debugger_watch_loop(shutdown: Arc<CancellationToken>) {
+    debugger_watch_loop_at(shutdown, DEBUGGER_CHECK_INTERVAL, check_debugger).await
+}
+
+/// `debugger_watch_loop` with its interval and its check taken as parameters, so a test can
+/// drive the loop without waiting five minutes or attaching a debugger. Production always
+/// goes through `debugger_watch_loop`, which passes `DEBUGGER_CHECK_INTERVAL` and
+/// `check_debugger`.
+pub(crate) async fn debugger_watch_loop_at(
+    shutdown: Arc<CancellationToken>,
+    interval: Duration,
+    check: impl Fn() -> bool + Send + 'static,
+) {
+    tracing::info!("debugger check task starting ({:?} interval)", interval);
+    loop {
+        tokio::select! {
+            _ = tokio::time::sleep(interval) => {
+                if check() {
+                    tracing::warn!("debugger attached to the service process (periodic check)");
+                }
+            }
+            _ = shutdown.cancelled() => {
+                tracing::info!("debugger check task cancelled, exiting");
+                return;
+            }
+        }
     }
 }
 
@@ -464,5 +512,62 @@ mod tests {
     #[test]
     fn test_check_pagefile_protection_no_panic() {
         check_pagefile_protection();
+    }
+
+    /// The shape #294 asked for: the task waits on the stop token and the timer at the same
+    /// time, so a stop ends the wait at once. A loop that slept the interval first and read
+    /// the flag afterwards would still be asleep here - with the production interval that is
+    /// five minutes of a stop the service would have to sit through.
+    #[tokio::test]
+    async fn the_debugger_check_ends_its_wait_when_the_stop_lands() {
+        let shutdown = Arc::new(CancellationToken::new());
+        let task = tokio::spawn(debugger_watch_loop_at(
+            shutdown.clone(),
+            Duration::from_secs(300),
+            || false,
+        ));
+        // Let the task reach its first wait, so the stop below meets a parked task rather
+        // than one that has not started yet.
+        tokio::time::sleep(Duration::from_millis(50)).await;
+
+        shutdown.cancel();
+        tokio::time::timeout(Duration::from_secs(1), task)
+            .await
+            .expect("a stop must end the check's wait at once, not after the whole interval")
+            .expect("the check task must not panic");
+    }
+
+    /// The other half: the check still runs, and it runs again every interval. Two checks is
+    /// the smallest count that tells a loop from a single check.
+    #[tokio::test]
+    async fn the_debugger_check_repeats_every_interval() {
+        let shutdown = Arc::new(CancellationToken::new());
+        let checks = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let counter = checks.clone();
+        let task = tokio::spawn(debugger_watch_loop_at(
+            shutdown.clone(),
+            Duration::from_millis(20),
+            move || {
+                counter.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                false
+            },
+        ));
+
+        // Poll instead of sleeping a fixed span: a slow runner may need longer than three
+        // intervals, and the deadline still fails the test if the loop never repeats.
+        let deadline = tokio::time::Instant::now() + Duration::from_secs(5);
+        while checks.load(std::sync::atomic::Ordering::SeqCst) < 2 {
+            assert!(
+                tokio::time::Instant::now() < deadline,
+                "the debugger check did not run again on the next interval"
+            );
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+
+        shutdown.cancel();
+        tokio::time::timeout(Duration::from_secs(1), task)
+            .await
+            .expect("the task must stop once the token is cancelled")
+            .expect("the check task must not panic");
     }
 }

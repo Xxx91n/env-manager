@@ -85,8 +85,8 @@ const TREE_KILL_BUDGET: Duration = Duration::from_secs(5);
 /// production). Tests that only need a rotation in flight (or do not care whether another test
 /// also has one) take a shared read lock - so they still run in parallel with each other,
 /// including `rotate_lock_tests`'s overlapping pair - while tests that assert the quiescent
-/// `rotation_in_flight() == false` path (including the post-rotation recovery tick) take an
-/// exclusive write lock so no sibling thread can hold the count above zero underneath them.
+/// `rotation_in_flight() == false` path take an exclusive write lock so no sibling thread can
+/// hold the count above zero underneath them.
 pub(crate) static ROTATION_SUITE_GATE: tokio::sync::RwLock<()> =
     tokio::sync::RwLock::const_new(());
 
@@ -190,7 +190,7 @@ async fn stop_terminates_and_reaps_the_rotate_child() {
 
 /// Scenario: recovery semantics of the interrupted rotation. The child is killed, the
 /// error reaches the IPC client, and the mount file is untouched: no half-written JSON and
-/// no rotation recorded, which is what makes the next `rotate` or reconcile tick replay it.
+/// no rotation recorded, which is what makes the next `rotate` replay it.
 #[tokio::test]
 async fn interrupted_rotation_leaves_the_mount_unrotated() {
     let _suite = ROTATION_SUITE_GATE.read().await;
@@ -271,7 +271,7 @@ async fn completed_rotation_records_the_mount() {
     assert_ne!(
         mounts[0]["lastRotatedAt"],
         serde_json::Value::Null,
-        "a completed rotate must be recorded, or every later tick replays it"
+        "a completed rotate must be recorded, or every later `rotate` replays it"
     );
     assert_eq!(
         mounts[0]["lastFetchedAt"],

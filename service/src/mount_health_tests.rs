@@ -5,7 +5,7 @@
 // machine-readable reason, past maps to `expired`, future maps to `valid`. The old code
 // mapped the first two to a green `healthy: true` badge - the defect this ticket closes.
 //
-// Driven through `get_mount_health_at`, the same mount-path seam the reconcile tick uses:
+// Driven through `get_mount_health_at`, the same mount-path seam the rotation tests use:
 // a temp file under `%TEMP%`, removed on drop, no real state read or written.
 
 use crate::reconcile::get_mount_health_at;

@@ -197,14 +197,15 @@ pub enum ServerExit {
     ListenFailed,
     /// The IPC accept loop returned without a stop request.
     IpcExited,
-    /// The reconcile loop returned without a stop request.
-    ReconcileExited,
+    /// The periodic process guard returned without a stop request (#294).
+    ProcessGuardExited,
 }
 
-/// Run the server body used by Service mode: listener, `SERVICE_RUNNING`, reconcile.
+/// Run the server body used by Service mode: listener, `SERVICE_RUNNING`, then the
+/// background tasks (IPC serving and the process guard).
 ///
 /// Ordering is a hard constraint (#149): the named-pipe listener is created first,
-/// `on_listening` fires the moment it exists, and only then does the reconcile loop
+/// `on_listening` fires the moment it exists, and only then does any background task
 /// start. Service mode reports `SERVICE_RUNNING` from `on_listening`, so any slow work
 /// moved ahead of that point brings back the boot-time 1053 failure. `on_listening`
 /// returns whether the listener was announced; a `false` means a stop is already
@@ -227,8 +228,8 @@ pub async fn run_server(
         }
     };
 
-    // Listen -> report -> reconcile, in that order. Reporting RUNNING is skipped when a
-    // stop landed while the listener was being created: the SCM already has
+    // Listen -> report -> background tasks, in that order. Reporting RUNNING is skipped
+    // when a stop landed while the listener was being created: the SCM already has
     // STOP_PENDING, and moving its state forward again would be wrong.
     if !on_listening() {
         return ServerExit::Requested;
@@ -237,29 +238,34 @@ pub async fn run_server(
     // Startup sweep of leftover sops plaintext roots (#219), in the only placement that
     // satisfies both constraints at once: after the RUNNING report (a slow sweep must not
     // push the report past ServicesPipeTimeout, the #149 red line) and before the spawns
-    // below. The reconcile loop and the IPC handlers are the only writers of new scratch
+    // below. The IPC handlers (the delegation path) are the only creators of new scratch
     // roots, so sweeping here makes "a root this instance created is never swept" true by
     // ordering rather than by timestamp judgement; the 24h threshold in `sops_tempdir` is
     // a second guard, not the mechanism.
     sops_tempdir::sweep_stale_roots(&env::temp_dir(), sops_tempdir::SWEEP_MIN_AGE);
 
-    let reconcile = tokio::spawn(reconcile::refresh_loop(shutdown.clone()));
+    // Three things the body owns once RUNNING is reported: the pipe listener it just
+    // created (handed straight to the IPC task), the IPC task that serves requests on it,
+    // and the process guard that checks for an attached debugger on its own interval.
+    // The periodic mount sweep that used to be the second task is gone (#294); the guard
+    // took its slot, so a stop still converges everything the body started.
     let ipc = tokio::spawn(ipc::serve(pipe_name, first, shutdown.clone()));
-    run_until_exit(reconcile, ipc, &shutdown).await
+    let guard = tokio::spawn(process_guard::debugger_watch_loop(shutdown.clone()));
+    run_until_exit(ipc, guard, &shutdown).await
 }
 
-/// Run the server body used by Background mode. Keeps its historical order - reconcile
-/// starts immediately and the IPC server creates the pipe on its own, retrying a
-/// failure every 5s instead of ending the process - because the GUI owns the lifecycle
-/// there and a missing listener must not starve the reconcile loop.
+/// Run the server body used by Background mode. Keeps its historical order - the
+/// background tasks start immediately and the IPC server creates the pipe on its own,
+/// retrying a failure every 5s instead of ending the process - because the GUI owns the
+/// lifecycle there and a missing listener must not starve anything the service runs.
 pub async fn run_background_server(
     pipe_name: &'static str,
     shutdown: Arc<CancellationToken>,
 ) -> ServerExit {
     tracing::info!("IPC pipe: {}", pipe_name);
-    let reconcile = tokio::spawn(reconcile::refresh_loop(shutdown.clone()));
     let ipc = tokio::spawn(ipc::start_ipc_server(pipe_name, shutdown.clone(), false));
-    run_until_exit(reconcile, ipc, &shutdown).await
+    let guard = tokio::spawn(process_guard::debugger_watch_loop(shutdown.clone()));
+    run_until_exit(ipc, guard, &shutdown).await
 }
 
 /// Wait for either task to finish, then drain the other one under a bounded timeout,
@@ -267,15 +273,16 @@ pub async fn run_background_server(
 ///
 /// The IPC task's budget covers its own connection handlers: `ipc::accept_loop` joins
 /// them before returning, which is what keeps a delegated CLI rotate from outliving the
-/// `SERVICE_STOPPED` report (#153).
+/// `SERVICE_STOPPED` report (#153). The process guard answers the same stop token, so a
+/// stop ends its wait at once instead of sleeping an interval out (#294).
 async fn run_until_exit(
-    mut reconcile: tokio::task::JoinHandle<()>,
     mut ipc: tokio::task::JoinHandle<()>,
+    mut guard: tokio::task::JoinHandle<()>,
     shutdown: &CancellationToken,
 ) -> ServerExit {
     let finished = tokio::select! {
-        _ = &mut reconcile => ServerExit::ReconcileExited,
         _ = &mut ipc => ServerExit::IpcExited,
+        _ = &mut guard => ServerExit::ProcessGuardExited,
     };
 
     // Both loops only return on cancellation in normal operation, so a cancelled
@@ -295,8 +302,8 @@ async fn run_until_exit(
     // re-polling a completed JoinHandle panics, so this keys off `finished`, not `exit`.
     shutdown.cancel();
     let pending = match finished {
-        ServerExit::ReconcileExited => &mut ipc,
-        _ => &mut reconcile,
+        ServerExit::IpcExited => &mut guard,
+        _ => &mut ipc,
     };
     if tokio::time::timeout(SHUTDOWN_DRAIN, pending).await.is_err() {
         tracing::warn!("shutdown drain timed out after {:?}", SHUTDOWN_DRAIN);
@@ -338,10 +345,10 @@ mod startup_contract_tests {
     //! The SCM RUNNING report hangs off `run_server`'s `on_listening` callback, so
     //! two properties have to hold at that exact point: the named-pipe listener is
     //! already connectable (otherwise the service reports Running while the GUI and
-    //! CLI still cannot reach it), and the reconcile loop has not started yet
-    //! (otherwise a slow first tick pushes the report past `ServicesPipeTimeout` and
-    //! start fails with 1053 again). Only the first property is observable from
-    //! outside; the second follows from the report firing before the spawns.
+    //! CLI still cannot reach it), and no background task has started yet (otherwise
+    //! slow work pushes the report past `ServicesPipeTimeout` and start fails with 1053
+    //! again). Only the first property is observable from outside; the second follows
+    //! from the report firing before the spawns.
     //!
     //! The stop side of the same contract lives here too (#153): when the body returns,
     //! the caller reports `SERVICE_STOPPED`, so the body must have released the pipe *and*

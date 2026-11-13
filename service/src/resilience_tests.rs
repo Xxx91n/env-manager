@@ -227,18 +227,6 @@ fn ipc_schema_compliance_under_faults() {
     }
 }
 
-/// Reconcile warmup (30s) prevents SCM timeout on boot. Only the loop-level warmup
-/// remains documentation-only here (the tick itself runs on `%TEMP%` via
-/// `reconcile::run_reconcile_tick_at` in `rotate_lock_tests`, #193): driving the real
-/// `refresh_loop` still requires >31s wall time and resolves `secret_mount_path()`
-/// against `LOCALAPPDATA` until `refresh_loop` itself takes warmup/path parameters.
-#[test]
-#[ignore = "30s warmup on refresh_loop needs >31s wall time and resolves LOCALAPPDATA; tick itself is covered via run_reconcile_tick_at"]
-fn reconcile_warmup_constant_pinned() {
-    // Contract (reconcile.rs): 30s warmup before first tick, 300s interval.
-    // Expected assertion once seamable: no tick before 30s, tick at 30s.
-}
-
 /// Kill -9 / SCM-restart recovery. Requires process-level control (start, ping,
 /// taskkill /F, poll watchdog detection, restart, assert secretMount.json
 /// persistence) and administrator rights — unsafe for automated CI runners.
