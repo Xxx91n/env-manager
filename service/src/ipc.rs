@@ -419,6 +419,13 @@ async fn handle_connection(mut server: NamedPipeServer, shutdown: Arc<Cancellati
     Ok(())
 }
 
+/// Shared reason string for the deprecated `refresh` / `reload` no-op responses (#293).
+/// Part of the IPC contract: the golden sample in `docs/schemas/ipc-samples.json` carries
+/// the same text, so rewording it is a golden-file change, and the CLI deprecation warning
+/// on stderr names the same removal version.
+const DEPRECATED_NOOP_REASON: &str =
+    "deprecated: this command performs no operation; scheduled for removal in v0.16.0";
+
 async fn process_request(req: &IpcRequest, shutdown: &CancellationToken) -> IpcResponse {
     tracing::info!("IPC request: method={} request_id={}", req.method, req.request_id.as_deref().unwrap_or("-"));
     match req.method.as_str() {
@@ -445,15 +452,21 @@ async fn process_request(req: &IpcRequest, shutdown: &CancellationToken) -> IpcR
                 Err(e) => IpcResponse::err(&format!("health check failed: {}", e)),
             }
         }
+        // Deprecated no-op (#293): the service has no refresh surface - values are fetched
+        // at CLI launch time - so the command stays accepted for old scripts, answers
+        // success with an explicit no-op marker plus a reason, and never touches the
+        // mount file. Planned for removal in v0.16.0.
         "refresh" => {
             let mount_id = req.mount_id.as_deref().unwrap_or("");
             if mount_id.is_empty() {
                 return IpcResponse::err("refresh requires mountId");
             }
-            match crate::reconcile::refresh_mount(mount_id).await {
-                Ok(info) => IpcResponse::ok(info),
-                Err(e) => IpcResponse::err(&format!("refresh failed: {}", e)),
-            }
+            IpcResponse::ok(serde_json::json!({
+                "mountId": mount_id,
+                "refreshed": false,
+                "noop": true,
+                "reason": DEPRECATED_NOOP_REASON,
+            }))
         }
         "rotate" => {
             let mount_id = req.mount_id.as_deref().unwrap_or("");
@@ -465,9 +478,17 @@ async fn process_request(req: &IpcRequest, shutdown: &CancellationToken) -> IpcR
                 Err(e) => IpcResponse::err(&format!("rotate failed: {}", e)),
             }
         }
+        // Deprecated no-op (#293): the service holds no cache - every read hits the disk -
+        // so there is nothing to reload. The method stays accepted for old scripts, answers
+        // success with an explicit no-op marker plus a reason, and never writes the
+        // "value fetched" timestamp. Planned for removal in v0.16.0.
         "reload" => {
-            tracing::info!("Reload requested via IPC");
-            IpcResponse::ok(serde_json::json!({"reloaded": true}))
+            tracing::info!("Reload requested via IPC; answering deprecated no-op");
+            IpcResponse::ok(serde_json::json!({
+                "reloaded": false,
+                "noop": true,
+                "reason": DEPRECATED_NOOP_REASON,
+            }))
         }
         "shutdown" => {
             tracing::info!("Shutdown requested via IPC — cancelling all tasks");
@@ -619,13 +640,15 @@ mod tests {
             "responses": [
                 { "name": "ok_status", "payload": { "ok": true, "data": { "running": true, "mountFile": true, "mountPath": "C:\\ProgramData\\EnvManager\\secretMount.json" } } },
                 { "name": "ok_ping", "payload": { "ok": true, "data": { "pong": true, "uptime_seconds": 3600 } } },
-                { "name": "ok_health", "payload": { "ok": true, "data": { "mounts": [
-                    { "id": "vault-team", "provider": "vault-kv2", "name": "TEAM_TOKEN", "refreshPolicy": "Renew", "healthy": true, "lastFetchedAt": "2026-08-31T10:00:00+00:00", "lastRotatedAt": null, "message": null },
-                    { "id": "cred-app", "provider": "credential-manager", "name": "APP_KEY", "refreshPolicy": "CreatedOnly", "healthy": false, "message": "expired" }
+                { "name": "ok_health", "note": "Three-state health (#293). expiresAt is the only health signal and is never written today: absent or unparsable maps to unverified with a machine-readable reason, never to green.", "payload": { "ok": true, "data": { "mounts": [
+                    { "id": "vault-team", "provider": "vault-kv2", "name": "TEAM_TOKEN", "refreshPolicy": "Renew", "state": "valid", "reason": null, "lastFetchedAt": "2026-08-31T10:00:00+00:00", "lastRotatedAt": null },
+                    { "id": "cred-app", "provider": "credential-manager", "name": "APP_KEY", "refreshPolicy": "CreatedOnly", "state": "expired", "reason": "expired", "lastFetchedAt": null, "lastRotatedAt": "2026-01-01T00:00:00+00:00" },
+                    { "id": "sops-docs", "provider": "sops", "name": "DOC_KEY", "refreshPolicy": "CreatedOnly", "state": "unverified", "reason": "noExpiry", "lastFetchedAt": null, "lastRotatedAt": null },
+                    { "id": "aws-stale", "provider": "aws-secretsmanager", "name": "AWS_KEY", "refreshPolicy": "Renew", "state": "unverified", "reason": "unparsableExpiry", "lastFetchedAt": null, "lastRotatedAt": null }
                 ] } } },
-                { "name": "ok_refresh", "payload": { "ok": true, "data": { "mountId": "vault-team", "refreshed": true, "lastFetchedAt": "2026-08-31T10:00:00+00:00" } } },
+                { "name": "ok_refresh_noop", "note": "Deprecated no-op (#293): the command stays accepted for old scripts but no longer touches the mount file.", "payload": { "ok": true, "data": { "mountId": "vault-team", "refreshed": false, "noop": true, "reason": "deprecated: this command performs no operation; scheduled for removal in v0.16.0" } } },
                 { "name": "ok_rotate_provider_managed_skipped", "note": "A Periodic mount with no local envelope is an observable skip; neither timestamp is advanced.", "payload": { "ok": true, "data": { "mountId": "vault-team", "rotated": false, "skipped": true, "skipReason": "providerManaged", "lastRotatedAt": null, "lastFetchedAt": "2026-08-31T10:00:00+00:00" } } },
-                { "name": "ok_reload", "payload": { "ok": true, "data": { "reloaded": true } } },
+                { "name": "ok_reload_noop", "note": "Deprecated no-op (#293): the service holds no cache, so there is nothing to reload.", "payload": { "ok": true, "data": { "reloaded": false, "noop": true, "reason": "deprecated: this command performs no operation; scheduled for removal in v0.16.0" } } },
                 { "name": "ok_shutdown", "payload": { "ok": true, "data": { "shuttingDown": true } } },
                 { "name": "err_unknown_method", "payload": { "ok": false, "message": "unknown method: frobnicate" } },
                 { "name": "err_refresh_missing_mount", "payload": { "ok": false, "message": "refresh requires mountId" } },
@@ -660,6 +683,46 @@ mod tests {
                 assert!(resp.data.is_some(), "sample {} should carry data", sample["name"]);
             }
         }
+    }
+
+    /// The golden test above pins the samples *file* against a literal; this pins the
+    /// deprecated no-op handlers themselves to the same contract, so the response a
+    /// caller actually receives cannot drift from what the golden sample documents (#293).
+    #[tokio::test]
+    async fn deprecated_refresh_and_reload_answer_the_no_op_contract() {
+        let shutdown = CancellationToken::new();
+        let refresh = process_request(
+            &IpcRequest {
+                method: "refresh".to_string(),
+                mount_id: Some("vault-team".to_string()),
+                id: None,
+                request_id: None,
+            },
+            &shutdown,
+        )
+        .await;
+        assert!(refresh.ok, "a deprecated refresh must answer success");
+        let data = refresh.data.expect("the no-op response carries data");
+        assert_eq!(data["mountId"], "vault-team");
+        assert_eq!(data["refreshed"], false);
+        assert_eq!(data["noop"], true);
+        assert_eq!(data["reason"], DEPRECATED_NOOP_REASON);
+
+        let reload = process_request(
+            &IpcRequest {
+                method: "reload".to_string(),
+                mount_id: None,
+                id: None,
+                request_id: None,
+            },
+            &shutdown,
+        )
+        .await;
+        assert!(reload.ok, "a deprecated reload must answer success");
+        let data = reload.data.expect("the no-op response carries data");
+        assert_eq!(data["reloaded"], false);
+        assert_eq!(data["noop"], true);
+        assert_eq!(data["reason"], DEPRECATED_NOOP_REASON);
     }
 }
 

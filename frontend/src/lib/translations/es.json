@@ -382,11 +382,7 @@
       "stopped": "Detenido",
       "checking": "Comprobando...",
       "ping": "Ping",
-      "reload": "Recargar",
       "shutdown": "Apagar",
-      "healthy": "Saludable",
-      "unhealthy": "Defectuoso",
-      "refreshBtn": "Actualizar",
       "rotateBtn": "Rotar"
     },
     "audit": {
@@ -418,12 +414,7 @@
   "settings.service.stopped": "Detenido",
   "settings.service.checking": "Comprobando...",
   "settings.service.ping": "Ping",
-  "settings.service.reload": "Recargar",
-  "settings.service.reloaded": "Servicio recargado",
   "settings.service.shutdown": "Apagar",
-  "settings.service.healthy": "Saludable",
-  "settings.service.unhealthy": "No saludable",
-  "settings.service.refreshBtn": "Actualizar",
   "settings.service.rotated": "Montaje rotado",
   "settings.service.rotateSkipped": "Se omitió el montaje gestionado por el proveedor; no hay un sobre local que rotar",
   "settings.service.rotateBtn": "Rotar",
@@ -472,5 +463,11 @@
   "common.retry": "Reintentar",
   "app.minimize": "Minimizar",
   "app.maximize": "Maximizar",
-  "app.close": "Cerrar"
+  "app.close": "Cerrar",
+  "settings.service.stateValid": "Válido",
+  "settings.service.stateExpired": "Caducado",
+  "settings.service.stateUnverified": "Sin verificar",
+  "settings.service.reasonNoExpiry": "Este montaje no registra hora de expiración, por lo que no se puede verificar",
+  "settings.service.reasonUnparsableExpiry": "No se pudo interpretar la hora de expiración registrada",
+  "settings.service.reasonExpired": "La hora de expiración ya pasó"
 }

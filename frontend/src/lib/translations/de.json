@@ -382,11 +382,7 @@
       "stopped": "Gestoppt",
       "checking": "Überprüfen...",
       "ping": "Ping",
-      "reload": "Neu laden",
       "shutdown": "Herunterfahren",
-      "healthy": "Gesund",
-      "unhealthy": "Fehlerhaft",
-      "refreshBtn": "Aktualisieren",
       "rotateBtn": "Rotieren"
     },
     "audit": {
@@ -418,12 +414,7 @@
   "settings.service.stopped": "Gestoppt",
   "settings.service.checking": "Überprüfen...",
   "settings.service.ping": "Ping",
-  "settings.service.reload": "Neu laden",
-  "settings.service.reloaded": "Dienst neu geladen",
   "settings.service.shutdown": "Herunterfahren",
-  "settings.service.healthy": "Gesund",
-  "settings.service.unhealthy": "Fehlerhaft",
-  "settings.service.refreshBtn": "Aktualisieren",
   "settings.service.rotated": "Mount rotiert",
   "settings.service.rotateSkipped": "Provider-verwalteter Mount übersprungen; kein lokales Envelope zum Rotieren vorhanden",
   "settings.service.rotateBtn": "Rotieren",
@@ -472,5 +463,11 @@
   "common.retry": "Erneut versuchen",
   "app.minimize": "Minimieren",
   "app.maximize": "Maximieren",
-  "app.close": "Schließen"
+  "app.close": "Schließen",
+  "settings.service.stateValid": "Gültig",
+  "settings.service.stateExpired": "Abgelaufen",
+  "settings.service.stateUnverified": "Ungeprüft",
+  "settings.service.reasonNoExpiry": "Für diesen Mount ist keine Ablaufzeit erfasst, daher kann sie nicht geprüft werden",
+  "settings.service.reasonUnparsableExpiry": "Die erfasste Ablaufzeit konnte nicht gelesen werden",
+  "settings.service.reasonExpired": "Die Ablaufzeit liegt in der Vergangenheit"
 }

@@ -17,8 +17,8 @@
 // write-back fixtures pass the production default explicitly and keep every assertion they
 // had, so those assertions are not weakened.
 //
-// Isolation: temp mount files under `%TEMP%`, removed on drop. `refresh_mount_at` takes
-// the fixture path, so no real `%LOCALAPPDATA%` / `ProgramData` state is read or written.
+// Isolation: temp mount files under `%TEMP%`, removed on drop. `rotate_mount_at_with_pipe_drain`
+// takes the fixture path, so no real `%LOCALAPPDATA%` / `ProgramData` state is read or written.
 
 use std::io::Write;
 use std::sync::{Arc, Mutex};
@@ -28,7 +28,7 @@ use tokio::sync::oneshot;
 use tokio_util::sync::CancellationToken;
 
 use crate::reconcile::{
-    refresh_mount_at, rotate_mount_at_with_pipe_drain, rotation_in_flight, run_cli_child,
+    rotate_mount_at_with_pipe_drain, rotation_in_flight, run_cli_child,
     ChildOutcome, LatchedPipeDrain, PIPE_DRAIN_ON_EXIT, ROTATION_TIME_LIMIT,
 };
 use crate::rotate_stop_tests::{MountFixture, ROTATION_SUITE_GATE};
@@ -61,8 +61,6 @@ const ALWAYS_TOO_LONG: Duration = Duration::from_secs(20);
 /// End-to-end ceiling for one delegation: injected drain + process startup + reap +
 /// scratch reclaim. An order of magnitude below the helper's 30s.
 const DRAIN_PATH_BUDGET: Duration = Duration::from_secs(5);
-/// How long a second rotation / refresh may take to get through the lock.
-const LOCK_FREE_BUDGET: Duration = Duration::from_secs(10);
 /// A drain long enough that a stop landing inside it is unmistakable: without the
 /// cancellation race the call would sit here for 10s.
 const LONG_DRAIN_FOR_STOP: Duration = Duration::from_secs(10);
@@ -272,7 +270,12 @@ async fn an_incomplete_diagnostic_does_not_fail_a_completed_rotation() {
         serde_json::Value::Null,
         "the mount file must carry the rotation stamp"
     );
-    assert_ne!(mounts[0]["lastFetchedAt"], serde_json::Value::Null);
+    assert_eq!(
+        mounts[0]["lastFetchedAt"],
+        serde_json::Value::Null,
+        "a rotation no longer stamps lastFetchedAt - the service never writes the \
+         \"value fetched\" time (#293)"
+    );
 }
 
 /// Wait for a `LatchedPipeDrain` phase signal (`entered` or `started`) within `budget`
@@ -302,11 +305,12 @@ async fn await_drain_signal<T: std::fmt::Debug>(
     }
 }
 
-/// The liveness half of #192: the RAII marker is dropped when the call returns, so the
-/// shared gate that both `run_reconcile_tick` and `refresh_mount` consult stops standing
-/// down. `refresh` is driven against the temp fixture; the tick reads the same
-/// `rotation_in_flight()` under the same lock, and its end-to-end `%TEMP%` assertion lives in
-/// `rotate_lock_tests` via `run_reconcile_tick_at` (#193). Holds the exclusive
+/// The liveness half of #192: the RAII marker is dropped when the call returns, so
+/// `rotation_in_flight()` returns to zero and the tick (the one remaining reader of the
+/// gate, since #293 retired `refresh` from it) stops standing down. The gate itself is
+/// probed directly through the same `rotation_in_flight()` snapshot production readers
+/// use; the tick's end-to-end `%TEMP%` assertion lives in `rotate_lock_tests` via
+/// `run_reconcile_tick_at` (#193). Holds the exclusive
 /// `ROTATION_SUITE_GATE` write lock so no sibling `cargo test` worker can raise the
 /// process-wide `ROTATIONS_IN_FLIGHT` counter while this test proves quiescent recovery.
 #[tokio::test]
@@ -344,8 +348,7 @@ async fn the_in_flight_gate_recovers_after_the_drain_budget() {
     // Synchronize deterministically on entry into `drain_pipes_on_exit` (#205): by the
     // time this returns, `child.wait()` has won the outer `select!` and the two-way latch
     // holds the drain open before its deadline starts while `RotationInFlight` is still
-    // held, so scheduler jitter cannot expire `RECOVERY_DRAIN` before `refresh_mount_at`
-    // probes the gate.
+    // held, so scheduler jitter cannot expire `RECOVERY_DRAIN` before the gate is probed.
     await_drain_signal(
         drain_rx,
         ALWAYS_TOO_LONG,
@@ -355,18 +358,15 @@ async fn the_in_flight_gate_recovers_after_the_drain_budget() {
     )
     .await;
 
-    let err = tokio::time::timeout(LOCK_FREE_BUDGET, refresh_mount_at(&fixture.path, "mount-1"))
-        .await
-        .expect("a refresh must answer, not queue behind a delegation")
-        .expect_err("a refresh must stand down while the post-exit drain owns the mount file");
     assert!(
-        err.contains("in flight"),
-        "the refusal has to say why, got: {err}"
+        rotation_in_flight(),
+        "the drain itself must keep ROTATIONS_IN_FLIGHT non-zero while the delegation \
+         is still inside its post-exit drain"
     );
     assert!(
         !in_flight.is_finished(),
-        "our own delegation must still be inside its post-exit drain after refresh stood \
-         down, proving the drain itself kept ROTATIONS_IN_FLIGHT non-zero"
+        "our own delegation must still be inside its post-exit drain while the gate is \
+         raised, proving the drain itself held ROTATIONS_IN_FLIGHT"
     );
 
     let _ = release_tx.send(());
@@ -381,14 +381,8 @@ async fn the_in_flight_gate_recovers_after_the_drain_budget() {
     assert!(
         !rotation_in_flight(),
         "ROTATIONS_IN_FLIGHT never returned to zero: the tick would skip every interval \
-         and refresh would answer 'in flight' forever"
+         forever once the marker stopped dropping"
     );
-    let refreshed =
-        tokio::time::timeout(LOCK_FREE_BUDGET, refresh_mount_at(&fixture.path, "mount-1"))
-            .await
-            .expect("a refresh after drain recovery must complete promptly")
-            .expect("refresh must succeed once the gate is free");
-    assert_eq!(refreshed["refreshed"], true);
 }
 
 /// The production default is the bound, not a second unbounded wait. Keeps a future

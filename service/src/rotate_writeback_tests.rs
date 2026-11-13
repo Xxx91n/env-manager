@@ -369,10 +369,11 @@ impl Drop for TwoMountFixture {
 
 /// The stamp-scope half of the whole-store contract (#195): an IPC `rotate <mountId>`
 /// re-encrypts every profile's locally-held envelopes - the child rewrites both envelopes
-/// in place - but the service owns the `lastRotatedAt`/`lastFetchedAt` stamps only on the
+/// in place - but the service owns the `lastRotatedAt` stamp only on the
 /// mount the call named. The child reproduces the real CLI write-back
 /// (`SecretMountEnvelopeHolder` stamps `LastRotatedAt` on every mount it rotates and never
-/// writes `LastFetchedAt`), so the assertions can pin both halves: the named mount's stamp
+/// writes `LastFetchedAt`, which the service stopped writing too - #293), so the assertions
+/// can pin both halves: the named mount's stamp
 /// is overwritten with the service's own now, and the other mount's CLI stamp passes
 /// through untouched.
 const CHILD_STAMP: &str = "2026-01-02T03:04:05Z";
@@ -449,10 +450,10 @@ async fn completed_rotation_stamps_only_the_named_mount() {
         "the service owns the named mount's stamp: it overwrites the value the CLI child \
          wrote with its own now"
     );
-    assert_ne!(
+    assert_eq!(
         mounts[0]["lastFetchedAt"],
         serde_json::Value::Null,
-        "the service writes the second half of the stamp pair the CLI never sets"
+        "the service stamps lastRotatedAt only - lastFetchedAt is never written (#293)"
     );
     assert_eq!(
         mounts[1]["envelope"],
@@ -467,6 +468,6 @@ async fn completed_rotation_stamps_only_the_named_mount() {
     assert_eq!(
         mounts[1]["lastFetchedAt"],
         serde_json::Value::Null,
-        "neither half of the service-owned stamp lands on a mount the call did not name"
+        "the service-owned stamp never lands on a mount the call did not name"
     );
 }

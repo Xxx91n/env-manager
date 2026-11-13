@@ -13,11 +13,14 @@ partial class Program
     {
         if (args.Length < 2)
         {
-            Console.Error.WriteLine("Usage: env-manager service <status|ping|health|refresh <id>|rotate <id>|reload|shutdown>");
+            Console.Error.WriteLine("Usage: env-manager service <status|ping|health|refresh <id>|rotate <id>|reload|shutdown> (refresh/reload are deprecated no-ops, removal in v0.16.0)");
             return 1;
         }
 
         string subcommand = args[1].ToLowerInvariant();
+        // Deprecated verbs answer a success no-op from the IPC layer (#293); warn on
+        // stderr only, so stdout keeps the structured response JSON and the exit stays 0.
+        ServiceDeprecation.WriteWarningIfAny(subcommand);
         // request_id propagated from Rust run_cli via env var, or generated here.
         string reqId = Environment.GetEnvironmentVariable("ENVMANAGER_REQUEST_ID") ?? "";
         if (string.IsNullOrEmpty(reqId)) reqId = DateTime.Now.ToString("HHmmss") + (new System.Random().Next(0, 9999)).ToString("D4");

@@ -382,11 +382,7 @@
       "stopped": "Остановлена",
       "checking": "Проверка...",
       "ping": "Ping",
-      "reload": "Перезагрузить",
       "shutdown": "Остановить",
-      "healthy": "Исправен",
-      "unhealthy": "Неисправен",
-      "refreshBtn": "Обновить",
       "rotateBtn": "Ротация"
     },
     "audit": {
@@ -418,12 +414,7 @@
   "settings.service.stopped": "Остановлено",
   "settings.service.checking": "Проверка...",
   "settings.service.ping": "Пинг",
-  "settings.service.reload": "Перезагрузить",
-  "settings.service.reloaded": "Служба перезагружена",
   "settings.service.shutdown": "Завершить",
-  "settings.service.healthy": "Здоров",
-  "settings.service.unhealthy": "Нездоров",
-  "settings.service.refreshBtn": "Обновить",
   "settings.service.rotated": "Маунт обновлен",
   "settings.service.rotateSkipped": "Пропущен ресурс под управлением провайдера: локальная оболочка для ротации отсутствует",
   "settings.service.rotateBtn": "Обновить",
@@ -472,5 +463,11 @@
   "common.retry": "Повторить",
   "app.minimize": "Свернуть",
   "app.maximize": "Развернуть",
-  "app.close": "Закрыть"
+  "app.close": "Закрыть",
+  "settings.service.stateValid": "Действителен",
+  "settings.service.stateExpired": "Истёк",
+  "settings.service.stateUnverified": "Не проверено",
+  "settings.service.reasonNoExpiry": "Для этого подключения не записано время истечения, проверить невозможно",
+  "settings.service.reasonUnparsableExpiry": "Записанное время истечения не удалось разобрать",
+  "settings.service.reasonExpired": "Время истечения уже прошло"
 }

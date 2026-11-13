@@ -76,6 +76,43 @@ describe('IPC schema contract (golden samples from Rust service)', () => {
     expect(parsed.data).toHaveProperty('lastFetchedAt', '2026-08-31T10:00:00+00:00')
   })
 
+  it('ok_health sample carries the three health states with machine-readable reasons (#293)', () => {
+    const sample = samples.responses.find((s) => s.name === 'ok_health')
+    expect(sample).toBeDefined()
+    const parsed = parseServiceResponse(JSON.stringify(sample!.payload))
+    expect(parsed.ok).toBe(true)
+    const mounts = parsed.data.mounts as Array<{ state: string; reason: string | null }>
+    // All three states present, and unverified carries a reason the GUI can localize.
+    expect(new Set(mounts.map((m) => m.state))).toEqual(new Set(['valid', 'expired', 'unverified']))
+    for (const m of mounts) {
+      if (m.state === 'unverified') {
+        expect(m.reason).toBeTruthy()
+        expect(['noExpiry', 'unparsableExpiry']).toContain(m.reason)
+      }
+      // The old boolean is gone: a mount can never render green just because the
+      // expiry data is missing.
+      expect(m).not.toHaveProperty('healthy')
+    }
+  })
+
+  it('ok_refresh_noop sample is a successful, explicit no-op (#293)', () => {
+    const sample = samples.responses.find((s) => s.name === 'ok_refresh_noop')
+    expect(sample).toBeDefined()
+    const parsed = parseServiceResponse(JSON.stringify(sample!.payload))
+    expect(parsed.ok).toBe(true)
+    expect(parsed.data).toMatchObject({ refreshed: false, noop: true })
+    expect(String(parsed.data.reason)).toContain('no operation')
+  })
+
+  it('ok_reload_noop sample is a successful, explicit no-op (#293)', () => {
+    const sample = samples.responses.find((s) => s.name === 'ok_reload_noop')
+    expect(sample).toBeDefined()
+    const parsed = parseServiceResponse(JSON.stringify(sample!.payload))
+    expect(parsed.ok).toBe(true)
+    expect(parsed.data).toMatchObject({ reloaded: false, noop: true })
+    expect(String(parsed.data.reason)).toContain('no operation')
+  })
+
   it('ok_ping sample carries pong=true', () => {
     const sample = samples.responses.find((s) => s.name === 'ok_ping')
     expect(sample).toBeDefined()

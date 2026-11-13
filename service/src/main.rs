@@ -39,6 +39,8 @@ mod rotate_lock_tests;
 mod rotate_hang_tests;
 #[cfg(test)]
 mod rotate_pipe_drain_tests;
+#[cfg(test)]
+mod mount_health_tests;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ServiceMode {

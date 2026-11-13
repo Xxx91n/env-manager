@@ -382,11 +382,7 @@
       "stopped": "已停止",
       "checking": "检查中...",
       "ping": "Ping",
-      "reload": "重载",
       "shutdown": "关闭",
-      "healthy": "健康",
-      "unhealthy": "异常",
-      "refreshBtn": "刷新",
       "rotateBtn": "轮换"
     },
     "audit": {
@@ -418,12 +414,7 @@
   "settings.service.stopped": "已停止",
   "settings.service.checking": "检查中...",
   "settings.service.ping": "Ping",
-  "settings.service.reload": "重载",
-  "settings.service.reloaded": "服务已重载",
   "settings.service.shutdown": "关机",
-  "settings.service.healthy": "健康",
-  "settings.service.unhealthy": "不健康",
-  "settings.service.refreshBtn": "刷新",
   "settings.service.rotated": "挂载已轮换",
   "settings.service.rotateSkipped": "已跳过由 provider 管理的挂载；本地没有可轮换的信封",
   "settings.service.rotateBtn": "轮换",
@@ -472,5 +463,11 @@
   "common.retry": "重试",
   "app.minimize": "最小化",
   "app.maximize": "最大化",
-  "app.close": "关闭"
+  "app.close": "关闭",
+  "settings.service.stateValid": "有效",
+  "settings.service.stateExpired": "已过期",
+  "settings.service.stateUnverified": "未验证",
+  "settings.service.reasonNoExpiry": "未记录过期时间，无法验证",
+  "settings.service.reasonUnparsableExpiry": "记录的过期时间无法解析",
+  "settings.service.reasonExpired": "过期时间已过"
 }

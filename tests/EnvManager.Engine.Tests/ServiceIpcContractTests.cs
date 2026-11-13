@@ -122,6 +122,37 @@ public class ServiceIpcContractTests
     }
 
     /// <summary>
+    /// The deprecated no-op verbs (#293) warn on stderr so a script parsing stdout keeps
+    /// receiving the structured response JSON unpolluted, and the removal version is named
+    /// so automation can plan. The stdout/stderr split itself is pinned by the gateway's
+    /// single write path (response JSON to stdout via Console.Out, warning via
+    /// Console.Error); this test pins the warning text the CLI emits for exactly those
+    /// two verbs and nothing else.
+    /// </summary>
+    [Theory]
+    [InlineData("refresh")]
+    [InlineData("reload")]
+    public void DeprecatedVerbs_WarnOnStderrWithARemovalVersion(string subcommand)
+    {
+        var warning = ServiceDeprecation.WarningFor(subcommand);
+        Assert.StartsWith("Warning: 'service ", warning);
+        Assert.Contains(subcommand, warning);
+        Assert.Contains("no operation", warning);
+        Assert.Contains("v0.16.0", warning);
+    }
+
+    [Theory]
+    [InlineData("status")]
+    [InlineData("ping")]
+    [InlineData("health")]
+    [InlineData("rotate")]
+    [InlineData("shutdown")]
+    public void LiveVerbs_EmitNoDeprecationWarning(string subcommand)
+    {
+        Assert.Equal("", ServiceDeprecation.WarningFor(subcommand));
+    }
+
+    /// <summary>
     /// Cross-checks the C# type surface against the exported JSON Schema: every
     /// property the schema declares on IpcRequest/IpcResponse must exist on the
     /// C# contract with the same wire name. Catches schema-side renames too.
