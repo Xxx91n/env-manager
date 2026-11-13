@@ -1,5 +1,6 @@
-// Secret-mount state for the service: read and write `secretMount.json`, delegate a
-// rotation to the CLI child, and answer the machine-readable mount health summary.
+// Background-mode mount state: read and write `secretMount.json`, delegate a rotation
+// to the CLI child, and answer the machine-readable mount health summary. Service mode
+// has no mount path and reports mounts as unavailable.
 //
 // The 300-second periodic sweep that gave this file its old name is gone (#294). It never
 // fetched a value: it stamped `lastFetchedAt` after a metadata check nobody could act on.
@@ -23,7 +24,7 @@ use tokio::sync::Mutex; // Phase 4C: TOCTOU protection
 use tokio::sync::oneshot; // phase-entry latch for post-exit pipe drain tests (#205)
 
 use crate::job_object::KillOnCloseJob; // kill-on-close tree containment for the CLI child
-use crate::sops_tempdir::{SopsTempDir, TEMP_DIR_ENV}; // service-owned sops working root (#177)
+use crate::sops_tempdir::{SopsTempDir, TEMP_DIR_ENV}; // Background-mode-owned sops working root (#177)
 
 /// `CREATE_NO_WINDOW`: the service has no console, and without the flag the CLI child
 /// would flash a window on the interactive desktop. Passed to tokio's own
@@ -54,8 +55,8 @@ const STDERR_DRAIN_ON_STOP: Duration = Duration::from_millis(200);
 /// is unchanged; the accept-loop join already allows a `SHUTDOWN_DRAIN` window.
 pub(crate) const PIPE_DRAIN_ON_EXIT: Duration = Duration::from_millis(200);
 
-/// How long a delegated rotation may stay inside its CLI child before the service treats it
-/// as hung, terminates it and reaps it (#161).
+/// How long a delegated rotation may stay inside its CLI child before the
+/// Background-mode handler treats it as hung, terminates it and reaps it (#161).
 ///
 /// This is a liveness backstop, not a rotation SLA, and that distinction is the decision this
 /// ticket asked for rather than a constant. A rotation is decrypt-then-re-encrypt per secret,
@@ -165,18 +166,29 @@ pub struct MountHealth {
 /// re-encrypts per secret, and the CLI replaces the mount file atomically.
 static RECONCILE_LOCK: Mutex<()> = Mutex::const_new(());
 
-/// Rotate a single mount by ID (IPC `rotate` method).
+/// Rotate a single mount by ID (Background-mode IPC `rotate` method). Service mode has
+/// no mount file and refuses this operation.
 ///
-/// `shutdown` is the service stop token, handed down by the connection handler that owns
+/// `shutdown` is the stop token, handed down by the connection handler that owns
 /// this request: the CLI child a rotation spawns belongs to the stop path, not to whatever
 /// task happened to spawn it (#153).
 pub async fn rotate_mount(
     mount_id: &str,
     shutdown: &CancellationToken,
 ) -> Result<serde_json::Value, String> {
+    rotate_mount_with_path(crate::secret_mount_path(), mount_id, shutdown).await
+}
+
+async fn rotate_mount_with_path(
+    mount_path: Option<PathBuf>,
+    mount_id: &str,
+    shutdown: &CancellationToken,
+) -> Result<serde_json::Value, String> {
+    let mount_path = mount_path
+        .ok_or_else(|| crate::SERVICE_MOUNTS_UNAVAILABLE_MESSAGE.to_string())?;
     let cli_exe = find_cli_exe()?;
     rotate_mount_at(
-        &crate::secret_mount_path(),
+        &mount_path,
         &cli_exe,
         &delegated_rotate_argv(),
         mount_id,
@@ -186,9 +198,24 @@ pub async fn rotate_mount(
     .await
 }
 
+#[cfg(test)]
+mod service_mode_rotation_tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn rotation_is_refused_without_a_mount_path() {
+        let result = rotate_mount_with_path(None, "mount-1", &CancellationToken::new()).await;
+
+        assert_eq!(
+            result.expect_err("a mount-less Service mode must not delegate rotation"),
+            crate::SERVICE_MOUNTS_UNAVAILABLE_MESSAGE,
+        );
+    }
+}
+
 /// `rotate_mount` with the mount file and the delegated command taken as parameters.
 /// That seam is what lets `rotate_stop_tests` interrupt a real child process against a
-/// temp mount file, instead of the real `%LOCALAPPDATA%` / `ProgramData` state.
+/// temp mount file, instead of the real Background-mode `%LOCALAPPDATA%` state.
 ///
 /// The lock is taken twice - around the mount check and around the write-back - and never
 /// held while the child runs (#161). See `RECONCILE_LOCK` for what that trades away.
@@ -322,12 +349,30 @@ pub(crate) async fn rotate_mount_at_with_pipe_drain(
 
 /// Get mount health summary (IPC `health` method).
 pub async fn get_mount_health() -> Result<serde_json::Value, String> {
-    get_mount_health_at(&crate::secret_mount_path()).await
+    let mount_path = crate::secret_mount_path();
+    get_mount_health_for_path(mount_path.as_deref()).await
 }
 
-/// `get_mount_health` with the mount file taken as a parameter - the same seam shape
-/// `rotate_mount_at` has (#293): the tri-state mapping is table-tested against a temp file
-/// instead of real `%LOCALAPPDATA%` / `ProgramData` state.
+/// No mount path means Service mode, where mount files are not supported. Keep the
+/// explanation in the IPC response so callers do not mistake an empty list for a healthy
+/// service with no configured mounts.
+pub(crate) async fn get_mount_health_for_path(
+    path: Option<&Path>,
+) -> Result<serde_json::Value, String> {
+    match path {
+        Some(path) => get_mount_health_at(path).await,
+        None => Ok(serde_json::json!({
+            "mounts": [],
+            "total": 0,
+            "mountsAvailable": false,
+            "unavailableReason": crate::SERVICE_MOUNTS_UNAVAILABLE_REASON,
+            "message": crate::SERVICE_MOUNTS_UNAVAILABLE_MESSAGE,
+        })),
+    }
+}
+
+/// `get_mount_health` with a real mount file - the same seam shape `rotate_mount_at` has
+/// (#293): the tri-state mapping is table-tested against a temp file instead of user state.
 pub(crate) async fn get_mount_health_at(path: &Path) -> Result<serde_json::Value, String> {
     let mounts = load_mounts(path);
 
@@ -494,15 +539,14 @@ impl Ending {
     }
 }
 
-/// Run a CLI child and converge it with the service stop path (#153, #160).
+/// Run a Background-mode CLI child and converge it with process shutdown (#153, #160).
 ///
 /// Strategy, chosen over join-to-completion: **terminate and reap**. A rotate waits on
-/// provider round-trips that can outlive the SCM stop window, and STOP shares that window
-/// with `SERVICE_ACCEPT_SHUTDOWN` during logoff, so the stop path cannot afford to wait a
-/// child out. On cancellation the child is killed and its exit awaited before this
-/// returns, which is what makes `SERVICE_STOPPED` mean "no CLI process is left that can
-/// write profiles.json". The abandoned rotation is recovered by replay, not by waiting -
-/// see `rotate_mount_at`.
+/// provider round-trips that can outlive a shutdown, so the caller cannot afford to wait
+/// a child out. On cancellation the child is killed and its exit awaited before this
+/// returns, which means the Background-mode process does not exit while the CLI can still
+/// write `profiles.json`. Service mode has no mount file and refuses rotation. An
+/// interrupted rotation is recovered by replay, not by waiting - see `rotate_mount_at`.
 ///
 /// Scope of the guarantee, and the holes it cannot close. The child spawned here joins a
 /// kill-on-close job object (`crate::job_object::KillOnCloseJob`), so the provider helpers
@@ -525,9 +569,9 @@ impl Ending {
 /// case, where the CLI's own `finally` never runs, because the process doing the delete is
 /// this one. That delete is retried for a moment (a killed helper can still own a handle
 /// for a fraction of a second) and a failure that survives the retries is logged at error
-/// level, never swallowed; see `crate::sops_tempdir`. What this cannot cover is a service
-/// that is killed rather than stopped: the root then stays on disk with a name that says
-/// the service wrote it.
+/// level, never swallowed; see `crate::sops_tempdir`. What this cannot cover is a
+/// Background-mode process that is killed rather than stopped: the root then stays on disk
+/// with a name that identifies it as an Env Manager rotation scratch directory.
 ///
 /// `hang_budget` bounds the wait on a *live* child (#161): whichever of the child's exit, the
 /// stop token and that budget comes first decides how the call ends, and the two that are not
@@ -992,7 +1036,7 @@ async fn call_cli_rotate(
         )),
         ChildOutcome::OverHangBudget { pid } => {
             // Deliberately not the stop wording: an operator reading the IPC error or the
-            // service log has to be able to tell "the SCM stopped us" from "this rotation
+            // Background-mode log has to be able to tell "shutdown interrupted us" from "this rotation
             // wedged". The duration is in the message because it is the only thing that
             // makes the number in `ROTATION_TIME_LIMIT` falsifiable from a log line.
             Err(format!(

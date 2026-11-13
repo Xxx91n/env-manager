@@ -1,5 +1,5 @@
 <!-- canonical: ../../README.md -->
-<!-- sync: 099ff2392de6f77f24072fced3a782fdf9111ed6 -->
+<!-- sync: c9cb30d200cd6eb93a8484348306bc939cd3753c -->
 
 <div align="center">
 
@@ -152,35 +152,36 @@ flowchart LR
 ```
 
 - **CLI**：基于 C# .NET 10 构建的可执行文件，负责统筹业务调度，并且是全系统唯一真正写入注册表的模块。
-- **Service**：独立的 Rust 服务程序，通过命名管道通信，负责在后台让机密挂载持续保持最新状态。
+- **Service**：独立的 Rust 程序，通过命名管道处理请求；不会定时读取机密。
 - **GUI**：基于 Tauri 2 + Svelte 5 开发的桌面图形前端，共用同一套 IPC 契约。
 
 ## 机密提供者
 
 支持 9 种机密提供者，每次切换时都会进行可用性检查。如果检查没通过，配置编辑器里会弹出醒目的黄色提示条：
 
-| 提供者 | 认证方式 | 定时刷新 | 文档 |
+| 提供者 | 认证方式 | 服务定时刷新 | 文档 |
 |---|---|---|---|
-| DPAPI CurrentUser | Windows DPAPI | 否（当前用户绑定） | [配置指南](../../docs/secret-providers-guide.md) |
-| Windows Credential Manager | Credential Manager + DPAPI | 否（当前用户绑定） | [配置指南](../../docs/secret-providers-guide.md) |
-| PowerShell SecretManagement | SecretStore 保险库 | 否（`CreatedOnly`） | [配置指南](../../docs/secret-providers-guide.md) |
-| HashiCorp Vault KV v2 | VAULT_TOKEN / AppRole 证书 | 是 | [配置指南](../../docs/secret-providers-guide.md) |
-| SOPS | Age / PGP / KMS | 否（`CreatedOnly`） | [配置指南](../../docs/secret-providers-guide.md) |
-| Azure Key Vault | 服务主体证书 / 托管标识 | 是 | [配置指南](../../docs/secret-providers-guide.md) |
-| 1Password CLI | OP_SERVICE_ACCOUNT_TOKEN | 是 | [配置指南](../../docs/secret-providers-guide.md) |
-| AWS Secrets Manager | SigV4 + 访问密钥 | 是 | [配置指南](../../docs/secret-providers-guide.md) |
-| AWS IAM Roles Anywhere | 用机器证书库里的证书换取临时凭据 | 还没有：`Periodic` 挂载不会被服务重新读取 | [配置指南](../../docs/secret-providers-guide.md) |
+| DPAPI CurrentUser | Windows DPAPI | 否（当前用户绑定；启动时读取） | [配置指南](../../docs/secret-providers-guide.md) |
+| Windows Credential Manager | Credential Manager + DPAPI | 否（当前用户绑定；启动时读取） | [配置指南](../../docs/secret-providers-guide.md) |
+| PowerShell SecretManagement | SecretStore 保险库 | 否（启动时读取） | [配置指南](../../docs/secret-providers-guide.md) |
+| HashiCorp Vault KV v2 | VAULT_TOKEN / AppRole 证书 | 否（启动时读取） | [配置指南](../../docs/secret-providers-guide.md) |
+| SOPS | Age / PGP / KMS | 否（启动时读取） | [配置指南](../../docs/secret-providers-guide.md) |
+| Azure Key Vault | 服务主体证书 / 托管标识 | 否（启动时读取） | [配置指南](../../docs/secret-providers-guide.md) |
+| 1Password CLI | OP_SERVICE_ACCOUNT_TOKEN | 否（启动时读取） | [配置指南](../../docs/secret-providers-guide.md) |
+| AWS Secrets Manager | SigV4 + 访问密钥 | 否（启动时读取） | [配置指南](../../docs/secret-providers-guide.md) |
+| AWS IAM Roles Anywhere | 用机器证书库里的证书换取临时凭据 | 否（启动时读取） | [配置指南](../../docs/secret-providers-guide.md) |
 
-「定时刷新」一列里的「是」，指的是提供者声明支持 `Periodic`；服务目前还不会重新读取这些挂载，机密值并不会自行刷新（见[这个 issue](https://github.com/Xxx91n/env-manager/issues/276)）。
+Env Manager 目前不会定时读取机密。启动 Launch 配置时才会读取机密；程序运行后，环境变量不会自动更新。
 
 每种机密提供者的前置环境、初始配置步骤以及常见报错解决方法，请查阅 [docs/secret-providers-guide.md](../../docs/secret-providers-guide.md)。
 
 ## 服务模式
 
-`env-manager-service.exe` 是一个独立的 Rust 二进制程序，通过命名管道响应请求，在后台保持机密挂载有效可用：
+`env-manager-service.exe` 通过命名管道处理请求，不会定时读取机密。Service 模式没有挂载文件：启动时会记一条警告，健康查询会返回空列表和说明。Background 模式仍使用当前启动用户的 `%LOCALAPPDATA%\EnvManager\secretMount.json`。
 
-- **运行模式**：Service（由 Windows SCM 服务控制管理器托管，开机自启）、Background（用户前台启动的后台进程）、Cli（单次执行网关）
-- **调和循环**：每 300 秒进行一次周期性全量扫描，单项处理支持幂等，首次检查延时 30 秒触发
+- **运行模式**：Service（由 Windows SCM 服务控制管理器托管，开机启动）、Background（用户启动的后台进程）、Cli（单次执行网关）
+- **Service 模式挂载**：不可用；没有机器级挂载文件。
+- **周期性进程检查**：只检查服务是否被调试器附加，不扫描或刷新挂载。
 - **审计账本**：采用只增不改的哈希链格式 `audit-ledger.jsonl`，单个文件满 100MB 自动轮换，支持篡改检测
 - **进程间通信 (IPC)**：设置防抢占管道标志，限制请求大小最大 65536 字节，通信基于换行分隔的 JSON 协议
 - **看门狗守护**：双层自愈机制 —— SCM 自动重启（Service 模式）+ GUI 每 30 秒心跳探测（Background 模式）

@@ -149,35 +149,36 @@ flowchart LR
 ```
 
 - **CLI**: a C# .NET 10 executable that coordinates the work and is the only writer of the registry.
-- **Service**: a standalone Rust binary that keeps secret mounts fresh over a named pipe.
+- **Service**: a standalone Rust binary that provides named-pipe IPC; it does not fetch secret values on a timer.
 - **GUI**: a Tauri 2 + Svelte 5 front end that uses the same IPC contracts.
 
 ## Secret providers
 
 Nine secret providers, each checked when you switch to it. A failed check appears as an inline amber banner in the profile editor:
 
-| Provider | Auth Method | Timer Refresh | Docs |
+| Provider | Auth Method | Service Timer Refresh | Docs |
 |---|---|---|---|
-| DPAPI CurrentUser | Windows DPAPI | No (per user) | [Guide](docs/secret-providers-guide.md) |
-| Windows Credential Manager | Credential Manager + DPAPI | No (per user) | [Guide](docs/secret-providers-guide.md) |
-| PowerShell SecretManagement | SecretStore vault | No (`CreatedOnly`) | [Guide](docs/secret-providers-guide.md) |
-| HashiCorp Vault KV v2 | VAULT_TOKEN / AppRole cert | Yes | [Guide](docs/secret-providers-guide.md) |
-| SOPS | Age / PGP / KMS | No (`CreatedOnly`) | [Guide](docs/secret-providers-guide.md) |
-| Azure Key Vault | Service principal cert / managed identity | Yes | [Guide](docs/secret-providers-guide.md) |
-| 1Password CLI | OP_SERVICE_ACCOUNT_TOKEN | Yes | [Guide](docs/secret-providers-guide.md) |
-| AWS Secrets Manager | SigV4 + access keys | Yes | [Guide](docs/secret-providers-guide.md) |
-| AWS IAM Roles Anywhere | Certificate from the machine store exchanged for temporary credentials | No, not yet: `Periodic` mounts are not re-read by the service (see [this issue](https://github.com/Xxx91n/env-manager/issues/276)) | [Guide](docs/secret-providers-guide.md) |
+| DPAPI CurrentUser | Windows DPAPI | No (user-bound; read at launch) | [Guide](docs/secret-providers-guide.md) |
+| Windows Credential Manager | Credential Manager + DPAPI | No (user-bound; read at launch) | [Guide](docs/secret-providers-guide.md) |
+| PowerShell SecretManagement | SecretStore vault | No (read at launch) | [Guide](docs/secret-providers-guide.md) |
+| HashiCorp Vault KV v2 | VAULT_TOKEN / AppRole cert | No (read at launch) | [Guide](docs/secret-providers-guide.md) |
+| SOPS | Age / PGP / KMS | No (read at launch) | [Guide](docs/secret-providers-guide.md) |
+| Azure Key Vault | Service principal cert / managed identity | No (read at launch) | [Guide](docs/secret-providers-guide.md) |
+| 1Password CLI | OP_SERVICE_ACCOUNT_TOKEN | No (read at launch) | [Guide](docs/secret-providers-guide.md) |
+| AWS Secrets Manager | SigV4 + access keys | No (read at launch) | [Guide](docs/secret-providers-guide.md) |
+| AWS IAM Roles Anywhere | Certificate from the machine store exchanged for temporary credentials | No (read at launch) | [Guide](docs/secret-providers-guide.md) |
 
-In the `Timer Refresh` column, `Yes` means the provider declares `Periodic` support; the service does not re-read those mounts yet, so values do not refresh on their own today (see [this issue](https://github.com/Xxx91n/env-manager/issues/276)).
+Env Manager does not fetch secret values on a timer. Values are read when a Launch profile starts; an already-running program keeps the value it started with.
 
 See [docs/secret-providers-guide.md](docs/secret-providers-guide.md) for per-provider prerequisites, one-time setup, and error fix steps.
 
 ## Service mode
 
-`env-manager-service.exe` is a standalone Rust binary that keeps secret mounts fresh and answers over a named pipe:
+`env-manager-service.exe` provides named-pipe IPC. It does not fetch secrets on a timer. Service mode has no mount file: it logs one warning at startup, and health returns an empty list with a message. Background mode uses the launching user's `%LOCALAPPDATA%\EnvManager\secretMount.json`.
 
-- **ServiceMode**: Service (SCM-managed, machine boot), Background (user-launched), Cli (one-shot gateway)
-- **Reconcile loop**: 300s periodic full-scan, idempotent per-item handler, 30s first-tick delay
+- **Modes**: Service (SCM-managed, machine boot), Background (user-launched), Cli (one-shot gateway)
+- **Service-mode mounts**: unavailable; there is no machine-level mount file.
+- **Periodic process guard**: checks for an attached debugger; it does not scan or refresh mounts.
 - **Audit ledger**: append-only hash-chained `audit-ledger.jsonl` with 100MB rotation and tamper detection
 - **IPC**: anti-squatting pipe flag, 65536-byte request cap, newline-delimited JSON protocol
 - **Watchdog**: two-layer recovery — SCM auto-restart (Service mode) + GUI 30s ping watchdog (Background mode)

@@ -8,7 +8,7 @@
 // Driven through `get_mount_health_at`, the same mount-path seam the rotation tests use:
 // a temp file under `%TEMP%`, removed on drop, no real state read or written.
 
-use crate::reconcile::get_mount_health_at;
+use crate::reconcile::{get_mount_health_at, get_mount_health_for_path};
 use crate::rotate_stop_tests::MountFixture;
 
 fn write_mount_fixture(path: &std::path::Path, expires: Option<&str>) {
@@ -56,4 +56,22 @@ async fn health_maps_the_four_expiry_inputs_onto_the_three_states() {
             label
         );
     }
+}
+
+#[tokio::test]
+async fn service_mode_health_explains_why_no_mounts_are_listed() {
+    let health = get_mount_health_for_path(None)
+        .await
+        .expect("Service mode health must answer without opening a mount file");
+
+    assert_eq!(
+        health,
+        serde_json::json!({
+            "mounts": [],
+            "total": 0,
+            "mountsAvailable": false,
+            "unavailableReason": crate::SERVICE_MOUNTS_UNAVAILABLE_REASON,
+            "message": crate::SERVICE_MOUNTS_UNAVAILABLE_MESSAGE,
+        })
+    );
 }

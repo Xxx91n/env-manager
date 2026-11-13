@@ -1,11 +1,12 @@
-// Stop-path convergence of a delegated CLI rotate (issue #153) and of the provider helper
-// tree it starts (#160).
+// Background-mode stop-path convergence of a delegated CLI rotate (issue #153) and of
+// the provider helper tree it starts (#160).
 //
-// Evidence seam chosen for these tickets: the service-side rotation call
+// Evidence seam chosen for these tickets: the Background-mode rotation handler
 // (`reconcile::run_cli_child` and `reconcile::rotate_mount_at`) driven against a real
-// child process and a temp mount file. A literal `Stop-Service` run would additionally
-// need an installed service, a working provider and a rotation slow enough to still be in
-// flight when the stop lands, none of which is deterministic on a CI runner. The layer
+// child process and a temp mount file. A literal `Stop-Service` test would use SCM
+// Service mode, which has no mount file and refuses rotation; these fixtures drive the
+// Background-mode shutdown token directly. A full provider-backed rotation with a
+// predictable stop window is not deterministic on a CI runner. The layer
 // above this seam is pinned by `startup_contract_tests` in `main.rs`: listener before
 // SERVICE_RUNNING, pipe released before SERVICE_STOPPED, and - added for #153 - the body
 // does not return while a connection handler is still in flight, which is the property the
@@ -127,9 +128,10 @@ impl Drop for MountFixture {
     }
 }
 
-/// Scenario: `Stop-Service` (or an uninstall) lands while a rotate child is running. The
-/// stop path must terminate that child and wait for its exit before returning, so the
-/// `SERVICE_STOPPED` that follows names a process that can no longer write profiles.json.
+/// Scenario: Background-mode shutdown (or an uninstall) lands while a rotate child is
+/// running. Service mode refuses rotation; this fixture drives the Background-mode token
+/// directly and verifies that the process does not exit while the child can still write
+/// profiles.json.
 #[tokio::test]
 async fn stop_terminates_and_reaps_the_rotate_child() {
     assert!(
@@ -346,9 +348,9 @@ async fn poll_until<T>(budget: Duration, mut probe: impl FnMut() -> Option<T>) -
 /// Scenario for #160: the stop has to converge the helper tree, not only the direct child.
 ///
 /// The stub is the CLI and the `ping` it starts is the provider helper (`sops`, `op`,
-/// `pwsh`). A stop that terminates only the CLI leaves the helper running - that is what
-/// the prototype measured against a real sops run, where the helper outlived
-/// `SERVICE_STOPPED` by 8s and the decrypted file by 22s. The job object has to take the
+/// `pwsh`). A Background-mode shutdown that terminates only the CLI leaves the helper
+/// running - that is what the prototype measured against a real sops run, where the helper
+/// outlived process shutdown by 8s and the decrypted file by 22s. The job object has to take the
 /// helper down with the CLI, which is why the assertion is made against the *grandchild's*
 /// pid and not against the stub's.
 ///

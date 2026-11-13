@@ -292,10 +292,9 @@ async fn accept_loop(
     shutdown: Arc<CancellationToken>,
     mut next: Option<NamedPipeServer>,
 ) {
-    // Connection handlers are tracked here rather than left detached. A `rotate` handler
-    // owns a CLI child, and the stop path below waits for the handler: reporting
-    // `SERVICE_STOPPED` while one is still live is exactly the silent "stopped, but
-    // something can still write profiles.json" window #153 closes.
+    // Connection handlers are tracked here rather than left detached. In Background mode,
+    // a `rotate` handler owns a CLI child; the stop path waits for every handler before the
+    // process exits. Service mode refuses rotation, but shares the pipe-release guarantee.
     let mut handlers: JoinSet<()> = JoinSet::new();
 
     loop {
@@ -375,8 +374,8 @@ async fn accept_loop(
 
 /// Handle a single client connection: read one request line, process, write one response line.
 ///
-/// `shutdown` is the service stop token, forwarded to the verbs that delegate to a CLI
-/// subprocess so the child is converged with the stop instead of orphaned by it (#153).
+/// `shutdown` is the process stop token, forwarded to verbs that delegate to a CLI
+/// subprocess so a Background-mode rotation child is converged with shutdown (#153).
 /// `accept_loop` tracks this handler and joins it before the server body returns.
 async fn handle_connection(mut server: NamedPipeServer, shutdown: Arc<CancellationToken>) -> io::Result<()> {
     tracing::info!("IPC connection accepted");
@@ -426,6 +425,24 @@ async fn handle_connection(mut server: NamedPipeServer, shutdown: Arc<Cancellati
 const DEPRECATED_NOOP_REASON: &str =
     "deprecated: this command performs no operation; scheduled for removal in v0.16.0";
 
+fn mount_status_data(mount_path: Option<&std::path::Path>) -> serde_json::Value {
+    match mount_path {
+        Some(mount_path) => serde_json::json!({
+            "running": true,
+            "mountFile": mount_path.exists(),
+            "mountPath": mount_path.to_string_lossy(),
+        }),
+        None => serde_json::json!({
+            "running": true,
+            "mountFile": false,
+            "mountPath": null,
+            "mountsAvailable": false,
+            "unavailableReason": crate::SERVICE_MOUNTS_UNAVAILABLE_REASON,
+            "message": crate::SERVICE_MOUNTS_UNAVAILABLE_MESSAGE,
+        }),
+    }
+}
+
 async fn process_request(req: &IpcRequest, shutdown: &CancellationToken) -> IpcResponse {
     tracing::info!("IPC request: method={} request_id={}", req.method, req.request_id.as_deref().unwrap_or("-"));
     match req.method.as_str() {
@@ -439,15 +456,9 @@ async fn process_request(req: &IpcRequest, shutdown: &CancellationToken) -> IpcR
                 "uptime_seconds": uptime,
             }))
         }
-        "status" => {
-            let mount_path = crate::secret_mount_path();
-            let exists = mount_path.exists();
-            IpcResponse::ok(serde_json::json!({
-                "running": true,
-                "mountFile": exists,
-                "mountPath": mount_path.to_string_lossy(),
-            }))
-        }
+        "status" => IpcResponse::ok(mount_status_data(
+            crate::secret_mount_path().as_deref(),
+        )),
         "health" => {
             match crate::reconcile::get_mount_health().await {
                 Ok(summary) => IpcResponse::ok(summary),
@@ -591,6 +602,37 @@ mod tests {
         std::fs::read_to_string(path).ok()
     }
 
+    #[test]
+    fn service_status_reports_mounts_as_unavailable_without_a_path() {
+        let status = mount_status_data(None);
+        assert_eq!(
+            status,
+            serde_json::json!({
+                "running": true,
+                "mountFile": false,
+                "mountPath": null,
+                "mountsAvailable": false,
+                "unavailableReason": crate::SERVICE_MOUNTS_UNAVAILABLE_REASON,
+                "message": crate::SERVICE_MOUNTS_UNAVAILABLE_MESSAGE,
+            })
+        );
+    }
+
+    #[test]
+    fn background_status_keeps_the_user_mount_path() {
+        let mount_path = std::path::PathBuf::from(
+            r"C:\Users\Alice\AppData\Local\EnvManager\secretMount.json",
+        );
+        assert_eq!(
+            mount_status_data(Some(&mount_path)),
+            serde_json::json!({
+                "running": true,
+                "mountFile": false,
+                "mountPath": mount_path.to_string_lossy(),
+            })
+        );
+    }
+
     /// Regeneration escape hatch: ENVMANAGER_REGENERATE_IPC_GOLDEN=1 overwrites
     /// the golden files instead of failing on drift. Intended for deliberate
     /// schema changes; every regeneration is a visible diff in review.
@@ -640,21 +682,24 @@ mod tests {
                 { "name": "shutdown", "payload": { "method": "shutdown" } }
             ],
             "responses": [
-                { "name": "ok_status", "payload": { "ok": true, "data": { "running": true, "mountFile": true, "mountPath": "C:\\ProgramData\\EnvManager\\secretMount.json" } } },
-                { "name": "ok_ping", "payload": { "ok": true, "data": { "pong": true, "uptime_seconds": 3600 } } },
+                {"name": "ok_status", "payload": {"data": {"mountFile": true, "mountPath": "C:\\Users\\Alice\\AppData\\Local\\EnvManager\\secretMount.json", "running": true}, "ok": true}},
+                {"name": "ok_status_service_mode_unavailable", "note": "Service mode has no mount file; status says so instead of resolving a ProgramData path.", "payload": {"data": {"message": "Secret mounts are unavailable in Service mode.", "mountFile": false, "mountPath": null, "mountsAvailable": false, "running": true, "unavailableReason": "serviceMode"}, "ok": true}},
+                {"name": "ok_ping", "payload": {"data": {"pong": true, "uptime_seconds": 3600}, "ok": true}},
                 { "name": "ok_health", "note": "Three-state health (#293). expiresAt is the only health signal and is never written today: absent or unparsable maps to unverified with a machine-readable reason, never to green.", "payload": { "ok": true, "data": { "mounts": [
-                    { "id": "vault-team", "provider": "vault-kv2", "name": "TEAM_TOKEN", "refreshPolicy": "Renew", "state": "valid", "reason": null, "lastFetchedAt": "2026-08-31T10:00:00+00:00", "lastRotatedAt": null },
-                    { "id": "cred-app", "provider": "credential-manager", "name": "APP_KEY", "refreshPolicy": "CreatedOnly", "state": "expired", "reason": "expired", "lastFetchedAt": null, "lastRotatedAt": "2026-01-01T00:00:00+00:00" },
-                    { "id": "sops-docs", "provider": "sops", "name": "DOC_KEY", "refreshPolicy": "CreatedOnly", "state": "unverified", "reason": "noExpiry", "lastFetchedAt": null, "lastRotatedAt": null },
-                    { "id": "aws-stale", "provider": "aws-secretsmanager", "name": "AWS_KEY", "refreshPolicy": "Renew", "state": "unverified", "reason": "unparsableExpiry", "lastFetchedAt": null, "lastRotatedAt": null }
-                ] } } },
-                { "name": "ok_refresh_noop", "note": "Deprecated no-op (#293): the command stays accepted for old scripts but no longer touches the mount file.", "payload": { "ok": true, "data": { "mountId": "vault-team", "refreshed": false, "noop": true, "reason": "deprecated: this command performs no operation; scheduled for removal in v0.16.0" } } },
-                { "name": "ok_rotate_provider_managed_skipped", "note": "A Periodic mount with no local envelope is an observable skip; neither timestamp is advanced.", "payload": { "ok": true, "data": { "mountId": "vault-team", "rotated": false, "skipped": true, "skipReason": "providerManaged", "lastRotatedAt": null, "lastFetchedAt": "2026-08-31T10:00:00+00:00" } } },
-                { "name": "ok_reload_noop", "note": "Deprecated no-op (#293): the service holds no cache, so there is nothing to reload.", "payload": { "ok": true, "data": { "reloaded": false, "noop": true, "reason": "deprecated: this command performs no operation; scheduled for removal in v0.16.0" } } },
-                { "name": "ok_shutdown", "payload": { "ok": true, "data": { "shuttingDown": true } } },
-                { "name": "err_unknown_method", "payload": { "ok": false, "message": "unknown method: frobnicate" } },
-                { "name": "err_refresh_missing_mount", "payload": { "ok": false, "message": "refresh requires mountId" } },
-                { "name": "cli_degraded_not_running", "note": "C# gateway-side failure envelope; extra `state` field is tolerated by consumers", "payload": { "ok": false, "state": "not_running", "message": "service not_running at \\\\.\\pipe\\EnvManager.Background" } }
+                    { "id": "vault-team", "lastFetchedAt": "2026-08-31T10:00:00+00:00", "lastRotatedAt": null, "name": "TEAM_TOKEN", "provider": "vault-kv2", "reason": null, "refreshPolicy": "Renew", "state": "valid" },
+                    { "id": "cred-app", "lastFetchedAt": null, "lastRotatedAt": "2026-01-01T00:00:00+00:00", "name": "APP_KEY", "provider": "credential-manager", "reason": "expired", "refreshPolicy": "CreatedOnly", "state": "expired" },
+                    { "id": "sops-docs", "lastFetchedAt": null, "lastRotatedAt": null, "name": "DOC_KEY", "provider": "sops", "reason": "noExpiry", "refreshPolicy": "CreatedOnly", "state": "unverified" },
+                    { "id": "aws-stale", "lastFetchedAt": null, "lastRotatedAt": null, "name": "AWS_KEY", "provider": "aws-secretsmanager", "reason": "unparsableExpiry", "refreshPolicy": "Renew", "state": "unverified" }
+                ], "total": 4 } } },
+                {"name": "ok_health_service_mode_unavailable", "note": "Service mode returns an empty mount list and explains that mount files are unavailable.", "payload": {"data": {"message": "Secret mounts are unavailable in Service mode.", "mounts": [], "mountsAvailable": false, "total": 0, "unavailableReason": "serviceMode"}, "ok": true}},
+                {"name": "ok_refresh_noop", "note": "Deprecated no-op (#293): the command stays accepted for old scripts but no longer touches the mount file.", "payload": {"data": {"mountId": "vault-team", "noop": true, "reason": "deprecated: this command performs no operation; scheduled for removal in v0.16.0", "refreshed": false}, "ok": true}},
+                {"name": "ok_rotate_provider_managed_skipped", "note": "A Periodic mount with no local envelope is an observable skip; neither timestamp is advanced.", "payload": {"data": {"lastFetchedAt": "2026-08-31T10:00:00+00:00", "lastRotatedAt": null, "mountId": "vault-team", "rotated": false, "skipReason": "providerManaged", "skipped": true}, "ok": true}},
+                {"name": "ok_reload_noop", "note": "Deprecated no-op (#293): the service holds no cache, so there is nothing to reload.", "payload": {"data": {"noop": true, "reason": "deprecated: this command performs no operation; scheduled for removal in v0.16.0", "reloaded": false}, "ok": true}},
+                {"name": "ok_shutdown", "payload": {"data": {"shuttingDown": true}, "ok": true}},
+                {"name": "err_unknown_method", "payload": {"message": "unknown method: frobnicate", "ok": false}},
+                {"name": "err_refresh_missing_mount", "payload": {"message": "refresh requires mountId", "ok": false}},
+                {"name": "err_rotate_service_mode_mounts_unavailable", "note": "A rotate request in Service mode is refused because there is no mount file.", "payload": {"message": "rotate failed: Secret mounts are unavailable in Service mode.", "ok": false}},
+                {"name": "cli_degraded_not_running", "note": "C# gateway-side failure envelope; extra `state` field is tolerated by consumers", "payload": {"message": "service not_running at \\\\.\\pipe\\EnvManager.Background", "ok": false, "state": "not_running"}},
             ]
         });
         check_golden(&golden_dir().join("ipc-samples.json"), &samples, "ipc samples");

@@ -183,7 +183,7 @@ Commands:
   agents [--path|--json|--summary] Output CLI spec. --path: file only. --json: machine-readable. --summary: brief
   help                       Show help
   update check                Check for latest version
-  service status|ping|health|refresh <id>|rotate <id>|reload|shutdown  Interact with the secret lifecycle service
+  service status|ping|health|refresh <id>|rotate <id>|reload|shutdown  IPC service (Background by default; --service-pipe selects SCM Service mode)
   audit list|verify|encrypt-file|migrate-audit|verify-ledger|export-survival-kit|recover-from-ledger  Manage the audit ledger
   export-state --output <file>  Export internal config as a DPAPI-encrypted archive
   import-state --input <file> [--dry-run]  Import a DPAPI-encrypted state archive
@@ -283,37 +283,19 @@ Commands:
         if (args.Length == 0) return false;
         string command = args[0].ToLowerInvariant();
         if (command is "list" or "get" or "backup" or "diff" or "validate" or "agents" or "help" or "expand") return false;
-        // `service` is a named-pipe forwarder: it opens a pipe, writes one request line and
-        // reads one response line (ServiceCommand.RunServiceCommand), so no registry value is
-        // written in this process and this mutex must not be taken here at all. Two reasons,
-        // both of them the same defect seen from different verbs:
-        //   - rotate delegates to a CLI child that is the writer and classifies as write, so
-        //     it takes this mutex itself. A gateway that took it first deadlocked its own
-        //     delegate: in Background mode the service runs in the caller's session, the
-        //     child therefore shares this `Local\` namespace, and every rotate answered
-        //     "Another Env Manager write operation is still running" after the full 30 s
-        //     budget - while the same code took 7 s in Service mode, whose session-0 child
-        //     never shares the namespace (#164).
-        //   - refresh mutates state inside the service, under that service's own reconcile
-        //     lock. Holding this mutex across the IPC round-trip re-creates the deadlock from
-        //     the other side: rotate_mount holds the reconcile lock across its delegated
-        //     child, the child wants this mutex, and the refresh request wants the reconcile
-        //     lock - so the child times out behind a sibling request. That is why `refresh` is
-        //     not exempted "because it writes": the writer of secretMount.json is the service,
-        //     and its serializer is the reconcile lock, not a lock any gateway process can
-        //     take without joining that cycle. A terminal CLI writing the same file from
-        //     outside the service stays unserialized - the gap Service mode has always had,
-        //     and a narrower exposure than a guaranteed 30 s rotate failure.
-        // The remaining verbs only read or write nothing, so no verb needs the lock. What the
-        // gateway therefore guarantees is narrower and checkable: it never holds a write lock
-        // while waiting for work it caused to run.
+        // `service` only forwards one request over named-pipe IPC. The gateway does not
+        // write registry state, and must not hold the mutation mutex while waiting for work.
+        // In Background mode, `rotate` delegates to a CLI child that needs this same `Local\`
+        // mutex; taking it here would deadlock the child. Service mode has no mount file and
+        // refuses rotation. `refresh` is a deprecated no-op and does not mutate mount state.
+        // No service verb needs this process's write lock.
         // Rejected alternatives: holding the mutex only around the IPC call re-creates the
         // deadlock (the child needs the lock while the gateway waits for that same child),
         // and handing the child an inherited holder identity is a bypass - the actual writer
         // would run unmutexed against a `set`.
         // No GUI-side change is needed to match: main.rs is_read_only keeps refresh, rotate,
         // reload and shutdown on the write side of CLI_RWLOCK, which serializes the shell's
-        // own submissions and never contended with the service's child (the service spawns
+        // own submissions and never contended with the Background-mode service's child (the service spawns
         // it, not the shell).
         if (command == "service") return false;
         if (command == "history") return args.Length > 1 && args[1].Equals("undo", StringComparison.OrdinalIgnoreCase);

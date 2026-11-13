@@ -33,8 +33,8 @@ internal interface ISecretProvider
 // SecretProviderManager.ListProviders and `profile secret-provider list` so capability is
 // data the GUI gates on instead of hardcoded provider-name rules.
 
-// Whether secrets mounted from this provider can be re-read periodically by the
-// service (refresh policy "Periodic"); false => "CreatedOnly" mounts only.
+// Whether this provider declares support for periodic reads. This is a provider
+// capability only: the service does not fetch secret values on a timer today.
 bool RefreshCapable => false;
 
 // Whether the provider's production auth model is certificate-bound

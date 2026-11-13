@@ -445,7 +445,7 @@
   "notes.deleteNote": "メモを削除",
   "notes.notePlaceholder": "メモを入力...",
   "notes.noteEmpty": "メモなし",
-  "service.description": "定期トークン更新のためのバックグラウンドシークレットマウントサービスを管理",
+  "service.description": "Background モードでは現在のユーザーのマウントファイルを使い、手動でローテーションできます。Service モードにはマウントファイルがなく、秘密情報を定期取得しません。",
   "profiles": {
     "unapplyToEdit": "プロファイルを適用解除してから変数を追加・編集してください"
   },

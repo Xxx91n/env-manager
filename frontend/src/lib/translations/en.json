@@ -445,7 +445,7 @@
   "notes.deleteNote": "Delete Note",
   "notes.notePlaceholder": "Type your note here...",
   "notes.noteEmpty": "No notes yet",
-  "service.description": "Manage the background secret mount service for periodic token rotation",
+  "service.description": "Background mode uses your user mount file and supports manual rotation. Service mode has no mount file and does not fetch secrets on a timer.",
   "profiles": {
     "unapplyToEdit": "Unapply the profile before adding or editing variables"
   },

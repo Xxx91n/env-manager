@@ -445,7 +445,7 @@
   "notes.deleteNote": "Eliminar nota",
   "notes.notePlaceholder": "Escribir nota...",
   "notes.noteEmpty": "Sin notas",
-  "service.description": "Gestionar el servicio en segundo plano para la rotacion periodica de secretos",
+  "service.description": "El modo Background usa el archivo de montajes del usuario y permite rotar secretos manualmente. El modo Service no tiene archivo de montajes ni lee secretos de forma periódica.",
   "profiles": {
     "unapplyToEdit": "Desaplique el perfil antes de añadir o editar variables"
   },

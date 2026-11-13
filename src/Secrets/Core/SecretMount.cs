@@ -22,15 +22,14 @@ class SecretMount
     [JsonPropertyName("name")] public string Name { get; set; } = "";
     [JsonPropertyName("targetName")] public string? TargetName { get; set; }
     [JsonPropertyName("scope")] public string Scope { get; set; } = "user";
-    // Design: fetch-on-launch is the fixed default for new mounts (refresh policy literal
-    // "CreatedOnly"; glossary: Refresh policy).
-    // The user-bound providers - dpapi-current-user, credential-manager,
-    // powershell-secretmanagement - and sops declare RefreshCapable => false: the NT SERVICE
-    // identity cannot open the interactive user's DPAPI master key, CredMan vault or pwsh
-    // SecretStore, and sops has no service-side refresh surface at all, so those mounts can
-    // only ever be fetch-on-launch. Migrating user-bound stores to a service identity is
-    // deliberately not planned. Changing this default (the shipped literal is "CreatedOnly")
-    // or adding a service-side migration is a design change; record it in docs/architecture.md first.
+    // New mounts default to "CreatedOnly" (see the Refresh policy glossary entry).
+    // RefreshCapable describes a provider's capability, not current service behavior:
+    // the service does not fetch values on a timer, and Service mode has no mount file.
+    // User-bound providers (dpapi-current-user, credential-manager, and
+    // powershell-secretmanagement) declare RefreshCapable => false because the service
+    // identity cannot open the interactive user's DPAPI master key, CredMan vault, or
+    // pwsh SecretStore. Keep the stored fields for compatibility; any future service-side
+    // timer fetch needs a new design recorded in docs/architecture.md.
     [JsonPropertyName("refreshPolicy")] public string RefreshPolicy { get; set; } = "CreatedOnly";
     [JsonPropertyName("refreshIntervalSeconds")] public int? RefreshIntervalSeconds { get; set; }
     [JsonPropertyName("lastRotatedAt")] public string? LastRotatedAt { get; set; }

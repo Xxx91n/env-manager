@@ -50,7 +50,7 @@ All commands: `env-manager-cli <command> [args] [--scope user|system] [--debug]`
 | `expand` | `expand <value>` | Resolve nested %VAR% references |
 | `protection` | `protection <subcommand>` | List and manage protected vars + PATH entries |
 | `update` | `update check` | Check GitHub releases for newer version (network) |
-| `service` | `service status\|ping\|health\|refresh\|rotate\|reload\|shutdown` | Send one request to env-manager-service. A healthy service answers with `running: true`. The gateway defines `not_running` (no pipe) and `unresponsive` (pipe exists but the connect times out) as degraded states; a failed probe currently prints an error and exits 1. |
+| `service` | `service status\|ping\|health\|refresh\|rotate\|reload\|shutdown [--service-pipe]` | Send one request over named-pipe IPC. Background mode is the default; append `--service-pipe` to target the SCM Service endpoint. Service mode reports mounts unavailable and refuses `rotate`; Background mode retains the launching user’s mount file and manual rotation. The gateway defines `not_running` (no pipe) and `unresponsive` (pipe exists but the connect times out) as degraded states; a failed probe currently prints an error and exits 1. |
 | `audit` | `audit list\|verify\|encrypt-file\|migrate-audit\|verify-ledger\|export-survival-kit\|recover-from-ledger` | Audit ledger management (hash-chained tamper-evident) |
 | `export-state` | `export-state --output <file>` | Export all internal settings files as a DPAPI-CurrentUser-encrypted archive |
 | `import-state` | `import-state --input <file> [--dry-run]` | Import a DPAPI-encrypted state archive (atomically writes all settings files) |
@@ -196,7 +196,7 @@ Registered providers:
 
 This CLI is the engine the Env Manager GUI (Tauri + Svelte) calls. The GUI starts this CLI as a subprocess through a Rust IPC layer. State protection is layered:
 
-1. **CLI mutex**: all write operations acquire the `Local\EnvManager.RegistryMutation` Windows named mutex. Concurrent CLI writes serialize on this. `service` is the one exception, and it is the whole verb family: the gateway forwards over a named pipe and writes nothing, so it takes no mutex and never waits on work it caused to run. `rotate` is locked by the CLI child it delegates to, and `refresh` is serialized inside the service by its reconcile lock (`RECONCILE_LOCK`) - a gateway lock on either would join a cycle with that work (`src/CliRuntime.cs`, #164).
+1. **CLI mutex**: all write operations acquire the `Local\EnvManager.RegistryMutation` Windows named mutex. Concurrent CLI writes serialize on this. `service` is the one exception, and it is the whole verb family: the gateway forwards over a named pipe and writes nothing, so it takes no mutex and never waits on work it caused to run. In Background mode, `rotate` is locked by the delegated CLI child; Service mode refuses it because there is no mount file. `refresh` is a deprecated no-op, so it does not mutate mount state. A gateway lock would deadlock the Background-mode rotate child (`src/CliRuntime.cs`, #164).
 2. **Rust `CLI_RWLOCK`**: the IPC layer separates read concurrency from write exclusivity at the process level.
 3. **Frontend `writeChain`**: the GUI serializes write IPC calls so the user cannot race two write commands through the UI.
 
@@ -239,12 +239,13 @@ When the GUI is used, it refreshes its view after every mutation. CLI-only usage
 | `%LOCALAPPDATA%\EnvManager\builtin-protected-vars.json` | Built-in protected variables (seeded from CLI resource) |
 | `%LOCALAPPDATA%\EnvManager\builtin-protected-paths.json` | Built-in protected PATH entries (seeded from CLI resource) |
 | `%LOCALAPPDATA%\EnvManager\secret-providers.json` | Active secret provider config |
-| `%LOCALAPPDATA%\EnvManager\secretMount.json` | Secret mount metadata for background and CLI mode (provider, refresh policy, last fetched and rotated times) |
-| `%ProgramData%\EnvManager\secretMount.json` | Secret mount metadata used by service mode |
+| `%LOCALAPPDATA%\EnvManager\secretMount.json` | Secret mount metadata for Background and CLI modes; periodic service-side fetching is not implemented |
 | `%LOCALAPPDATA%\EnvManager\gui-settings.json` | GUI settings (locale, darkMode, fontScale) persisted via Rust IPC |
-| `%ProgramData%\EnvManager\audit-ledger.jsonl` | Hash-chained audit ledger (service mode, append-only) |
+| `%ProgramData%\EnvManager\audit-ledger.jsonl` | Hash-chained audit ledger (Service mode, append-only); service logs are also stored under `%ProgramData%\EnvManager` |
 
 The user JSON folder is shared by both the portable and MSI installations of Env Manager, so configuration follows the Windows user account rather than the binary install location.
+
+Service mode has no mount file. It logs one warning at startup, and its health response reports mounts as unavailable with an empty list and an explanation.
 
 ---
 

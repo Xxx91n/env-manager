@@ -58,8 +58,23 @@
       "payload": {
         "data": {
           "mountFile": true,
-          "mountPath": "C:\\ProgramData\\EnvManager\\secretMount.json",
+          "mountPath": "C:\\Users\\Alice\\AppData\\Local\\EnvManager\\secretMount.json",
           "running": true
+        },
+        "ok": true
+      }
+    },
+    {
+      "name": "ok_status_service_mode_unavailable",
+      "note": "Service mode has no mount file; status says so instead of resolving a ProgramData path.",
+      "payload": {
+        "data": {
+          "message": "Secret mounts are unavailable in Service mode.",
+          "mountFile": false,
+          "mountPath": null,
+          "mountsAvailable": false,
+          "running": true,
+          "unavailableReason": "serviceMode"
         },
         "ok": true
       }
@@ -120,7 +135,22 @@
               "refreshPolicy": "Renew",
               "state": "unverified"
             }
-          ]
+          ],
+          "total": 4
+        },
+        "ok": true
+      }
+    },
+    {
+      "name": "ok_health_service_mode_unavailable",
+      "note": "Service mode returns an empty mount list and explains that mount files are unavailable.",
+      "payload": {
+        "data": {
+          "message": "Secret mounts are unavailable in Service mode.",
+          "mounts": [],
+          "mountsAvailable": false,
+          "total": 0,
+          "unavailableReason": "serviceMode"
         },
         "ok": true
       }
@@ -185,6 +215,14 @@
       "name": "err_refresh_missing_mount",
       "payload": {
         "message": "refresh requires mountId",
+        "ok": false
+      }
+    },
+    {
+      "name": "err_rotate_service_mode_mounts_unavailable",
+      "note": "A rotate request in Service mode is refused because there is no mount file.",
+      "payload": {
+        "message": "rotate failed: Secret mounts are unavailable in Service mode.",
         "ok": false
       }
     },

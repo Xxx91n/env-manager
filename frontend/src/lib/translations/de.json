@@ -445,7 +445,7 @@
   "notes.deleteNote": "Notiz löschen",
   "notes.notePlaceholder": "Notiz eingeben...",
   "notes.noteEmpty": "Keine Notizen",
-  "service.description": "Hintergrunddienst für Secret-Mount-Lebenszyklus verwalten",
+  "service.description": "Der Hintergrundmodus nutzt die Mount-Datei des angemeldeten Benutzers und unterstützt die manuelle Rotation. Im Servicemodus gibt es keine Mount-Datei, und Geheimnisse werden nicht regelmäßig gelesen.",
   "profiles": {
     "unapplyToEdit": "Profil erst deaktivieren bevor Variablen hinzugefügt oder bearbeitet werden"
   },

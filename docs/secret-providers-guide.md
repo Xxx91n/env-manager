@@ -16,9 +16,9 @@ The six external providers below require host-side setup. Each section lists the
 
 ### Capability matrix
 
-Every provider declares its capability descriptors on `ISecretProvider`, and `profile secret-provider list` reports them per line as `[refresh=yes|no certauth=yes|no network=yes|no]` plus real availability (`(unavailable)` when the cheap environment gate fails). The `Periodic refresh` column is what the provider declares, and it is what the Service page in the GUI shows read-only next to each mount (there is no policy picker in the GUI); the service-side loop that actually re-reads a `Periodic` mount is still tracked in [this issue](https://github.com/Xxx91n/env-manager/issues/276), so a declared `yes` does not yet mean values refresh on their own.
+Every provider declares its capabilities on `ISecretProvider`, and `profile secret-provider list` reports them as `[refresh=yes|no certauth=yes|no network=yes|no]` plus current availability (`(unavailable)` when a quick environment check fails). The `Provider periodic-read capability` column shows what a provider declares; the Background-mode Service page displays it as read-only. It does not mean Env Manager fetches values on a timer: the service has no timer-based fetch today. The `refreshPolicy` field stays in mount files for compatibility and continues to mark provider-managed `Periodic` mounts for rotation handling; its periodic-fetch meaning is reserved. Secret values are read when a Launch profile starts, and an already-running program keeps the value it started with.
 
-| Provider | Periodic refresh | Cert-bound auth | Network | Cheap availability gate |
+| Provider | Provider periodic-read capability | Cert-bound auth | Network | Cheap availability gate |
 |----------|------------------|-----------------|---------|--------------------------|
 | dpapi-current-user | no (CreatedOnly) | no | no | always usable on Windows |
 | credential-manager | no (CreatedOnly) | no | no | always usable on Windows |
@@ -303,30 +303,30 @@ That exchange always goes to the real AWS address. `AWS_ENDPOINT_URL_SECRETS_MAN
 - `AWS_ROLES_ANYWHERE_ROLE_ARN`, `AWS_ROLES_ANYWHERE_PROFILE_ARN`, `AWS_ROLES_ANYWHERE_TRUST_ANCHOR_ARN`.
 - `AWS_ROLES_ANYWHERE_CERT_SHA1`: the SHA-1 fingerprint of the certificate, with or without spaces.
 - Optional `AWS_ROLES_ANYWHERE_DURATION_SECONDS`: how long to ask for, default 3600. Values outside the 900-43200 range AWS accepts are clamped.
-- The certificate in `Cert:\LocalMachine\My`, with its private key readable by the account that runs Env Manager. An interactive session uses your own account; the service uses `NT SERVICE\EnvManagerService`.
+- The certificate in `Cert:\LocalMachine\My`, with its private key readable by the Windows account that runs `env-manager-cli` and the Background helper (normally your signed-in user). Service mode has no mount file and does not fetch or rotate secrets, so no Service identity is involved.
 - The role must allow `secretsmanager:GetSecretValue`, `CreateSecret`, `PutSecretValue` and `DeleteSecret` for the secrets you use. Creating a secret is needed because that is what storing one does.
 
-Machine-level environment variables are required, not per-user ones. `setx` without `/M` writes to your own account, which the service cannot see.
+Env Manager reads those variables from the account that runs the CLI or Background helper. Your user environment is sufficient (`setx VAR value` without `/M`); after changing them, restart the shell or Env Manager so the new values are picked up. You do not need to set them machine-wide for this provider.
 
 ### Certificate requirements
 
 - X.509 v3, `CA=false`, key usage including digital signature.
-- The private key must **not** be marked "strong private key protection". That flag makes Windows show a confirmation prompt on every key use, and a service running in session 0 has nobody to click it, so every call fails.
+- The private key must **not** be marked "strong private key protection". That flag makes Windows show a confirmation prompt on every key use, and the Background helper runs headlessly with nobody to click it, so every call fails or hangs.
 - A non-exportable software key is not an absolute barrier: an administrator can still extract it. For real key isolation, generate the key on a TPM. Env Manager's threat model already excludes the local administrator, so the software key is the documented default.
 
 ### One-time setup
 
 1. Obtain a certificate issued by the CA your trust anchor trusts.
 2. Import it into the machine store: `certutil -f -importpfx My identity.pfx`, or `Import-PfxCertificate -CertStoreLocation Cert:\LocalMachine\My`.
-3. Give the running account read access to the private key: `certlm.msc` > certificate > All Tasks > Manage Private Keys > add `NT SERVICE\EnvManagerService` with Read.
+3. Give your account read access to the private key: `certlm.msc` > certificate > All Tasks > Manage Private Keys > add your Windows account (the one that runs `env-manager-cli` and the Background helper) with Read. If you run Env Manager under a different account, add that account instead.
 4. Register the CA as a trust anchor, create a profile that allows the role, and allow the role to be assumed from `rolesanywhere.amazonaws.com`.
-5. Set the environment variables machine-wide and restart Env Manager.
+5. Set the environment variables for your user and restart Env Manager (a log-off/on or shell restart ensures they are picked up).
 
 ### Activation error and fix
 
 Error: `Cannot activate provider 'aws-roles-anywhere': IAM Roles Anywhere is not configured; missing AWS_ROLES_ANYWHERE_ROLE_ARN, AWS_ROLES_ANYWHERE_CERT_SHA1.`
 
-Fix: the message names every missing variable. Set them machine-wide, restart Env Manager, then retry.
+Fix: the message names every missing variable. Set them for your user, restart Env Manager, then retry.
 
 Error: `certificate <fingerprint> is not in Cert:\LocalMachine\My` (or `expired`, or `has no private key`).
 
@@ -345,16 +345,16 @@ Selecting this provider exchanges your certificate for temporary credentials onc
 No emulator implements `CreateSession`, so the wire protocol is not exercised in CI. The offline suite proves the signature, the header set, the decimal serial in the credential scope and the envelope shape against a locally generated certificate, but only AWS can accept a real signature. Before relying on this provider, run it once against a throwaway trust anchor:
 
 1. Register a disposable CA as a trust anchor, a profile, and a role allowed to assume from `rolesanywhere.amazonaws.com` with `secretsmanager:CreateSecret` and `secretsmanager:GetSecretValue`.
-2. Import the test certificate into `Cert:\LocalMachine\My`, note its SHA-1, and set the five `AWS_ROLES_ANYWHERE_*` variables machine-wide.
+2. Import the test certificate into `Cert:\LocalMachine\My`, note its SHA-1, and set the five `AWS_ROLES_ANYWHERE_*` variables for your user.
 3. Add a secret to a Launch profile with `env-manager-cli profile add-secret <profile> <name> <value>`; this is the call that creates the envelope and, through the provider, the remote secret.
 4. Read it back with `env-manager-cli profile reveal-secret <profile> <name>` and confirm the value matches. `profile apply` cannot serve this step: it refuses Launch profiles outright, because applying would put a Launch profile's secrets into the registry.
 5. Delete the remote secret, the profile, the trust anchor and the certificate. Nothing about the run needs to stay.
 
 If step 4 fails with `CreateSession rejected certificate`, the failure is on the AWS side (trust anchor, revocation, role trust policy). A local signature check does not exonerate the request that actually left the machine: it proves the signature matches the string this code built, not the request AWS received. Env Manager logs the upstream error and the certificate fingerprint; compare the response's complaint against the trust anchor and the role's trust policy before assuming the signing code is wrong.
 
-### The service does not refresh this provider yet
+### This provider is not refreshed on a timer
 
-`RefreshCapable` is `true`, but the Rust service's periodic pass only stamps mount metadata; it does not call `Decrypt`. That gap is tracked in [#276](https://github.com/Xxx91n/env-manager/issues/276) and applies to every provider, not just this one. Until it lands, a `Periodic` mount keeps its last value until the CLI reads it again on launch.
+`RefreshCapable` reports what the provider supports; it does not mean Env Manager fetches values periodically. The service does not fetch secrets on a timer. `refreshPolicy` remains in mount files and still identifies provider-managed `Periodic` mounts for rotation handling, but its periodic-fetch meaning is reserved. Values are read when a Launch profile starts. A program that is already running keeps the value it started with.
 
 ---
 
