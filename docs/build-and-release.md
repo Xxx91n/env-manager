@@ -306,7 +306,7 @@ Failure triage: hang at `InstallFinalize` -> `StartServices` with lowest `Action
 | @tauri-apps/cli 2.x | Tauri build tooling |
 | svelte 5.x | UI framework |
 | svelte-i18n 4.x | Internationalization |
-| tailwindcss 3.x | CSS framework |
+| tailwindcss 4.x | CSS framework |
 | vite 8.x | Build tool |
 | typescript 5.x | Type checking |
 | vitest 4.x | Unit test runner |
