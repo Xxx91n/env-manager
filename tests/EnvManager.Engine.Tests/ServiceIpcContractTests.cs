@@ -134,7 +134,7 @@ public class ServiceIpcContractTests
     [InlineData("reload")]
     public void DeprecatedVerbs_WarnOnStderrWithARemovalVersion(string subcommand)
     {
-        var warning = Program.DeprecationWarningFor(subcommand);
+        var warning = ServiceDeprecation.WarningFor(subcommand);
         Assert.StartsWith("Warning: 'service ", warning);
         Assert.Contains(subcommand, warning);
         Assert.Contains("no operation", warning);
@@ -149,7 +149,7 @@ public class ServiceIpcContractTests
     [InlineData("shutdown")]
     public void LiveVerbs_EmitNoDeprecationWarning(string subcommand)
     {
-        Assert.Equal("", Program.DeprecationWarningFor(subcommand));
+        Assert.Equal("", ServiceDeprecation.WarningFor(subcommand));
     }
 
     /// <summary>
