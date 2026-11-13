@@ -284,6 +284,19 @@ public sealed class ReadOnlyProbeWireTests
         Assert.Equal(SecretProviderErrors.ReasonPermission, SecretProviderErrors.ReasonCode(thrown!));
     }
 
+    [Fact]
+    public void AzureBudgets_NormalReadsKeepTenSeconds_TheProbeKeepsFive()
+    {
+        // A probe budget must not leak into a normal Encrypt/Decrypt. This pins the two
+        // values directly: shortening the shared helper for the probe once cut the
+        // managed-identity attempt on real reads to half its budget, so an endpoint
+        // answering between 5s and 10s failed where it used to succeed. A test that slept
+        // past the budget could not catch it - the fake handler ignores cancellation.
+        Assert.Equal(TimeSpan.FromSeconds(10), AzureKeyVaultProvider.NormalTokenTimeout);
+        Assert.Equal(TimeSpan.FromSeconds(5), AzureKeyVaultProvider.ProbeTimeoutBudget);
+        Assert.NotEqual(AzureKeyVaultProvider.NormalTokenTimeout, AzureKeyVaultProvider.ProbeTimeoutBudget);
+    }
+
     // ---------------- AWS Secrets Manager ----------------
 
     [Fact]

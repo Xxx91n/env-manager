@@ -58,6 +58,12 @@ internal sealed class AzureKeyVaultProvider : ISecretProvider
     // reason the Vault probe is 5s: it sits in front of a GUI page load.
     private static readonly TimeSpan ProbeTimeout = TimeSpan.FromSeconds(5);
 
+    // The two budgets are pinned by ReadOnlyProbeWireTests: the probe's must stay short
+    // enough to sit in front of a page load, and a normal read's must not shrink to match
+    // it. Internal so the pin reads the real values instead of a copy.
+    internal static TimeSpan ProbeTimeoutBudget => ProbeTimeout;
+    internal static TimeSpan NormalTokenTimeout => TokenTimeout;
+
     // Read-only probe: GET a secret name that cannot exist. `SecretNotFound` (404) proves
     // the identity may read secret values in this vault; 401 means the token could not be
     // obtained and 403 means the identity authenticated but lacks the data-plane role.
@@ -77,13 +83,13 @@ internal sealed class AzureKeyVaultProvider : ISecretProvider
         // would otherwise add up to near 15s, and `list` probes providers one after
         // another in front of a page load. `list` runs on each profile-editor mount.
         var deadline = DateTimeOffset.UtcNow.Add(ProbeTimeout);
-        string token = GetBearerToken(SecretProviderErrors.OpProbe, RemainingProbeBudget(deadline));
+        string token = GetBearerToken(SecretProviderErrors.OpProbe, deadline);
         string probeName = "env-manager-probe-" + Guid.NewGuid().ToString("N").Substring(0, 12);
         string apiUrl = vaultUri.TrimEnd('/') + "/secrets/" + probeName + "?api-version=" + API_VERSION;
 
         using var client = CreateClient();
         client.DefaultRequestHeaders.Add("Authorization", "Bearer " + token);
-        client.Timeout = RemainingProbeBudget(deadline);
+        client.Timeout = RemainingBudget(deadline);
 
         var response = SecretProviderErrors.Send(Name, SecretProviderErrors.OpProbe,
             () => client.GetAsync(apiUrl).GetAwaiter().GetResult());
@@ -98,10 +104,10 @@ internal sealed class AzureKeyVaultProvider : ISecretProvider
         throw SecretProviderErrors.FromStatus(Name, SecretProviderErrors.OpProbe, response.StatusCode, "probe", body);
     }
 
-    // What is left of the probe budget. A spent budget cannot be handed to HttpClient
+    // What is left of a deadline. A spent budget cannot be handed to HttpClient
     // (a zero Timeout means "no limit"), so the exhausted case gets a deliberately tiny
     // positive window: the next request fails fast instead of stalling the page load.
-    private static TimeSpan RemainingProbeBudget(DateTimeOffset deadline)
+    private static TimeSpan RemainingBudget(DateTimeOffset deadline)
     {
         TimeSpan left = deadline - DateTimeOffset.UtcNow;
         return left > TimeSpan.FromMilliseconds(100) ? left : TimeSpan.FromMilliseconds(100);
@@ -244,22 +250,19 @@ internal sealed class AzureKeyVaultProvider : ISecretProvider
         return Encrypt(plaintext, context);
     }
 
-    // `timeout` is the budget for the token acquisition, shared between the two attempts
-    // (the probe passes its remaining deadline so the whole probe stays inside one window;
-    // the real calls keep the 10s default).
-    private string GetBearerToken(string operation, TimeSpan? timeout = null)
+    // `deadline` is shared by every request the token acquisition makes. The probe passes
+    // its own 5s deadline so the whole probe (both token attempts plus the data-plane GET)
+    // fits inside one window. The real calls pass nothing and keep their original budget:
+    // each attempt gets the full 10s, which is what they have always had - a probe budget
+    // must not shorten a normal Encrypt/Decrypt just because they share this helper.
+    private string GetBearerToken(string operation, DateTimeOffset? deadline = null)
     {
         if (_cachedToken != null && DateTimeOffset.UtcNow < _tokenExpiry.AddMinutes(-5))
             return _cachedToken;
 
-        TimeSpan budget = timeout ?? TimeSpan.FromSeconds(10);
-        // The managed-identity attempt usually has nothing to talk to off Azure, and it is
-        // tried first. Giving it the whole budget means a service-principal fallback starts
-        // with nothing left, so it gets at most half.
-        TimeSpan firstAttempt = budget > TimeSpan.FromMilliseconds(200)
-            ? TimeSpan.FromMilliseconds(Math.Max(100, budget.TotalMilliseconds / 2))
-            : budget;
-        string? token = TryGetManagedIdentityToken(firstAttempt) ?? TryGetServicePrincipalToken(budget);
+        string? token = deadline is null
+            ? TryGetManagedIdentityToken(TokenTimeout) ?? TryGetServicePrincipalToken(TokenTimeout)
+            : TryGetManagedIdentityToken(RemainingBudget(deadline.Value)) ?? TryGetServicePrincipalToken(RemainingBudget(deadline.Value));
         if (string.IsNullOrEmpty(token))
             throw new SecretProviderAuthFailedException(Name, operation,
                 "Failed to obtain Azure access token. Either run on an Azure VM with managed identity, " +
@@ -268,6 +271,10 @@ internal sealed class AzureKeyVaultProvider : ISecretProvider
         _cachedToken = token;
         return token;
     }
+
+    // The budget each token attempt gets when no deadline was supplied: unchanged from
+    // before the probe existed.
+    private static readonly TimeSpan TokenTimeout = TimeSpan.FromSeconds(10);
 
     private string? TryGetManagedIdentityToken(TimeSpan timeout)
     {
