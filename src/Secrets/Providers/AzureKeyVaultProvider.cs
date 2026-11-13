@@ -20,6 +20,23 @@ namespace EnvManager.Secrets.Providers;
 
 internal sealed class AzureKeyVaultProvider : ISecretProvider
 {
+    // Test seam only: production always uses the parameterless constructor, so no
+    // environment switch can redirect a request. Same shape as AwsRolesAnywhereProvider.
+    private readonly HttpMessageHandler? _handler;
+
+    public AzureKeyVaultProvider() { }
+
+    internal AzureKeyVaultProvider(HttpMessageHandler handler) { _handler = handler; }
+
+    // One place that builds the client, so the seam above covers every request this
+    // adapter sends and a test can assert the probe's own wire traffic.
+    private HttpClient CreateClient()
+    {
+        return _handler == null
+            ? new System.Net.Http.HttpClient()
+            : new System.Net.Http.HttpClient(_handler, disposeHandler: false);
+    }
+
     public string Name => "azure-keyvault";
 
     // Capability descriptors: declared per provider,
@@ -31,6 +48,70 @@ internal sealed class AzureKeyVaultProvider : ISecretProvider
 
     // Cheap gate mirroring Encrypt's fail-fast precondition (no network I/O).
     public bool Available => !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("AZURE_KEYVAULT_URI"));
+
+    // The availability probe reads; it never writes. `list` runs on every
+    // profile-editor mount, and the old sentinel round-trip created and then deleted a
+    // secret in the customer's vault each time.
+    public bool ProbeWritesData => false;
+
+    // Budget for the read-only probe. Shorter than the real calls' 15s for the same
+    // reason the Vault probe is 5s: it sits in front of a GUI page load.
+    private static readonly TimeSpan ProbeTimeout = TimeSpan.FromSeconds(5);
+
+    // The two budgets are pinned by ReadOnlyProbeWireTests: the probe's must stay short
+    // enough to sit in front of a page load, and a normal read's must not shrink to match
+    // it. Internal so the pin reads the real values instead of a copy.
+    internal static TimeSpan ProbeTimeoutBudget => ProbeTimeout;
+    internal static TimeSpan NormalTokenTimeout => TokenTimeout;
+
+    // Read-only probe: GET a secret name that cannot exist. `SecretNotFound` (404) proves
+    // the identity may read secret values in this vault; 401 means the token could not be
+    // obtained and 403 means the identity authenticated but lacks the data-plane role.
+    // The roles matter here: Key Vault Reader can list metadata and still cannot read a
+    // value, so "the request got an answer" is not enough - only 404 is.
+    public void ProbeReadOnly()
+    {
+        string vaultUri = Environment.GetEnvironmentVariable("AZURE_KEYVAULT_URI")
+            ?? throw new SecretProviderUnavailableException(Name, SecretProviderErrors.OpProbe,
+                "AZURE_KEYVAULT_URI environment variable not set (e.g. https://myvault.vault.azure.net)");
+
+        if (!vaultUri.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
+            throw new SecretProviderPermissionDeniedException(Name, SecretProviderErrors.OpProbe, "Azure Key Vault requires HTTPS (TLS mandatory)");
+
+        // One deadline for the whole probe, not 5s per stage: a managed-identity fetch
+        // that fails, a service-principal fetch that succeeds late, and the data-plane GET
+        // would otherwise add up to near 15s, and `list` probes providers one after
+        // another in front of a page load. `list` runs on each profile-editor mount.
+        var deadline = DateTimeOffset.UtcNow.Add(ProbeTimeout);
+        string token = GetBearerToken(SecretProviderErrors.OpProbe, deadline);
+        string probeName = "env-manager-probe-" + Guid.NewGuid().ToString("N").Substring(0, 12);
+        string apiUrl = vaultUri.TrimEnd('/') + "/secrets/" + probeName + "?api-version=" + API_VERSION;
+
+        using var client = CreateClient();
+        client.DefaultRequestHeaders.Add("Authorization", "Bearer " + token);
+        client.Timeout = RemainingBudget(deadline);
+
+        var response = SecretProviderErrors.Send(Name, SecretProviderErrors.OpProbe,
+            () => client.GetAsync(apiUrl).GetAwaiter().GetResult());
+        string body = response.Content.ReadAsStringAsync().GetAwaiter().GetResult();
+
+        if ((int)response.StatusCode == 404 &&
+            body.Contains("SecretNotFound", StringComparison.OrdinalIgnoreCase))
+            return;
+
+        // A 404 without SecretNotFound is not the answer the probe expects; everything
+        // else maps onto the typed family (401 -> auth, 403 -> permission).
+        throw SecretProviderErrors.FromStatus(Name, SecretProviderErrors.OpProbe, response.StatusCode, "probe", body);
+    }
+
+    // What is left of a deadline. A spent budget cannot be handed to HttpClient
+    // (a zero Timeout means "no limit"), so the exhausted case gets a deliberately tiny
+    // positive window: the next request fails fast instead of stalling the page load.
+    private static TimeSpan RemainingBudget(DateTimeOffset deadline)
+    {
+        TimeSpan left = deadline - DateTimeOffset.UtcNow;
+        return left > TimeSpan.FromMilliseconds(100) ? left : TimeSpan.FromMilliseconds(100);
+    }
 
     // Envelope: { provider, version, createdAt, targetName (vaultUri|secretName) }
     // The profile stores only the vault URI and secret name.
@@ -63,7 +144,7 @@ internal sealed class AzureKeyVaultProvider : ISecretProvider
         string payload = "{\"value\":\"" + JsonEscape(plaintext) + "\"}";
         string apiUrl = vaultUri.TrimEnd('/') + "/secrets/" + secretName + "?api-version=" + API_VERSION;
 
-        using var client = new System.Net.Http.HttpClient();
+        using var client = CreateClient();
         client.DefaultRequestHeaders.Add("Authorization", "Bearer " + token);
         client.Timeout = Timeout;
 
@@ -108,7 +189,7 @@ internal sealed class AzureKeyVaultProvider : ISecretProvider
         string token = GetBearerToken(SecretProviderErrors.OpDecrypt);
         string apiUrl = vaultUri.TrimEnd('/') + "/secrets/" + secretName + "?api-version=" + API_VERSION;
 
-        using var client = new System.Net.Http.HttpClient();
+        using var client = CreateClient();
         client.DefaultRequestHeaders.Add("Authorization", "Bearer " + token);
         client.Timeout = Timeout;
 
@@ -151,7 +232,7 @@ internal sealed class AzureKeyVaultProvider : ISecretProvider
                 string token = GetBearerToken(SecretProviderErrors.OpDelete);
                 string apiUrl = vaultUri.TrimEnd('/') + "/secrets/" + secretName + "?api-version=" + API_VERSION;
 
-                using var client = new System.Net.Http.HttpClient();
+                using var client = CreateClient();
                 client.DefaultRequestHeaders.Add("Authorization", "Bearer " + token);
                 client.Timeout = Timeout;
                 SecretProviderErrors.Send(Name, SecretProviderErrors.OpDelete,
@@ -169,13 +250,19 @@ internal sealed class AzureKeyVaultProvider : ISecretProvider
         return Encrypt(plaintext, context);
     }
 
-    private string GetBearerToken(string operation)
+    // `deadline` is shared by every request the token acquisition makes. The probe passes
+    // its own 5s deadline so the whole probe (both token attempts plus the data-plane GET)
+    // fits inside one window. The real calls pass nothing and keep their original budget:
+    // each attempt gets the full 10s, which is what they have always had - a probe budget
+    // must not shorten a normal Encrypt/Decrypt just because they share this helper.
+    private string GetBearerToken(string operation, DateTimeOffset? deadline = null)
     {
         if (_cachedToken != null && DateTimeOffset.UtcNow < _tokenExpiry.AddMinutes(-5))
             return _cachedToken;
 
-        string? token = TryGetManagedIdentityToken() ?? TryGetServicePrincipalToken();
-
+        string? token = deadline is null
+            ? TryGetManagedIdentityToken(TokenTimeout) ?? TryGetServicePrincipalToken(TokenTimeout)
+            : TryGetManagedIdentityToken(RemainingBudget(deadline.Value)) ?? TryGetServicePrincipalToken(RemainingBudget(deadline.Value));
         if (string.IsNullOrEmpty(token))
             throw new SecretProviderAuthFailedException(Name, operation,
                 "Failed to obtain Azure access token. Either run on an Azure VM with managed identity, " +
@@ -185,7 +272,11 @@ internal sealed class AzureKeyVaultProvider : ISecretProvider
         return token;
     }
 
-    private string? TryGetManagedIdentityToken()
+    // The budget each token attempt gets when no deadline was supplied: unchanged from
+    // before the probe existed.
+    private static readonly TimeSpan TokenTimeout = TimeSpan.FromSeconds(10);
+
+    private string? TryGetManagedIdentityToken(TimeSpan timeout)
     {
         try
         {
@@ -205,14 +296,14 @@ internal sealed class AzureKeyVaultProvider : ISecretProvider
                     "?api-version=2018-02-01&resource=https://vault.azure.net";
             }
 
-            using var client = new System.Net.Http.HttpClient();
+            using var client = CreateClient();
             client.DefaultRequestHeaders.Add("Metadata", "true");
             string? identityHeader = Environment.GetEnvironmentVariable("IDENTITY_HEADER");
             if (!string.IsNullOrEmpty(identityEndpoint) && !string.IsNullOrEmpty(identityHeader))
             {
                 client.DefaultRequestHeaders.Add("X-IDENT-HEADER", identityHeader);
             }
-            client.Timeout = TimeSpan.FromSeconds(10);
+            client.Timeout = timeout;
 
             var response = client.GetAsync(imdsUrl).GetAwaiter().GetResult();
             if (!response.IsSuccessStatusCode)
@@ -245,7 +336,7 @@ internal sealed class AzureKeyVaultProvider : ISecretProvider
         }
     }
 
-    private string? TryGetServicePrincipalToken()
+    private string? TryGetServicePrincipalToken(TimeSpan timeout)
     {
         string? clientId = Environment.GetEnvironmentVariable("AZURE_CLIENT_ID");
         string? clientSecret = Environment.GetEnvironmentVariable("AZURE_CLIENT_SECRET");
@@ -263,8 +354,8 @@ internal sealed class AzureKeyVaultProvider : ISecretProvider
                 "&scope=" + Uri.EscapeDataString("https://vault.azure.net/.default") +
                 "&grant_type=client_credentials";
 
-            using var client = new System.Net.Http.HttpClient();
-            client.Timeout = TimeSpan.FromSeconds(10);
+            using var client = CreateClient();
+            client.Timeout = timeout;
 
             var content = new System.Net.Http.StringContent(formData, Encoding.UTF8, "application/x-www-form-urlencoded");
             var response = client.PostAsync(tokenUrl, content).GetAwaiter().GetResult();

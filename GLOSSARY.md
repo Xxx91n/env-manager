@@ -38,6 +38,10 @@ _Avoid_: credential blob, encrypted value, masked value
 The component that encrypts a secret or fetches it from a remote store. The app ships nine providers.
 _Avoid_: backend, secret manager, broker
 
+**Availability probe**:
+The check the tool runs before it reports a provider as usable. For a provider whose store is a customer account, that check reads and does not write.
+_Avoid_: activation probe, sentinel round-trip, availability check
+
 **Endpoint override**:
 A setting that makes one provider send its requests to a different address instead of the real service, so you can run against a local stand-in. Production leaves it unset.
 _Avoid_: endpoint hook, custom endpoint, base URL

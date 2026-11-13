@@ -2,7 +2,7 @@
 
 > **Official upstream docs**: this guide mirrors vendor-canonical configuration. Per-provider primary references are linked inline at each section: [Microsoft.PowerShell.SecretManagement](https://www.powershellgallery.com/packages/Microsoft.PowerShell.SecretManagement) + [SecretStore](https://www.powershellgallery.com/packages/Microsoft.PowerShell.SecretStore); [HashiCorp Vault KV v2](https://developer.hashicorp.com/vault/docs/secrets/kv/kv-v2); [Mozilla SOPS](https://getsops.io/) and [age](https://github.com/FiloSottile/age); [Azure Key Vault REST API](https://learn.microsoft.com/en-us/rest/api/keyvault/) and [az CLI managed identity / SP](https://learn.microsoft.com/en-us/azure/key-vault/general/authentication); [1Password CLI](https://developer.1password.com/docs/cli/getting-started); [AWS Secrets Manager REST API + SigV4](https://docs.aws.amazon.com/secretsmanager/latest/userguide/); [IAM Roles Anywhere signing process](https://docs.aws.amazon.com/rolesanywhere/latest/userguide/authentication-sign-process.html).
 
-Env Manager ships nine secret providers. Secrets belong to Launch profiles only, because those put values into one child process; a Global profile cannot hold a secret. The active provider is selected in the Profile editor > Active provider dropdown. The activation probe runs once at selection time; if your environment is not configured, the selection is rejected with an inline error under the dropdown plus a toast -- you must fix the environment and retry.
+Env Manager ships nine secret providers. Secrets belong to Launch profiles only, because those put values into one child process; a Global profile cannot hold a secret. The active provider is selected in the Profile editor > Active provider dropdown. The availability probe runs once at selection time; if your environment is not configured, the selection is rejected with an inline error under the dropdown plus a toast -- you must fix the environment and retry.
 
 Three providers need no cloud account:
 
@@ -30,7 +30,24 @@ Every provider declares its capability descriptors on `ISecretProvider`, and `pr
 | aws-secretsmanager | yes (Periodic) | no (static access keys) | yes | region + access key + secret key set |
 | aws-roles-anywhere | yes (Periodic) | yes (certificate) | yes | region + role, profile and trust-anchor ARNs + certificate SHA-1 set |
 
-Network providers additionally survive a probe before `list` reports them available (the same check `set` has always run); local providers never probe. The probe kind differs by where the provider keeps its data: an ordinary network provider runs a sentinel Encrypt/Decrypt/Delete round-trip, while a provider that declares `ProbeWritesData` as false - `aws-roles-anywhere`, whose store is your AWS account - only exchanges its certificate for temporary credentials and writes nothing.
+Network providers additionally survive a probe before `list` reports them available (the same check `set` has always run); local providers never probe. **Every network provider's probe is read-only, and none of them creates or deletes anything in your account.** Opening the Profile editor calls `list`, so a writing probe would put a key and a deletion into the customer's store on every page load. Each provider proves it can reach its store with one read:
+
+| Provider | What the probe reads | What counts as usable |
+|----------|----------------------|-----------------------|
+| vault-kv2 | `GET /v1/secret/data/env-manager/__env_manager_probe__<random>` | 404 with an empty error list (the token may read that path). 403 is a refusal - a dead token and a missing policy answer the same way, on purpose |
+| azure-keyvault | `GET /secrets/env-manager-probe-<random>?api-version=7.4` | 404 `SecretNotFound` (the identity may read secret values). 401 means no token; 403 means no data-plane role - Key Vault Reader reads metadata and still fails here |
+| aws-secretsmanager | signed `GetSecretValue` for `env-manager-probe-<random>` | HTTP 400 `ResourceNotFoundException` - AWS answers "not found" as 400, not 404. `AccessDenied` is reported as `unknown`, not `permission`: a policy scoped to specific secret ARNs refuses this probe name while real reads still work, and one call cannot tell that apart from an identity that reads nothing |
+| 1password | `op whoami` | Exit code 0. Only the exit code is trusted; the CLI's stderr wording changes between releases |
+| aws-roles-anywhere | one certificate exchange for temporary credentials | The exchange returns a session, and nothing is written |
+
+A provider whose cheap gate fails (no `VAULT_ADDR`, no `op` binary) prints a bare `(unavailable)` and is never probed. When the probe itself fails, the marker names the cause - `(unavailable: auth)`, `permission`, `network`, `timeout`, or `unknown` - and the GUI shows that as a translated sentence. `profile secret-provider set` fails on the same probe and points at the missing credential or role.
+
+Four things the read-only probe does not promise:
+
+- It does not prove the account may **write**. A token that can read secrets still needs create rights before `add-secret` succeeds; the failure then appears at add-secret time rather than at provider-selection time.
+- An AWS policy that grants `secretsmanager:GetSecretValue` only on specific secret ARNs - the least-privilege shape AWS documents - refuses the random probe name. The marker then reads `(unavailable: unknown)` with the likely cause in the message. Widen the policy to cover `env-manager-probe-*` if you want the probe to pass, or read that marker as "the probe could not decide".
+- It still leaves a read entry in CloudTrail, Key Vault diagnostics, or the Vault audit log, and AWS bills per call. Opening the editor once probes each reachable provider once; the GUI holds the result for 15 seconds so tab switching does not repeat it.
+- A 1Password desktop session that needs a biometric unlock answers `op whoami` with "not signed in" even for a user who could still use the provider. The report is honest but pessimistic; run `op signin` or set `OP_SERVICE_ACCOUNT_TOKEN`.
 
 ---
 
@@ -57,7 +74,7 @@ Install-Module Microsoft.PowerShell.SecretManagement, Microsoft.PowerShell.Secre
 ### SecretStore no-password bootstrap (required before switching to the provider headlessly)
 
 The `Microsoft.PowerShell.SecretStore` vault defaults to an interactive password
-prompt on every read/write. The Env Manager activation probe runs headless
+prompt on every read/write. The Env Manager availability probe runs headless
 (no terminal to type a password into), so a fresh SecretStore will hang the
 probe until the 30s timeout and report a `Set-Secret is not recognized` /
 `CLIXML` failure. Configure the store for no interactive password once before
@@ -344,7 +361,7 @@ If step 4 fails with `CreateSession rejected certificate`, the failure is on the
 ## Troubleshooting
 
 - After installing modules / binaries / env vars, **restart Env Manager** before retrying. Providers read env vars at activation time, not at secret-store time.
-- If the inline banner under the provider selector still shows the error after the env is fixed, click the Close button on the banner and re-select the provider to re-run the activation probe.
+- If the inline banner under the provider selector still shows the error after the env is fixed, click the Close button on the banner and re-select the provider to re-run the availability probe.
 - The CLI command `env-manager-cli profile secret-provider list` lists available providers with the active one marked `(active)`.
 - Audit entries for Rotation / Export / Import never log plaintext or ciphertext; only provider name and counts.
 - Provider activation errors are emitted to `logs/env-manager.log` with a truncated, scrubbed `stderr_hint` line (any `Bearer`, `token=`, `password=`, `setx`, `VAULT_TOKEN=`, `AWS_SECRET_ACCESS_KEY=`, `AWS_SESSION_TOKEN=`, or `OP_SERVICE_ACCOUNT_TOKEN=` segment is masked to `<redacted>`). The log records the error message shape, never a secret value. If the inline banner disappears, the `logs/env-manager.log` line still shows the upstream error to copy into a support request.

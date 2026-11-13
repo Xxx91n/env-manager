@@ -29,9 +29,48 @@ describe('parseSecretProviderList', () => {
     ])
     const vault = parsed.providers.find((p) => p.name === 'vault-kv2')!
     expect(vault.available).toBe(false)
+    expect(vault.reason).toBeNull()
     const dpapi = parsed.providers.find((p) => p.name === 'dpapi-current-user')!
     expect(dpapi.active).toBe(true)
     expect(dpapi.available).toBe(true)
+  })
+
+  it('carries the reason code when a probe failed', () => {
+    // Issue #277: a probe failure names its cause, a gate failure does not. The code
+    // is a fixed vocabulary, so the GUI never has to translate CLI prose.
+    const raw = [
+      'Active provider: dpapi-current-user',
+      'Available providers:',
+      '  dpapi-current-user (active) [refresh=no certauth=no network=no]',
+      '  vault-kv2 (unavailable: permission) [refresh=yes certauth=yes network=yes]',
+      '  azure-keyvault (unavailable: auth) [refresh=yes certauth=yes network=yes]',
+      '  1password (unavailable: timeout) [refresh=yes certauth=no network=yes]',
+      '  aws-secretsmanager (unavailable: network) [refresh=yes certauth=no network=yes]',
+      '  aws-roles-anywhere (unavailable: unknown) [refresh=yes certauth=yes network=yes]',
+    ].join('\n')
+    const parsed = parseSecretProviderList(raw)
+    const expected: Array<[string, string]> = [
+      ['vault-kv2', 'permission'],
+      ['azure-keyvault', 'auth'],
+      ['1password', 'timeout'],
+      ['aws-secretsmanager', 'network'],
+      ['aws-roles-anywhere', 'unknown'],
+    ]
+    for (const [name, reason] of expected) {
+      const entry = parsed.providers.find((p) => p.name === name)!
+      expect(entry.available).toBe(false)
+      expect(entry.reason).toBe(reason)
+    }
+  })
+
+  it('ignores a reason code outside the known vocabulary', () => {
+    // A future CLI could emit something this build does not know. Showing raw text
+    // would put untranslated words in the dropdown, so the code is dropped instead
+    // and the provider falls back to the plain "unavailable" label.
+    const raw = ['Active provider: sops', 'Available providers:', '  vault-kv2 (unavailable: kms-key-revoked)'].join('\n')
+    const parsed = parseSecretProviderList(raw)
+    expect(parsed.providers[0].available).toBe(false)
+    expect(parsed.providers[0].reason).toBeNull()
   })
 
   it('parses output without the capability block', () => {

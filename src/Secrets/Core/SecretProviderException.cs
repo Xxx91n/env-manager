@@ -70,6 +70,18 @@ internal sealed class SecretProviderInvalidEnvelopeException : SecretProviderExc
         : base(provider, operation, message, mountId, inner) { }
 }
 
+// A probe answer that names more than one cause. The AWS probe cannot separate "your
+// policy is scoped to specific secret ARNs, so this probe name is outside it" from "this
+// identity may not read secrets at all"; both come back as AccessDenied. Reporting either
+// one would be a guess, so this family says "unknown" and the message carries both
+// readings. Unused outside the availability probe, which is the only caller that has to
+// classify without knowing.
+internal sealed class SecretProviderProbeInconclusiveException : SecretProviderException
+{
+    public SecretProviderProbeInconclusiveException(string provider, string operation, string message, string? mountId = null, Exception? inner = null)
+        : base(provider, operation, message, mountId, inner) { }
+}
+
 // Classification + mapping helpers shared by the 8 provider adapters.
 internal static class SecretProviderErrors
 {
@@ -81,11 +93,42 @@ internal static class SecretProviderErrors
     public const string CatInvalidEnvelope = "invalidEnvelope";
     public const string CatUnknown = "unknown";
 
+    // Reason codes carried to the CLI/GUI by an availability-probe failure. They are the
+    // machine-readable half of the `(unavailable: <code>)` marker; the human sentence
+    // lives in the translation files, so a code is never sent as prose.
+    public const string ReasonAuth = "auth";
+    public const string ReasonPermission = "permission";
+    public const string ReasonNetwork = "network";
+    public const string ReasonTimeout = "timeout";
+    public const string ReasonUnknown = "unknown";
+
+    // Failure-kind -> reason code for the availability probe. `network` covers the
+    // transported-behind-a-dead-end cases (unreachable host, TLS, malformed reply);
+    // anything the probe cannot place falls to `unknown` rather than inventing a cause.
+    // `unknown` is a real answer here, not a fallback: the AWS probe's AccessDenied covers
+    // both "the policy is scoped to other ARNs" and "this identity reads nothing", so the
+    // cause is genuinely undecidable from one call.
+    public static string ReasonCode(Exception ex) => ex switch
+    {
+        SecretProviderProbeInconclusiveException => ReasonUnknown,
+        _ => Classify(ex) switch
+        {
+            CatAuthFailed => ReasonAuth,
+            CatPermissionDenied => ReasonPermission,
+            CatTimeout => ReasonTimeout,
+            CatUnavailable => ReasonNetwork,
+            _ => ReasonUnknown
+        }
+    };
+
     // Adapter operation labels (SecretProviderException.Operation).
     public const string OpEncrypt = "encrypt";
     public const string OpDecrypt = "decrypt";
     public const string OpRotate = "rotate";
     public const string OpDelete = "delete";
+    // The read-only availability probe (`ISecretProvider.ProbeReadOnly`), so a probe
+    // failure reaching the CLI is labelled as a probe, not as a failed encrypt.
+    public const string OpProbe = "probe";
 
     // Failure-kind bucket for SecretProviderManager.RotateAll classified counting and tests.
     public static string Classify(Exception ex) => ex switch
