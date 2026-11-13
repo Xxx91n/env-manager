@@ -134,9 +134,10 @@ pub(crate) const DEBUGGER_CHECK_INTERVAL: Duration = Duration::from_secs(300);
 /// The debugger check as its own periodic task (#294).
 ///
 /// The wait is one `select!` over the timer *and* the stop token, so a stop ends it the
-/// moment it lands. The old shape slept the whole interval first and only then read the
-/// cancelled flag, which is why stopping the service could sit in that sleep for up to five
-/// minutes. Nothing here touches the mount file, and no value is fetched.
+/// moment it lands. That shape is a requirement of this ticket, not a habit inherited from
+/// the sweep it replaces: a loop that slept the interval and only then looked at a flag
+/// would sit out up to five minutes of a stop, and a brand-new task is the wrong place to
+/// reintroduce that pattern. Nothing here touches the mount file, and no value is fetched.
 ///
 /// `shutdown` is the same token the IPC server answers, so a stop ends both background
 /// tasks inside the same window.
@@ -516,7 +517,7 @@ mod tests {
     /// The shape #294 asked for: the task waits on the stop token and the timer at the same
     /// time, so a stop ends the wait at once. A loop that slept the interval first and read
     /// the flag afterwards would still be asleep here - with the production interval that is
-    /// five minutes, which is the slow-stop defect this test pins out.
+    /// five minutes of a stop the service would have to sit through.
     #[tokio::test]
     async fn the_debugger_check_ends_its_wait_when_the_stop_lands() {
         let shutdown = Arc::new(CancellationToken::new());
@@ -536,7 +537,7 @@ mod tests {
             .expect("the check task must not panic");
     }
 
-    /// The other half: the check still runs, and it runs again every interval. Two ticks is
+    /// The other half: the check still runs, and it runs again every interval. Two checks is
     /// the smallest count that tells a loop from a single check.
     #[tokio::test]
     async fn the_debugger_check_repeats_every_interval() {

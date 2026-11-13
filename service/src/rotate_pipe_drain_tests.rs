@@ -307,9 +307,9 @@ async fn await_drain_signal<T: std::fmt::Debug>(
 
 /// The liveness half of #192: the RAII marker is dropped when the call returns, so
 /// `rotation_in_flight()` returns to zero even though the pipe drain outlived the child.
-/// The gate is probed directly through the same `rotation_in_flight()` snapshot its one
-/// remaining reader used before the periodic sweep was deleted (#294), keeping
-/// `ROTATIONS_IN_FLIGHT` itself private with no test-only accessor. Holds the exclusive
+/// The count is probed directly through `rotation_in_flight()`, the same snapshot its
+/// only production reader used before that reader - the periodic sweep - was deleted
+/// (#294), keeping `ROTATIONS_IN_FLIGHT` itself private with no test-only accessor. Holds the exclusive
 /// `ROTATION_SUITE_GATE` write lock so no sibling `cargo test` worker can raise the
 /// process-wide counter while this test proves quiescent recovery.
 #[tokio::test]

@@ -193,11 +193,12 @@ try {
     $postRestartPing = &$CLI_EXE service ping 2>&1
     Log-Assert "Service responsive after restart" ($postRestartPing -match '"ok":\s*true')
     
-    # Step 9: Verify reconcile loop resumed (check health endpoint)
-    Log-Step "Step 9: Verifying reconcile loop resumed..."
+    # Step 9: Verify the restarted service answers health (the periodic mount sweep this
+    # step used to name is gone - #294 deleted it; the health summary reads the mount file).
+    Log-Step "Step 9: Verifying the restarted service answers health..."
     $healthResult = &$CLI_EXE service health 2>&1
     if ($healthResult -match '"total"') {
-        Log-Assert "Reconcile loop health endpoint accessible" $true
+        Log-Assert "Health endpoint accessible after restart" $true
     } else {
         Write-Host "  ⚠ Health endpoint response unclear, but service is responsive" -ForegroundColor Yellow
     }

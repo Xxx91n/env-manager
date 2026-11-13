@@ -44,7 +44,7 @@ const STDERR_DRAIN_ON_STOP: Duration = Duration::from_millis(200);
 /// no test pinned: one helper that inherits stdout/stderr (`UseShellExecute`, a future adapter,
 /// anything the CLI spawns without redirecting) leaves the CLI gone and both pipes open, so
 /// `run_cli_child` never returned and `ROTATIONS_IN_FLIGHT` stayed at 1 forever, so the
-/// count that guards the mount file never came back down.
+/// count never came back down.
 ///
 /// 200ms is the same size as the stop drain: long enough for a normal pipe to close in the
 /// instant after `wait()` reaps the child, short enough that a held handle cannot turn a

@@ -9,7 +9,7 @@
 // The other writer this module used to pin is gone (#294): the periodic sweep took the same
 // lock and stamped `lastFetchedAt` in between, so its stand-down and stamping cases lived
 // here too. Both went with the sweep. The in-flight counter itself survives until the ticket
-// that removes the gate, and `rotate_pipe_drain_tests` still probes it directly.
+// that removes the gate (#295), and `rotate_pipe_drain_tests` still probes it directly.
 //
 // Isolation: temp mount files under `%TEMP%`, removed on drop; no registry, no real
 // `%LOCALAPPDATA%\EnvManager` or `ProgramData\EnvManager` state.
