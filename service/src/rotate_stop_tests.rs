@@ -78,17 +78,6 @@ const ALWAYS_TOO_LONG: Duration = Duration::from_secs(20);
 /// not reap them synchronously, so the ticket's acceptance budget is spent polling.
 const TREE_KILL_BUDGET: Duration = Duration::from_secs(5);
 
-/// Coordinates tests that touch the process-wide `ROTATIONS_IN_FLIGHT` counter (#193).
-///
-/// `cargo test` runs all tests in this binary concurrently across worker threads, while
-/// `ROTATIONS_IN_FLIGHT` is a process-global `AtomicUsize` (one service owns one mount file in
-/// production). Tests that only need a rotation in flight (or do not care whether another test
-/// also has one) take a shared read lock - so they still run in parallel with each other,
-/// including `rotate_lock_tests`'s overlapping pair - while tests that assert the quiescent
-/// `rotation_in_flight() == false` path take an exclusive write lock so no sibling thread can
-/// hold the count above zero underneath them.
-pub(crate) static ROTATION_SUITE_GATE: tokio::sync::RwLock<()> =
-    tokio::sync::RwLock::const_new(());
 
 /// A temp `secretMount.json` holding one Periodic mount with a local envelope, deleted with the file.
 /// Delegated-rotation tests need a rotatable envelope; a separate null-envelope fixture pins the
@@ -193,7 +182,6 @@ async fn stop_terminates_and_reaps_the_rotate_child() {
 /// no rotation recorded, which is what makes the next `rotate` replay it.
 #[tokio::test]
 async fn interrupted_rotation_leaves_the_mount_unrotated() {
-    let _suite = ROTATION_SUITE_GATE.read().await;
     let fixture = MountFixture::new("unrotated");
     let shutdown = std::sync::Arc::new(CancellationToken::new());
     cancel_after(&shutdown, Duration::from_millis(300));
@@ -240,7 +228,6 @@ async fn interrupted_rotation_leaves_the_mount_unrotated() {
 /// and re-encrypts per secret, so a duplicate rotation is harmless but must not be normal.
 #[tokio::test]
 async fn completed_rotation_records_the_mount() {
-    let _suite = ROTATION_SUITE_GATE.read().await;
     let fixture = MountFixture::new("recorded");
     let shutdown = std::sync::Arc::new(CancellationToken::new());
 
