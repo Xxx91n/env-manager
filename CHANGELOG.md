@@ -5,6 +5,26 @@ All notable changes to Env Manager will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.15.0](https://github.com/Xxx91n/env-manager/compare/v0.14.0...v0.15.0) (2026-11-14)
+
+
+### Features
+
+* **secrets:** add the AWS IAM Roles Anywhere provider ([#278](https://github.com/Xxx91n/env-manager/issues/278)) ([bee789e](https://github.com/Xxx91n/env-manager/commit/bee789ee431b47a125e3d0702628eec03c95c33c))
+* **ui:** align Launch labels, audit naming, refresh wording, and CLI command tables ([#246](https://github.com/Xxx91n/env-manager/issues/246)) ([#262](https://github.com/Xxx91n/env-manager/issues/262)) ([3719c52](https://github.com/Xxx91n/env-manager/commit/3719c528b90a081c1ed623d881b2a929115ca619))
+
+
+### Bug Fixes
+
+* **frontend:** keep forced-colors focus outline on form controls ([#315](https://github.com/Xxx91n/env-manager/issues/315)) ([4597101](https://github.com/Xxx91n/env-manager/commit/459710146f7757ef4b2b0a853e44649895d00112))
+* **gui:** immediately refresh history view after clear-all and mutations ([#240](https://github.com/Xxx91n/env-manager/issues/240)) ([2e7b4f4](https://github.com/Xxx91n/env-manager/commit/2e7b4f49f3c239078d31fe995e7bfb337554af72)), closes [#238](https://github.com/Xxx91n/env-manager/issues/238)
+* **secrets:** network provider availability probes stop writing to customer accounts ([#297](https://github.com/Xxx91n/env-manager/issues/297)) ([f699815](https://github.com/Xxx91n/env-manager/commit/f699815ddc3995d98ecd138b359e679d631e9a07))
+* **secrets:** refuse a plain http endpoint override for another host ([#284](https://github.com/Xxx91n/env-manager/issues/284)) ([b11d690](https://github.com/Xxx91n/env-manager/commit/b11d690a298941b6ba3ff29aa1efd6fac74214df))
+* **service:** delete the 300s sweep, give the debugger check its own task ([#294](https://github.com/Xxx91n/env-manager/issues/294)) ([#299](https://github.com/Xxx91n/env-manager/issues/299)) ([44d0e49](https://github.com/Xxx91n/env-manager/commit/44d0e493dc570db010f53d9079db27cdd1fa1d7c))
+* **service:** delete the rotation-in-flight gate and its readers ([#295](https://github.com/Xxx91n/env-manager/issues/295)) ([#300](https://github.com/Xxx91n/env-manager/issues/300)) ([870d648](https://github.com/Xxx91n/env-manager/commit/870d648c2f119e5ae905ca4d01ea6e1b936e9533))
+* **service:** honest mount health and deprecated refresh/reload no-ops ([#293](https://github.com/Xxx91n/env-manager/issues/293)) ([#298](https://github.com/Xxx91n/env-manager/issues/298)) ([3c19b33](https://github.com/Xxx91n/env-manager/commit/3c19b339eb65ad9a49890a883bc0cbd9fa91ed84))
+* **service:** make Service-mode mounts unavailable ([#301](https://github.com/Xxx91n/env-manager/issues/301)) ([2c65e27](https://github.com/Xxx91n/env-manager/commit/2c65e27e3d99e7cbb9b144b0e1b2b712acf07f99))
+
 ## [0.14.0](https://github.com/Xxx91n/env-manager/compare/v0.13.0...v0.14.0) (2026-11-06)
 
 
