@@ -87,6 +87,15 @@ async function injectMocks(page: Page, settings: MockSettings): Promise<void> {
   )
 }
 
+// Channel deltas within this margin count as antialiasing noise, not paint.
+const PIXEL_NOISE_MARGIN = 8
+// A 2px offset outline around the ~150x30 select paints well past this floor;
+// the pre-fix regression measured 220 border-only pixels, with the outline ~700.
+const MIN_FOCUS_INDICATOR_PIXELS = 100
+// Padding around the control's bounding box so the 2px offset outline (4px
+// outside the border box) stays inside every clipped screenshot.
+const CLIP_PADDING = 12
+
 async function shot(page: Page, clip: { x: number; y: number; width: number; height: number }): Promise<Buffer> {
   return Buffer.from(await page.screenshot({ clip }))
 }
@@ -141,12 +150,6 @@ async function pixelDiff(page: Page, a: Buffer, b: Buffer): Promise<number> {
   )
 }
 
-// Channel deltas within this margin count as antialiasing noise, not paint.
-const PIXEL_NOISE_MARGIN = 8
-// A 2px offset outline around the ~150x30 select paints well past this floor;
-// the pre-fix regression measured 220 border-only pixels, with the outline ~700.
-const MIN_FOCUS_INDICATOR_PIXELS = 100
-
 test('forced-colors focus indicator is painted on the Variables scope select (slate light)', async ({ page }) => {
   await injectMocks(page, {
     darkMode: 'false',
@@ -165,7 +168,12 @@ test('forced-colors focus indicator is painted on the Variables scope select (sl
   const select = page.locator('select').first()
   await expect(select).toBeVisible()
   const box = await select.boundingBox()
-  const clip = { x: box!.x - 12, y: box!.y - 12, width: box!.width + 24, height: box!.height + 24 }
+  const clip = {
+    x: box!.x - CLIP_PADDING,
+    y: box!.y - CLIP_PADDING,
+    width: box!.width + CLIP_PADDING * 2,
+    height: box!.height + CLIP_PADDING * 2,
+  }
 
   await select.focus()
   const focused = await shot(page, clip)
