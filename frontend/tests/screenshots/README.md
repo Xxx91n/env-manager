@@ -25,6 +25,12 @@ The config starts the Vite dev server itself (`npm run dev`, port 5173).
 
 - OS: Windows (win32)
 - `@playwright/test` 1.64.1, Chromium build 1248, browser version 156.0.8078.4
+  - #319 bumped the devDependency to ^1.65.0, whose Chromium build is 1254
+    (158.0.8127.18). The #315 compare runs pinned 1.64.1 via
+    `npm install --no-save @playwright/test@1.64.1` to stay on the recorded
+    browser build (1248) and keep the baseline comparable. A future re-shoot
+    that moves to 1.65+ must re-record this block and re-judge baseline
+    comparability, per the owner's note on #315.
 - Viewport 1280x800, `deviceScaleFactor: 1`, locale `en-US`, timezone `UTC`,
   `colorScheme: light`
 - Fake data injected with the package's own `mockIPC` via `page.addInitScript`
@@ -52,6 +58,64 @@ it; only sub-perceptual raster noise passes.
 `{ entries }`, so the page renders its empty state even when records exist.
 The baseline keeps that real behavior rather than faking a shape the app
 never sees.
+
+## High-contrast focus spot check (`forced-colors.spec.ts`)
+
+Ticket #315 (spec #310) requires a Windows High Contrast focus-ring spot check:
+the `focus:outline-none` → `focus:outline-hidden` rename behaves differently
+only under `forced-colors: active`, which the 28-shot baseline (normal mode)
+cannot see. The check runs `page.emulateMedia({ forcedColors: 'active' })`,
+focuses the Variables scope `select` (one of the 20 renamed spots), and asserts
+the focus indicator is actually PAINTED by diffing focused vs unfocused pixels
+of the same region inside the page — `getComputedStyle` is not a usable oracle
+here, because under forced-colors emulation Chromium reports
+`outline-style: none` even while painting the author outline.
+
+Findings, in order:
+
+1. **Pre-fix regression (fixed in `src/app.css`):** app.css's unlayered
+   `input:focus, select:focus, textarea:focus { outline: none }` beat
+   `@layer utilities` regardless of specificity, so the forced-colors branch of
+   `.focus\:outline-hidden:focus` (outline: 2px solid + offset) never applied.
+   Focused form controls kept only the `focus:border-primary` color change with
+   no outline. In v3 the utility's (0,2,0) out-ranked this (0,1,1) rule —
+   cascade layers changed the winner, which is a migration-caused regression,
+   caught by this spot check (focused/unfocused diff was 220 border-only pixels;
+   after the fix 712 pixels including the outline).
+2. The fix wraps the rule in `@layer base` (see the comment in `app.css`):
+   utilities win back on focus, normal-mode computed values are unchanged (the
+   utility's normal branch is `outline-style: none` too), inputs without a
+   `focus:outline-hidden` class still get `outline: none`, and the
+   `theme-style-regression.test.ts` source assertion still matches.
+3. Chromium's UA focus fallback also changed the bare computed picture; that is
+   why the assertion is paint-based (pixel diff > 100) rather than
+   computed-style based.
+
+Evidence: `evidence/forced-colors-focus-select.png` (focused state after the
+fix, forced accent outline visible around the select).
+
+The check runs as part of the same suite and config (29 tests total). It is
+local-only like the rest of the suite.
+
+## #315 compare runs (2026-11-14, on d737d91)
+
+Current HEAD including #314's 27 semantic renames, same machine and browser
+build (1248) as the recorded environment, `npm install --no-save
+@playwright/test@1.64.1`:
+
+```
+npx playwright test --config playwright.screenshots.config.ts   # 28 passed, exit 0 (run 1)
+npx playwright test --config playwright.screenshots.config.ts   # 28 passed, exit 0 (run 2)
+```
+
+Two independent compare runs, both exit 0, zero snapshot churn (git status
+clean). Conclusion: all 28 shots render identical to the v4 baseline under the
+three acceptance criteria (layout / color / readability) — the 27 renames
+produced no visible change in normal mode, consistent with #314 renaming only
+semantics-equivalent utilities. After the app.css forced-colors fix above, two
+further full runs passed 29/29 (28 baseline + 1 forced-colors), again with zero
+snapshot churn: normal mode is pixel-identical before and after the fix.
+
 
 ## v4 re-baseline (2026-11-14): the titlebar border now renders
 
