@@ -16,7 +16,8 @@ import { mockDataset, type MockSettings } from './mock-data'
 // same region inside the browser instead. The cascade prerequisite was fixed in
 // app.css (input:focus rule moved into @layer base — see the comment there);
 // without that fix the unlayered rule buried the utility's forced-colors
-// branch and this test fails with a 0-pixel diff.
+// branch: focused/unfocused differs by only 220 border-color pixels, below the
+// MIN_FOCUS_INDICATOR_PIXELS floor, so the test fails until the fix returns.
 // Evidence screenshot lands in tests/screenshots/evidence/.
 
 const require = createRequire(import.meta.url)
