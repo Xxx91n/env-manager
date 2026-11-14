@@ -66,7 +66,7 @@
         <button
           onclick={() => (mode = 'export')}
           class="flex-1 px-3 py-1.5 text-xs font-medium rounded {mode === 'export'
-            ? 'bg-card text-foreground shadow-sm bg-card text-foreground'
+            ? 'bg-card text-foreground shadow-xs bg-card text-foreground'
             : 'text-muted-foreground text-muted-foreground'}"
         >
           {$t('buttons.export')}
@@ -74,7 +74,7 @@
         <button
           onclick={() => (mode = 'import')}
           class="flex-1 px-3 py-1.5 text-xs font-medium rounded {mode === 'import'
-            ? 'bg-card text-foreground shadow-sm bg-card text-foreground'
+            ? 'bg-card text-foreground shadow-xs bg-card text-foreground'
             : 'text-muted-foreground text-muted-foreground'}"
         >
           {$t('buttons.restore')}

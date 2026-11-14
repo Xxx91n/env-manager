@@ -200,13 +200,13 @@
         type="text"
         placeholder={$t('messages.searchPlaceholder')}
         bind:value={$search}
-        class="w-full pl-8 pr-3 py-1.5 text-xs border border-border rounded-md focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary bg-card border-border/80 text-foreground"
+        class="w-full pl-8 pr-3 py-1.5 text-xs border border-border rounded-md focus:outline-hidden focus:ring-1 focus:ring-primary focus:border-primary bg-card border-border/80 text-foreground"
       />
     </div>
 
     <select
       bind:value={$selectedScope}
-      class="px-2.5 py-1.5 text-xs border border-border rounded-md focus:outline-none focus:ring-1 focus:ring-primary bg-card border-border/80 text-foreground"
+      class="px-2.5 py-1.5 text-xs border border-border rounded-md focus:outline-hidden focus:ring-1 focus:ring-primary bg-card border-border/80 text-foreground"
     >
       <option value="all">{$t('table.scope')}</option>
       <option value="user">{$t('scope.user')}</option>

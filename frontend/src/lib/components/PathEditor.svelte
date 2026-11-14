@@ -508,7 +508,7 @@
       id="path-scope"
       bind:value={scope}
       onchange={handleScopeChange}
-      class="px-2.5 py-1.5 text-xs border border-border rounded-md focus:outline-none focus:ring-1 focus:ring-primary bg-card bg-accent border-border/80 text-foreground"
+      class="px-2.5 py-1.5 text-xs border border-border rounded-md focus:outline-hidden focus:ring-1 focus:ring-primary bg-card bg-accent border-border/80 text-foreground"
     >
       <option value="user">{$t('scope.user')}</option>
       <option value="system">{$t('scope.system')}</option>
@@ -521,7 +521,7 @@
       placeholder={$t('path.entryPlaceholder')}
       bind:value={newEntry}
       onkeydown={(e) => { if (e.key === 'Enter') handleAdd() }}
-      class="flex-1 px-3 py-1.5 text-xs border border-border rounded-md focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary font-mono bg-card border-border/80 text-foreground"
+      class="flex-1 px-3 py-1.5 text-xs border border-border rounded-md focus:outline-hidden focus:ring-1 focus:ring-primary focus:border-primary font-mono bg-card border-border/80 text-foreground"
     />
     <button
       onclick={handleAdd}
@@ -626,7 +626,7 @@
                       bind:value={editValue}
                       onkeydown={(e) => handleEditKeydown(e, entry.path)}
                       onblur={() => handleEditBlur(entry.path)}
-                      class="flex-1 px-2 py-1 text-[10px] font-mono border border-primary rounded-md focus:outline-none focus:ring-1 focus:ring-primary bg-background text-foreground"
+                      class="flex-1 px-2 py-1 text-[10px] font-mono border border-primary rounded-md focus:outline-hidden focus:ring-1 focus:ring-primary bg-background text-foreground"
                       spellcheck="false"
                     />
                     <button

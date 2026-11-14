@@ -473,7 +473,7 @@
           id="settings-lang"
           onchange={(e) => switchLocale(e.currentTarget.value)}
           value={currentLocale}
-          class="w-full px-3 py-1.5 text-sm border border-border rounded-md focus:outline-none focus:ring-1 focus:ring-primary bg-card bg-accent border-border/80 text-foreground"
+          class="w-full px-3 py-1.5 text-sm border border-border rounded-md focus:outline-hidden focus:ring-1 focus:ring-primary bg-card bg-accent border-border/80 text-foreground"
         >
           {#each locales as loc}
             <option value={loc}>{languageNames[loc]}</option>

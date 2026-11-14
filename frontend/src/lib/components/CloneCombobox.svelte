@@ -106,7 +106,7 @@
     onfocus={() => { dropdownOpen = true }}
     onkeydown={onKeydown}
     onblur={() => { setTimeout(() => { dropdownOpen = false }, 150) }}
-    class="w-full px-2 py-1 text-[10px] border border-border rounded focus:outline-none focus:ring-1 focus:ring-primary bg-accent border-border/80 text-foreground"
+    class="w-full px-2 py-1 text-[10px] border border-border rounded focus:outline-hidden focus:ring-1 focus:ring-primary bg-accent border-border/80 text-foreground"
   />
   {#if dropdownOpen && filtered.length > 0}
     <ul class="absolute z-30 left-0 right-0 mt-0.5 bg-card border border-border border-border/80 rounded shadow-lg max-h-40 overflow-auto">

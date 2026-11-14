@@ -191,7 +191,7 @@
 
     <select
       bind:value={$selectedScope}
-      class="px-2.5 py-1.5 text-xs border border-border rounded-md focus:outline-none focus:ring-1 focus:ring-primary bg-card border-border/80 text-foreground"
+      class="px-2.5 py-1.5 text-xs border border-border rounded-md focus:outline-hidden focus:ring-1 focus:ring-primary bg-card border-border/80 text-foreground"
     >
       <option value="all">{$t('table.scope')}</option>
       <option value="user">{$t('scope.user')}</option>
@@ -242,7 +242,7 @@
             <div class="grid grid-cols-2 sm:grid-cols-3 gap-1 p-3">
               {#each filteredBuiltinVars as varName (varName)}
                 <div class="flex items-center gap-1.5 px-2 py-1 rounded bg-muted/20 bg-muted">
-                  <Lock class="w-3 h-3 text-primary/80 flex-shrink-0" />
+                  <Lock class="w-3 h-3 text-primary/80 shrink-0" />
                   <span class="text-xs font-mono text-foreground/80 text-foreground truncate" title={varName}>{varName}</span>
                 </div>
               {/each}
@@ -266,7 +266,7 @@
                 <span class="text-xs font-mono text-foreground/80 text-foreground truncate" title={varName}>{varName}</span>
                 <button
                   onclick={() => handleRemoveVar(varName)}
-                  class="text-destructive hover:text-destructive transition flex-shrink-0 ml-2"
+                  class="text-destructive hover:text-destructive transition shrink-0 ml-2"
                   title={$t('protection.unlockVar')}
                   aria-label={$t('protection.unlockVar')}
                 >
@@ -307,7 +307,7 @@
           {#each filteredBuiltinPaths as entry (entry)}
             <div class="flex items-center justify-between px-4 py-2">
               <span class="text-xs font-mono text-foreground/80 text-foreground truncate" title={entry}>{entry}</span>
-              <span class="text-[10px] text-muted-foreground flex-shrink-0 ml-2">{$t('protection.builtin')}</span>
+              <span class="text-[10px] text-muted-foreground shrink-0 ml-2">{$t('protection.builtin')}</span>
             </div>
           {/each}
         </div>
@@ -327,7 +327,7 @@
                 <span class="text-xs font-mono text-foreground/80 text-foreground truncate" title={entry}>{entry}</span>
                 <button
                   onclick={() => handleRemovePath(entry, false)}
-                  class="text-destructive hover:text-destructive transition flex-shrink-0 ml-2"
+                  class="text-destructive hover:text-destructive transition shrink-0 ml-2"
                   title={$t('protection.unlockPath')}
                   aria-label={$t('protection.unlockPath')}
                 >
