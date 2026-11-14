@@ -319,10 +319,22 @@ select,
 textarea {
   color-scheme: light;
 }
-input:focus,
-select:focus,
-textarea:focus {
-  outline: none;
+/* v4 cascade layers: unlayered author CSS beats @layer utilities regardless of
+   specificity, so this rule used to bury the forced-colors branch of
+   `.focus\:outline-hidden:focus` and silently dropped every form control's
+   focus indicator in Windows High Contrast mode (v3 kept it: the utility's
+   (0,2,0) out-ranked this (0,1,1) with no layers in play). Keep the rule in
+   @layer base so utilities win back on focus — normal-mode computed value is
+   unchanged (the utility's normal branch is outline-style: none too), and
+   inputs without a focus:outline-hidden class still get outline: none.
+   Found by #315's forced-colors spot check; asserted by
+   tests/screenshots/forced-colors.spec.ts. */
+@layer base {
+  input:focus,
+  select:focus,
+  textarea:focus {
+    outline: none;
+  }
 }
 
 
