@@ -89,9 +89,11 @@ async function injectMocks(page: Page, settings: MockSettings): Promise<void> {
 
 // Channel deltas within this margin count as antialiasing noise, not paint.
 const PIXEL_NOISE_MARGIN = 8
-// A 2px offset outline around the ~150x30 select paints well past this floor;
-// the pre-fix regression measured 220 border-only pixels, with the outline ~700.
-const MIN_FOCUS_INDICATOR_PIXELS = 100
+// A 2px offset outline around the ~150x30 select paints well past this floor.
+// The pre-fix regression measured 220 border-only pixels vs 712 with the
+// outline, so the floor sits between the two (CodeRabbit caught that 100 would
+// still pass on the regression): reverting the app.css fix must fail this test.
+const MIN_FOCUS_INDICATOR_PIXELS = 400
 // Padding around the control's bounding box so the 2px offset outline (4px
 // outside the border box) stays inside every clipped screenshot.
 const CLIP_PADDING = 12

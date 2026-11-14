@@ -88,7 +88,9 @@ Findings, in order:
    `focus:outline-hidden` class still get `outline: none`, and the
    `theme-style-regression.test.ts` source assertion still matches.
 3. Chromium's UA focus fallback also changed the bare computed picture; that is
-   why the assertion is paint-based (pixel diff > 100) rather than
+   why the assertion is paint-based (pixel diff against a floor of 400, between
+   the recorded 220-regression and 712-fixed measurements — CodeRabbit review:
+   a floor of 100 would still pass on the regression) rather than
    computed-style based.
 
 Evidence: `evidence/forced-colors-focus-select.png` (focused state after the
