@@ -689,7 +689,7 @@ import { parseSecretProviderList } from '../secret-provider-list'
         placeholder={$t('profiles.createPrompt')}
         bind:value={newProfileName}
         onkeydown={(event) => { if (event.key === 'Enter') handleCreate() }}
-        class="flex-1 px-3 py-1.5 text-xs border border-border rounded-md focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary bg-card border-border/80 text-foreground"
+        class="flex-1 px-3 py-1.5 text-xs border border-border rounded-md focus:outline-hidden focus:ring-1 focus:ring-primary focus:border-primary bg-card border-border/80 text-foreground"
       />
       <button
         onclick={handleCreate}
@@ -855,7 +855,7 @@ import { parseSecretProviderList } from '../secret-provider-list'
                      {/each}
                   </div>
                  <div class="flex gap-1 items-center">
-                   <select bind:value={newPathScope} disabled={profile.isEnabled} class="px-1.5 py-1 text-[10px] border border-border rounded focus:outline-none focus:ring-1 focus:ring-primary bg-accent border-border/80 text-foreground">
+                   <select bind:value={newPathScope} disabled={profile.isEnabled} class="px-1.5 py-1 text-[10px] border border-border rounded focus:outline-hidden focus:ring-1 focus:ring-primary bg-accent border-border/80 text-foreground">
                      <option value="user">{$t('scope.user')}</option>
                      <option value="system">{$t('scope.system')}</option>
                    </select>
@@ -968,7 +968,7 @@ import { parseSecretProviderList } from '../secret-provider-list'
                       id="profile-var-scope"
                       value={newVarScope}
                       onchange={(e) => newVarScope = e.currentTarget.value}
-                      class="px-2 py-1 text-[10px] border border-border rounded focus:outline-none focus:ring-1 focus:ring-primary bg-accent border-border/80 text-foreground"
+                      class="px-2 py-1 text-[10px] border border-border rounded focus:outline-hidden focus:ring-1 focus:ring-primary bg-accent border-border/80 text-foreground"
                     >
                       <option value="user">{$t('scope.user')}</option>
                       <option value="system">{$t('scope.system')}</option>
@@ -978,13 +978,13 @@ import { parseSecretProviderList } from '../secret-provider-list'
                     type="text"
                     placeholder={$t('labels.name')}
                     bind:value={newVarName}
-                    class="w-full px-2 py-1 text-[10px] border border-border rounded focus:outline-none focus:ring-1 focus:ring-primary bg-accent border-border/80 text-foreground"
+                    class="w-full px-2 py-1 text-[10px] border border-border rounded focus:outline-hidden focus:ring-1 focus:ring-primary bg-accent border-border/80 text-foreground"
                   />
                   <input
                     type="text"
                     placeholder={$t('labels.value')}
                     bind:value={newVarValue}
-                    class="w-full px-2 py-1 text-[10px] border border-border rounded focus:outline-none focus:ring-1 focus:ring-primary bg-accent border-border/80 text-foreground"
+                    class="w-full px-2 py-1 text-[10px] border border-border rounded focus:outline-hidden focus:ring-1 focus:ring-primary bg-accent border-border/80 text-foreground"
                   />
                   <div class="flex gap-1">
                     <button
@@ -1008,7 +1008,7 @@ import { parseSecretProviderList } from '../secret-provider-list'
                 <div class="flex items-center gap-1.5 mt-2">
                  <span class="text-[9px] text-muted-foreground">{$t('secrets.activeProvider')}:</span>
                      <select
-                     class="text-[9px] px-1.5 py-0.5 rounded bg-muted/30 bg-accent text-muted-foreground text-foreground/80 border border-border border-border/80 focus:outline-none focus:ring-1 focus:ring-primary"
+                     class="text-[9px] px-1.5 py-0.5 rounded bg-muted/30 bg-accent text-muted-foreground text-foreground/80 border border-border border-border/80 focus:outline-hidden focus:ring-1 focus:ring-primary"
                      value={activeProvider}
                      onchange={(e) => {
                        const next = e.currentTarget.value;
@@ -1046,13 +1046,13 @@ import { parseSecretProviderList } from '../secret-provider-list'
                       type="text"
                       placeholder={$t('labels.name')}
                       bind:value={newSecretName}
-                      class="w-full px-2 py-1 text-[10px] border border-border rounded focus:outline-none focus:ring-1 focus:ring-amber-500 bg-accent border-border/80 text-foreground"
+                      class="w-full px-2 py-1 text-[10px] border border-border rounded focus:outline-hidden focus:ring-1 focus:ring-amber-500 bg-accent border-border/80 text-foreground"
                     />
                     <input
                       type="password"
                       placeholder={$t('profiles.secretValue')}
                       bind:value={newSecretValue}
-                      class="w-full px-2 py-1 text-[10px] border border-border rounded focus:outline-none focus:ring-1 focus:ring-amber-500 bg-accent border-border/80 text-foreground"
+                      class="w-full px-2 py-1 text-[10px] border border-border rounded focus:outline-hidden focus:ring-1 focus:ring-amber-500 bg-accent border-border/80 text-foreground"
                     />
                     <div class="flex gap-1">
                       <button

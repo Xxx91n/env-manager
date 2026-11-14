@@ -88,7 +88,7 @@
           onkeydown={handleKeydown}
           placeholder={$inputModal.placeholder ?? ''}
           maxlength={$inputModal.maxLength ?? 255}
-          class="w-full px-3 py-2 text-xs border border-border rounded-md focus:outline-none focus:ring-2 focus:ring-primary bg-accent border-border/80 text-foreground placeholder-muted-foreground"
+          class="w-full px-3 py-2 text-xs border border-border rounded-md focus:outline-hidden focus:ring-2 focus:ring-primary bg-accent border-border/80 text-foreground placeholder-muted-foreground"
         />
       </div>
 

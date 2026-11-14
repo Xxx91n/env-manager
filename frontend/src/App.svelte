@@ -284,7 +284,7 @@
 </div>
 
 <div class="h-screen flex flex-col overflow-hidden bg-background text-foreground" style="padding-top: 32px;">
-  <header class="bg-card border-b border-border px-5 py-3 flex-shrink-0">
+  <header class="bg-card border-b border-border px-5 py-3 shrink-0">
     <div class="flex items-center justify-between">
       <div class="flex items-center gap-3">
         <Monitor class="w-5 h-5 text-primary" />

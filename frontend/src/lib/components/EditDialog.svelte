@@ -155,7 +155,7 @@
           type="text"
           bind:value={name}
           spellcheck="false"
-          class="w-full px-3 py-1.5 text-xs border border-border rounded-md focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary font-mono bg-accent border-border/80 text-foreground"
+          class="w-full px-3 py-1.5 text-xs border border-border rounded-md focus:outline-hidden focus:ring-1 focus:ring-primary focus:border-primary font-mono bg-accent border-border/80 text-foreground"
         />
         {#if nameChanged}
           <p class="mt-1 text-[10px] text-primary/80">
@@ -172,7 +172,7 @@
           id="edit-value"
           bind:value={value}
           rows="4"
-          class="w-full px-3 py-1.5 text-xs border border-border rounded-md focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary font-mono bg-accent border-border/80 text-foreground"
+          class="w-full px-3 py-1.5 text-xs border border-border rounded-md focus:outline-hidden focus:ring-1 focus:ring-primary focus:border-primary font-mono bg-accent border-border/80 text-foreground"
 ></textarea>
       </div>
 
@@ -184,7 +184,7 @@
           id="edit-scope"
           bind:value={scope}
           disabled={!!(variable && variable.isProtected)}
-          class="w-full px-3 py-1.5 text-xs border border-border rounded-md focus:outline-none focus:ring-1 focus:ring-primary bg-card disabled:bg-muted/30 bg-accent border-border/80 text-foreground"
+          class="w-full px-3 py-1.5 text-xs border border-border rounded-md focus:outline-hidden focus:ring-1 focus:ring-primary bg-card disabled:bg-muted/30 bg-accent border-border/80 text-foreground"
         >
           <option value="user">{$t('scope.user')}</option>
           <option value="system">{$t('scope.system')}</option>
