@@ -116,6 +116,33 @@ semantics-equivalent utilities. After the app.css forced-colors fix above, two
 further full runs passed 29/29 (28 baseline + 1 forced-colors), again with zero
 snapshot churn: normal mode is pixel-identical before and after the fix.
 
+## Real-window walkthrough (ticket #315, 2026-11-14)
+
+Per spec #310: the real window is part of acceptance but not the primary
+evidence. Walked the 8 screens in light and dark with the portable artifact
+built by CI run 43568747649 on this branch's HEAD, driven via window-level
+screenshots and real mouse clicks (WebView2 ignores injected browser args in
+this build, so no CDP attach). Screenshots stay local (`em315-scratch`) and are
+not committed — they show this machine's real registry data. Findings:
+
+- Environment gap, not a UI defect: the host had no .NET 10 Desktop Runtime, so
+  the GUI's CLI IPC failed (red guidance toast, all data pages empty). Installed
+  the official runtime (10.0.15 win-x64, Authenticode signature verified) and
+  re-walked; everything below is post-install.
+- All 8 screens (Variables, Profiles, Path Editor, History & Import, Protection,
+  Service Manager, Audit Ledger, Settings dialog) render correctly in light and
+  dark: real data tables (variables, PATH entries, 35 built-in protected
+  variables), correct per-scope badges, no light/dark color bleed, readable text
+  everywhere.
+- Scrollbars: window/table scrollbars appear and track correctly (table larger
+  than viewport at 1016x708 window).
+- Native controls: select dropdowns, radio pair (Global/Launch), toggle
+  switches, font-size slider, all render and operate correctly in both themes.
+- Focus: clicking the Variables search input shows the ring focus indicator in
+  the real window (dark theme), matching the emulated forced-colors check above.
+- Problems found: none beyond the missing-runtime environment gap above; theme
+  was restored to light after the walkthrough.
+
 
 ## v4 re-baseline (2026-11-14): the titlebar border now renders
 
